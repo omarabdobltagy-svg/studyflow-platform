@@ -196,7 +196,7 @@ export async function upsertGoogleUser(input: { openId: string; name: string; em
   const existingByOpenId = await db.select().from(users).where(eq(users.openId, input.openId)).limit(1);
   if (existingByOpenId[0]) {
     await db.update(users).set({
-      name: input.name,
+      name: existingByOpenId[0].name?.trim() ? existingByOpenId[0].name : input.name,
       email: input.email,
       loginMethod: "google",
       lastSignedIn: now,
@@ -213,7 +213,7 @@ export async function upsertGoogleUser(input: { openId: string; name: string; em
   if (matchingEmail[0]) {
     await db.update(users).set({
       openId: input.openId,
-      name: input.name,
+      name: matchingEmail[0].name?.trim() ? matchingEmail[0].name : input.name,
       email: input.email,
       loginMethod: "google",
       lastSignedIn: now,
