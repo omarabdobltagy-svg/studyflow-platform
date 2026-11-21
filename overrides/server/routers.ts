@@ -38,6 +38,7 @@ import {
   listTasks,
   saveStudentProfile,
   saveSIEOnboarding,
+  updateStudentProfileSelection,
   setGoalStatus,
   toggleRoutineItem,
   toggleTask,
@@ -170,6 +171,66 @@ export const appRouter = router({
 
   studentProfile: router({
     get: protectedProcedure.query(({ ctx }) => getStudentProfile(ctx.user.id)),
+    updateTeacherProgress: protectedProcedure
+      .input(z.object({ subjectId: z.string().trim().min(1).max(80), checkpoint: z.string().trim().min(1).max(120) }))
+      .mutation(async ({ ctx, input }) => {
+        const profile = await getStudentProfile(ctx.user.id);
+        if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "ملفك الدراسي غير مكتمل بعد." });
+        const selection = (profile.selection ?? {}) as Record<string, unknown>;
+        const choices = (selection.teacherChoices ?? {}) as Record<string, string>;
+        const teacherId = choices[input.subjectId];
+        const teacher = teacherId ? getSIETeacher(teacherId) : undefined;
+        if (!teacher || !teacher.subjectIds.includes(input.subjectId) || !teacher.studentInputRequired) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "لا يوجد مدرس محدد لهذه المادة أو لا يلزم تحديث الموضع الآن." });
+        }
+        const allowed = new Set(getSIECheckpointChoices(input.subjectId).map(choice => choice.nodeId));
+        const sentinels = new Set(["__NOT_STARTED__", "__UNKNOWN__", "__DEFERRED__"]);
+        if (!allowed.has(input.checkpoint) && !sentinels.has(input.checkpoint)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "الموضوع المختار غير موجود في فهرس المادة." });
+        }
+        const frontiers = { ...((selection.teacherFrontiers ?? {}) as Record<string, string>), [input.subjectId]: input.checkpoint };
+        const progressState = { ...((selection.teacherProgressState ?? {}) as Record<string, Record<string, unknown>>) };
+        const isNode = !sentinels.has(input.checkpoint);
+        const subject = getSIESubject(input.subjectId);
+        const state = {
+          ...(progressState[input.subjectId] ?? {}),
+          teacherId,
+          teacherSourceId: teacher.sourceId,
+          teacherSourceUrl: teacher.profileUrl,
+          coursePresence: teacher.coursePresence,
+          courseVerifiedFor: teacher.courseVerifiedFor,
+          teacherPublicContentFrontier: teacher.latestPublicCheckpoint ?? null,
+          teacherPublicContentFrontierDate: teacher.latestCheckpointDate ?? null,
+          teacherPublicContentSegments: teacher.publicSegments ?? [],
+          teacherPaidCourseFrontier: teacher.paidCourseCatalogFrontier ?? null,
+          teacherPaidCoursePositionStatus: teacher.paidCoursePositionStatus,
+          studentAttendedFrontier: isNode ? input.checkpoint : null,
+          status: input.checkpoint === "__NOT_STARTED__" ? "not_started_with_teacher"
+            : input.checkpoint === "__UNKNOWN__" ? "unknown"
+            : input.checkpoint === "__DEFERRED__" ? "unlocated" : "student_reported",
+          evidenceSource: "student_selection",
+          confidence: "student_reported",
+          selectedAt: new Date().toISOString(),
+        };
+        progressState[input.subjectId] = state;
+        const history = Array.isArray(selection.teacherProgressEvents) ? selection.teacherProgressEvents as Array<Record<string, unknown>> : [];
+        const event = {
+          subjectId: input.subjectId,
+          subjectName: subject?.nameAr ?? input.subjectId,
+          teacherId,
+          report: input.checkpoint,
+          eventType: "student_reported_frontier",
+          evidenceSource: "student_selection",
+          occurredAt: new Date().toISOString(),
+        };
+        await updateStudentProfileSelection(ctx.user.id, {
+          ...selection,
+          teacherFrontiers: frontiers,
+          teacherProgressState: progressState,
+          teacherProgressEvents: [...history, event].slice(-500),
+        });
+        return { success: true, progressState: state };
+      }),
     save: protectedProcedure
       .input(z.object({
         studentName: z.string().trim().min(2).max(120),
@@ -231,6 +292,12 @@ export const appRouter = router({
             throw new TRPCError({ code: "BAD_REQUEST", message: "اختيار نقطة البداية غير موجود في فهرس المادة." });
           }
         }
+        const previousProfile = await getStudentProfile(ctx.user.id);
+        const previousSelection = (previousProfile?.selection ?? {}) as Record<string, unknown>;
+        const previousProgressEvents = Array.isArray(previousSelection.teacherProgressEvents)
+          ? previousSelection.teacherProgressEvents as Array<Record<string, unknown>>
+          : [];
+        const previousTeacherFrontiers = (previousSelection.teacherFrontiers ?? {}) as Record<string, string>;
         const subjectNames = input.subjectIds.map(id => {
           const subject = getSIESubject(id);
           if (!subject) throw new TRPCError({ code: "BAD_REQUEST", message: "توجد مادة غير معروفة في الاختيارات." });
@@ -272,7 +339,7 @@ export const appRouter = router({
                 teacherPublicContentFrontier: teacher?.latestPublicCheckpoint ?? null,
                 teacherPublicContentFrontierDate: teacher?.latestCheckpointDate ?? null,
                 teacherPublicContentSegments: teacher?.publicSegments ?? [],
-                teacherPaidCourseFrontier: null,
+                teacherPaidCourseFrontier: teacher?.paidCourseCatalogFrontier ?? null,
                 teacherPaidCoursePositionStatus: teacher?.paidCoursePositionStatus ?? "unknown",
                 studentAttendedFrontier: isNode ? report : null,
                 status: isNotRequired ? "not_required" : report === "__NOT_STARTED__" ? "not_started_with_teacher" : report === "__UNKNOWN__" ? "unknown" : report === "__DEFERRED__" ? "unlocated" : "student_reported",
@@ -281,7 +348,23 @@ export const appRouter = router({
                 selectedAt: new Date().toISOString(),
               }];
             })),
-            teacherFrontiers: input.teacherFrontierReports,
+            teacherFrontiers: {
+              ...previousTeacherFrontiers,
+              ...input.teacherFrontierReports,
+            },
+            teacherProgressEvents: [
+              ...previousProgressEvents,
+              ...Object.entries(input.teacherFrontierReports)
+                .filter(([subjectId, report]) => previousTeacherFrontiers[subjectId] !== report)
+                .map(([subjectId, report]) => ({
+                  subjectId,
+                  teacherId: input.teacherSelections[subjectId],
+                  report,
+                  eventType: "student_reported_frontier",
+                  evidenceSource: "student_selection",
+                  occurredAt: new Date().toISOString(),
+                })),
+            ].slice(-500),
             completedAt: new Date().toISOString(),
           },
         });
@@ -327,6 +410,36 @@ export const appRouter = router({
           listRoutines(ctx.user.id, "Africa/Cairo"),
           listCalendarEvents(ctx.user.id),
         ]);
+        const selection = (profile?.selection ?? {}) as Record<string, unknown>;
+        const teacherChoices = (selection.teacherChoices ?? {}) as Record<string, string>;
+        const teacherProgressState = (selection.teacherProgressState ?? {}) as Record<string, Record<string, unknown>>;
+        const teacherFrontiers = (selection.teacherFrontiers ?? {}) as Record<string, string>;
+        const teacherProgressContext = Object.entries(teacherChoices)
+          .filter(([, teacherId]) => Boolean(teacherId && teacherId !== "__SKIP__"))
+          .map(([subjectId, teacherId]) => {
+            const teacher = getSIETeacher(teacherId);
+            const progress = teacherProgressState[subjectId] ?? {};
+            const publicFrontier = teacher?.latestPublicCheckpoint ?? progress.teacherPublicContentFrontier ?? null;
+            const paidFrontier = progress.teacherPaidCourseFrontier ?? teacher?.paidCourseCatalogFrontier ?? null;
+            const reported = teacherFrontiers[subjectId];
+            const studentFrontier = progress.studentAttendedFrontier ?? (
+              reported && !["__NOT_STARTED__", "__UNKNOWN__", "__DEFERRED__"].includes(reported) ? reported : null
+            );
+            const studentState = String(progress.status ?? (
+              reported === "__NOT_STARTED__" ? "not_started_with_teacher"
+                : reported === "__UNKNOWN__" ? "unknown"
+                : reported === "__DEFERRED__" ? "unlocated"
+                : studentFrontier ? "student_reported" : "not_reported"
+            ));
+            return [
+              `المادة: ${getSIESubject(subjectId)?.nameAr ?? subjectId}`,
+              `المدرس المختار: ${teacher?.nameAr ?? teacherId}`,
+              `آخر محتوى عام مثبت للمدرس: ${publicFrontier || "غير مثبت في المصادر الحالية"}`,
+              `فهرس الكورس المدفوع: ${paidFrontier ? JSON.stringify(paidFrontier) : "لا يوجد موضع مدفوع دقيق مثبت"}`,
+              `آخر موضع للطالب: ${studentFrontier || "غير محدد"} (الحالة: ${studentState})`,
+              `مصدر وثقة تقدم الطالب: ${String(progress.evidenceSource ?? "لا يوجد سجل")} / ${String(progress.confidence ?? "غير محدد")}`,
+            ].join(" | ");
+          }).join("\n") || "لم يتم اختيار مدرسين بعد.";
         const dateLabel = (value: Date | string | null | undefined) => {
           if (!value) return "بلا موعد";
           const date = value instanceof Date ? value : new Date(value);
@@ -341,16 +454,27 @@ export const appRouter = router({
           `المكتبة: ${bookRows.slice(0, 8).map(book => `- ${book.title} — ${book.subject} (${book.progress}%)`).join("\n") || "لا توجد كتب مسجلة."}`,
           `الروتين النشط: ${routineRows.filter(routine => routine.isActive).slice(0, 6).map(routine => `- ${routine.name}: ${routine.items.filter(item => item.isActive).map(item => `${item.title}${item.completedToday ? " ✓" : ""}`).join("، ")}`).join("\n") || "لا يوجد روتين نشط."}`,
           `المواعيد القادمة: ${calendarRows.filter(event => new Date(event.startAt).getTime() >= Date.now()).slice(0, 8).map(event => `- ${event.title} (${dateLabel(event.startAt)})`).join("\n") || "لا توجد مواعيد قادمة مسجلة."}`,
+          `مواضع المدرسين وتقدم الطالب (كل مصدر مستقل):\n${teacherProgressContext}`,
         ].join("\n\n");
         const context = `${profileContext}\n\nحالة التطبيق الحالية (قد تتغير بعد تحديث الصفحة):\n${appContext}`;
-        const response = await invokeLLM({
+        let response;
+        try {
+          response = await invokeLLM({
           messages: [
-            { role: "system", content: `أنت مساعد StudyFlow العربي. أجب مباشرة دون عبارة مثل «جاري صياغة السؤال». كن عمليًا ومختصرًا، واقترح خطوة واحدة قابلة للتنفيذ أولًا. استخدم سياق التطبيق كبيانات حالية لا كحقائق دائمة؛ إذا كانت البيانات ناقصة فاسأل بدل التخمين. لا تنشئ أو تعدّل مهامًا أو خططًا أو عادات ولا تدّعِ أنك نفذت إجراءً؛ اطلب موافقة صريحة ووجّه الطالب إلى الصفحة المناسبة. لا تدّعي معرفة أخبار أو مواعيد مدرسين دون مصدر. لا تعرض مرفقات أو بيانات خاصة غير لازمة. بيانات الطالب والتطبيق:\n${context}` },
+            { role: "system", content: `أنت مساعد StudyFlow العربي. أجب مباشرة دون عبارة مثل «جاري صياغة السؤال». كن عمليًا ومختصرًا، واقترح خطوة واحدة قابلة للتنفيذ أولًا. استخدم سياق التطبيق كبيانات حالية لا كحقائق دائمة؛ إذا كانت البيانات ناقصة فاسأل بدل التخمين. قواعد موضع المدرس: آخر محتوى عام لا يساوي آخر عنصر مدفوع، وآخر عنصر مدفوع لا يثبت أن الطالب شاهده. لا تنقل نقطة تقدم من مصدر إلى آخر. اذكر أن الموضع غير مثبت عندما تكون البيانات غير متاحة، ولا تخترع رقم محاضرة أو إنجازًا. لا تنشئ أو تعدّل مهامًا أو خططًا أو عادات ولا تدّعِ أنك نفذت إجراءً؛ اطلب موافقة صريحة ووجّه الطالب إلى الصفحة المناسبة. لا تدّعي معرفة أخبار أو مواعيد مدرسين دون مصدر. لا تعرض مرفقات أو بيانات خاصة غير لازمة. بيانات الطالب والتطبيق:\n${context}` },
             ...input.messages.slice(-20),
           ],
-          model: process.env.OPENROUTER_MODEL || undefined,
+          model: process.env.AI_MODEL || undefined,
           maxTokens: 900,
-        });
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          console.error("[StudyFlow AI] Provider request failed:", message);
+          if (message.includes("AI_API_KEY is not configured")) {
+            return { content: "المساعد الذكي لم يُفعّل بعد. أضف مفتاح مزود الذكاء الاصطناعي في متغير AI_API_KEY داخل Railway، وسيعمل المساعد دون تغيير بياناتك." };
+          }
+          throw new TRPCError({ code: "BAD_GATEWAY", message: "المساعد غير متاح حاليًا من مزود الذكاء الاصطناعي. حاول مرة أخرى لاحقًا." });
+        }
         const content = response.choices[0]?.message?.content;
         return { content: typeof content === "string" ? content : "لم أتمكن من تكوين رد الآن. جرّب مرة أخرى." };
       }),
@@ -532,7 +656,17 @@ export const appRouter = router({
       .input(z.object({ id: z.number().int().positive(), done: z.boolean(), timeZone: timeZoneInput.optional() }))
       .mutation(({ ctx, input }) => toggleRoutineItem(ctx.user.id, input.id, input.done, input.timeZone ?? "UTC")),
     update: protectedProcedure
-      .input(z.object({ id: z.number().int().positive(), name: z.string().trim().min(1).max(120), period: z.enum(["morning", "evening", "custom"]), accent: z.string().trim().min(1).max(20), isActive: z.boolean() }))
+      .input(z.object({
+        id: z.number().int().positive(),
+        name: z.string().trim().min(1).max(120),
+        period: z.enum(["morning", "evening", "custom"]),
+        accent: z.string().trim().min(1).max(20),
+        isActive: z.boolean(),
+        items: z.array(z.object({
+          title: z.string().trim().min(1).max(180),
+          durationMinutes: z.number().int().min(1).max(300),
+        })).max(20).optional(),
+      }))
       .mutation(({ ctx, input }) => updateRoutine(ctx.user.id, input.id, input)),
     delete: protectedProcedure
       .input(z.object({ id: z.number().int().positive() }))

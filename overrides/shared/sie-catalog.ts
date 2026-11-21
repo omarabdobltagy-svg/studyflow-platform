@@ -54,6 +54,7 @@ export type SIETeacher = {
   studentAttendedFrontierStatus: string;
   mappedCurriculumNodeIds: string[];
   publicSegments?: Array<{ title: string; timestamp?: string; curriculumNodeIds: string[]; mappingStatus: string; note?: string }>;
+  paidCourseCatalogFrontier?: { courseTitle: string; courseUrl: string; checkedAt: string; lessonCount?: number; sequenceVisible: boolean; note: string };
   conflictOptions?: Array<{ label: string; sourceDate: string; sourceLabel: string; confidence: string }>;
 };
 
@@ -67,7 +68,7 @@ export const SIE_CATALOG_META = {
   academicYear: ACADEMIC_YEAR,
   gradeYear: GRADE_YEAR,
   gradeId: "G11_EQ_G2",
-  teacherRecommendationLimit: 3,
+  teacherRecommendationLimit: 5,
   teacherPolicy:
     "ترشيحات أولية مبنية على وجود أدلة للمادة والصف والسنة، وليست ترتيبًا لأفضل أو أشهر المدرسين على مستوى مصر.",
 } as const;
@@ -526,6 +527,108 @@ export const SIE_TEACHERS: SIETeacher[] = [
     systemCourseVerification: { EG_BACCALAUREATE: "public_lesson_2_2027_found_paid_course_unverified", EG_GENERAL_SECONDARY: "not_verified_for_2026_2027" },
     sourceId: "SRC_PROG_KHALED_OCT_LESSON2",
   },
+
+  {
+    teacherId: "T_HIS_AHMED_ADEL", nameAr: "أحمد عادل", brandName: "أحمد عادل",
+    subjectIds: ["HIS_G2_BAC"], profileUrl: "https://www.mr-ahmed-adel.com/course/90",
+    lastChecked: "2026-11-21",
+    coursePresence: "verified_on_platform",
+    courseVerifiedFor: "2 Bac 2027 — National History",
+    courseProgressEvidence: "المنصة الرسمية تعرض باقة المنهج كاملًا في التاريخ الوطني للصف الثاني بكالوريا 2027. صفحة الكورس لا تعرض فهرس عناصر مدفوعة يمكن منه إثبات آخر محاضرة أو ترتيبها.",
+    paidCourseCatalogFrontier: {
+      courseTitle: "باقة المنهج كاملًا في التاريخ الوطني — الصف الثاني بكالوريا 2027",
+      courseUrl: "https://www.mr-ahmed-adel.com/course/90",
+      checkedAt: "2026-11-21",
+      sequenceVisible: false,
+      note: "وجود الباقة مثبت على المنصة الرسمية؛ أسماء وترتيب آخر العناصر المدفوعة غير ظاهرة في الفهرس العام."
+    },
+    latestCheckpointDate: "2026-11-21",
+    scheduleEvidence: "لا يوجد موعد حالي محدد تم التحقق منه.",
+    scheduleEntries: [],
+    progressConfidence: "course_presence_only_paid_item_frontier_unknown",
+    selectionLabel: "مدرس تاريخ — كورس رسمي للصف الثاني بكالوريا 2027",
+    teacherNotes: "لا يُستنتج موضع المحاضرة المدفوعة من وجود الباقة وحده.",
+    paidCoursePositionStatus: "catalog_bundle_verified_item_frontier_unknown",
+    studentInputRequired: true,
+    adminFollowup: "يلزم فهرس عام لعناصر الباقة أو موصل مصرح به لتحديث آخر عنصر مدفوع. لا تطلب كلمة مرور المنصة من الطالب.",
+    studentAttendedFrontierStatus: "requires_student_signal_or_SIE_progress_event",
+    mappedCurriculumNodeIds: [],
+    publicSegments: [],
+    evidenceLabel: "كورس تاريخ وطني رسمي للصف الثاني بكالوريا",
+    confidenceLabel: "وجود الكورس مثبت؛ موضعه التفصيلي غير مثبت",
+    evidenceNote: "الصفحة الرسمية تعرض باقة المنهج الكامل، لكنها لا تثبت آخر عنصر مدفوع أو ما أنجزه الطالب.",
+    systemCourseVerification: { EG_BACCALAUREATE: "official_2bac_course_listing_found", EG_GENERAL_SECONDARY: "not_verified_for_2026_2027" },
+    sourceId: "SRC_AHMED_ADEL_OFFICIAL_2BAC_2027",
+    shortlistPosition: 4,
+  },
+  {
+    teacherId: "T_HIS_GOMAA_EL_SAYED", nameAr: "جمعة السيد", brandName: "منصة القيصر",
+    subjectIds: ["HIS_G2_BAC"], profileUrl: "https://gomaa-elsayed.com/years/2",
+    lastChecked: "2026-11-21",
+    coursePresence: "verified_on_platform",
+    courseVerifiedFor: "2 Bac 2027 — National History",
+    courseProgressEvidence: "المنصة الرسمية تعرض كورسات تاريخ وطني للصف الثاني بكالوريا، بما فيها كورس الشهر الثالث. العرض العام لا يكشف أسماء عناصر الكورس المدفوع أو آخر عنصر متاح.",
+    paidCourseCatalogFrontier: {
+      courseTitle: "كورسات التاريخ الوطني — الصف الثاني بكالوريا",
+      courseUrl: "https://gomaa-elsayed.com/years/2",
+      checkedAt: "2026-11-21",
+      sequenceVisible: false,
+      note: "وجود كورسات الصف الثاني بكالوريا مثبت؛ فهرس العناصر المدفوعة التفصيلي غير ظاهر في المصدر العام."
+    },
+    latestCheckpointDate: "2026-11-21",
+    scheduleEvidence: "لم يتم تثبيت جدول حالي محدد للمحاضرات.",
+    scheduleEntries: [],
+    progressConfidence: "course_presence_only_paid_item_frontier_unknown",
+    selectionLabel: "مدرس تاريخ — كورسات بكالوريا موثقة",
+    teacherNotes: "لا يُستنتج آخر درس مدفوع من عنوان الباقة أو شهرها.",
+    paidCoursePositionStatus: "catalog_bundle_verified_item_frontier_unknown",
+    studentInputRequired: true,
+    adminFollowup: "يلزم فهرس علني لعناصر الكورس أو تكامل مصرح به لمعرفة العنصر المدفوع الأخير.",
+    studentAttendedFrontierStatus: "requires_student_signal_or_SIE_progress_event",
+    mappedCurriculumNodeIds: [],
+    publicSegments: [],
+    evidenceLabel: "منصة رسمية تعرض كورسات التاريخ الوطني للصف الثاني بكالوريا",
+    confidenceLabel: "وجود الكورس مثبت؛ موضعه التفصيلي غير مثبت",
+    evidenceNote: "قائمة الكورسات تثبت ارتباط المدرس بالمادة والصف؛ لا تثبت ما شاهده الطالب أو آخر عنصر مدفوع.",
+    systemCourseVerification: { EG_BACCALAUREATE: "official_2bac_course_listing_found", EG_GENERAL_SECONDARY: "not_verified_for_2026_2027" },
+    sourceId: "SRC_GOMAA_EL_SAYED_OFFICIAL_2BAC_2027",
+    shortlistPosition: 5,
+  },
+  {
+    teacherId: "T_PROG_MAZEN_ALI_BARMAGTHALK", nameAr: "م. مازن علي", brandName: "برمجتهالك",
+    subjectIds: ["PROG_AI_G2_BAC"], profileUrl: "https://barmagthalk.pyramitech.com/",
+    lastChecked: "2026-11-21",
+    coursePresence: "verified_on_platform",
+    courseVerifiedFor: "2 Bac 2027 — Programming & AI (Arabic and Languages)",
+    courseProgressEvidence: "المنصة الرسمية تعرض كورس الشهر الثالث للصف الثاني بكالوريا (عربي/لغات) في 4 محاضرات مع تدريبات تفاعلية وامتحانات عملية. لا تعرض أسماء المحاضرات الأربعة أو آخر عنصر تم فتحه.",
+    paidCourseCatalogFrontier: {
+      courseTitle: "كورس الشهر الثالث للصف الثاني بكالوريا — عربي ولغات",
+      courseUrl: "https://barmagthalk.pyramitech.com/",
+      checkedAt: "2026-11-21",
+      lessonCount: 4,
+      sequenceVisible: false,
+      note: "فهرس المنصة يثبت وجود كورس الشهر الثالث وأربع محاضرات؛ عناوين المحاضرات وترتيب آخر عنصر غير ظاهرين في المصدر العام."
+    },
+    latestCheckpointDate: "2026-11-21",
+    scheduleEvidence: "لا يوجد جدول أسبوعي حالي مثبت من المصدر العام.",
+    scheduleEntries: [],
+    progressConfidence: "course_catalog_verified_item_sequence_unknown",
+    selectionLabel: "منصة برمجة وبكالوريا موثقة",
+    teacherNotes: "المصدر يثبت وجود الكورس وعدد محاضرات الباقة، لكنه لا يثبت آخر فيديو مدفوع أو إنجاز الطالب.",
+    paidCoursePositionStatus: "catalog_bundle_verified_item_frontier_unknown",
+    studentInputRequired: true,
+    adminFollowup: "يلزم ربط رسمي أو موافقة من المنصة أو فهرس علني للعناصر لتحديث تقدم المدرس تلقائيًا؛ لا تطلب بيانات دخول الطالب.",
+    studentAttendedFrontierStatus: "requires_student_signal_or_SIE_progress_event",
+    mappedCurriculumNodeIds: [],
+    publicSegments: [],
+    evidenceLabel: "منصة برمجتهالك تعرض مسارات وكورسات برمجة للصف الثاني بكالوريا",
+    confidenceLabel: "توفر الكورس وعدد عناصر الباقة مثبتان؛ عناوين العناصر غير متاحة علنًا",
+    evidenceNote: "البيانات المستعملة من واجهة الكتالوج العام، وليست وصولًا إلى محتوى مدفوع.",
+    systemCourseVerification: { EG_BACCALAUREATE: "official_2bac_course_listing_found", EG_GENERAL_SECONDARY: "not_verified_for_2026_2027" },
+    sourceId: "SRC_BARMAGTHALK_G2_MONTH3_CATALOG",
+    shortlistPosition: 4,
+  },
+
 ];
 
 export function getSIETracks(systemId: SIESystemId) {

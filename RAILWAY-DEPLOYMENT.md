@@ -27,3 +27,20 @@ Set these variables on the **StudyFlow app** service:
 - `APP_SESSION_SECRET`: a long random secret used to sign 30-day sessions.
 
 Do not place any of these values in a `VITE_` variable or in the repository. No database schema migration is required for local sign-in. The local account adopts the only existing user row when one exists, preserving its user ID and linked study data; if multiple existing user rows are found, the login flow refuses to guess which one owns the data.
+
+
+## AI provider
+
+The in-app assistant uses an OpenAI-compatible API endpoint. The default provider base URL is `https://openrouter.ai/api/v1` and the default model routing is `openrouter/auto`.
+
+Set these variables on the **StudyFlow app** service:
+
+- `AI_API_BASE_URL`: defaults to `https://openrouter.ai/api/v1`.
+- `AI_MODEL`: defaults to `openrouter/auto`.
+- `AI_API_KEY`: required secret from the selected API provider. Set this directly in Railway's secret variables; never commit it or send it in chat.
+
+Without `AI_API_KEY`, the rest of the platform works and the assistant displays a setup message instead of pretending the integration is active.
+
+## Teacher progress model
+
+StudyFlow keeps three separate values: public teacher content, the teacher's paid-course catalogue, and the student's own completed topic. Public listings do not prove the last paid lesson, and a teacher's latest item does not prove that the student watched it. Exact paid-course item sequence remains unknown when the official public catalogue does not expose it.

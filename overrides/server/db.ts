@@ -300,6 +300,14 @@ export type SIEOnboardingInput = {
   selection: Record<string, unknown>;
 };
 
+export async function updateStudentProfileSelection(userId: number, selection: Record<string, unknown>) {
+  const database = await requireDb();
+  const result = await database.update(studentProfiles)
+    .set({ selectionJson: JSON.stringify(selection) })
+    .where(eq(studentProfiles.userId, userId));
+  if (result[0].affectedRows === 0) throw new Error("ملف الطالب غير موجود.");
+}
+
 export async function saveSIEOnboarding(userId: number, data: SIEOnboardingInput) {
   const db = await requireDb();
   const studentName = data.studentName.trim();
@@ -899,10 +907,54 @@ export async function toggleRoutineItem(userId: number, itemId: number, done: bo
   }
 }
 
-export async function updateRoutine(userId: number, routineId: number, data: { name: string; period: "morning" | "evening" | "custom"; accent: string; isActive: boolean }) {
+export async function updateRoutine(
+  userId: number,
+  routineId: number,
+  data: {
+    name: string;
+    period: "morning" | "evening" | "custom";
+    accent: string;
+    isActive: boolean;
+    items?: { title: string; durationMinutes?: number }[];
+  }
+) {
   const db = await requireDb();
-  const result = await db.update(routines).set(data).where(and(eq(routines.id, routineId), eq(routines.userId, userId)));
-  if (result[0].affectedRows === 0) throw new Error("الروتين غير موجود أو لا تملك تعديله.");
+  await db.transaction(async tx => {
+    const current = await tx.select({ id: routines.id })
+      .from(routines)
+      .where(and(eq(routines.id, routineId), eq(routines.userId, userId)))
+      .limit(1);
+    if (!current[0]) throw new Error("الروتين غير موجود أو لا تملك تعديله.");
+
+    await tx.update(routines).set({
+      name: data.name,
+      period: data.period,
+      accent: data.accent,
+      isActive: data.isActive,
+    }).where(and(eq(routines.id, routineId), eq(routines.userId, userId)));
+
+    if (data.items) {
+      const oldItems = await tx.select({ id: routineItems.id })
+        .from(routineItems)
+        .where(eq(routineItems.routineId, routineId));
+      if (oldItems.length) {
+        // Keep completion history intact; deactivate old steps and add a fresh ordered set.
+        await tx.update(routineItems)
+          .set({ isActive: false })
+          .where(inArray(routineItems.id, oldItems.map(item => item.id)));
+      }
+      const nextItems = data.items.filter(item => item.title.trim().length > 0);
+      if (nextItems.length) {
+        await tx.insert(routineItems).values(nextItems.map((item, index) => ({
+          routineId,
+          title: item.title.trim(),
+          durationMinutes: item.durationMinutes ?? 10,
+          sortOrder: index,
+          isActive: true,
+        })));
+      }
+    }
+  });
 }
 
 export async function deleteRoutine(userId: number, routineId: number) {
