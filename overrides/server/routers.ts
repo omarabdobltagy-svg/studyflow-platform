@@ -177,6 +177,10 @@ export const appRouter = router({
               const isNode = !["__NOT_STARTED__", "__UNKNOWN__", "__DEFERRED__"].includes(report);
               return [subjectId, {
                 teacherId,
+                teacherPublicContentFrontier: getSIETeacher(teacherId)?.latestPublicCheckpoint ?? null,
+                teacherPublicContentFrontierDate: getSIETeacher(teacherId)?.latestCheckpointDate ?? null,
+                teacherPaidCourseFrontier: null,
+                teacherPaidCoursePositionStatus: getSIETeacher(teacherId)?.paidCoursePositionStatus ?? "unknown",
                 studentAttendedFrontier: isNode ? report : null,
                 status: report === "__NOT_STARTED__" ? "not_started_with_teacher" : report === "__UNKNOWN__" ? "unknown" : report === "__DEFERRED__" ? "unlocated" : "student_reported",
                 evidenceSource: isNode ? "student_selection" : "student_selection_state",
@@ -184,7 +188,7 @@ export const appRouter = router({
                 selectedAt: new Date().toISOString(),
               }];
             })),
-            teacherFrontierReports: input.teacherFrontierReports,
+            teacherFrontiers: input.teacherFrontierReports,
             completedAt: new Date().toISOString(),
           },
         });
