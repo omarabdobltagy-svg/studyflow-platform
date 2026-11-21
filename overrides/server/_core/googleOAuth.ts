@@ -3,6 +3,7 @@ import axios from "axios";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import type { Express, Request, Response } from "express";
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
+import { parse as parseCookieHeader } from "cookie";
 import * as db from "../db";
 import { getSessionCookieOptions } from "./cookies";
 import { ENV } from "./env";
@@ -86,12 +87,10 @@ export function registerGoogleOAuthRoutes(app: Express) {
   app.get("/api/oauth/google/callback", async (req: Request, res: Response) => {
     const code = typeof req.query.code === "string" ? req.query.code : "";
     const state = typeof req.query.state === "string" ? req.query.state : "";
-    const stateCookie = req.cookies?.[STATE_COOKIE] ??
-      (req.headers.cookie ?? "").split(";").map(part => part.trim()).find(part => part.startsWith(STATE_COOKIE + "="))?.slice(STATE_COOKIE.length + 1);
-    const nonceCookie = req.cookies?.[NONCE_COOKIE] ??
-      (req.headers.cookie ?? "").split(";").map(part => part.trim()).find(part => part.startsWith(NONCE_COOKIE + "="))?.slice(NONCE_COOKIE.length + 1);
-    const verifierCookie = req.cookies?.[VERIFIER_COOKIE] ??
-      (req.headers.cookie ?? "").split(";").map(part => part.trim()).find(part => part.startsWith(VERIFIER_COOKIE + "="))?.slice(VERIFIER_COOKIE.length + 1);
+    const cookies = parseCookieHeader(req.headers.cookie ?? "");
+    const stateCookie = cookies[STATE_COOKIE];
+    const nonceCookie = cookies[NONCE_COOKIE];
+    const verifierCookie = cookies[VERIFIER_COOKIE];
 
     clearTransientCookies(res, req);
 
@@ -146,14 +145,11 @@ export function registerGoogleOAuthRoutes(app: Express) {
       }
 
       const openId = "google:" + googleSub;
-      await db.upsertUser({
+      const user = await db.upsertGoogleUser({
         openId,
         name: googleName || googleEmail,
         email: googleEmail,
-        loginMethod: "google",
-        lastSignedIn: new Date(),
       });
-      const user = await db.getUserByOpenId(openId);
       if (!user) {
         res.status(503).send("تم التحقق من Google، لكن تعذّر إنشاء جلسة الحساب. أعد المحاولة.");
         return;
