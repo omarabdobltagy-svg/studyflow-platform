@@ -53,6 +53,8 @@ export type SIETeacher = {
   adminFollowup: string;
   studentAttendedFrontierStatus: string;
   mappedCurriculumNodeIds: string[];
+  publicSegments?: Array<{ title: string; timestamp?: string; curriculumNodeIds: string[]; mappingStatus: string; note?: string }>;
+  conflictOptions?: Array<{ label: string; sourceDate: string; sourceLabel: string; confidence: string }>;
 };
 
 const BAC_SYSTEM: SIESystemId = "EG_BACCALAUREATE";
@@ -191,6 +193,7 @@ export const SIE_TEACHERS: SIETeacher[] = [
     adminFollowup: "المراجعة تثبت موضوعات عامة فقط؛ لا تثبت موضع الكورس المدفوع ولا أن الطالب شاهدها. عند تعذر التحقق، استخدم مسار تحديد الموضع داخل المنصة ولا توقف الخطة.",
     studentAttendedFrontierStatus: "requires_student_signal_or_SIE_progress_event",
     mappedCurriculumNodeIds: ["ARB_U1_L1","ARB_U1_L2"],
+    publicSegments: [{"title":"النحو - الأسماء الخمسة","timestamp":"00:03:50","curriculumNodeIds":[],"mappingStatus":"skill_only_not_a_separate_toc_node"},{"title":"القصة - حكايات الغريب","timestamp":"01:16:28","curriculumNodeIds":["STORY_W01"],"mappingStatus":"provisional_companion_mapping","note":"مورد أدبي مرافق؛ ارتباطه الرسمي بالصف غير محسوم."},{"title":"العلم بين القانون والضمير","timestamp":"02:14:45","curriculumNodeIds":["ARB_U1_L1"],"mappingStatus":"title_match"},{"title":"الخلق جوهر الفضيلة","timestamp":"02:47:53","curriculumNodeIds":["ARB_U1_L2"],"mappingStatus":"title_match"},{"title":"الفقرة الحجاجية ونقد المقال","timestamp":"03:35:36","curriculumNodeIds":[],"mappingStatus":"integrated_skill"}],
     evidenceLabel: "ظهور باقة للصف الثاني بكالوريا على المنصة",
     confidenceLabel: "ثقة متوسطة – نقطة عامة منشورة",
     evidenceNote: "مراجعة أكتوبر المنشورة تثبت موضوعات عامة فقط؛ لا تثبت رقم الكورس المدفوع ولا أن الطالب شاهد هذه الموضوعات.",
@@ -222,6 +225,7 @@ export const SIE_TEACHERS: SIETeacher[] = [
     adminFollowup: "إطار عمل لأربع مراحل وليس نمط لقاء أسبوعي؛ لا تستنتج رقم محاضرة. عند تعذر التحقق، استخدم مسار تحديد الموضع داخل المنصة ولا توقف الخطة.",
     studentAttendedFrontierStatus: "requires_student_signal_or_SIE_progress_event",
     mappedCurriculumNodeIds: [],
+    publicSegments: [{"title":"الفكرة المحورية والرئيسية والفرعية","curriculumNodeIds":[],"mappingStatus":"skill_only"},{"title":"تحليل الحجج والأدلة والرأي المخالف","curriculumNodeIds":[],"mappingStatus":"skill_only"}],
     evidenceLabel: "محتوى تأسيسي/عام للصف الثاني بكالوريا",
     confidenceLabel: "ثقة منخفضة إلى متوسطة – محتوى عام",
     evidenceNote: "المصدر يدعم وجود محتوى عام؛ لا يثبت موضع الكورس المدفوع الحالي.",
@@ -237,7 +241,7 @@ export const SIE_TEACHERS: SIETeacher[] = [
     popularitySignal: "قناة تعليمية عامة تقارب 422K مشترك في لقطة نوفمبر 2026؛ مؤشر انتشار عام وليس تقييم جودة",
     latestPublicCheckpoint: "محتوى تأسيسي منشور 20 أغسطس عن فهم النص وتحليله ومناقشته وتوظيف اللغة والتحدث والكتابة.",
     shortlistPosition: 3,
-    coursePresence: "verified_official_course_listing",
+    coursePresence: "verified_bac_listing_with_conflicting_generic_catalog",
     courseVerifiedFor: "2 Bac 2027 Arabic",
     courseProgressEvidence: "صفحة الكورس التفصيلية تعرض محاضرة أولى للصف الثاني ونوع التعليم بكالوريا؛ الكتالوج العام يعرض محاضرة سابعة للصف الثاني دون تعريف نفس مسار البكالوريا.",
     latestCheckpointDate: "2026-08-20",
@@ -251,10 +255,12 @@ export const SIE_TEACHERS: SIETeacher[] = [
     adminFollowup: "لا تعتبر المحاضرة السابعة هي الحالية لهذا الكورس؛ تعارض هوية الكورس يحتاج تحققًا. عند تعذر التحقق، استخدم مسار تحديد الموضع داخل المنصة ولا توقف الخطة.",
     studentAttendedFrontierStatus: "requires_student_signal_or_SIE_progress_event",
     mappedCurriculumNodeIds: [],
+    publicSegments: [{"title":"الفهم والتحليل والمناقشة وتوظيف اللغة والتحدث والكتابة","curriculumNodeIds":[],"mappingStatus":"foundation_skills_only"}],
+    conflictOptions: [{"label":"صفحة كورس خاصة بالصف الثاني تعرض المحاضرة الأولى","sourceDate":"2026-08-20","sourceLabel":"صفحة الكورس التفصيلية","confidence":"هوية بكالوريا أوضح"},{"label":"الكتالوج العام يعرض المحاضرة السابعة مع هوية سنة/مسار غير محسومة","sourceDate":"2026-08-20","sourceLabel":"الكتالوج العام","confidence":"متعارضة وغير كافية"}],
     evidenceLabel: "ظهور قائمة بكالوريا مع تعارض في كتالوج عام",
     confidenceLabel: "ثقة منخفضة – توجد بيانات متعارضة",
     evidenceNote: "المصادر لا تحسم موضع الكورس المدفوع؛ لا نعتمد رقم محاضرة من هذه البيانات.",
-    systemCourseVerification: { EG_BACCALAUREATE: "public_2027_course_evidence_found", EG_GENERAL_SECONDARY: "not_verified_for_2026_2027" },
+    systemCourseVerification: { EG_BACCALAUREATE: "official_course_listing_and_public_2027_content", EG_GENERAL_SECONDARY: "not_verified_for_2026_2027" },
     sourceId: "SRC_TAREK_CATALOG_CONFLICT",
   },
   {
@@ -280,6 +286,7 @@ export const SIE_TEACHERS: SIETeacher[] = [
     adminFollowup: "الفيديو الواحد قد يجمع Vocabulary وGrammar وعدة دروس؛ لا تستنتج أن المدرس في Unit 3 أو أن رقم درس المفردات هو رقم المحاضرة. عند تعذر التحقق، استخدم مسار تحديد الموضع داخل المنصة ولا توقف الخطة.",
     studentAttendedFrontierStatus: "requires_student_signal_or_SIE_progress_event",
     mappedCurriculumNodeIds: ["ENG_U1_SEC_A_T1","ENG_U1_SEC_A_T2","ENG_U1_SEC_B_T1","ENG_U1_SEC_B_T2"],
+    publicSegments: [{"title":"كلمات الدرس الأول وجرامره","timestamp":"2026-10-11","curriculumNodeIds":["ENG_U1_NODE"],"mappingStatus":"unit_level_mapping"},{"title":"كلمات الدرس الثاني وجرامره","timestamp":"2026-10-11","curriculumNodeIds":["ENG_U1_NODE"],"mappingStatus":"unit_level_mapping"},{"title":"كلمات الدرس الثالث","timestamp":"2026-10-13","curriculumNodeIds":["ENG_U1_NODE"],"mappingStatus":"unit_level_mapping"},{"title":"جرامر حالات If","timestamp":"2026-10-13","curriculumNodeIds":["ENG_U1_NODE"],"mappingStatus":"unit_level_mapping"},{"title":"كلمات الدرسين الرابع والخامس مع التقييمات","timestamp":"2026-10-13","curriculumNodeIds":["ENG_U1_NODE"],"mappingStatus":"unit_level_mapping"}],
     evidenceLabel: "باقة/محتوى منشور للصف الثاني بكالوريا",
     confidenceLabel: "ثقة متوسطة – نقاط عامة متعددة",
     evidenceNote: "المراجعات العامة لا تثبت ترتيب الكورس المدفوع أو تقدم الطالب.",
@@ -459,7 +466,7 @@ export const SIE_TEACHERS: SIETeacher[] = [
     evidenceLabel: "إدراج كورس للصف الثاني بكالوريا على WE4CODE",
     confidenceLabel: "ثقة متوسطة – وجود الكورس في الكتالوج",
     evidenceNote: "إدراج المنصة يثبت وجود الكورس، لكنه لا يعرض فهرسًا كاملًا أو تقدم الطالب.",
-    systemCourseVerification: { EG_BACCALAUREATE: "course_catalog_presence_only", EG_GENERAL_SECONDARY: "not_verified_for_2026_2027" },
+    systemCourseVerification: { EG_BACCALAUREATE: "course_listing_for_2027_found", EG_GENERAL_SECONDARY: "not_verified_for_2026_2027" },
     sourceId: "SRC_PROG_WE4CODE_IMAD",
   },
   {
@@ -486,7 +493,7 @@ export const SIE_TEACHERS: SIETeacher[] = [
     evidenceLabel: "إدراج كورس نوفمبر على Code-UP",
     confidenceLabel: "ثقة منخفضة إلى متوسطة – إدراج كتالوج",
     evidenceNote: "الإدراج يثبت وجود منتج للكورس، والفهرس الداخلي غير مكتمل.",
-    systemCourseVerification: { EG_BACCALAUREATE: "course_catalog_presence_only", EG_GENERAL_SECONDARY: "not_verified_for_2026_2027" },
+    systemCourseVerification: { EG_BACCALAUREATE: "course_listing_for_2026_2027_found", EG_GENERAL_SECONDARY: "not_verified_for_2026_2027" },
     sourceId: "SRC_PROG_CODEUP_ANAS",
   },
   {
@@ -512,10 +519,11 @@ export const SIE_TEACHERS: SIETeacher[] = [
     adminFollowup: "الكتالوج/الفيديو يثبت وجود محتوى عام أو إدراج دورة فقط؛ لم يثبت رقم المحاضرة المدفوعة الحالي. استخدم مسار تحديد الموضع داخل المنصة ولا تستنتج رقمًا.",
     studentAttendedFrontierStatus: "requires_student_signal_or_SIE_progress_event",
     mappedCurriculumNodeIds: ["PROG_1_2"],
+    publicSegments: [{"title":"ما هو الذكاء الاصطناعي","timestamp":"09:09","curriculumNodeIds":["PROG_1_2"],"mappingStatus":"content_match"},{"title":"التعلم الآلي","timestamp":"20:42","curriculumNodeIds":["PROG_1_2"],"mappingStatus":"segment_within_lesson"},{"title":"التعلم العميق","timestamp":"25:05","curriculumNodeIds":["PROG_1_2"],"mappingStatus":"segment_within_lesson"},{"title":"الشبكات العصبية الاصطناعية","timestamp":"30:51","curriculumNodeIds":["PROG_1_2"],"mappingStatus":"segment_within_lesson"},{"title":"الذكاء الاصطناعي التوليدي","timestamp":"33:40","curriculumNodeIds":["PROG_1_2"],"mappingStatus":"segment_within_lesson"},{"title":"هلوسة الذكاء الاصطناعي","timestamp":"43:17","curriculumNodeIds":["PROG_1_2"],"mappingStatus":"segment_within_lesson"}],
     evidenceLabel: "فيديو عام للصف الثاني – درس عن عمل الذكاء الاصطناعي",
     confidenceLabel: "ثقة متوسطة – نقطة عامة فقط",
     evidenceNote: "الفيديو لا يثبت وجود كورس مدفوع أو آخر محاضرة فيه.",
-    systemCourseVerification: { EG_BACCALAUREATE: "public_checkpoint_only", EG_GENERAL_SECONDARY: "not_verified_for_2026_2027" },
+    systemCourseVerification: { EG_BACCALAUREATE: "public_lesson_2_2027_found_paid_course_unverified", EG_GENERAL_SECONDARY: "not_verified_for_2026_2027" },
     sourceId: "SRC_PROG_KHALED_OCT_LESSON2",
   },
 ];
