@@ -7,6 +7,8 @@ import {
   SIE_CATALOG_META,
   SIE_SYSTEMS,
   getSIEElectiveGroups,
+  getSIECheckpointChoices,
+  getSIETeacher,
   getSIESubject,
   getSIESubjectsForTrack,
   getSIETeachersForSubject,
@@ -38,10 +40,14 @@ type FormState = {
   trackId: string;
   electiveSubjectId: string;
   teacherSelections: TeacherChoiceMap;
+  checkpointSelections: Record<string, string>;
 };
 
-const steps = ["بياناتك", "النظام الدراسي", "المسار", "المواد", "المدرسون"];
+const steps = ["بياناتك", "النظام الدراسي", "المسار", "المواد", "المدرسون", "نقطة البداية"];
 const SKIP_TEACHER = "__SKIP__";
+const CHECKPOINT_NOT_STARTED = "__NOT_STARTED__";
+const CHECKPOINT_UNKNOWN = "__UNKNOWN__";
+const CHECKPOINT_DEFERRED = "__DEFERRED__";
 
 function normalizeEgyptianPhone(value: string) {
   const trimmed = value.trim();
@@ -87,6 +93,7 @@ export default function Onboarding({ editMode = false }: { editMode?: boolean })
     trackId: "",
     electiveSubjectId: "",
     teacherSelections: {},
+    checkpointSelections: {},
   });
 
   useEffect(() => {
@@ -101,6 +108,9 @@ export default function Onboarding({ editMode = false }: { editMode?: boolean })
       teacherSelections: Object.keys(current.teacherSelections).length
         ? current.teacherSelections
         : (saved?.teacherChoices ?? {}),
+      checkpointSelections: Object.keys(current.checkpointSelections).length
+        ? current.checkpointSelections
+        : (saved?.teacherFrontiers ?? {}),
     }));
   }, [auth.data, profile.data]);
 
@@ -184,6 +194,7 @@ export default function Onboarding({ editMode = false }: { editMode?: boolean })
       skippedTeacherSubjectIds: selectedSubjects
         .filter(subject => !teacherSelections[subject.subjectId])
         .map(subject => subject.subjectId),
+      teacherFrontierReports: Object.fromEntries(Object.entries(form.checkpointSelections).filter(([subjectId]) => Boolean(teacherSelections[subjectId]))),
     });
   };
 
@@ -485,6 +496,80 @@ export default function Onboarding({ editMode = false }: { editMode?: boolean })
                   })}
                 </div>
               )}
+              {step === 5 && (
+                <div className="space-y-5">
+                  <div className="flex items-start gap-3 rounded-2xl border border-primary/15 bg-secondary/25 p-4">
+                    <CircleHelp className="mt-0.5 size-5 shrink-0 text-primary" />
+                    <p className="text-sm leading-7 text-muted-foreground">
+                      مش لازم تعرف رقم المحاضرة. اختر آخر موضوع أكملته بنفسك مع المدرس، أو قل إنك لسه ما بدأتش أو مش متأكد. الاختيارات من فهرس المنهج الرسمي، وليست ترقيمًا لمحاضرات المدرس. إجابتك تُحفظ كتقرير منك فقط، ولا نعتبرها إنجازًا مثبتًا قبل تسجيل دليل داخل SIE.
+                    </p>
+                  </div>
+                  {selectedSubjects.filter(subject => {
+                    const teacherId = form.teacherSelections[subject.subjectId];
+                    return Boolean(teacherId && teacherId !== SKIP_TEACHER);
+                  }).length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-5 text-sm leading-7 text-muted-foreground">
+                      لم تختر مدرسًا لأي مادة. يمكنك إكمال إعداد الحساب الآن؛ سيبدأ تحديد نقطة البداية عند اختيار مدرس لاحقًا.
+                    </div>
+                  ) : selectedSubjects.filter(subject => {
+                    const teacherId = form.teacherSelections[subject.subjectId];
+                    return Boolean(teacherId && teacherId !== SKIP_TEACHER);
+                  }).map(subject => {
+                    const teacherId = form.teacherSelections[subject.subjectId];
+                    const teacher = getSIETeacher(teacherId);
+                    const choices = getSIECheckpointChoices(subject.subjectId);
+                    const selected = form.checkpointSelections[subject.subjectId] ?? CHECKPOINT_DEFERRED;
+                    return (
+                      <section key={subject.subjectId} className="rounded-2xl border border-border p-4 sm:p-5">
+                        <div className="mb-4">
+                          <p className="font-bold">{subject.nameAr} · {teacher?.nameAr ?? "المدرس المختار"}</p>
+                          <p className="mt-1 text-xs leading-6 text-muted-foreground">ما آخر موضوع أكملته فعلًا؟ لا تختَر موضوعًا لمجرد أنه منشور على قناة المدرس.</p>
+                        </div>
+                        {choices.length > 0 ? (
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            {choices.map(choice => (
+                              <ChoiceCard
+                                key={choice.nodeId}
+                                selected={selected === choice.nodeId}
+                                onClick={() => setForm(current => ({
+                                  ...current,
+                                  checkpointSelections: { ...current.checkpointSelections, [subject.subjectId]: choice.nodeId },
+                                }))}
+                                icon={<BookOpen className="size-5" />}
+                                title={choice.title}
+                                subtitle={choice.unitTitle}
+                                note={choice.note}
+                              />
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="rounded-xl bg-muted/25 p-3 text-xs leading-6 text-muted-foreground">
+                            لا توجد نقطة عامة قابلة للمطابقة لهذا المدرس في الحزمة. يمكنك تأجيل التحديد؛ لن نخمن موضعك.
+                          </p>
+                        )}
+                        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                          <button type="button" aria-pressed={selected === CHECKPOINT_NOT_STARTED}
+                            onClick={() => setForm(current => ({ ...current, checkpointSelections: { ...current.checkpointSelections, [subject.subjectId]: CHECKPOINT_NOT_STARTED } }))}
+                            className={"rounded-xl border px-3 py-3 text-sm font-semibold transition " + (selected === CHECKPOINT_NOT_STARTED ? "border-primary bg-secondary text-primary" : "border-border text-muted-foreground hover:border-primary/30")}>
+                            لسه ما بدأتش مع المدرس ده
+                          </button>
+                          <button type="button" aria-pressed={selected === CHECKPOINT_UNKNOWN}
+                            onClick={() => setForm(current => ({ ...current, checkpointSelections: { ...current.checkpointSelections, [subject.subjectId]: CHECKPOINT_UNKNOWN } }))}
+                            className={"rounded-xl border px-3 py-3 text-sm font-semibold transition " + (selected === CHECKPOINT_UNKNOWN ? "border-primary bg-secondary text-primary" : "border-border text-muted-foreground hover:border-primary/30")}>
+                            مش متأكد
+                          </button>
+                          <button type="button" aria-pressed={selected === CHECKPOINT_DEFERRED}
+                            onClick={() => setForm(current => ({ ...current, checkpointSelections: { ...current.checkpointSelections, [subject.subjectId]: CHECKPOINT_DEFERRED } }))}
+                            className={"rounded-xl border px-3 py-3 text-sm font-semibold transition " + (selected === CHECKPOINT_DEFERRED ? "border-primary bg-secondary text-primary" : "border-border text-muted-foreground hover:border-primary/30")}>
+                            أحددها بعدين
+                          </button>
+                        </div>
+                      </section>
+                    );
+                  })}
+                </div>
+              )}
+
             </div>
 
             <footer className="flex flex-col-reverse gap-3 border-t border-border/70 bg-muted/15 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
