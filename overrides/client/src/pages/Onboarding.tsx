@@ -45,7 +45,7 @@ type FormState = {
   checkpointSelections: Record<string, string>;
 };
 
-const steps = ["بياناتك", "النظام الدراسي", "المسار", "المواد", "المدرسون", "نقطة البداية"];
+const steps = ["بياناتك", "النظام الدراسي", "المسار", "المواد", "المدرسون ونقطة البداية"];
 const SKIP_TEACHER = "__SKIP__";
 const CHECKPOINT_NOT_STARTED = "__NOT_STARTED__";
 const CHECKPOINT_UNKNOWN = "__UNKNOWN__";
@@ -78,12 +78,25 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
   const auth = trpc.auth.me.useQuery(undefined, { retry: false });
   const profile = trpc.studentProfile.get.useQuery(undefined, { enabled: Boolean(auth.data) });
   const utils = trpc.useUtils();
+  const [isEditingProfile, setIsEditingProfile] = useState(!editMode);
+  const updateTeacherProgress = trpc.studentProfile.updateTeacherProgress.useMutation({
+    onSuccess: async () => {
+      await utils.studentProfile.get.invalidate();
+      toast.success("تم تحديث موضعك الدراسي مع المدرس.");
+    },
+    onError: error => toast.error(error.message || "تعذر تحديث موضعك الدراسي."),
+  });
   const complete = trpc.studentProfile.complete.useMutation({
     onSuccess: async () => {
       await Promise.all([utils.auth.me.invalidate(), utils.studentProfile.get.invalidate()]);
       toast.success(editMode ? "تم تحديث اختيارات ملفك الدراسي." : "اكتمل إعداد حسابك الدراسي.");
       setRefreshCheckpointMode(false);
-      setLocation("/");
+      if (editMode) {
+        setIsEditingProfile(false);
+        setStep(0);
+      } else {
+        setLocation("/");
+      }
     },
     onError: error => toast.error(error.message || "تعذر حفظ بيانات الحساب."),
   });
@@ -145,7 +158,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
     const teacher = teacherId && teacherId !== SKIP_TEACHER ? getSIETeacher(teacherId) : undefined;
     return teacher?.studentInputRequired === true && (refreshCheckpointMode || form.checkpointSelections[subject.subjectId] === undefined);
   });
-  const activeSteps = hasCheckpointStep ? steps : steps.slice(0, 5);
+  const activeSteps = steps;
 
   const isIdentityValid =
     form.studentName.trim().length >= 2 &&
@@ -204,6 +217,16 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
       toast.error("راجع بياناتك واختياراتك قبل الحفظ.");
       return;
     }
+    const missingCheckpoints = selectedSubjects.filter(subject => {
+      const teacherId = form.teacherSelections[subject.subjectId];
+      const teacher = teacherId && teacherId !== SKIP_TEACHER ? getSIETeacher(teacherId) : undefined;
+      return teacher?.studentInputRequired === true && !form.checkpointSelections[subject.subjectId];
+    });
+    if (missingCheckpoints.length > 0) {
+      setRefreshCheckpointMode(true);
+      toast.error("حدد نقطة البداية أو اختر «تخطي دلوقتي» لكل مدرس يحتاج تحديد موضعك.");
+      return;
+    }
     const teacherSelections = Object.fromEntries(
       Object.entries(form.teacherSelections).filter(([, teacherId]) => teacherId && teacherId !== SKIP_TEACHER)
     );
@@ -231,6 +254,13 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
           <Loader2 className="mx-auto mb-3 size-5 animate-spin" />
           نحمّل حسابك واختياراتك…
         </div>
+      ) : editMode && !isEditingProfile ? (
+        <StudentProfileOverview
+          profile={profile.data as any}
+          updatePending={updateTeacherProgress.isPending}
+          onEdit={() => { setIsEditingProfile(true); setStep(0); }}
+          onUpdateProgress={(subjectId, checkpoint) => updateTeacherProgress.mutate({ subjectId, checkpoint })}
+        />
       ) : (
         <div className="mx-auto max-w-4xl">
           <section className="relative overflow-hidden rounded-[2rem] bg-primary p-6 text-primary-foreground shadow-xl sm:p-9">
@@ -481,18 +511,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                   })}
                 </div>
               )}
-              {step === 4 && editMode && hasCheckpointStep && (
-                <div className="mt-5 flex flex-col gap-3 rounded-2xl border border-border/70 bg-card/70 p-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="font-semibold">موضعك الحالي محفوظ</p>
-                    <p className="mt-1 text-xs leading-6 text-muted-foreground">يمكنك تحديث آخر موضوع أنجزته مع المدرس دون إعادة إعداد المواد.</p>
-                  </div>
-                  <Button type="button" variant="outline" className="rounded-xl" onClick={() => { setRefreshCheckpointMode(true); setStep(5); }}>
-                    تحديث موضعك الدراسي
-                  </Button>
-                </div>
-              )}
-              {step === 5 && (
+              {step === 4 && hasCheckpointStep && (
                 <div className="space-y-5">
                   <div className="flex items-start gap-3 rounded-2xl border border-primary/15 bg-secondary/25 p-4">
                     <CircleHelp className="mt-0.5 size-5 shrink-0 text-primary" />
@@ -640,7 +659,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                 </Button>
               ) : (
                 <Button type="button" onClick={save} disabled={complete.isPending || !track || selectedSubjects.length === 0} className="rounded-xl bg-primary">
-                  {complete.isPending ? <><Loader2 className="size-4 animate-spin" /> نحفظ اختياراتك…</> : <><Check className="size-4" /> إكمال إعداد الحساب</>}
+                  {complete.isPending ? <><Loader2 className="size-4 animate-spin" /> نحفظ اختياراتك…</> : <><Check className="size-4" /> {editMode ? "حفظ تعديلات الملف" : "إكمال إعداد الحساب"}</>}
                 </Button>
               )}
             </footer>
@@ -652,6 +671,124 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
         </div>
       )}
     </DashboardLayout>
+  );
+}
+
+function StudentProfileOverview({
+  profile,
+  onEdit,
+  onUpdateProgress,
+  updatePending,
+}: {
+  profile: any;
+  onEdit: () => void;
+  onUpdateProgress: (subjectId: string, checkpoint: string) => void;
+  updatePending: boolean;
+}) {
+  const selection = (profile?.selection ?? {}) as Record<string, any>;
+  const teacherChoices = (selection.teacherChoices ?? {}) as Record<string, string>;
+  const frontiers = (selection.teacherFrontiers ?? {}) as Record<string, string>;
+  const progressState = (selection.teacherProgressState ?? {}) as Record<string, Record<string, any>>;
+  const subjectIds = Array.isArray(selection.subjectIds) && selection.subjectIds.length
+    ? selection.subjectIds as string[]
+    : Object.keys(teacherChoices);
+  const [drafts, setDrafts] = useState<Record<string, string>>(() =>
+    Object.fromEntries(subjectIds.map(subjectId => [
+      subjectId,
+      frontiers[subjectId] ?? progressState[subjectId]?.studentAttendedFrontier ?? "__UNKNOWN__",
+    ]))
+  );
+
+  useEffect(() => {
+    setDrafts(Object.fromEntries(subjectIds.map(subjectId => [
+      subjectId,
+      frontiers[subjectId] ?? progressState[subjectId]?.studentAttendedFrontier ?? "__UNKNOWN__",
+    ])));
+  }, [profile?.updatedAt, selection.teacherFrontiers, selection.teacherProgressState]);
+
+  const system = SIE_SYSTEMS.find(item => item.systemId === selection.systemId);
+  const track = selection.trackId ? getSIETrack(selection.trackId) : undefined;
+  const subjectNames = subjectIds.map(id => getSIESubject(id)?.nameAr ?? id);
+  const reportLabel = (subjectId: string, value: string) => {
+    if (value === "__NOT_STARTED__") return "لم أبدأ مع المدرس بعد";
+    if (value === "__UNKNOWN__") return "لم أحدد موضعي بعد";
+    if (value === "__DEFERRED__") return "تحديد الموضع مؤجل";
+    return getSIECheckpointChoices(subjectId).find(choice => choice.nodeId === value)?.title ?? "موضع غير محدد في الفهرس الحالي";
+  };
+
+  return (
+    <div className="mx-auto max-w-5xl space-y-5 enter">
+      <section className="relative overflow-hidden rounded-[2rem] border border-primary/20 bg-card p-6 shadow-xl sm:p-8">
+        <div className="pointer-events-none absolute -left-10 -top-14 size-52 rounded-full bg-primary/10 blur-3xl" />
+        <div className="relative flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
+          <div>
+            <p className="eyebrow">ملفك الدراسي الحالي</p>
+            <h2 className="mt-2 text-2xl font-bold sm:text-3xl">{profile?.studentName || "بيانات الطالب"}</h2>
+            <p className="mt-2 text-sm text-muted-foreground">{system?.nameAr ?? profile?.educationSystem ?? "النظام الدراسي غير محدد"} · {track?.nameAr ?? profile?.track ?? "المسار غير محدد"}</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {subjectNames.map(name => <span key={name} className="rounded-full border border-border bg-secondary/60 px-3 py-1.5 text-xs font-semibold">{name}</span>)}
+            </div>
+          </div>
+          <Button onClick={onEdit} className="pressable rounded-xl bg-primary"><Pencil className="size-4" />تعديل بيانات الملف</Button>
+        </div>
+        <div className="relative mt-6 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-2xl border border-border/70 bg-background/70 p-4"><p className="eyebrow">المواد المحددة</p><p className="mt-2 text-2xl font-bold num">{subjectIds.length}</p></div>
+          <div className="rounded-2xl border border-border/70 bg-background/70 p-4"><p className="eyebrow">المدرسون المختارون</p><p className="mt-2 text-2xl font-bold num">{Object.values(teacherChoices).filter(id => id && id !== "__SKIP__").length}</p></div>
+          <div className="rounded-2xl border border-border/70 bg-background/70 p-4"><p className="eyebrow">تاريخ إنشاء الملف</p><p className="mt-2 text-sm font-semibold">{profile?.completedAt ? new Date(profile.completedAt).toLocaleDateString("ar-EG") : "محفوظ"}</p></div>
+        </div>
+      </section>
+
+      <section className="app-card overflow-hidden">
+        <div className="border-b border-border/70 p-5 sm:p-6">
+          <p className="eyebrow">متابعة التعلّم</p>
+          <h3 className="mt-1 text-lg font-bold">المدرسون وموضعك الدراسي</h3>
+          <p className="mt-2 text-sm leading-7 text-muted-foreground">تقدر تحدّث آخر موضوع وصلت له مع كل مدرس من هنا. التقرير ده يعبّر عن اللي بتبلّغنا به، ومش بنعتبره دليل مشاهدة تلقائي.</p>
+        </div>
+        <div className="divide-y divide-border/70">
+          {subjectIds.map(subjectId => {
+            const subject = getSIESubject(subjectId);
+            const teacherId = teacherChoices[subjectId];
+            const teacher = teacherId && teacherId !== "__SKIP__" ? getSIETeacher(teacherId) : undefined;
+            const current = drafts[subjectId] ?? frontiers[subjectId] ?? "__UNKNOWN__";
+            const choices = getSIECheckpointChoices(subjectId);
+            const publicFrontier = teacher?.latestPublicCheckpoint;
+            return (
+              <article key={subjectId} className="space-y-4 p-5 sm:p-6">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-bold">{subject?.nameAr ?? subjectId}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">{teacher?.nameAr ?? "لم يتم اختيار مدرس بعد"}</p>
+                  </div>
+                  <span className="rounded-full bg-secondary px-3 py-1 text-xs font-semibold">{reportLabel(subjectId, current)}</span>
+                </div>
+                {teacher ? (
+                  <div className="grid gap-3 rounded-xl bg-secondary/35 p-4 sm:grid-cols-2">
+                    <div><p className="text-xs font-semibold text-muted-foreground">آخر محتوى عام موثق</p><p className="mt-1 text-sm font-medium">{publicFrontier || "لا توجد نقطة عامة موثقة في الفهرس الحالي"}</p><p className="mt-1 text-[11px] text-muted-foreground">{teacher.latestCheckpointDate ? `تاريخ التحديث: ${teacher.latestCheckpointDate}` : "لا يوجد تاريخ نشر موثق"}</p></div>
+                    <div><p className="text-xs font-semibold text-muted-foreground">فهرس الكورس المدفوع</p><p className="mt-1 text-sm font-medium">{teacher.paidCourseCatalogFrontier?.courseTitle || "غير متاح للتأكيد"}</p><p className="mt-1 text-[11px] text-muted-foreground">لن نستنتج موضعك من فيديوهات عامة أو إعلان باقة.</p></div>
+                  </div>
+                ) : <p className="rounded-xl bg-muted/35 p-4 text-sm text-muted-foreground">اختر مدرسًا من تعديل الملف الدراسي لربط المادة به.</p>}
+                {teacher && choices.length > 0 && (
+                  <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+                    <label className="block">
+                      <span className="mb-2 block text-xs font-semibold">آخر موضوع أنجزته مع المدرس</span>
+                      <select value={current} onChange={event => setDrafts(value => ({ ...value, [subjectId]: event.target.value }))} className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm">
+                        <option value="__NOT_STARTED__">لسه ما بدأتش مع المدرس ده</option>
+                        <option value="__UNKNOWN__">مش متأكد</option>
+                        <option value="__DEFERRED__">تخطي دلوقتي</option>
+                        {choices.map(choice => <option key={choice.nodeId} value={choice.nodeId}>{choice.unitTitle} — {choice.title}</option>)}
+                      </select>
+                    </label>
+                    <Button type="button" disabled={updatePending || current === (frontiers[subjectId] ?? progressState[subjectId]?.studentAttendedFrontier ?? "__UNKNOWN__")} onClick={() => onUpdateProgress(subjectId, current)} className="pressable h-11 rounded-xl bg-primary">
+                      {updatePending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}حفظ التقدم
+                    </Button>
+                  </div>
+                )}
+              </article>
+            );
+          })}
+        </div>
+      </section>
+    </div>
   );
 }
 
