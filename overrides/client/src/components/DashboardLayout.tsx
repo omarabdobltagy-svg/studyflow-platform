@@ -85,8 +85,8 @@ export default function DashboardLayout({ title, description, children, action }
         <div className="app-card w-full overflow-hidden p-7 text-center sm:p-10">
           <div className="mx-auto mb-7 flex size-16 items-center justify-center rounded-3xl bg-primary text-primary-foreground"><BrandMark className="size-7" /></div>
           <p className="eyebrow mb-3">مسار التعلّم</p><h1 className="text-3xl font-bold tracking-tight sm:text-4xl">مساحتك المركّزة لكل يوم</h1>
-          <p className="mx-auto mt-4 max-w-md leading-8 text-muted-foreground">استخدم حساب Google لفتح مساحتك الشخصية، ثم أدخل اسمك ورقم هاتفك واختر بياناتك الدراسية.</p>
-          <Button onClick={() => startLogin()} size="lg" className="pressable mt-8 min-w-48 rounded-2xl bg-primary px-7 font-semibold">المتابعة باستخدام Google<ChevronLeft className="size-4" /></Button>
+          <p className="mx-auto mt-4 max-w-md leading-8 text-muted-foreground">سجّل الدخول لفتح مساحتك الشخصية ومتابعة إعداد ملفك الدراسي.</p>
+          <Button onClick={() => startLogin()} size="lg" className="pressable mt-8 min-w-48 rounded-2xl bg-primary px-7 font-semibold">تسجيل الدخول<ChevronLeft className="size-4" /></Button>
         </div>
       </div>
     </div>
