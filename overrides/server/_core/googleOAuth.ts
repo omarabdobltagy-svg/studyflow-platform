@@ -54,7 +54,7 @@ function safeRedirect(res: Response, path: string) {
 
 export function registerGoogleOAuthRoutes(app: Express) {
   app.get("/api/oauth/google", (req: Request, res: Response) => {
-    if (!ENV.googleClientId || !ENV.googleClientSecret || !ENV.cookieSecret) {
+    if (!ENV.googleClientId || !ENV.googleClientSecret || !ENV.cookieSecret || (ENV.isProduction && !ENV.googleRedirectUri)) {
       res.status(503).send("تسجيل الدخول باستخدام Google غير مهيأ بعد. يلزم إعداد بيانات OAuth وJWT_SECRET في بيئة التشغيل.");
       return;
     }
@@ -165,7 +165,7 @@ export function registerGoogleOAuthRoutes(app: Express) {
       const profile = await db.getStudentProfile(user.id);
       safeRedirect(res, profile && user.phone ? "/" : "/onboarding");
     } catch (error) {
-      console.error("[Google OAuth] Callback failed", error);
+      console.error("[Google OAuth] Callback failed", error instanceof Error ? error.message : "Unknown error");
       res.status(500).send("حدث خطأ أثناء تسجيل الدخول باستخدام Google. حاول مرة أخرى.");
     }
   });
