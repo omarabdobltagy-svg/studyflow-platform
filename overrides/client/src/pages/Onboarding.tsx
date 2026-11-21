@@ -421,6 +421,20 @@ export default function Onboarding({ editMode = false }: { editMode?: boolean })
                                   <p className="mt-3 text-xs leading-6 text-muted-foreground">{teacher.evidenceLabel}</p>
                                   <p className="mt-2 text-xs leading-6">{teacher.confidenceLabel}</p>
                                   <p className="mt-1 text-[11px] leading-5 text-muted-foreground">{teacher.evidenceNote}</p>
+                                  {teacher.publicAudienceMetric ? (
+                                    <div className="mt-2 rounded-lg bg-muted/45 px-3 py-2 text-[11px] leading-5 text-muted-foreground">
+                                      إشارة وصول عامة: {new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 2 }).format(teacher.publicAudienceMetric)} · لقطة {teacher.publicAudienceMetricDate}
+                                      <span className="block">مؤشر انتشار فقط، وليس تقييمًا لجودة التدريس.</span>
+                                    </div>
+                                  ) : teacher.popularitySignal ? (
+                                    <p className="mt-2 text-[11px] leading-5 text-muted-foreground">{teacher.popularitySignal}</p>
+                                  ) : null}
+                                  {teacher.latestPublicCheckpoint && (
+                                    <p className="mt-2 text-[11px] leading-6 text-muted-foreground">
+                                      آخر نقطة عامة موثقة: {teacher.latestPublicCheckpoint}
+                                    </p>
+                                  )}
+
                                   <div className="mt-3 flex flex-wrap items-center gap-2">
                                     <span className="rounded-full bg-muted px-2.5 py-1 text-[10px]">آخر تحقق: {teacher.lastChecked}</span>
                                     {needsRefresh && <span className="rounded-full bg-amber-500/10 px-2.5 py-1 text-[10px] text-amber-700 dark:text-amber-300">يحتاج تحديث المصدر</span>}
