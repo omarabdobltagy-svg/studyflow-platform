@@ -32,6 +32,8 @@ export type SIETeacher = {
   publicAudienceMetricDate?: string;
   popularitySignal?: string;
   latestPublicCheckpoint?: string;
+  teachingAdvice?: string;
+  teachingAdviceEvidence?: string;
   evidenceLabel: string;
   confidenceLabel: string;
   evidenceNote: string;
@@ -158,6 +160,8 @@ export const SIE_TEACHERS: SIETeacher[] = [
     publicAudienceMetricDate: "2024-06-29",
     popularitySignal: "لقطة تاريخية لقناة واسعة الوصول",
     latestPublicCheckpoint: "مراجعة 13 أكتوبر: الأسماء الخمسة، حكايات الغريب، العلم بين القانون والضمير، الخلق جوهر الفضيلة، والفقرة الحجاجية ونقد المقال.",
+    teachingAdvice: "لا تساوِ بين مشاهدة المحاضرة وبين تعلّم الدرس؛ اختبر الفهم بالسؤال والتطبيق، واستخدم أخطاء الواجب والامتحان لتحديد ما يحتاج تصحيحًا.",
+    teachingAdviceEvidence: "ملخص وصف فيديو منشور 29 أكتوبر 2026؛ ليس تفريغًا حرفيًا.",
     evidenceLabel: "ظهور باقة للصف الثاني بكالوريا على المنصة",
     confidenceLabel: "ثقة متوسطة – نقطة عامة منشورة",
     evidenceNote: "مراجعة أكتوبر المنشورة تثبت موضوعات عامة فقط؛ لا تثبت رقم الكورس المدفوع ولا أن الطالب شاهد هذه الموضوعات.",
@@ -172,6 +176,8 @@ export const SIE_TEACHERS: SIETeacher[] = [
     publicAudienceMetricDate: "2026-11-14",
     popularitySignal: "لقطة عامة للقناة، وليست مقياس جودة",
     latestPublicCheckpoint: "تأسيس النص المعلوماتي ومهارات الفكرة المحورية وتحليل الحجج؛ لا توجد نقطة مدفوعة أحدث مؤكدة.",
+    teachingAdvice: "حدّد النقطة الأساسية في الفرع، افهمها، ثم طبّق عليها بأسئلة وامتحانات وتحقق من الإجابة. إذا تعثرت في سؤال، انتقل مؤقتًا ثم عد إليه.",
+    teachingAdviceEvidence: "مقابلة صحفية 2024؛ نصيحة عامة وليست ترتيبًا إلزاميًا لامتحان 2027.",
     evidenceLabel: "محتوى تأسيسي/عام للصف الثاني بكالوريا",
     confidenceLabel: "ثقة منخفضة إلى متوسطة – محتوى عام",
     evidenceNote: "المصدر يدعم وجود محتوى عام؛ لا يثبت موضع الكورس المدفوع الحالي.",
@@ -242,6 +248,8 @@ export const SIE_TEACHERS: SIETeacher[] = [
     publicAudienceMetricDate: "2026-08-29",
     popularitySignal: "لقطة عامة للقناة",
     latestPublicCheckpoint: "إعلان الخطة السنوية فقط؛ آخر درس مدفوع غير معروف.",
+    teachingAdvice: "في التاريخ: حدّد الحدث وأسبابه ونتائجه وموقعه الزمني وعلاقته بحدث آخر، ثم مارس تحليل النص والخريطة ونقطة التحول والاستثناء.",
+    teachingAdviceEvidence: "مهارات يصفها المعلم في محاضرته التأسيسية؛ أفكار تدريب وليست مواصفة رسمية للامتحان.",
     evidenceLabel: "خطة سنوية منشورة من موقع المدرس",
     confidenceLabel: "ثقة منخفضة – خطة عامة فقط",
     evidenceNote: "الخطة السنوية لا تثبت رقم المحاضرة المدفوعة أو تقدم الطالب.",
@@ -256,6 +264,8 @@ export const SIE_TEACHERS: SIETeacher[] = [
     publicAudienceMetricDate: "2026-11-17",
     popularitySignal: "لقطة تحليلات قناة عامة",
     latestPublicCheckpoint: "مقاطع عامة عن دروس 4–6؛ ترتيب المدرس لا يطابق فهرس الكتاب تلقائيًا.",
+    teachingAdvice: "استخدم السرد والربط بين الأحداث بدل حفظ كل حدث منفصلًا، ثم اختبر الفهم بأسئلة متدرجة.",
+    teachingAdviceEvidence: "ملخص وصف القناة العامة.",
     evidenceLabel: "محتوى تاريخ عام منشور",
     confidenceLabel: "ثقة منخفضة إلى متوسطة – محتوى عام",
     evidenceNote: "المحتوى العام لا يثبت ترتيب كورس مدفوع أو موعدًا ثابتًا.",
