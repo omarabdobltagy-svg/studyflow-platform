@@ -164,6 +164,7 @@ export default function Onboarding({ editMode = false }: { editMode?: boolean })
       trackId: "",
       electiveSubjectId: "",
       teacherSelections: {},
+      checkpointSelections: {},
     }));
   };
 
@@ -173,6 +174,7 @@ export default function Onboarding({ editMode = false }: { editMode?: boolean })
       trackId,
       electiveSubjectId: "",
       teacherSelections: {},
+      checkpointSelections: {},
     }));
   };
 
@@ -360,6 +362,7 @@ export default function Onboarding({ editMode = false }: { editMode?: boolean })
                                   ...current,
                                   electiveSubjectId: subject.subjectId,
                                   teacherSelections: {},
+                                  checkpointSelections: {},
                                 }))}
                                 icon={<BookOpen className="size-5" />}
                                 title={subject.nameAr}
@@ -433,8 +436,18 @@ export default function Onboarding({ editMode = false }: { editMode?: boolean })
                                     {selectedTeacher === teacher.teacherId && <Check className="size-5 shrink-0 text-primary" />}
                                   </div>
                                   <p className="mt-3 text-xs leading-6 text-muted-foreground">{teacher.evidenceLabel}</p>
+                                  <div className="mt-2 rounded-xl bg-muted/30 px-3 py-2 text-[11px] leading-6">
+                                    <p><span className="font-semibold">مرشح أولي:</span> {teacher.selectionLabel}</p>
+                                    <p><span className="font-semibold">الصف/السنة المثبتة:</span> {teacher.courseVerifiedFor}</p>
+                                    <p className="mt-1">{teacher.courseProgressEvidence}</p>
+                                  </div>
                                   <p className="mt-2 text-xs leading-6">{teacher.confidenceLabel}</p>
                                   <p className="mt-1 text-[11px] leading-5 text-muted-foreground">{teacher.evidenceNote}</p>
+                                  <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+                                    حالة موضع الكورس المدفوع: {teacher.paidCoursePositionStatus === "not_verified_from_public_evidence" ? "غير مثبت من المصادر العامة" : teacher.paidCoursePositionStatus}
+                                  </p>
+                                  <p className="mt-1 text-[11px] leading-5 text-muted-foreground">{teacher.scheduleEvidence}</p>
+                                  <p className="mt-1 text-[11px] leading-5 text-muted-foreground">{teacher.teacherNotes}</p>
                                   {teacher.publicAudienceMetric ? (
                                     <div className="mt-2 rounded-lg bg-muted/45 px-3 py-2 text-[11px] leading-5 text-muted-foreground">
                                       إشارة وصول عامة: {new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 2 }).format(teacher.publicAudienceMetric)} · لقطة {teacher.publicAudienceMetricDate}
