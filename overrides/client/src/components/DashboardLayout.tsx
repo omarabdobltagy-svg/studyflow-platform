@@ -1,6 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
-import { startLogin } from "@/const";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import QueryErrorNotice from "@/components/QueryErrorNotice";
 import BrandMark from "@/components/BrandMark";
@@ -45,6 +46,15 @@ type DashboardLayoutProps = { title: string; description: string; children: Reac
 
 export default function DashboardLayout({ title, description, children, action }: DashboardLayoutProps) {
   const { user, loading, logout, error: authError, refresh: refreshAuth } = useAuth();
+  const trpcUtils = trpc.useUtils();
+  const [loginUsername, setLoginUsername] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const loginMutation = trpc.auth.login.useMutation({
+    onSuccess: (authenticatedUser) => {
+      trpcUtils.auth.me.setData(undefined, authenticatedUser);
+      void trpcUtils.invalidate();
+    },
+  });
   const [location, setLocation] = useLocation();
   const [isMobileNavOpen, setMobileNavOpen] = useState(false);
   const studentProfile = trpc.studentProfile.get.useQuery(undefined, { enabled: Boolean(user) });
@@ -85,8 +95,49 @@ export default function DashboardLayout({ title, description, children, action }
         <div className="app-card w-full overflow-hidden p-7 text-center sm:p-10">
           <div className="mx-auto mb-7 flex size-16 items-center justify-center rounded-3xl bg-primary text-primary-foreground"><BrandMark className="size-7" /></div>
           <p className="eyebrow mb-3">مسار التعلّم</p><h1 className="text-3xl font-bold tracking-tight sm:text-4xl">مساحتك المركّزة لكل يوم</h1>
-          <p className="mx-auto mt-4 max-w-md leading-8 text-muted-foreground">سجّل الدخول لفتح مساحتك الشخصية ومتابعة إعداد ملفك الدراسي.</p>
-          <Button onClick={() => startLogin()} size="lg" className="pressable mt-8 min-w-48 rounded-2xl bg-primary px-7 font-semibold">تسجيل الدخول<ChevronLeft className="size-4" /></Button>
+          <p className="mx-auto mt-4 max-w-md leading-8 text-muted-foreground">ادخل بيانات المساحة لفتح لوحة الدراسة ومتابعة بياناتك.</p>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              loginMutation.mutate({ username: loginUsername, password: loginPassword });
+            }}
+            className="mx-auto mt-8 max-w-sm space-y-4 text-right"
+          >
+            <div className="space-y-2">
+              <Label htmlFor="studyflow-username">اسم المستخدم</Label>
+              <Input
+                id="studyflow-username"
+                value={loginUsername}
+                onChange={(event) => setLoginUsername(event.target.value)}
+                autoComplete="username"
+                placeholder="اسم المستخدم"
+                required
+                dir="ltr"
+                className="text-left"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="studyflow-password">كلمة المرور</Label>
+              <Input
+                id="studyflow-password"
+                type="password"
+                value={loginPassword}
+                onChange={(event) => setLoginPassword(event.target.value)}
+                autoComplete="current-password"
+                placeholder="كلمة المرور"
+                required
+              />
+            </div>
+            {loginMutation.error && (
+              <p role="alert" className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {loginMutation.error.message}
+              </p>
+            )}
+            <Button type="submit" disabled={loginMutation.isPending} size="lg" className="pressable mt-2 w-full rounded-2xl bg-primary px-7 font-semibold">
+              {loginMutation.isPending ? "جارٍ تسجيل الدخول..." : "دخول إلى المساحة"}
+              <ChevronLeft className="size-4" />
+            </Button>
+          </form>
         </div>
       </div>
     </div>

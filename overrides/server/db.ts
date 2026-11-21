@@ -186,6 +186,54 @@ export async function upsertUser(user: InsertUser): Promise<void> {
   await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
 }
 
+
+/**
+ * Creates the single local StudyFlow account, or adopts the only existing user row.
+ * Reusing the existing row preserves every study record linked by userId.
+ * If multiple identities exist, refuse to guess which account owns the data.
+ */
+export async function ensureLocalAuthUser(name: string) {
+  const db = await requireDb();
+  const openId = "studyflow-local-owner";
+  const localRows = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
+
+  if (localRows[0]) {
+    await db.update(users).set({
+      name,
+      loginMethod: "local",
+      role: "admin",
+      lastSignedIn: new Date(),
+    }).where(eq(users.id, localRows[0].id));
+  } else {
+    const existingRows = await db.select().from(users).orderBy(asc(users.id)).limit(2);
+    if (existingRows.length > 1) {
+      throw new Error("MULTIPLE_EXISTING_USERS");
+    }
+    if (existingRows.length === 1) {
+      // Keep the existing user id so profiles, tasks, books and other records remain linked.
+      await db.update(users).set({
+        openId,
+        name,
+        loginMethod: "local",
+        role: "admin",
+        lastSignedIn: new Date(),
+      }).where(eq(users.id, existingRows[0].id));
+    } else {
+      await db.insert(users).values({
+        openId,
+        name,
+        loginMethod: "local",
+        role: "admin",
+        lastSignedIn: new Date(),
+      });
+    }
+  }
+
+  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
+  if (!result[0]) throw new Error("LOCAL_USER_CREATION_FAILED");
+  return result[0];
+}
+
 export async function getUserByOpenId(openId: string) {
   const db = await getDb();
   if (!db) return undefined;
