@@ -180,8 +180,8 @@ export const appRouter = router({
         const choices = (selection.teacherChoices ?? {}) as Record<string, string>;
         const teacherId = choices[input.subjectId];
         const teacher = teacherId ? getSIETeacher(teacherId) : undefined;
-        if (!teacher || !teacher.subjectIds.includes(input.subjectId) || !teacher.studentInputRequired) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "لا يوجد مدرس محدد لهذه المادة أو لا يلزم تحديث الموضع الآن." });
+        if (!teacher || !teacher.subjectIds.includes(input.subjectId)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "لا يوجد مدرس محدد لهذه المادة." });
         }
         const allowed = new Set(getSIECheckpointChoices(input.subjectId).map(choice => choice.nodeId));
         const sentinels = new Set(["__NOT_STARTED__", "__UNKNOWN__", "__DEFERRED__"]);
@@ -284,8 +284,8 @@ export const appRouter = router({
             throw new TRPCError({ code: "BAD_REQUEST", message: "نقطة البداية يجب أن تخص مادة ومدرسًا تم اختيارهما." });
           }
           const checkpointTeacher = getSIETeacher(input.teacherSelections[subjectId]);
-          if (!checkpointTeacher?.studentInputRequired) {
-            throw new TRPCError({ code: "BAD_REQUEST", message: "لا يلزم إدخال نقطة بداية لهذا المدرس في هذه المرحلة." });
+          if (!checkpointTeacher || !checkpointTeacher.subjectIds.includes(subjectId)) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "المدرس المختار لا يرتبط بالمادة المحددة." });
           }
           const allowedNodeIds = new Set(getSIECheckpointChoices(subjectId).map(choice => choice.nodeId));
           if (!validFrontierSentinels.has(report) && !allowedNodeIds.has(report)) {
