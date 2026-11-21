@@ -602,6 +602,10 @@ export const SIE_CHECKPOINT_CHOICES: Record<string, SIECheckpointChoice[]> = {
     { nodeId: "ARB_U1_L3", title: "العلم نور", unitTitle: "العلم والضمير" },
     { nodeId: "ARB_U2_L1", title: "التقنية وصناعة الرأي العام", unitTitle: "سلطان الكلمة الرقمية" },
     { nodeId: "ARB_U2_L2", title: "بين الذوق والعقل", unitTitle: "سلطان الكلمة الرقمية" },
+    { nodeId: "ARB_U2_L3", title: "أثر الكلمة وحفظ اللسان", unitTitle: "سلطان الكلمة الرقمية" },
+    { nodeId: "ARB_U3_L1", title: "حقوق الإنسان بين العالمية والخصوصية", unitTitle: "الإنسان وكرامته" },
+    { nodeId: "ARB_U3_L2", title: "الحرية الفكرية", unitTitle: "الإنسان وكرامته" },
+    { nodeId: "ARB_U3_L3", title: "يا أخي الإنسان", unitTitle: "الإنسان وكرامته" },
   ],
   ENG1_G2_BAC: [
     { nodeId: "ENG_U1_SEC_A_T1", title: "Social Media and Self-Image", unitTitle: "Living Well in a Complex World" },
@@ -609,22 +613,94 @@ export const SIE_CHECKPOINT_CHOICES: Record<string, SIECheckpointChoice[]> = {
     { nodeId: "ENG_U1_SEC_B_T1", title: "Whose Responsibility Is It?", unitTitle: "Living Well in a Complex World" },
     { nodeId: "ENG_U1_SEC_B_T2", title: "Understanding Mental Health", unitTitle: "Living Well in a Complex World" },
     { nodeId: "ENG_U2_SEC_A_T1", title: "Screen Time and Young People", unitTitle: "Leisure Time" },
+    { nodeId: "ENG_U2_SEC_A_T2", title: "Creative Arts as Leisure Activities", unitTitle: "Leisure Time" },
+    { nodeId: "ENG_U2_SEC_B_T1", title: "Sport and Physical Activity as Leisure", unitTitle: "Leisure Time" },
+    { nodeId: "ENG_U2_SEC_B_T2", title: "Not Exactly a Relaxing Day", unitTitle: "Leisure Time" },
+    { nodeId: "ENG_U3_SEC_A_T1", title: "Sites of Memory", unitTitle: "Echoes of the Past" },
+    { nodeId: "ENG_U3_SEC_A_T2", title: "The Museum as a Storyteller", unitTitle: "Echoes of the Past" },
+    { nodeId: "ENG_U3_SEC_B_T1", title: "The Viral Past", unitTitle: "Echoes of the Past" },
+    { nodeId: "ENG_U3_SEC_B_T2", title: "Social Media and Historical Events", unitTitle: "Echoes of the Past" },
+    { nodeId: "ENG_U4_SEC_A_T1", title: "Food Waste", unitTitle: "The Power of Choice" },
+    { nodeId: "ENG_U4_SEC_A_T2", title: "Beyond the Brand", unitTitle: "The Power of Choice" },
+    { nodeId: "ENG_U4_SEC_B_T1", title: "Digital Consumption", unitTitle: "The Power of Choice" },
+    { nodeId: "ENG_U4_SEC_B_T2", title: "Black Friday and Sales Culture", unitTitle: "The Power of Choice" },
+    { nodeId: "ENG_U5_SEC_A_T1", title: "The Climate Crisis", unitTitle: "The Greenhouse Effect" },
+    { nodeId: "ENG_U5_SEC_A_T2", title: "Renewable Energy – Powering a Sustainable Future", unitTitle: "The Greenhouse Effect" },
+    { nodeId: "ENG_U5_SEC_B_T1", title: "Greening Projects in Egypt", unitTitle: "The Greenhouse Effect" },
+    { nodeId: "ENG_U5_SEC_B_T2", title: "Individual and Collective Actions", unitTitle: "The Greenhouse Effect" },
   ],
   HIS_G2_BAC: [
     { nodeId: "HIS_U1_L1", title: "بناء الدولة المصرية واستمرارها عبر التاريخ", unitTitle: "مصر بين الماضي والحاضر" },
     { nodeId: "HIS_U1_L2", title: "الدولة المصرية القديمة ومقاومة الاحتلال", unitTitle: "مصر بين الماضي والحاضر" },
     { nodeId: "HIS_U1_L3", title: "التحولات الكبرى في مصر (العصر الوسيط)", unitTitle: "مصر بين الماضي والحاضر" },
     { nodeId: "HIS_U1_L4", title: "التحولات الكبرى في مصر (العصر الحديث)", unitTitle: "مصر بين الماضي والحاضر" },
-    { nodeId: "HIS_U2_L1", title: "سياسات الاحتلال بمصر في العصر الحديث", unitTitle: "تحولات القوة وبناء الوعي بمصر" },
+    { nodeId: "HIS_U2_L1", title: "سياسات الاحتلال بمصر في العصر الحديث", unitTitle: "تحولات القوة وبناء الوعي بمصر في العصر الحديث والمعاصر" },
+    { nodeId: "HIS_U2_L2", title: "صمود الشعب المصري ومقاومة الاحتلال", unitTitle: "تحولات القوة وبناء الوعي بمصر في العصر الحديث والمعاصر" },
+    { nodeId: "HIS_U2_L3", title: "ثورة 23 يوليو والتحولات الكبرى في مصر", unitTitle: "تحولات القوة وبناء الوعي بمصر في العصر الحديث والمعاصر" },
+    { nodeId: "HIS_U2_L4", title: "الهوية الوطنية في مواجهة الاستعمار الجديد", unitTitle: "تحولات القوة وبناء الوعي بمصر في العصر الحديث والمعاصر" },
+    { nodeId: "HIS_U3_L1", title: "حركات التحرر الوطني ضد الاحتلال الفرنسي والإيطالي في العالم العربي", unitTitle: "مصر وقضايا التحرر الوطني في الوطن العربي وإفريقيا" },
+    { nodeId: "HIS_U3_L2", title: "حركات التحرر الوطني ضد الاحتلال البريطاني والإسباني في العالم العربي", unitTitle: "مصر وقضايا التحرر الوطني في الوطن العربي وإفريقيا" },
+    { nodeId: "HIS_U3_L3", title: "مرتكزات الدور المصري إقليميًا ودوليًا", unitTitle: "مصر وقضايا التحرر الوطني في الوطن العربي وإفريقيا" },
+    { nodeId: "HIS_U3_L4", title: "دور مصر في دعم حركات التحرر الوطني", unitTitle: "مصر وقضايا التحرر الوطني في الوطن العربي وإفريقيا" },
   ],
   PROG_AI_G2_BAC: [
     { nodeId: "PROG_1_1", title: "تطور تكنولوجيا المعلومات والتحول الاجتماعي", unitTitle: "تكنولوجيا المعلومات والمجتمع" },
-    { nodeId: "PROG_1_2", title: "كيف يعمل الذكاء الاصطناعي", unitTitle: "تكنولوجيا المعلومات والمجتمع", note: "له محتوى عام منشور؛ لا يثبت موضع الكورس المدفوع أو إنجاز الطالب." },
+    { nodeId: "PROG_1_2", title: "كيف يعمل الذكاء الاصطناعي", unitTitle: "تكنولوجيا المعلومات والمجتمع" },
     { nodeId: "PROG_1_3", title: "الذكاء الاصطناعي في الحياة اليومية والصناعة", unitTitle: "تكنولوجيا المعلومات والمجتمع" },
     { nodeId: "PROG_1_4", title: "القضايا الأخلاقية للذكاء الاصطناعي", unitTitle: "تكنولوجيا المعلومات والمجتمع" },
     { nodeId: "PROG_2_1", title: "تقنيات التشفير والمصادقة", unitTitle: "الأمن السيبراني" },
+    { nodeId: "PROG_2_2", title: "تصميم أمن الشبكات", unitTitle: "الأمن السيبراني" },
+    { nodeId: "PROG_2_3", title: "الاستجابة للحوادث وإدارة المخاطر", unitTitle: "الأمن السيبراني" },
+    { nodeId: "PROG_3_1", title: "البنية العامة لتطبيقات الويب", unitTitle: "تطبيقات الويب" },
+    { nodeId: "PROG_3_2", title: "طرق الاتصال في تطبيقات الويب", unitTitle: "تطبيقات الويب" },
+    { nodeId: "PROG_3_3", title: "أساسيات تكنولوجيا الواجهة الأمامية", unitTitle: "تطبيقات الويب" },
+    { nodeId: "PROG_4_1", title: "أنواع الوسائط وخصائصها", unitTitle: "تصميم الويب والوسائط" },
+    { nodeId: "PROG_4_2", title: "تصميم المعلومات وتجربة المستخدم للمواقع", unitTitle: "تصميم الويب والوسائط" },
+    { nodeId: "PROG_4_3", title: "أساليب تقييم المواقع الإلكترونية", unitTitle: "تصميم الويب والوسائط" },
+    { nodeId: "PROG_4_4", title: "عملية التحسين التكراري للمواقع", unitTitle: "تصميم الويب والوسائط" },
+    { nodeId: "PROG_5_1", title: "طرق جمع البيانات", unitTitle: "جمع البيانات وتنقيتها" },
+    { nodeId: "PROG_5_2", title: "تنقية البيانات وتحويلها", unitTitle: "جمع البيانات وتنقيتها" },
+    { nodeId: "PROG_5_3", title: "البيانات المفتوحة وواجهات برمجة التطبيقات", unitTitle: "جمع البيانات وتنقيتها" },
+    { nodeId: "PROG_6_1", title: "الاستدلال الإحصائي", unitTitle: "التحليل والتواصل" },
+    { nodeId: "PROG_6_2", title: "استخدام تحليل الانحدار وتقييمه", unitTitle: "التحليل والتواصل" },
+    { nodeId: "PROG_6_3", title: "تمثيل البيانات المرئي والتواصل", unitTitle: "التحليل والتواصل" },
+    { nodeId: "PROG_7_1", title: "أساسيات التعلم الآلي", unitTitle: "التعلم الآلي والذكاء الاصطناعي" },
+    { nodeId: "PROG_7_2", title: "الشبكات العصبية والتعلم العميق", unitTitle: "التعلم الآلي والذكاء الاصطناعي" },
+    { nodeId: "PROG_7_3", title: "نماذج اللغة الكبيرة والذكاء الاصطناعي التوليدي", unitTitle: "التعلم الآلي والذكاء الاصطناعي" },
   ],
 };
+
+/** كل الاختيارات هنا من فهرس الوزارة المحمّل، وليست أرقام محاضرات المدرسين. */
+export function getSIECheckpointChoices(subjectId: string): SIECheckpointChoice[] {
+  return SIE_CHECKPOINT_CHOICES[subjectId] ?? [];
+}
+
+export function getSIECheckpointChoicesPreview(subjectId: string, limit = 5): SIECheckpointChoice[] {
+  return getSIECheckpointChoices(subjectId).slice(0, limit);
+}
+
+export function getSIEPublicSegments(teacherId: string) {
+  return getSIETeacher(teacherId)?.publicSegments ?? [];
+}
+
+export function getSIEPublicCheckpointOptions(teacherId: string): SIECheckpointChoice[] {
+  const teacher = getSIETeacher(teacherId);
+  if (!teacher) return [];
+  const subjectId = teacher.subjectIds[0];
+  const validNodeIds = new Set(getSIECheckpointChoices(subjectId).map(choice => choice.nodeId));
+  const segments = teacher.publicSegments ?? [];
+  const ids = [...new Set(segments.flatMap(segment => segment.curriculumNodeIds).filter(id => validNodeIds.has(id)))];
+  return getSIECheckpointChoices(subjectId).filter(choice => ids.includes(choice.nodeId));
+}
+
+export function getSIECheckpointChoicesForTeacher(teacherId: string): SIECheckpointChoice[] {
+  const teacher = getSIETeacher(teacherId);
+  if (!teacher) return [];
+  const subjectId = teacher.subjectIds[0];
+  const mapped = getSIEPublicCheckpointOptions(teacherId);
+  if (mapped.length >= 3) return mapped.slice(0, 5);
+  return getSIECheckpointChoicesPreview(subjectId, 5);
+}
 
 export function getSIECheckpointChoices(subjectId: string): SIECheckpointChoice[] {
   return SIE_CHECKPOINT_CHOICES[subjectId] ?? [];
