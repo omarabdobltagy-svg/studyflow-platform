@@ -190,6 +190,47 @@ export async function upsertUser(user: InsertUser): Promise<void> {
   await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
 }
 
+export async function upsertGoogleUser(input: { openId: string; name: string; email: string }) {
+  const db = await requireDb();
+  const now = new Date();
+  const existingByOpenId = await db.select().from(users).where(eq(users.openId, input.openId)).limit(1);
+  if (existingByOpenId[0]) {
+    await db.update(users).set({
+      name: input.name,
+      email: input.email,
+      loginMethod: "google",
+      lastSignedIn: now,
+    }).where(eq(users.id, existingByOpenId[0].id));
+    return getUserByOpenId(input.openId);
+  }
+
+  // A verified Google email may reconnect one existing SIE account without
+  // discarding its student data. Ambiguous duplicate emails are never merged.
+  const matchingEmail = await db.select().from(users).where(eq(users.email, input.email)).limit(2);
+  if (matchingEmail.length > 1) {
+    throw new Error("يوجد أكثر من حساب مرتبط بهذا البريد. يلزم مراجعة الدعم قبل الربط.");
+  }
+  if (matchingEmail[0]) {
+    await db.update(users).set({
+      openId: input.openId,
+      name: input.name,
+      email: input.email,
+      loginMethod: "google",
+      lastSignedIn: now,
+    }).where(eq(users.id, matchingEmail[0].id));
+    return getUserByOpenId(input.openId);
+  }
+
+  await db.insert(users).values({
+    openId: input.openId,
+    name: input.name,
+    email: input.email,
+    loginMethod: "google",
+    lastSignedIn: now,
+  });
+  return getUserByOpenId(input.openId);
+}
+
 export async function getUserByOpenId(openId: string) {
   const db = await getDb();
   if (!db) return undefined;
