@@ -4332,6 +4332,8 @@ packages:
 
 snapshots:
 
+  three@0.187.0: {}
+
   '@antfu/install-pkg@1.1.0':
     dependencies:
       package-manager-detector: 1.5.0
