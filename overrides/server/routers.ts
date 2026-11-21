@@ -158,7 +158,7 @@ export const appRouter = router({
             academicYear: SIE_CATALOG_META.academicYear,
             gradeId: SIE_CATALOG_META.gradeId,
             trackId: track.trackId,
-            electiveSubjectId: input.subjectIds.find(id => !track.requiredSubjectIds.includes(id)) ?? null,
+            electiveSubjectId: track.electiveOptions.length ? (input.subjectIds.find(id => !track.requiredSubjectIds.includes(id)) ?? null) : null,
             subjectIds: input.subjectIds,
             teacherChoices,
             teacherProgressState: Object.fromEntries(Object.entries(input.teacherSelections).map(([subjectId, teacherId]) => [subjectId, {
