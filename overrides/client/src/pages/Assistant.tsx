@@ -97,7 +97,15 @@ export default function Assistant() {
       ? { ...thread, title: thread.messages.length ? thread.title : trimmed.slice(0, 42), messages: nextMessages, updatedAt: Date.now() }
       : thread
     ));
-    chat.mutate({ messages: nextMessages.filter(message => message.role !== "system").slice(-20) });
+    const memory = threads
+      .filter(thread => thread.id !== activeThread.id && thread.messages.length > 0)
+      .slice()
+      .sort((left, right) => right.updatedAt - left.updatedAt)
+      .slice(0, 5)
+      .map(thread => "محادثة سابقة: " + thread.title + "\n" + thread.messages.slice(-2).map(message => (message.role === "user" ? "الطالب: " : "المساعد: ") + message.content.slice(0, 500)).join("\n"))
+      .join("\n---\n")
+      .slice(0, 2_400);
+    chat.mutate({ messages: nextMessages.filter(message => message.role !== "system").slice(-20), memory });
   };
 
   return (
