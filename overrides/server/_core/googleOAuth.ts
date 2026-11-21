@@ -160,7 +160,7 @@ export function registerGoogleOAuthRoutes(app: Express) {
         expiresInMs: ONE_YEAR_MS,
       });
       const cookieOptions = getSessionCookieOptions(req);
-      res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+      res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, sameSite: "lax", maxAge: ONE_YEAR_MS });
 
       const profile = await db.getStudentProfile(user.id);
       safeRedirect(res, profile && user.phone ? "/" : "/onboarding");
