@@ -474,7 +474,30 @@ export default function Onboarding({ editMode = false }: { editMode?: boolean })
                                     <p className="mt-2 text-[11px] leading-6 text-muted-foreground">
                                       آخر نقطة عامة موثقة: {teacher.latestPublicCheckpoint}
                                     </p>
-                                  )} 
+                                  )}
+                                  {teacher.publicSegments && teacher.publicSegments.length > 0 && (
+                                    <div className="mt-2 rounded-lg bg-muted/25 px-3 py-2 text-[11px] leading-5">
+                                      <p className="font-semibold">تفاصيل آخر محتوى عام</p>
+                                      {teacher.publicSegments.slice(0, 3).map((segment, index) => (
+                                        <p key={segment.title + index} className="mt-1 text-muted-foreground">
+                                          {(segment.timestamp ? segment.timestamp + " · " : "") + segment.title}
+                                          {segment.mappingStatus === "skill_only_not_a_separate_toc_node" ? " · مهارة وليست درسًا مستقلًا في الفهرس" : ""}
+                                        </p>
+                                      ))}
+                                      <p className="mt-1 text-muted-foreground">هذه المقاطع تثبت ما نُشر علنًا فقط، ولا تثبت تسلسل الكورس المدفوع أو إنجاز الطالب.</p>
+                                    </div>
+                                  )}
+                                  {teacher.conflictOptions && teacher.conflictOptions.length > 0 && (
+                                    <div className="mt-2 rounded-lg border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-[11px] leading-5">
+                                      <p className="font-semibold">تنبيه: بيانات الكورس متعارضة</p>
+                                      {teacher.conflictOptions.map(option => (
+                                        <p key={option.sourceLabel} className="mt-1 text-muted-foreground">
+                                          {option.sourceLabel} · {option.sourceDate}: {option.label}
+                                        </p>
+                                      ))}
+                                    </div>
+                                  )}
+ 
                                   {teacher.teachingAdvice && (
                                     <div className="mt-2 rounded-lg border border-border/70 px-3 py-2 text-[11px] leading-6">
                                       <span className="font-semibold">إرشاد تعليمي من مصدر:</span> {teacher.teachingAdvice}
