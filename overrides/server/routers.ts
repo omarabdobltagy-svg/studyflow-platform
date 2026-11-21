@@ -517,6 +517,7 @@ export const appRouter = router({
 
       let scheduleUid = existing.scheduleCronTaskUid;
       let nextExecutionAt: string | null | undefined;
+      let preferenceWriteStarted = false;
       try {
         if (scheduleUid) {
           const job = await updateHeartbeatJob(scheduleUid, {
@@ -542,6 +543,7 @@ export const appRouter = router({
         // Upsert the preferences row first so a first-time user has a row for
         // the schedule UID update. If the following write fails, the catch block
         // compensates the scheduler and restores the previous preference state.
+        preferenceWriteStarted = true;
         await saveReminderPreferences(userId, input);
         await saveReminderSchedule(userId, scheduleUid, nextExecutionAt ? new Date(nextExecutionAt) : null);
       } catch (error) {
@@ -567,14 +569,16 @@ export const appRouter = router({
             console.error("[Reminders] Failed to disable the newly-created schedule:", rollbackError);
           }
         }
-        try {
-          await saveReminderPreferences(userId, {
-            enabled: existing.enabled,
-            dailyTime: existing.dailyTime,
-            timezone: existing.timezone,
-          });
-        } catch (rollbackError) {
-          console.error("[Reminders] Failed to restore the previous reminder preferences:", rollbackError);
+        if (preferenceWriteStarted) {
+          try {
+            await saveReminderPreferences(userId, {
+              enabled: existing.enabled,
+              dailyTime: existing.dailyTime,
+              timezone: existing.timezone,
+            });
+          } catch (rollbackError) {
+            console.error("[Reminders] Failed to restore the previous reminder preferences:", rollbackError);
+          }
         }
         throw error;
       }
