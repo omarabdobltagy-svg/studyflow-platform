@@ -163,7 +163,7 @@ export function registerGoogleOAuthRoutes(app: Express) {
       res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
 
       const profile = await db.getStudentProfile(user.id);
-      safeRedirect(res, profile ? "/" : "/onboarding");
+      safeRedirect(res, profile && user.phone ? "/" : "/onboarding");
     } catch (error) {
       console.error("[Google OAuth] Callback failed", error);
       res.status(500).send("حدث خطأ أثناء تسجيل الدخول باستخدام Google. حاول مرة أخرى.");
