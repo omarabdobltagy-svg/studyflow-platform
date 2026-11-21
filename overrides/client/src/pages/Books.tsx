@@ -68,7 +68,17 @@ function BookLibrary() {
     try {
       const cleanTitle = file.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 180);
       const title = cleanTitle || "كتاب جديد";
-      const subject = studentProfile.data?.subjects?.[0] || "دراسة عامة";
+      const subjects = studentProfile.data?.subjects ?? [];
+      const normalizeText = (value: string) => value
+        .toLocaleLowerCase("ar")
+        .replace(/ال/g, "")
+        .replace(/[^\u0600-\u06FFa-z0-9]+/gi, " ")
+        .trim();
+      const fileTerms = new Set(normalizeText(title).split(/\s+/).filter(term => term.length > 2));
+      const matchedSubject = subjects.find(subjectName =>
+        normalizeText(subjectName).split(/\s+/).some(term => term.length > 2 && fileTerms.has(term))
+      );
+      const subject = matchedSubject || subjects[0] || "دراسة عامة";
       createdBookId = await createBook.mutateAsync({
         title,
         author: null,
