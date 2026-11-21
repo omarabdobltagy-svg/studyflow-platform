@@ -64,7 +64,7 @@ export const SIE_CATALOG_META = {
   packageVersion: "2026-11-21-no-design",
   academicYear: ACADEMIC_YEAR,
   gradeYear: GRADE_YEAR,
-  gradeId: "G2",
+  gradeId: "G11_EQ_G2",
   teacherRecommendationLimit: 3,
   teacherPolicy:
     "ترشيحات أولية مبنية على وجود أدلة للمادة والصف والسنة، وليست ترتيبًا لأفضل أو أشهر المدرسين على مستوى مصر.",
