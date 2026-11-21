@@ -183,8 +183,14 @@ export const appRouter = router({
               const isNotRequired = report === "__NOT_REQUIRED__";
               return [subjectId, {
                 teacherId,
+                teacherSourceId: teacher?.sourceId ?? null,
+                teacherSourceUrl: teacher?.profileUrl ?? null,
+                shortlistPosition: teacher?.shortlistPosition ?? null,
+                coursePresence: teacher?.coursePresence ?? "unknown",
+                courseVerifiedFor: teacher?.courseVerifiedFor ?? null,
                 teacherPublicContentFrontier: teacher?.latestPublicCheckpoint ?? null,
                 teacherPublicContentFrontierDate: teacher?.latestCheckpointDate ?? null,
+                teacherPublicContentSegments: teacher?.publicSegments ?? [],
                 teacherPaidCourseFrontier: null,
                 teacherPaidCoursePositionStatus: teacher?.paidCoursePositionStatus ?? "unknown",
                 studentAttendedFrontier: isNode ? report : null,
