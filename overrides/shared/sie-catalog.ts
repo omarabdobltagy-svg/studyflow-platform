@@ -169,7 +169,7 @@ export const SIE_TEACHERS: SIETeacher[] = [
   {
     teacherId: "T_AR_MOHAMED_SALAH", nameAr: "محمد صلاح", brandName: "بسطتهالك",
     subjectIds: ["ARB_G2_BAC"], profileUrl: "https://bassthalk.com/userprofile/",
-    lastChecked: "2026-10-13", coursePresence: "verified_on_platform",
+    lastChecked: "2026-10-13",
     publicAudienceMetric: 6020000,
     publicAudienceMetricDate: "2024-06-29",
     popularitySignal: "قناة واسعة الوصول؛ لقطة تاريخية تقارب 6.02M مشترك في 2024",
@@ -200,7 +200,7 @@ export const SIE_TEACHERS: SIETeacher[] = [
   {
     teacherId: "T_AR_REDA_FAROUK", nameAr: "رضا الفاروق", brandName: "رضا الفاروق",
     subjectIds: ["ARB_G2_BAC"], profileUrl: "https://youtube.com/channel/UC7fHSfm6zxGJYC-P7RMzX7w",
-    lastChecked: "2026-08-08", coursePresence: "verified_public_content",
+    lastChecked: "2026-08-08",
     publicAudienceMetric: 1570000,
     publicAudienceMetricDate: "2026-11-14",
     popularitySignal: "قناة موثقة؛ قرابة 1.57M مشترك في لقطة عامة",
@@ -231,7 +231,7 @@ export const SIE_TEACHERS: SIETeacher[] = [
   {
     teacherId: "T_AR_MOHAMED_TAREK", nameAr: "محمد طارق", brandName: "القيصر",
     subjectIds: ["ARB_G2_BAC"], profileUrl: "https://youtube.com/@mr.mohamed_tarek",
-    lastChecked: "2026-08-20", coursePresence: "verified_bac_listing_with_conflicting_generic_catalog",
+    lastChecked: "2026-08-20",
     publicAudienceMetric: 422000,
     publicAudienceMetricDate: "2026-11-10",
     popularitySignal: "قناة تعليمية عامة تقارب 422K مشترك في لقطة نوفمبر 2026؛ مؤشر انتشار عام وليس تقييم جودة",
@@ -260,7 +260,7 @@ export const SIE_TEACHERS: SIETeacher[] = [
   {
     teacherId: "T_EN_MAHMOUD_RADWAN", nameAr: "محمود رضوان", brandName: "إنجلشاوي",
     subjectIds: ["ENG1_G2_BAC"], profileUrl: "https://www.youtube.com/@MahmoudRadwan.Englishawy",
-    lastChecked: "2026-10-13", coursePresence: "verified_public_2027_course_package_and_public_unit1_reviews",
+    lastChecked: "2026-10-13",
     publicAudienceMetric: 1510000,
     publicAudienceMetricDate: "2026-11-17",
     popularitySignal: "قناة عامة قرابة 1.51M مشترك في لقطة حديثة",
@@ -289,7 +289,7 @@ export const SIE_TEACHERS: SIETeacher[] = [
   {
     teacherId: "T_EN_SHERIF", nameAr: "شريف المصري", brandName: "شريف المصري",
     subjectIds: ["ENG1_G2_BAC"], profileUrl: "https://sherifelmassry.com/",
-    lastChecked: "2026-11-01", coursePresence: "verified_teacher_platform_and_channel",
+    lastChecked: "2026-11-01",
     publicAudienceMetric: 250000,
     publicAudienceMetricDate: "2026-11-17",
     popularitySignal: "قناة عامة قرابة 250K مشترك",
@@ -318,7 +318,7 @@ export const SIE_TEACHERS: SIETeacher[] = [
   {
     teacherId: "T_EN_AHMED_SOBHY", nameAr: "أحمد صبحي", brandName: "إنجليزي البكالوريا",
     subjectIds: ["ENG1_G2_BAC"], profileUrl: "https://zolotube.com/channel?id=UCP4vtEvANSvCszyJFBEiqOA",
-    lastChecked: "2026-11-17", coursePresence: "verified_public_content",
+    lastChecked: "2026-11-17",
     publicAudienceMetric: 6350,
     publicAudienceMetricDate: "2026-11-17",
     popularitySignal: "قناة عامة قرابة 6.35K مشترك مع محتوى 2 Bac 2027 حديث",
@@ -347,7 +347,7 @@ export const SIE_TEACHERS: SIETeacher[] = [
   {
     teacherId: "T_HIS_AHMED_GHONIEM", nameAr: "أحمد غنيم", brandName: "أحمد غنيم",
     subjectIds: ["HIS_G2_BAC"], profileUrl: "https://ahmedghoniem.com/",
-    lastChecked: "2026-08-29", coursePresence: "verified_teacher_primary",
+    lastChecked: "2026-08-29",
     publicAudienceMetric: 186000,
     publicAudienceMetricDate: "2026-08-29",
     popularitySignal: "قناة موثقة تقارب 186K متابع",
@@ -378,7 +378,7 @@ export const SIE_TEACHERS: SIETeacher[] = [
   {
     teacherId: "T_HIS_MARWAN", nameAr: "مروان حسن", brandName: "المؤرخ مروان حسن",
     subjectIds: ["HIS_G2_BAC"], profileUrl: "https://youtube.com/channel/UCJqSCcNDCxe4b259TXPZbcw",
-    lastChecked: "2026-11-15", coursePresence: "verified_public_content",
+    lastChecked: "2026-11-15",
     publicAudienceMetric: 66200,
     publicAudienceMetricDate: "2026-11-17",
     popularitySignal: "لقطة تحليلات قناة عامة قرابة 66.2K مشترك",
@@ -409,7 +409,7 @@ export const SIE_TEACHERS: SIETeacher[] = [
   {
     teacherId: "T_HIS_ABDELHADY", nameAr: "محمود عبدالهادي", brandName: "محمود عبدالهادي",
     subjectIds: ["HIS_G2_BAC"], profileUrl: "https://zolotube.com/channel?id=UCThV5LrCMIWs9tyDvZ9IC2w",
-    lastChecked: "2026-11-17", coursePresence: "verified_public_content",
+    lastChecked: "2026-11-17",
     publicAudienceMetric: 27700,
     publicAudienceMetricDate: "2026-11-17",
     popularitySignal: "قناة عامة قرابة 27.7K مشترك ومحتوى تاريخ بكالوريا حديث",
@@ -438,7 +438,7 @@ export const SIE_TEACHERS: SIETeacher[] = [
   {
     teacherId: "T_PROG_IMAD_SHARAF", nameAr: "عماد شرف", brandName: "WE4CODE",
     subjectIds: ["PROG_AI_G2_BAC"], profileUrl: "https://we4code.com/course/7",
-    lastChecked: "2026-11-17", coursePresence: "verified_platform_course_listing",
+    lastChecked: "2026-11-17",
     shortlistPosition: 1,
     coursePresence: "verified_platform_course_listing",
     courseVerifiedFor: "الصف الثاني بكالوريا 2027 - البرمجة والذكاء الاصطناعي (إدراجات شهرية على WE4CODE)",
@@ -465,7 +465,7 @@ export const SIE_TEACHERS: SIETeacher[] = [
   {
     teacherId: "T_PROG_ANAS_AHMED", nameAr: "د. أنس أحمد", brandName: "Code-UP",
     subjectIds: ["PROG_AI_G2_BAC"], profileUrl: "https://www.code-up.tech/",
-    lastChecked: "2026-11-17", coursePresence: "verified_platform_course_listing",
+    lastChecked: "2026-11-17",
     shortlistPosition: 2,
     coursePresence: "verified_platform_course_listing",
     courseVerifiedFor: "الصف الثاني بكالوريا - كورس نوفمبر للبرمجة والذكاء الاصطناعي",
@@ -492,7 +492,7 @@ export const SIE_TEACHERS: SIETeacher[] = [
   {
     teacherId: "T_PROG_KHALED_ASHRAF", nameAr: "خالد أشرف", brandName: "برمجة بكالوريا",
     subjectIds: ["PROG_AI_G2_BAC"], profileUrl: "https://www.youtube.com/watch?v=oIYgUBLUJxU",
-    lastChecked: "2026-08-27", coursePresence: "verified_public_video_for_grade_and_subject",
+    lastChecked: "2026-08-27",
     publicAudienceMetric: 6150,
     publicAudienceMetricDate: "2026-11-17",
     popularitySignal: "لقطة قناة عامة تظهر نحو 6,150 مشتركًا وفيديو الدرس الثاني نحو 46,389 مشاهدة وقت الفهرسة؛ هذه أرقام وصول لا جودة تدريس.",
