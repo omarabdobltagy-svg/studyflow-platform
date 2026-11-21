@@ -279,7 +279,18 @@ export async function saveSIEOnboarding(userId: number, data: SIEOnboardingInput
     obstacle: "",
     completedAt: new Date(),
   };
-  await db.insert(studentProfiles).values(values).onDuplicateKeyUpdate({ set: values });
+  // A profile edit must not erase the student's accumulated backlog, notes,
+  // obstacle history, or original completion timestamp.
+  const updateSet = {
+    studentName: values.studentName,
+    educationSystem: values.educationSystem,
+    gradeYear: values.gradeYear,
+    track: values.track,
+    subjectsJson: values.subjectsJson,
+    teacherSelectionsJson: values.teacherSelectionsJson,
+    selectionJson: values.selectionJson,
+  };
+  await db.insert(studentProfiles).values(values).onDuplicateKeyUpdate({ set: updateSet });
   return getStudentProfile(userId);
 }
 
