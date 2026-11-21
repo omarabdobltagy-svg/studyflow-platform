@@ -141,6 +141,10 @@ export const appRouter = router({
           if (!input.subjectIds.includes(subjectId) || !input.teacherSelections[subjectId]) {
             throw new TRPCError({ code: "BAD_REQUEST", message: "نقطة البداية يجب أن تخص مادة ومدرسًا تم اختيارهما." });
           }
+          const checkpointTeacher = getSIETeacher(input.teacherSelections[subjectId]);
+          if (!checkpointTeacher?.studentInputRequired) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "لا يلزم إدخال نقطة بداية لهذا المدرس في هذه المرحلة." });
+          }
           const allowedNodeIds = new Set(getSIECheckpointChoices(subjectId).map(choice => choice.nodeId));
           if (!validFrontierSentinels.has(report) && !allowedNodeIds.has(report)) {
             throw new TRPCError({ code: "BAD_REQUEST", message: "اختيار نقطة البداية غير موجود في فهرس المادة." });
@@ -173,18 +177,20 @@ export const appRouter = router({
             subjectIds: input.subjectIds,
             teacherChoices,
             teacherProgressState: Object.fromEntries(Object.entries(input.teacherSelections).map(([subjectId, teacherId]) => {
-              const report = input.teacherFrontierReports[subjectId] ?? "__DEFERRED__";
-              const isNode = !["__NOT_STARTED__", "__UNKNOWN__", "__DEFERRED__"].includes(report);
+              const teacher = getSIETeacher(teacherId);
+              const report = input.teacherFrontierReports[subjectId] ?? (teacher?.studentInputRequired ? "__DEFERRED__" : "__NOT_REQUIRED__");
+              const isNode = !["__NOT_STARTED__", "__UNKNOWN__", "__DEFERRED__", "__NOT_REQUIRED__"].includes(report);
+              const isNotRequired = report === "__NOT_REQUIRED__";
               return [subjectId, {
                 teacherId,
-                teacherPublicContentFrontier: getSIETeacher(teacherId)?.latestPublicCheckpoint ?? null,
-                teacherPublicContentFrontierDate: getSIETeacher(teacherId)?.latestCheckpointDate ?? null,
+                teacherPublicContentFrontier: teacher?.latestPublicCheckpoint ?? null,
+                teacherPublicContentFrontierDate: teacher?.latestCheckpointDate ?? null,
                 teacherPaidCourseFrontier: null,
-                teacherPaidCoursePositionStatus: getSIETeacher(teacherId)?.paidCoursePositionStatus ?? "unknown",
+                teacherPaidCoursePositionStatus: teacher?.paidCoursePositionStatus ?? "unknown",
                 studentAttendedFrontier: isNode ? report : null,
-                status: report === "__NOT_STARTED__" ? "not_started_with_teacher" : report === "__UNKNOWN__" ? "unknown" : report === "__DEFERRED__" ? "unlocated" : "student_reported",
-                evidenceSource: isNode ? "student_selection" : "student_selection_state",
-                confidence: "student_reported",
+                status: isNotRequired ? "not_required" : report === "__NOT_STARTED__" ? "not_started_with_teacher" : report === "__UNKNOWN__" ? "unknown" : report === "__DEFERRED__" ? "unlocated" : "student_reported",
+                evidenceSource: isNotRequired ? "not_required" : isNode ? "student_selection" : "student_selection_state",
+                confidence: isNotRequired ? "not_applicable" : "student_reported",
                 selectedAt: new Date().toISOString(),
               }];
             })),
