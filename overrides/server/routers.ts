@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { COOKIE_NAME } from "@shared/const";
-import { SIE_CATALOG_META, SIE_SYSTEMS, getSIEEducationSystem, getSIESubject, getSIETeacher, getSIETeachersForSubject, getSIETrack, validateSIESubjectSelection } from "@shared/sie-catalog";
+import { SIE_CATALOG_META, SIE_SYSTEMS, getSIEEducationSystem, getSIESubject, getSIETeacher, getSIETeachersForSubject, getSIETrack, getSIECheckpointChoices, validateSIESubjectSelection } from "@shared/sie-catalog";
 import {
   addChapter,
   addLibraryAttachment,
@@ -110,6 +110,7 @@ export const appRouter = router({
         subjectIds: z.array(z.string().trim().min(1).max(80)).min(1).max(12),
         teacherSelections: z.record(z.string(), z.string().trim().min(1).max(80)).default({}),
         skippedTeacherSubjectIds: z.array(z.string().trim().min(1).max(80)).max(12).default([]),
+        teacherFrontierReports: z.record(z.string(), z.string().trim().min(1).max(120)).default({}),
       }))
       .mutation(async ({ ctx, input }) => {
         const track = getSIETrack(input.trackId);
@@ -133,6 +134,16 @@ export const appRouter = router({
         for (const subjectId of input.skippedTeacherSubjectIds) {
           if (!input.subjectIds.includes(subjectId)) {
             throw new TRPCError({ code: "BAD_REQUEST", message: "اختيار تأجيل المدرس لا يطابق مادة في الملف." });
+          }
+        }
+        const validFrontierSentinels = new Set(["__NOT_STARTED__", "__UNKNOWN__", "__DEFERRED__"]);
+        for (const [subjectId, report] of Object.entries(input.teacherFrontierReports)) {
+          if (!input.subjectIds.includes(subjectId) || !input.teacherSelections[subjectId]) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "نقطة البداية يجب أن تخص مادة ومدرسًا تم اختيارهما." });
+          }
+          const allowedNodeIds = new Set(getSIECheckpointChoices(subjectId).map(choice => choice.nodeId));
+          if (!validFrontierSentinels.has(report) && !allowedNodeIds.has(report)) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "اختيار نقطة البداية غير موجود في فهرس المادة." });
           }
         }
         const subjectNames = input.subjectIds.map(id => {
@@ -161,11 +172,19 @@ export const appRouter = router({
             electiveSubjectId: track.electiveOptions.length ? (input.subjectIds.find(id => !track.requiredSubjectIds.includes(id)) ?? null) : null,
             subjectIds: input.subjectIds,
             teacherChoices,
-            teacherProgressState: Object.fromEntries(Object.entries(input.teacherSelections).map(([subjectId, teacherId]) => [subjectId, {
-              teacherId,
-              studentAttendedFrontier: "unlocated",
-              status: "unlocated",
-            }])),
+            teacherProgressState: Object.fromEntries(Object.entries(input.teacherSelections).map(([subjectId, teacherId]) => {
+              const report = input.teacherFrontierReports[subjectId] ?? "__DEFERRED__";
+              const isNode = !["__NOT_STARTED__", "__UNKNOWN__", "__DEFERRED__"].includes(report);
+              return [subjectId, {
+                teacherId,
+                studentAttendedFrontier: isNode ? report : null,
+                status: report === "__NOT_STARTED__" ? "not_started_with_teacher" : report === "__UNKNOWN__" ? "unknown" : report === "__DEFERRED__" ? "unlocated" : "student_reported",
+                evidenceSource: isNode ? "student_selection" : "student_selection_state",
+                confidence: "student_reported",
+                selectedAt: new Date().toISOString(),
+              }];
+            })),
+            teacherFrontierReports: input.teacherFrontierReports,
             completedAt: new Date().toISOString(),
           },
         });
