@@ -8,6 +8,8 @@ import {
   SIE_SYSTEMS,
   getSIEElectiveGroups,
   getSIECheckpointChoices,
+  getSIECheckpointChoicesForTeacher,
+  getSIEPublicSegments,
   getSIETeacher,
   getSIESubject,
   getSIESubjectsForTrack,
@@ -86,6 +88,7 @@ export default function Onboarding({ editMode = false }: { editMode?: boolean })
   });
 
   const [step, setStep] = useState(0);
+  const [expandedCheckpointChoices, setExpandedCheckpointChoices] = useState<Record<string, number>>({});
   const [form, setForm] = useState<FormState>({
     studentName: "",
     phone: "",
@@ -151,6 +154,17 @@ export default function Onboarding({ editMode = false }: { editMode?: boolean })
       else if (step === 2) toast.error("اختر المسار أو الشعبة.");
       else if (step === 3) toast.error("اختر المادة التخصصية المطلوبة لمسارك.");
       return;
+    }
+    if (step === 4) {
+      const needsCheckpoint = selectedSubjects.some(subject => {
+        const teacherId = form.teacherSelections[subject.subjectId];
+        const teacher = teacherId && teacherId !== SKIP_TEACHER ? getSIETeacher(teacherId) : undefined;
+        return teacher?.studentInputRequired === true;
+      });
+      if (!needsCheckpoint) {
+        save();
+        return;
+      }
     }
     setStep(current => Math.min(steps.length - 1, current + 1));
   };
@@ -514,33 +528,69 @@ export default function Onboarding({ editMode = false }: { editMode?: boolean })
                   <div className="flex items-start gap-3 rounded-2xl border border-primary/15 bg-secondary/25 p-4">
                     <CircleHelp className="mt-0.5 size-5 shrink-0 text-primary" />
                     <p className="text-sm leading-7 text-muted-foreground">
-                      مش لازم تعرف رقم المحاضرة. اختر آخر موضوع أكملته بنفسك مع المدرس، أو قل إنك لسه ما بدأتش أو مش متأكد. الاختيارات من فهرس المنهج الرسمي، وليست ترقيمًا لمحاضرات المدرس. إجابتك تُحفظ كتقرير منك فقط، ولا نعتبرها إنجازًا مثبتًا قبل تسجيل دليل داخل SIE.
+                      دي خطوة اختيارية بتظهر فقط لما نحتاج نحدد نقطة بدايتك. مش مطلوب رقم محاضرة ولا كتابة حرة. لو عندنا مقاطع عامة موثقة هنعرضها أولًا، وإلا هنبدأ من 3–5 موضوعات من فهرس المنهج. اختيارك تقرير منك فقط، ومش بيتسجل كإنجاز دراسي.
                     </p>
                   </div>
                   {selectedSubjects.filter(subject => {
                     const teacherId = form.teacherSelections[subject.subjectId];
-                    return Boolean(teacherId && teacherId !== SKIP_TEACHER);
+                    const teacher = teacherId && teacherId !== SKIP_TEACHER ? getSIETeacher(teacherId) : undefined;
+                    return teacher?.studentInputRequired === true;
                   }).length === 0 ? (
                     <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-5 text-sm leading-7 text-muted-foreground">
-                      لم تختر مدرسًا لأي مادة. يمكنك إكمال إعداد الحساب الآن؛ سيبدأ تحديد نقطة البداية عند اختيار مدرس لاحقًا.
+                      لا توجد مادة تحتاج تحديد نقطة بداية الآن. تقدر تكمل إعداد حسابك.
                     </div>
                   ) : selectedSubjects.filter(subject => {
                     const teacherId = form.teacherSelections[subject.subjectId];
-                    return Boolean(teacherId && teacherId !== SKIP_TEACHER);
+                    const teacher = teacherId && teacherId !== SKIP_TEACHER ? getSIETeacher(teacherId) : undefined;
+                    return teacher?.studentInputRequired === true;
                   }).map(subject => {
                     const teacherId = form.teacherSelections[subject.subjectId];
                     const teacher = getSIETeacher(teacherId);
-                    const choices = getSIECheckpointChoices(subject.subjectId);
+                    const allChoices = getSIECheckpointChoices(subject.subjectId);
+                    const initialChoices = getSIECheckpointChoicesForTeacher(teacherId);
+                    const extraCount = expandedCheckpointChoices[subject.subjectId] ?? 0;
+                    const visibleChoices = [
+                      ...initialChoices,
+                      ...allChoices.filter(choice => !initialChoices.some(initial => initial.nodeId === choice.nodeId)).slice(0, extraCount),
+                    ];
+                    const hasMoreChoices = visibleChoices.length < allChoices.length;
+                    const publicSegments = getSIEPublicSegments(teacherId);
                     const selected = form.checkpointSelections[subject.subjectId] ?? CHECKPOINT_DEFERRED;
                     return (
                       <section key={subject.subjectId} className="rounded-2xl border border-border p-4 sm:p-5">
                         <div className="mb-4">
                           <p className="font-bold">{subject.nameAr} · {teacher?.nameAr ?? "المدرس المختار"}</p>
-                          <p className="mt-1 text-xs leading-6 text-muted-foreground">ما آخر موضوع أكملته فعلًا؟ لا تختَر موضوعًا لمجرد أنه منشور على قناة المدرس.</p>
+                          <p className="mt-1 text-xs leading-6 text-muted-foreground">
+                            إيه آخر موضوع خلصته فعلًا مع المدرس ده؟ اختر أقرب عنوان تعرفه. مش هنفترض إن آخر فيديو منشور هو آخر حاجة درستها.
+                          </p>
                         </div>
-                        {choices.length > 0 ? (
+                        {teacher?.conflictOptions && teacher.conflictOptions.length > 0 && (
+                          <div className="mb-4 rounded-xl border border-amber-500/25 bg-amber-500/5 p-3">
+                            <p className="text-xs font-semibold">فيه تعارض في مصادر الكورس؛ مش هنختار رقم نيابة عنك.</p>
+                            {teacher.conflictOptions.map(option => (
+                              <p key={option.sourceLabel} className="mt-2 text-xs leading-6 text-muted-foreground">
+                                {option.label} · {option.sourceLabel} · {option.sourceDate}
+                              </p>
+                            ))}
+                            <p className="mt-2 text-xs text-muted-foreground">لو مش متأكد، اختار «مش متأكد» أو «تخطي دلوقتي».</p>
+                          </div>
+                        )}
+                        {publicSegments.length > 0 && (
+                          <div className="mb-4 rounded-xl bg-muted/25 p-3">
+                            <p className="text-xs font-semibold">مقاطع عامة تم التحقق منها — ليست ترتيبًا للكورس المدفوع</p>
+                            {publicSegments.slice(0, 5).map((segment, index) => (
+                              <p key={segment.title + index} className="mt-1 text-xs leading-6 text-muted-foreground">
+                                {(segment.timestamp ? segment.timestamp + " · " : "") + segment.title}
+                              </p>
+                            ))}
+                            {publicSegments.length > 5 && (
+                              <p className="mt-1 text-[11px] text-muted-foreground">وتوجد مقاطع إضافية في المصدر.</p>
+                            )}
+                          </div>
+                        )}
+                        {visibleChoices.length > 0 ? (
                           <div className="grid gap-2 sm:grid-cols-2">
-                            {choices.map(choice => (
+                            {visibleChoices.map(choice => (
                               <ChoiceCard
                                 key={choice.nodeId}
                                 selected={selected === choice.nodeId}
@@ -557,8 +607,20 @@ export default function Onboarding({ editMode = false }: { editMode?: boolean })
                           </div>
                         ) : (
                           <p className="rounded-xl bg-muted/25 p-3 text-xs leading-6 text-muted-foreground">
-                            لا توجد نقطة عامة قابلة للمطابقة لهذا المدرس في الحزمة. يمكنك تأجيل التحديد؛ لن نخمن موضعك.
+                            فهرس المادة غير متاح في الحزمة الحالية. يمكنك تخطي تحديد نقطة البداية؛ لن نخمن موضعك.
                           </p>
+                        )}
+                        {hasMoreChoices && (
+                          <button
+                            type="button"
+                            onClick={() => setExpandedCheckpointChoices(current => ({
+                              ...current,
+                              [subject.subjectId]: (current[subject.subjectId] ?? 0) + 5,
+                            }))}
+                            className="mt-3 rounded-xl border border-dashed border-primary/40 px-3 py-2 text-xs font-semibold text-primary hover:bg-secondary/30"
+                          >
+                            موضوع تاني / اعرض اختيارات إضافية
+                          </button>
                         )}
                         <div className="mt-3 grid gap-2 sm:grid-cols-3">
                           <button type="button" aria-pressed={selected === CHECKPOINT_NOT_STARTED}
@@ -574,7 +636,7 @@ export default function Onboarding({ editMode = false }: { editMode?: boolean })
                           <button type="button" aria-pressed={selected === CHECKPOINT_DEFERRED}
                             onClick={() => setForm(current => ({ ...current, checkpointSelections: { ...current.checkpointSelections, [subject.subjectId]: CHECKPOINT_DEFERRED } }))}
                             className={"rounded-xl border px-3 py-3 text-sm font-semibold transition " + (selected === CHECKPOINT_DEFERRED ? "border-primary bg-secondary text-primary" : "border-border text-muted-foreground hover:border-primary/30")}>
-                            أحددها بعدين
+                            تخطي دلوقتي
                           </button>
                         </div>
                       </section>
