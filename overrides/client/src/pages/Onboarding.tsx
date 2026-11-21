@@ -399,18 +399,21 @@ export default function Onboarding({ editMode = false }: { editMode?: boolean })
                               const staleDays = daysSince(teacher.lastChecked);
                               const needsRefresh = staleDays !== null && staleDays > 30;
                               return (
-                                <button
+                                <div
                                   key={teacher.teacherId}
-                                  type="button"
-                                  onClick={() => setForm(current => ({
-                                    ...current,
-                                    teacherSelections: { ...current.teacherSelections, [subject.subjectId]: teacher.teacherId },
-                                  }))}
-                                  aria-pressed={selectedTeacher === teacher.teacherId}
-                                  className={"rounded-2xl border p-4 text-right transition " + (selectedTeacher === teacher.teacherId
+                                  className={"rounded-2xl border p-4 transition " + (selectedTeacher === teacher.teacherId
                                     ? "border-primary bg-secondary/40 ring-1 ring-primary/20"
                                     : "border-border bg-card hover:border-primary/35")}
                                 >
+                                  <button
+                                    type="button"
+                                    onClick={() => setForm(current => ({
+                                      ...current,
+                                      teacherSelections: { ...current.teacherSelections, [subject.subjectId]: teacher.teacherId },
+                                    }))}
+                                    aria-pressed={selectedTeacher === teacher.teacherId}
+                                    className="w-full text-right"
+                                  >
                                   <div className="flex items-start justify-between gap-3">
                                     <div>
                                       <p className="font-bold">{teacher.nameAr}</p>
@@ -439,16 +442,16 @@ export default function Onboarding({ editMode = false }: { editMode?: boolean })
                                     <span className="rounded-full bg-muted px-2.5 py-1 text-[10px]">آخر تحقق: {teacher.lastChecked}</span>
                                     {needsRefresh && <span className="rounded-full bg-amber-500/10 px-2.5 py-1 text-[10px] text-amber-700 dark:text-amber-300">يحتاج تحديث المصدر</span>}
                                   </div>
+                                  </button>
                                   <a
                                     href={teacher.profileUrl}
                                     target="_blank"
                                     rel="noreferrer"
-                                    onClick={event => event.stopPropagation()}
                                     className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-primary underline-offset-4 hover:underline"
                                   >
                                     فتح المصدر <ExternalLink className="size-3" />
                                   </a>
-                                </button>
+                                </div>
                               );
                             })}
                           </div>
