@@ -133,6 +133,13 @@ export default function Onboarding({ editMode = false }: { editMode?: boolean })
     ];
   }, [track, fixedSubjects, firstElectiveGroup, form.electiveSubjectId]);
 
+  const requiresCheckpoint = selectedSubjects.some(subject => {
+    const teacherId = form.teacherSelections[subject.subjectId];
+    const teacher = teacherId && teacherId !== SKIP_TEACHER ? getSIETeacher(teacherId) : undefined;
+    return teacher?.studentInputRequired === true;
+  });
+  const activeSteps = requiresCheckpoint ? steps : steps.slice(0, 5);
+
   const isIdentityValid =
     form.studentName.trim().length >= 2 &&
     form.studentName.trim().length <= 120 &&
@@ -155,18 +162,11 @@ export default function Onboarding({ editMode = false }: { editMode?: boolean })
       else if (step === 3) toast.error("اختر المادة التخصصية المطلوبة لمسارك.");
       return;
     }
-    if (step === 4) {
-      const needsCheckpoint = selectedSubjects.some(subject => {
-        const teacherId = form.teacherSelections[subject.subjectId];
-        const teacher = teacherId && teacherId !== SKIP_TEACHER ? getSIETeacher(teacherId) : undefined;
-        return teacher?.studentInputRequired === true;
-      });
-      if (!needsCheckpoint) {
-        save();
-        return;
-      }
+    if (step === 4 && !requiresCheckpoint) {
+      save();
+      return;
     }
-    setStep(current => Math.min(steps.length - 1, current + 1));
+    setStep(current => Math.min(activeSteps.length - 1, current + 1));
   };
 
   const previous = () => setStep(current => Math.max(0, current - 1));
@@ -240,9 +240,9 @@ export default function Onboarding({ editMode = false }: { editMode?: boolean })
                 <GraduationCap className="size-6" />
               </span>
             </div>
-            <Progress value={((step + 1) / steps.length) * 100} className="relative mt-7 h-2 bg-white/15 [&>div]:bg-violet-200" />
+            <Progress value={((step + 1) / activeSteps.length) * 100} className="relative mt-7 h-2 bg-white/15 [&>div]:bg-violet-200" />
             <div className="relative mt-3 flex justify-between gap-2 text-[10px] text-primary-foreground/60 sm:text-xs">
-              {steps.map((label, index) => (
+              {activeSteps.map((label, index) => (
                 <span key={label} className={index <= step ? "font-bold text-white" : ""}>{label}</span>
               ))}
             </div>
@@ -250,7 +250,7 @@ export default function Onboarding({ editMode = false }: { editMode?: boolean })
 
           <section className="app-card mt-5 overflow-hidden">
             <header className="border-b border-border/70 bg-muted/20 px-5 py-5 sm:px-7">
-              <p className="eyebrow">الخطوة {step + 1} من {steps.length}</p>
+              <p className="eyebrow">الخطوة {step + 1} من {activeSteps.length}</p>
               <h2 className="mt-1 text-xl font-bold">{steps[step]}</h2>
             </header>
 
@@ -438,6 +438,7 @@ export default function Onboarding({ editMode = false }: { editMode?: boolean })
                                     onClick={() => setForm(current => ({
                                       ...current,
                                       teacherSelections: { ...current.teacherSelections, [subject.subjectId]: teacher.teacherId },
+                                      checkpointSelections: { ...current.checkpointSelections, [subject.subjectId]: CHECKPOINT_DEFERRED },
                                     }))}
                                     aria-pressed={selectedTeacher === teacher.teacherId}
                                     className="w-full text-right"
@@ -674,9 +675,9 @@ export default function Onboarding({ editMode = false }: { editMode?: boolean })
               <Button type="button" variant="ghost" onClick={previous} disabled={step === 0 || complete.isPending} className="rounded-xl">
                 <ArrowRight className="size-4" /> رجوع
               </Button>
-              {step < steps.length - 1 ? (
+              {step < activeSteps.length - 1 ? (
                 <Button type="button" onClick={next} disabled={!stepValid || complete.isPending} className="rounded-xl bg-primary">
-                  التالي <ArrowLeft className="size-4" />
+                  {step === 4 && !requiresCheckpoint ? "إكمال الإعداد" : "التالي"} <ArrowLeft className="size-4" />
                 </Button>
               ) : (
                 <Button type="button" onClick={save} disabled={complete.isPending || !track || selectedSubjects.length === 0} className="rounded-xl bg-primary">
