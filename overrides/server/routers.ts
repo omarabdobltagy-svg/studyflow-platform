@@ -449,6 +449,17 @@ export const appRouter = router({
         const profileContext = profile
           ? `اسم الطالب: ${profile.studentName}\nالنظام: ${profile.educationSystem}\nالصف/السنة: ${profile.gradeYear}\nالمسار: ${profile.track}\nالمواد: ${profile.subjects.join("، ")}\nالتراكم المسجل: ${Object.entries(profile.backlog).map(([subject, count]) => `${subject}: ${count}`).join("، ") || "لا يوجد مسجل"}\nالعائق المعلن: ${profile.obstacle}`
           : "لم يكتمل ملف الطالب بعد.";
+        const curriculumContext = (profile?.subjects || []).map(subjectId => {
+          const subjectName = getSIESubject(subjectId)?.nameAr || subjectId;
+          const lessons = getSIECheckpointChoices(subjectId);
+          const progress = (selection.subjectLessonProgress || {}) as Record<string, Record<string, any>>;
+          const records = progress[subjectId] || {};
+          const done = Object.values(records).filter(item => Array.isArray(item.completedSteps) && item.completedSteps.length === 5).length;
+          const underway = Object.values(records).filter(item => Array.isArray(item.completedSteps) && item.completedSteps.length > 0 && item.completedSteps.length < 5).length;
+          const difficult = Object.entries(records).filter((entry: any) => entry[1].difficulty === "hard").map((entry: any) => lessons.find(lesson => lesson.nodeId === entry[0])?.title || entry[0]);
+          return subjectName + ": " + (lessons.map(item => item.unitTitle + " / " + item.title).join("؛ ") || "فهرس المنهج غير محمّل")
+            + " | مكتمل SQ3R: " + done + " | قيد الدراسة: " + underway + " | صعب: " + (difficult.join("، ") || "لا توجد بيانات");
+        }).join("\n");
         const appContext = [
           `المهام غير المكتملة: ${taskRows.filter(task => task.status !== "done").slice(0, 12).map(task => `- ${task.title} (${task.category}, ${task.priority}, ${dateLabel(task.dueAt)})`).join("\n") || "لا توجد مهام غير مكتملة مسجلة."}`,
           `الأهداف النشطة: ${goalRows.filter(goal => goal.status === "active").slice(0, 8).map(goal => `- ${goal.title} (${goal.progress}%، ${goal.completedTaskCount}/${goal.taskCount})`).join("\n") || "لا توجد أهداف نشطة."}`,
@@ -456,13 +467,14 @@ export const appRouter = router({
           `الروتين النشط: ${routineRows.filter(routine => routine.isActive).slice(0, 6).map(routine => `- ${routine.name}: ${routine.items.filter(item => item.isActive).map(item => `${item.title}${item.completedToday ? " ✓" : ""}`).join("، ")}`).join("\n") || "لا يوجد روتين نشط."}`,
           `المواعيد القادمة: ${calendarRows.filter(event => new Date(event.startAt).getTime() >= Date.now()).slice(0, 8).map(event => `- ${event.title} (${dateLabel(event.startAt)})`).join("\n") || "لا توجد مواعيد قادمة مسجلة."}`,
           `مواضع المدرسين وتقدم الطالب (كل مصدر مستقل):\n${teacherProgressContext}`,
+          `فهرس المنهج وتقدم دروس SQ3R:\n${curriculumContext || "لا توجد فهارس متاحة للمواد المختارة."}`,
         ].join("\n\n");
         const context = `${profileContext}\n\nحالة التطبيق الحالية (قد تتغير بعد تحديث الصفحة):\n${appContext}`;
         let response;
         try {
           response = await invokeLLM({
           messages: [
-            { role: "system", content: `أنت مساعد StudyFlow العربي. أجب مباشرة دون عبارة مثل «جاري صياغة السؤال». كن عمليًا ومختصرًا، واقترح خطوة واحدة قابلة للتنفيذ أولًا. استخدم سياق التطبيق كبيانات حالية لا كحقائق دائمة؛ إذا كانت البيانات ناقصة فاسأل بدل التخمين. قواعد موضع المدرس: آخر محتوى عام لا يساوي آخر عنصر مدفوع، وآخر عنصر مدفوع لا يثبت أن الطالب شاهده. لا تنقل نقطة تقدم من مصدر إلى آخر. اذكر أن الموضع غير مثبت عندما تكون البيانات غير متاحة، ولا تخترع رقم محاضرة أو إنجازًا. لا تنشئ أو تعدّل مهامًا أو خططًا أو عادات ولا تدّعِ أنك نفذت إجراءً؛ اطلب موافقة صريحة ووجّه الطالب إلى الصفحة المناسبة. لا تدّعي معرفة أخبار أو مواعيد مدرسين دون مصدر. لا تعرض مرفقات أو بيانات خاصة غير لازمة. بيانات الطالب والتطبيق:\n${context}` },
+            { role: "system", content: `أنت المساعد الدراسي المتخصص في StudyFlow. دورك شرح المنهج، تفكيك المفاهيم، بناء أمثلة وأسئلة تدريبية، ومساعدة الطالب على الفهم لا إعطائه إجابات سطحية. استخدم فهرس المنهج وسياق المادة والدرس وموضع المدرس. ميّز بين الفهرس الرسمي وتقرير الطالب. إذا لم يكن فهرس المادة أو نص الكتاب متاحًا فلا تدّع أنك قرأته؛ اطلب نص الصفحة أو صورة واضحة عند الحاجة. أجب مباشرة وبدقة. استخدم سياق التطبيق كبيانات حالية لا كحقائق دائمة؛ إذا كانت البيانات ناقصة فاسأل بدل التخمين. قواعد موضع المدرس: آخر محتوى عام لا يساوي آخر عنصر مدفوع، وآخر عنصر مدفوع لا يثبت أن الطالب شاهده. لا تنقل نقطة تقدم من مصدر إلى آخر. اذكر أن الموضع غير مثبت عندما تكون البيانات غير متاحة، ولا تخترع رقم محاضرة أو إنجازًا. لا تنشئ أو تعدّل مهامًا أو خططًا أو عادات ولا تدّعِ أنك نفذت إجراءً؛ اطلب موافقة صريحة ووجّه الطالب إلى الصفحة المناسبة. لا تدّعي معرفة أخبار أو مواعيد مدرسين دون مصدر. لا تعرض مرفقات أو بيانات خاصة غير لازمة. بيانات الطالب والتطبيق:\n${context}` },
             ...input.messages.slice(-20),
           ],
           model: process.env.AI_MODEL || undefined,
@@ -641,6 +653,40 @@ export const appRouter = router({
   }),
 
   study: router({
+    saveSubjectLessonProgress: protectedProcedure
+      .input(z.object({
+        subjectId: z.string().trim().min(1).max(80),
+        lessonId: z.string().trim().min(1).max(120),
+        completedSteps: z.array(z.enum(["survey", "question", "read", "recite", "review"])).max(5),
+        difficulty: z.enum(["unknown", "easy", "medium", "hard"]).default("unknown"),
+        notes: z.string().trim().max(2_000).default(""),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const profile = await getStudentProfile(ctx.user.id);
+        if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "أكمل ملفك الدراسي أولًا." });
+        if (!profile.subjects.includes(input.subjectId)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "هذه المادة ليست ضمن مواد ملفك الدراسي." });
+        }
+        const lesson = getSIECheckpointChoices(input.subjectId).find(item => item.nodeId === input.lessonId);
+        if (!lesson) throw new TRPCError({ code: "BAD_REQUEST", message: "الدرس غير موجود في فهرس المادة الحالي." });
+        const selection = (profile.selection || {}) as Record<string, any>;
+        const progress = (selection.subjectLessonProgress || {}) as Record<string, Record<string, any>>;
+        const subjectProgress = { ...(progress[input.subjectId] || {}) };
+        const record = {
+          completedSteps: [...new Set(input.completedSteps)],
+          difficulty: input.difficulty,
+          notes: input.notes,
+          status: input.completedSteps.length === 5 ? "completed" : input.completedSteps.length ? "in_progress" : "not_started",
+          updatedAt: new Date().toISOString(),
+          evidenceSource: "student_self_report",
+        };
+        subjectProgress[input.lessonId] = record;
+        await updateStudentProfileSelection(ctx.user.id, {
+          ...selection,
+          subjectLessonProgress: { ...progress, [input.subjectId]: subjectProgress },
+        });
+        return { success: true, progress: record, lessonTitle: lesson.title };
+      }),
     activeSession: protectedProcedure.query(({ ctx }) => getActiveStudySession(ctx.user.id)),
     startSession: protectedProcedure
       .input(z.object({
