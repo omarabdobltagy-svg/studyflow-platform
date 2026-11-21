@@ -6,7 +6,8 @@ import { BookOpen, MessageSquare, Plus, ShieldCheck, Sparkles, Trash2 } from "lu
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-type ChatThread = { id: string; title: string; messages: Message[]; updatedAt: number };
+type ChatMessage = { role: "user" | "assistant"; content: string };
+type ChatThread = { id: string; title: string; messages: ChatMessage[]; updatedAt: number };
 const STORAGE_KEY = "studyflow.assistant.conversations.v2";
 const SELECTED_KEY = "studyflow.assistant.selected.v2";
 const suggestions = [
@@ -91,7 +92,7 @@ export default function Assistant() {
   const sendMessage = (content: string) => {
     const trimmed = content.trim();
     if (!trimmed || chat.isPending || !activeThread) return;
-    const userMessage: Message = { role: "user", content: trimmed };
+    const userMessage: ChatMessage = { role: "user", content: trimmed };
     const nextMessages = [...activeThread.messages, userMessage].slice(-40);
     setThreads(current => current.map(thread => thread.id === activeThread.id
       ? { ...thread, title: thread.messages.length ? thread.title : trimmed.slice(0, 42), messages: nextMessages, updatedAt: Date.now() }
@@ -105,7 +106,7 @@ export default function Assistant() {
       .map(thread => "محادثة سابقة: " + thread.title + "\n" + thread.messages.slice(-2).map(message => (message.role === "user" ? "الطالب: " : "المساعد: ") + message.content.slice(0, 500)).join("\n"))
       .join("\n---\n")
       .slice(0, 2_400);
-    chat.mutate({ messages: nextMessages.filter(message => message.role !== "system").slice(-20), memory });
+    chat.mutate({ messages: nextMessages.slice(-20), memory });
   };
 
   return (
