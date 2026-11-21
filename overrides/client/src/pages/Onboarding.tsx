@@ -103,7 +103,7 @@ export default function Onboarding({ editMode = false }: { editMode?: boolean })
     const saved = (profile.data as any)?.selection ?? null;
     setForm(current => ({
       ...current,
-      studentName: current.studentName || (profile.data as any)?.studentName || auth.data?.name || "",
+      studentName: current.studentName || (profile.data as any)?.studentName || "",
       phone: current.phone || auth.data?.phone || "",
       systemId: current.systemId || saved?.systemId || "",
       trackId: current.trackId || saved?.trackId || "",
