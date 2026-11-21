@@ -1,9 +1,6 @@
 name: StudyFlow validation
 
 on:
-  push:
-    branches:
-      - feature/google-auth-student-onboarding
   pull_request:
     branches:
       - main
