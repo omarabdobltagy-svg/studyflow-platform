@@ -697,9 +697,21 @@ export function getSIECheckpointChoicesForTeacher(teacherId: string): SIECheckpo
   const teacher = getSIETeacher(teacherId);
   if (!teacher) return [];
   const subjectId = teacher.subjectIds[0];
-  const mapped = getSIEPublicCheckpointOptions(teacherId);
-  if (mapped.length >= 3) return mapped.slice(0, 5);
-  return getSIECheckpointChoicesPreview(subjectId, 5);
+  const choices = getSIECheckpointChoices(subjectId);
+  const segments = teacher.publicSegments ?? [];
+  const mappedIds = new Set(segments.flatMap(segment => segment.curriculumNodeIds));
+  const mapped = choices.filter(choice => mappedIds.has(choice.nodeId));
+  const focusUnits = new Set(mapped.map(choice => choice.unitTitle));
+  // A public mapping to a whole unit (as with English reviews) narrows the
+  // first student choices to that official unit without guessing subtopics.
+  if (focusUnits.size === 0) {
+    const unitNodeIds = new Set(segments.flatMap(segment => segment.curriculumNodeIds));
+    const unitTitles: Record<string, string> = { ENG_U1_NODE: "Living Well in a Complex World" };
+    for (const id of unitNodeIds) if (unitTitles[id]) focusUnits.add(unitTitles[id]);
+  }
+  if (focusUnits.size > 0) return choices.filter(choice => focusUnits.has(choice.unitTitle)).slice(0, 5);
+  const firstUnit = choices[0]?.unitTitle;
+  return choices.filter(choice => choice.unitTitle === firstUnit).slice(0, 5);
 }
 
 export function getSIECheckpointChoices(subjectId: string): SIECheckpointChoice[] {
