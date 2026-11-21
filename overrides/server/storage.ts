@@ -1,4 +1,4 @@
-import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { ENV } from "./_core/env";
 
@@ -141,4 +141,14 @@ export async function storageGetSignedUrl(relKey: string): Promise<string> {
     }), { expiresIn: 300 });
   }
   return forgeGetSignedUrl(key);
+}
+
+/** Remove an S3-backed object after its database reference has been removed. */
+export async function storageDelete(relKey: string): Promise<void> {
+  const key = normalizeKey(relKey);
+  const s3 = getS3Config();
+  // The legacy Forge API only exposes upload/download signing in this project.
+  // Keep its existing behavior; S3 objects can be safely deleted directly.
+  if (!s3) return;
+  await s3.client.send(new DeleteObjectCommand({ Bucket: s3.bucket, Key: key }));
 }
