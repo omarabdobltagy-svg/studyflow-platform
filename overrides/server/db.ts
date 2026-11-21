@@ -185,8 +185,12 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       updateSet[field] = user[field] ?? null;
     }
   });
-  values.role = user.role ?? (user.openId === ENV.ownerOpenId ? "admin" : "user");
-  updateSet.role = values.role;
+  // Preserve an existing user's role during ordinary sign-in. Only assign or
+  // change it when an explicit role is supplied or the configured owner ID matches.
+  if (user.role !== undefined || user.openId === ENV.ownerOpenId) {
+    values.role = user.role ?? "admin";
+    updateSet.role = values.role;
+  }
   await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
 }
 
