@@ -714,6 +714,4 @@ export function getSIECheckpointChoicesForTeacher(teacherId: string): SIECheckpo
   return choices.filter(choice => choice.unitTitle === firstUnit).slice(0, 5);
 }
 
-export function getSIECheckpointChoices(subjectId: string): SIECheckpointChoice[] {
-  return SIE_CHECKPOINT_CHOICES[subjectId] ?? [];
-}
+
