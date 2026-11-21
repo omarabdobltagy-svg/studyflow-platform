@@ -133,12 +133,17 @@ export default function Onboarding({ editMode = false }: { editMode?: boolean })
     ];
   }, [track, fixedSubjects, firstElectiveGroup, form.electiveSubjectId]);
 
+  const hasCheckpointStep = selectedSubjects.some(subject => {
+    const teacherId = form.teacherSelections[subject.subjectId];
+    const teacher = teacherId && teacherId !== SKIP_TEACHER ? getSIETeacher(teacherId) : undefined;
+    return teacher?.studentInputRequired === true;
+  });
   const requiresCheckpoint = selectedSubjects.some(subject => {
     const teacherId = form.teacherSelections[subject.subjectId];
     const teacher = teacherId && teacherId !== SKIP_TEACHER ? getSIETeacher(teacherId) : undefined;
     return teacher?.studentInputRequired === true && form.checkpointSelections[subject.subjectId] === undefined;
   });
-  const activeSteps = requiresCheckpoint ? steps : steps.slice(0, 5);
+  const activeSteps = hasCheckpointStep ? steps : steps.slice(0, 5);
 
   const isIdentityValid =
     form.studentName.trim().length >= 2 &&
