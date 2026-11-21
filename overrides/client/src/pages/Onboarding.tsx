@@ -7,7 +7,6 @@ import {
   SIE_CATALOG_META,
   SIE_SYSTEMS,
   getSIEElectiveGroups,
-  getSIEEducationSystem,
   getSIESubject,
   getSIESubjectsForTrack,
   getSIETeachersForSubject,
@@ -25,9 +24,9 @@ import {
   GraduationCap,
   Loader2,
   ShieldCheck,
-  UserRound,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 
@@ -500,7 +499,7 @@ function ChoiceCard({
 }: {
   selected: boolean;
   onClick: () => void;
-  icon: React.ReactNode;
+  icon: ReactNode;
   title: string;
   subtitle?: string;
   note?: string;
