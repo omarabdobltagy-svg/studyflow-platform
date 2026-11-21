@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
-import { CalendarDays, CheckCircle2, CircleDashed, Flag, ListTree, Pencil, Plus, Target, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, CalendarDays, CheckCircle2, CircleDashed, Flag, ListTree, Pencil, Plus, Target, Trash2, X } from "lucide-react";
 import { FormEvent, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -147,5 +147,146 @@ function GoalCard({ goal, stages, tasks, completing, onComplete, onEdit, onDelet
 function Overview({ icon, value, label }: { icon: React.ReactNode; value: string | number; label: string }) { return <div className="app-card flex items-center gap-4 p-5"><span className="flex size-11 items-center justify-center rounded-2xl bg-secondary text-primary">{icon}</span><div><p className="num text-2xl font-semibold">{value}</p><p className="mt-1 text-xs text-muted-foreground">{label}</p></div></div>; }
 function EmptyGoals({ onClick }: { onClick: () => void }) { return <div className="app-card flex min-h-72 flex-col items-center justify-center p-6 text-center"><Target className="mb-4 size-10 text-primary/40" /><h3 className="font-bold">امنح يومك وجهة</h3><p className="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">أنشئ هدفًا، ثم اربطه بمهام صغيرة. سيحسب التطبيق نسبة تقدمك تلقائيًا.</p><Button onClick={onClick} className="pressable mt-5 rounded-xl"><Plus className="size-4" />أنشئ أول هدف</Button></div>; }
 function GoalEditForm({ goal, onClose, onSubmit, loading }: { goal: EditableGoal; onClose: () => void; loading: boolean; onSubmit: (data: { title: string; description: string | null; kind: "short" | "long"; category: string; color: string; targetDate: Date | null }) => void }) { const [title, setTitle] = useState(goal.title); const [description, setDescription] = useState(goal.description || ""); const [kind, setKind] = useState<"short" | "long">(goal.kind); const [category, setCategory] = useState(goal.category); const [color, setColor] = useState(goal.color); const [date, setDate] = useState(goal.targetDate ? new Date(goal.targetDate).toISOString().slice(0, 10) : ""); const submit = (event: FormEvent) => { event.preventDefault(); if (!title.trim()) return toast.error("اكتب عنوان الهدف أولًا."); onSubmit({ title: title.trim(), description: description.trim() || null, kind, category: category.trim() || "شخصي", color, targetDate: date ? new Date(`${date}T12:00:00`) : null }); }; return <section className="enter app-card mb-6 overflow-hidden border-primary/20"><div className="flex items-center justify-between border-b border-border/65 px-5 py-4"><div><p className="eyebrow">تعديل الهدف</p><h2 className="mt-1 font-bold">حدّث وجهتك وخطتك</h2></div><Button variant="ghost" size="icon" onClick={onClose} className="rounded-xl"><X className="size-4" /></Button></div><form onSubmit={submit} className="grid gap-4 p-5 sm:grid-cols-2"><div className="sm:col-span-2"><label className="mb-2 block text-sm font-semibold">عنوان الهدف</label><Input autoFocus value={title} onChange={event => setTitle(event.target.value)} className="h-11 rounded-xl bg-background" /></div><div className="sm:col-span-2"><label className="mb-2 block text-sm font-semibold">الوصف</label><Textarea value={description} onChange={event => setDescription(event.target.value)} className="min-h-20 rounded-xl bg-background" /></div><div><label className="mb-2 block text-sm font-semibold">مدى الهدف</label><Select value={kind} onValueChange={(value: "short" | "long") => setKind(value)}><SelectTrigger className="h-11 rounded-xl bg-background"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="short">قصير المدى</SelectItem><SelectItem value="long">طويل المدى</SelectItem></SelectContent></Select></div><div><label className="mb-2 block text-sm font-semibold">التصنيف</label><Input value={category} onChange={event => setCategory(event.target.value)} className="h-11 rounded-xl bg-background" /></div><div><label className="mb-2 block text-sm font-semibold">اللون</label><Select value={color} onValueChange={setColor}><SelectTrigger className="h-11 rounded-xl bg-background"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="violet">رمادي</SelectItem><SelectItem value="teal">تركوازي</SelectItem><SelectItem value="emerald">زمردي</SelectItem><SelectItem value="amber">ذهبي</SelectItem><SelectItem value="sky">سماوي</SelectItem></SelectContent></Select></div><div><label className="mb-2 block text-sm font-semibold">التاريخ المستهدف</label><Input type="date" value={date} onChange={event => setDate(event.target.value)} className="h-11 rounded-xl bg-background" /></div><div className="flex justify-end gap-2 sm:col-span-2"><Button type="button" variant="outline" onClick={onClose} className="rounded-xl">إلغاء</Button><Button disabled={loading} className="pressable rounded-xl bg-primary">حفظ التعديلات</Button></div></form></section>; }
-function GoalForm({ onClose, onSubmit, loading }: { onClose: () => void; loading: boolean; onSubmit: (data: { title: string; description: string | null; kind: "short" | "long"; category: string; color: string; targetDate: Date | null }) => void }) { const [title, setTitle] = useState(""); const [description, setDescription] = useState(""); const [kind, setKind] = useState<"short" | "long">("short"); const [category, setCategory] = useState("شخصي"); const [color, setColor] = useState("teal"); const [date, setDate] = useState(""); const submit = (event: FormEvent) => { event.preventDefault(); if (!title.trim()) return toast.error("اكتب عنوان الهدف أولًا."); onSubmit({ title: title.trim(), description: description.trim() || null, kind, category, color, targetDate: date ? new Date(`${date}T12:00:00`) : null }); }; return <section className="enter app-card mb-6 overflow-hidden border-primary/15"><div className="flex items-center justify-between border-b border-border/65 px-5 py-4"><div><p className="eyebrow">وجهة جديدة</p><h2 className="mt-1 font-bold">أنشئ هدفًا قابلًا للمتابعة</h2></div><Button variant="ghost" size="icon" className="rounded-xl" onClick={onClose}><X className="size-4" /></Button></div><form onSubmit={submit} className="grid gap-4 p-5 sm:grid-cols-2"><div className="sm:col-span-2"><label className="mb-2 block text-sm font-semibold">عنوان الهدف</label><Input autoFocus value={title} onChange={event => setTitle(event.target.value)} placeholder="مثال: إنهاء مقرر الإحصاء" className="h-11 rounded-xl bg-background" /></div><div className="sm:col-span-2"><label className="mb-2 block text-sm font-semibold">لماذا يهمك؟ <span className="font-normal text-muted-foreground">اختياري</span></label><Textarea value={description} onChange={event => setDescription(event.target.value)} placeholder="وصف موجز يذكّرك بالنتيجة التي تسعى إليها" className="min-h-20 rounded-xl bg-background" /></div><div><label className="mb-2 block text-sm font-semibold">مدى الهدف</label><Select value={kind} onValueChange={(value: "short" | "long") => setKind(value)}><SelectTrigger className="h-11 rounded-xl bg-background"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="short">قصير المدى</SelectItem><SelectItem value="long">طويل المدى</SelectItem></SelectContent></Select></div><div><label className="mb-2 block text-sm font-semibold">التصنيف</label><Input value={category} onChange={event => setCategory(event.target.value)} className="h-11 rounded-xl bg-background" /></div><div><label className="mb-2 block text-sm font-semibold">اللون</label><Select value={color} onValueChange={setColor}><SelectTrigger className="h-11 rounded-xl bg-background"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="violet">بنفسجي</SelectItem><SelectItem value="emerald">زمردي</SelectItem><SelectItem value="amber">ذهبي</SelectItem><SelectItem value="sky">سماوي</SelectItem></SelectContent></Select></div><div><label className="mb-2 block text-sm font-semibold">تاريخ مستهدف</label><Input type="date" value={date} onChange={event => setDate(event.target.value)} className="h-11 rounded-xl bg-background" /></div><div className="flex justify-end gap-2 sm:col-span-2"><Button type="button" variant="outline" onClick={onClose} className="rounded-xl">إلغاء</Button><Button disabled={loading} className="pressable rounded-xl bg-primary">{loading ? "يُنشأ الهدف..." : "حفظ الهدف"}</Button></div></form></section>; }
+
+type GoalStepDraft = { id: string; title: string; estimatedMinutes: number };
+
+function GoalForm({ onClose, onSubmit, loading }: {
+  onClose: () => void;
+  loading: boolean;
+  onSubmit: (data: {
+    title: string;
+    description: string | null;
+    kind: "short" | "long";
+    category: string;
+    color: string;
+    targetDate: Date | null;
+    initialSteps: { title: string; estimatedMinutes: number }[];
+  }) => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [kind, setKind] = useState<"short" | "long">("short");
+  const [category, setCategory] = useState("شخصي");
+  const [color, setColor] = useState("teal");
+  const [date, setDate] = useState("");
+  const [initialSteps, setInitialSteps] = useState<GoalStepDraft[]>([]);
+
+  const addStep = () => setInitialSteps(items => [
+    ...items,
+    { id: `goal-step-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, title: "", estimatedMinutes: 25 },
+  ]);
+  const patchStep = (id: string, patch: Partial<GoalStepDraft>) =>
+    setInitialSteps(items => items.map(item => item.id === id ? { ...item, ...patch } : item));
+  const moveStep = (index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= initialSteps.length) return;
+    setInitialSteps(items => {
+      const next = [...items];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  };
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    if (!title.trim()) return toast.error("اكتب عنوان الهدف أولًا.");
+    const steps = initialSteps
+      .map(step => ({ title: step.title.trim(), estimatedMinutes: step.estimatedMinutes }))
+      .filter(step => step.title.length > 0);
+    onSubmit({
+      title: title.trim(),
+      description: description.trim() || null,
+      kind,
+      category,
+      color,
+      targetDate: date ? new Date(`${date}T12:00:00`) : null,
+      initialSteps: steps,
+    });
+  };
+
+  return (
+    <section className="enter app-card mb-6 overflow-hidden border-primary/15">
+      <div className="flex items-center justify-between border-b border-border/65 px-5 py-4">
+        <div>
+          <p className="eyebrow">وجهة جديدة</p>
+          <h2 className="mt-1 font-bold">أنشئ هدفًا قابلًا للمتابعة</h2>
+          <p className="mt-1 text-xs text-muted-foreground">أضف الهدف وخطواته من شاشة واحدة، أو ابدأ بالهدف فقط.</p>
+        </div>
+        <Button variant="ghost" size="icon" className="rounded-xl" onClick={onClose}><X className="size-4" /></Button>
+      </div>
+      <form onSubmit={submit} className="grid gap-4 p-5 sm:grid-cols-2">
+        <div className="sm:col-span-2">
+          <label className="mb-2 block text-sm font-semibold">عنوان الهدف</label>
+          <Input autoFocus value={title} onChange={event => setTitle(event.target.value)} placeholder="مثال: إنهاء مقرر الإحصاء" className="h-11 rounded-xl bg-background" />
+        </div>
+        <div className="sm:col-span-2">
+          <label className="mb-2 block text-sm font-semibold">لماذا يهمك؟ <span className="font-normal text-muted-foreground">اختياري</span></label>
+          <Textarea value={description} onChange={event => setDescription(event.target.value)} placeholder="وصف موجز يذكّرك بالنتيجة التي تسعى إليها" className="min-h-20 rounded-xl bg-background" />
+        </div>
+        <div>
+          <label className="mb-2 block text-sm font-semibold">مدى الهدف</label>
+          <Select value={kind} onValueChange={(value: "short" | "long") => setKind(value)}>
+            <SelectTrigger className="h-11 rounded-xl bg-background"><SelectValue /></SelectTrigger>
+            <SelectContent><SelectItem value="short">قصير المدى</SelectItem><SelectItem value="long">طويل المدى</SelectItem></SelectContent>
+          </Select>
+        </div>
+        <div>
+          <label className="mb-2 block text-sm font-semibold">التصنيف</label>
+          <Input value={category} onChange={event => setCategory(event.target.value)} className="h-11 rounded-xl bg-background" />
+        </div>
+        <div>
+          <label className="mb-2 block text-sm font-semibold">اللون</label>
+          <Select value={color} onValueChange={setColor}>
+            <SelectTrigger className="h-11 rounded-xl bg-background"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="violet">رمادي داكن</SelectItem>
+              <SelectItem value="teal">تركوازي</SelectItem>
+              <SelectItem value="emerald">زمردي</SelectItem>
+              <SelectItem value="amber">ذهبي</SelectItem>
+              <SelectItem value="sky">سماوي</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <label className="mb-2 block text-sm font-semibold">تاريخ مستهدف</label>
+          <Input type="date" value={date} onChange={event => setDate(event.target.value)} className="h-11 rounded-xl bg-background" />
+        </div>
+        <div className="sm:col-span-2 rounded-2xl border border-border/70 bg-muted/15 p-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-bold">خطوات التنفيذ الأولية</h3>
+              <p className="mt-1 text-xs text-muted-foreground">كل خطوة تتحول إلى مهمة مرتبطة بالهدف ويُحسب التقدم من إنجازها الفعلي.</p>
+            </div>
+            <span className="rounded-lg bg-secondary px-2 py-1 text-xs font-semibold text-primary">{initialSteps.length} خطوة</span>
+          </div>
+          {initialSteps.length > 0 && (
+            <div className="mb-3 space-y-2">
+              {initialSteps.map((step, index) => (
+                <div key={step.id} className="grid grid-cols-[30px_minmax(0,1fr)_76px_64px] items-center gap-2 rounded-xl border border-border/75 bg-card p-2.5">
+                  <span className="flex size-8 items-center justify-center rounded-lg bg-secondary text-xs font-bold text-primary">{index + 1}</span>
+                  <Input value={step.title} onChange={event => patchStep(step.id, { title: event.target.value })} placeholder="ما الخطوة التالية؟" aria-label={`خطوة الهدف ${index + 1}`} className="h-10 min-w-0 rounded-xl bg-background text-sm" />
+                  <label className="relative">
+                    <Input type="number" min={1} max={300} value={step.estimatedMinutes} onChange={event => patchStep(step.id, { estimatedMinutes: Math.min(300, Math.max(1, Number(event.target.value) || 25)) })} aria-label={`مدة الخطوة ${index + 1}`} className="h-10 rounded-xl bg-background pl-1 text-center text-sm" />
+                    <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">د</span>
+                  </label>
+                  <div className="flex items-center justify-end gap-0.5">
+                    <Button type="button" size="icon" variant="ghost" disabled={index === 0} onClick={() => moveStep(index, -1)} className="size-7 rounded-lg" aria-label="تحريك خطوة لأعلى"><ArrowUp className="size-3.5" /></Button>
+                    <Button type="button" size="icon" variant="ghost" disabled={index === initialSteps.length - 1} onClick={() => moveStep(index, 1)} className="size-7 rounded-lg" aria-label="تحريك خطوة لأسفل"><ArrowDown className="size-3.5" /></Button>
+                    <Button type="button" size="icon" variant="ghost" onClick={() => setInitialSteps(items => items.filter(item => item.id !== step.id))} className="size-7 rounded-lg text-destructive hover:text-destructive" aria-label="حذف الخطوة"><Trash2 className="size-3.5" /></Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <Button type="button" variant="outline" disabled={initialSteps.length >= 20} onClick={addStep} className="w-full rounded-xl border-dashed">
+            <Plus className="size-4" /> إضافة خطوة إلى الهدف
+          </Button>
+        </div>
+        <div className="flex justify-end gap-2 sm:col-span-2">
+          <Button type="button" variant="outline" onClick={onClose} className="rounded-xl">إلغاء</Button>
+          <Button disabled={loading} className="pressable rounded-xl bg-primary">{loading ? "يُنشأ الهدف..." : "حفظ الهدف"}</Button>
+        </div>
+      </form>
+    </section>
+  );
+}
 function GoalSkeletons() { return <>{[0, 1].map(i => <div key={i} className="app-card h-36 animate-pulse bg-muted/60" />)}</>; }

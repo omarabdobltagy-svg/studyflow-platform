@@ -462,17 +462,41 @@ export async function createGoal(
     category?: string;
     color?: string;
     targetDate?: Date | null;
+    initialSteps?: { title: string; estimatedMinutes: number }[];
   }
 ) {
   const db = await requireDb();
-  await db.insert(goals).values({
-    userId,
-    title: data.title,
-    description: data.description ?? null,
-    kind: data.kind ?? "short",
-    category: data.category ?? "شخصي",
-    color: data.color ?? "violet",
-    targetDate: data.targetDate ?? null,
+  const steps = (data.initialSteps ?? [])
+    .map(step => ({
+      title: step.title.trim(),
+      estimatedMinutes: Math.min(300, Math.max(1, Math.round(step.estimatedMinutes || 25))),
+    }))
+    .filter(step => step.title.length > 0);
+
+  return db.transaction(async tx => {
+    const inserted = await tx.insert(goals).values({
+      userId,
+      title: data.title.trim(),
+      description: data.description ?? null,
+      kind: data.kind ?? "short",
+      category: data.category ?? "شخصي",
+      color: data.color ?? "teal",
+      targetDate: data.targetDate ?? null,
+    });
+    const goalId = Number(inserted[0].insertId);
+    if (steps.length) {
+      await tx.insert(tasks).values(steps.map((step, index) => ({
+        userId,
+        goalId,
+        title: step.title,
+        notes: null,
+        category: data.category ?? "عام",
+        priority: "medium" as const,
+        estimatedMinutes: step.estimatedMinutes,
+        dueAt: data.targetDate ?? null,
+      })));
+    }
+    return { goalId, initialTaskCount: steps.length };
   });
 }
 

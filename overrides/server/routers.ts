@@ -526,6 +526,10 @@ export const appRouter = router({
         category: z.string().trim().min(1).max(80).optional(),
         color: z.string().trim().min(1).max(20).optional(),
         targetDate: dateInput,
+        initialSteps: z.array(z.object({
+          title: z.string().trim().min(1).max(220),
+          estimatedMinutes: z.number().int().min(1).max(300),
+        })).max(20).optional(),
       }))
       .mutation(({ ctx, input }) => createGoal(ctx.user.id, input)),
     setStatus: protectedProcedure
