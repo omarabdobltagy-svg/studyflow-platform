@@ -38,37 +38,22 @@ function makeRoutineStep(title = "", durationMinutes = 10): RoutineStepDraft {
 }
 
 const routineTemplates = [
-  {
-    label: "بداية اليوم",
-    name: "بداية اليوم",
-    period: "morning" as const,
-    items: [
-      { title: "ترتيب مساحة العمل", durationMinutes: 5 },
-      { title: "مراجعة أولويات اليوم", durationMinutes: 10 },
-      { title: "بدء أول مهمة", durationMinutes: 25 },
-    ],
-  },
-  {
-    label: "جلسة تركيز",
-    name: "جلسة تركيز",
-    period: "custom" as const,
-    items: [
-      { title: "تحديد هدف الجلسة", durationMinutes: 5 },
-      { title: "عمل مركز دون مقاطعة", durationMinutes: 25 },
-      { title: "استراحة قصيرة", durationMinutes: 5 },
-      { title: "مراجعة ما تم إنجازه", durationMinutes: 5 },
-    ],
-  },
-  {
-    label: "نهاية اليوم",
-    name: "نهاية اليوم",
-    period: "evening" as const,
-    items: [
-      { title: "مراجعة إنجازات اليوم", durationMinutes: 10 },
-      { title: "تجهيز مهام الغد", durationMinutes: 10 },
-      { title: "إغلاق مساحة العمل", durationMinutes: 5 },
-    ],
-  },
+  { label: "بداية اليوم", name: "بداية اليوم", period: "morning" as const, items: [
+    { title: "ترتيب مساحة العمل", durationMinutes: 5 },
+    { title: "مراجعة أولويات اليوم", durationMinutes: 10 },
+    { title: "بدء أول مهمة", durationMinutes: 25 },
+  ] },
+  { label: "جلسة تركيز", name: "جلسة تركيز", period: "custom" as const, items: [
+    { title: "تحديد هدف الجلسة", durationMinutes: 5 },
+    { title: "عمل مركز دون مقاطعة", durationMinutes: 25 },
+    { title: "استراحة قصيرة", durationMinutes: 5 },
+    { title: "مراجعة ما تم إنجازه", durationMinutes: 5 },
+  ] },
+  { label: "نهاية اليوم", name: "نهاية اليوم", period: "evening" as const, items: [
+    { title: "مراجعة إنجازات اليوم", durationMinutes: 10 },
+    { title: "تجهيز مهام الغد", durationMinutes: 10 },
+    { title: "إغلاق مساحة العمل", durationMinutes: 5 },
+  ] },
 ];
 
 function PeriodPicker({ value, onChange }: { value: RoutinePeriod; onChange: (value: RoutinePeriod) => void }) {
@@ -80,15 +65,10 @@ function PeriodPicker({ value, onChange }: { value: RoutinePeriod; onChange: (va
   return (
     <div className="grid grid-cols-3 gap-2 rounded-2xl bg-muted/55 p-1.5" role="group" aria-label="فترة الروتين">
       {options.map(option => (
-        <button
-          key={option.value}
-          type="button"
-          aria-pressed={value === option.value}
-          onClick={() => onChange(option.value)}
+        <button key={option.value} type="button" aria-pressed={value === option.value} onClick={() => onChange(option.value)}
           className={cn("rounded-xl px-3 py-2.5 text-sm font-semibold transition", value === option.value
             ? "bg-card text-primary shadow-sm ring-1 ring-border/70"
-            : "text-muted-foreground hover:bg-card/60 hover:text-foreground")}
-        >
+            : "text-muted-foreground hover:bg-card/60 hover:text-foreground")}>
           {option.label}
         </button>
       ))}
@@ -96,12 +76,8 @@ function PeriodPicker({ value, onChange }: { value: RoutinePeriod; onChange: (va
   );
 }
 
-function RoutineStepBuilder({ items, onChange }: {
-  items: RoutineStepDraft[];
-  onChange: (items: RoutineStepDraft[]) => void;
-}) {
-  const patchStep = (key: string, patch: Partial<RoutineStepDraft>) =>
-    onChange(items.map(item => item.key === key ? { ...item, ...patch } : item));
+function RoutineStepBuilder({ items, onChange }: { items: RoutineStepDraft[]; onChange: (items: RoutineStepDraft[]) => void }) {
+  const patchStep = (key: string, patch: Partial<RoutineStepDraft>) => onChange(items.map(item => item.key === key ? { ...item, ...patch } : item));
   const moveStep = (index: number, direction: -1 | 1) => {
     const target = index + direction;
     if (target < 0 || target >= items.length) return;
@@ -109,39 +85,23 @@ function RoutineStepBuilder({ items, onChange }: {
     [next[index], next[target]] = [next[target], next[index]];
     onChange(next);
   };
-
   return (
     <div className="space-y-3">
-      {items.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-border bg-muted/20 px-4 py-6 text-center">
-          <ListChecks className="mx-auto mb-2 size-6 text-muted-foreground/65" />
-          <p className="text-sm font-semibold">ابدأ بإضافة أول خطوة</p>
-          <p className="mt-1 text-xs text-muted-foreground">كل خطوة لها اسم ومدة تقديرية، ويمكنك ترتيبها لاحقًا.</p>
-        </div>
-      )}
+      {items.length === 0 && <div className="rounded-2xl border border-dashed border-border bg-muted/20 px-4 py-6 text-center">
+        <ListChecks className="mx-auto mb-2 size-6 text-muted-foreground/65" />
+        <p className="text-sm font-semibold">ابدأ بإضافة أول خطوة</p>
+        <p className="mt-1 text-xs text-muted-foreground">كل خطوة لها اسم ومدة تقديرية، ويمكنك ترتيبها لاحقًا.</p>
+      </div>}
       {items.map((item, index) => (
         <div key={item.key} className="routine-step-card grid grid-cols-[30px_minmax(0,1fr)_76px_64px] items-center gap-2 rounded-2xl border border-border/75 bg-card p-3">
           <span className="flex size-8 items-center justify-center rounded-xl bg-secondary text-xs font-bold text-primary">{index + 1}</span>
-          <Input
-            value={item.title}
-            onChange={event => patchStep(item.key, { title: event.target.value })}
-            placeholder={index === 0 ? "مثال: مراجعة أولويات اليوم" : "اسم الخطوة"}
-            aria-label={`اسم الخطوة ${index + 1}`}
-            className="h-10 min-w-0 rounded-xl bg-background text-sm"
-          />
+          <Input value={item.title} onChange={event => patchStep(item.key, { title: event.target.value })}
+            placeholder={index === 0 ? "مثال: مراجعة أولويات اليوم" : "اسم الخطوة"} aria-label={`اسم الخطوة ${index + 1}`}
+            className="h-10 min-w-0 rounded-xl bg-background text-sm" />
           <label className="relative">
-            <Input
-              type="number"
-              min={1}
-              max={300}
-              value={item.durationMinutes}
-              onChange={event => {
-                const value = Number(event.target.value);
-                patchStep(item.key, { durationMinutes: Number.isFinite(value) ? Math.min(300, Math.max(1, value)) : 10 });
-              }}
-              aria-label={`مدة الخطوة ${index + 1} بالدقائق`}
-              className="h-10 rounded-xl bg-background pl-1 text-center text-sm"
-            />
+            <Input type="number" min={1} max={300} value={item.durationMinutes}
+              onChange={event => { const value = Number(event.target.value); patchStep(item.key, { durationMinutes: Number.isFinite(value) ? Math.min(300, Math.max(1, value)) : 10 }); }}
+              aria-label={`مدة الخطوة ${index + 1} بالدقائق`} className="h-10 rounded-xl bg-background pl-1 text-center text-sm" />
             <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">د</span>
           </label>
           <div className="flex items-center justify-end gap-0.5">
@@ -151,8 +111,8 @@ function RoutineStepBuilder({ items, onChange }: {
           </div>
         </div>
       ))}
-      <Button type="button" variant="outline" onClick={() => onChange([...items, makeRoutineStep()])} className="w-full rounded-xl border-dashed">
-        <Plus className="size-4" /> إضافة خطوة
+      <Button type="button" variant="outline" disabled={items.length >= 20} onClick={() => onChange([...items, makeRoutineStep()])} className="w-full rounded-xl border-dashed">
+        <Plus className="size-4" /> {items.length >= 20 ? "وصلت للحد الأقصى من الخطوات" : "إضافة خطوة"}
       </Button>
     </div>
   );
@@ -189,11 +149,9 @@ function RoutineForm({ onClose, onSubmit, loading }: {
           <div><label className="mb-2 block text-sm font-semibold">اسم الروتين</label><Input autoFocus value={name} onChange={event => setName(event.target.value)} placeholder="مثال: بداية يوم الدراسة" className="h-11 rounded-xl bg-background" /></div>
           <div><label className="mb-2 block text-sm font-semibold">موعد الروتين</label><PeriodPicker value={period} onChange={setPeriod} /></div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {routineTemplates.map(template => (
-            <button key={template.label} type="button" onClick={() => applyTemplate(template)} className="rounded-xl border border-border/70 bg-muted/30 px-3 py-2 text-xs font-semibold transition hover:border-primary/40 hover:bg-secondary/60">{template.label}</button>
-          ))}
-        </div>
+        <div className="flex flex-wrap gap-2">{routineTemplates.map(template => (
+          <button key={template.label} type="button" onClick={() => applyTemplate(template)} className="rounded-xl border border-border/70 bg-muted/30 px-3 py-2 text-xs font-semibold transition hover:border-primary/40 hover:bg-secondary/60">{template.label}</button>
+        ))}</div>
         <section className="space-y-3 rounded-2xl border border-border/70 bg-muted/15 p-4">
           <div className="flex items-center justify-between gap-2"><div><h3 className="font-bold">خطوات الروتين</h3><p className="mt-1 text-xs text-muted-foreground">رتّب الخطوات وحدد زمنًا تقريبيًا لكل واحدة.</p></div><span className="rounded-lg bg-secondary px-2 py-1 text-xs font-semibold text-primary">{items.length} خطوة</span></div>
           <RoutineStepBuilder items={items} onChange={setItems} />

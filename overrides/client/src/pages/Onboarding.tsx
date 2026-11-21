@@ -455,8 +455,6 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                                   </span>
                                 </button>
                               );
-                                </div>
-                              );
                             })}
                           </div>
                         ) : (
