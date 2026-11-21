@@ -136,7 +136,7 @@ export default function Onboarding({ editMode = false }: { editMode?: boolean })
   const requiresCheckpoint = selectedSubjects.some(subject => {
     const teacherId = form.teacherSelections[subject.subjectId];
     const teacher = teacherId && teacherId !== SKIP_TEACHER ? getSIETeacher(teacherId) : undefined;
-    return teacher?.studentInputRequired === true;
+    return teacher?.studentInputRequired === true && form.checkpointSelections[subject.subjectId] === undefined;
   });
   const activeSteps = requiresCheckpoint ? steps : steps.slice(0, 5);
 
@@ -438,7 +438,11 @@ export default function Onboarding({ editMode = false }: { editMode?: boolean })
                                     onClick={() => setForm(current => ({
                                       ...current,
                                       teacherSelections: { ...current.teacherSelections, [subject.subjectId]: teacher.teacherId },
-                                      checkpointSelections: { ...current.checkpointSelections, [subject.subjectId]: CHECKPOINT_DEFERRED },
+                                      checkpointSelections: (() => {
+                                        const next = { ...current.checkpointSelections };
+                                        delete next[subject.subjectId];
+                                        return next;
+                                      })(),
                                     }))}
                                     aria-pressed={selectedTeacher === teacher.teacherId}
                                     className="w-full text-right"
@@ -558,7 +562,7 @@ export default function Onboarding({ editMode = false }: { editMode?: boolean })
                   {selectedSubjects.filter(subject => {
                     const teacherId = form.teacherSelections[subject.subjectId];
                     const teacher = teacherId && teacherId !== SKIP_TEACHER ? getSIETeacher(teacherId) : undefined;
-                    return teacher?.studentInputRequired === true;
+                    return teacher?.studentInputRequired === true && form.checkpointSelections[subject.subjectId] === undefined;
                   }).length === 0 ? (
                     <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-5 text-sm leading-7 text-muted-foreground">
                       لا توجد مادة تحتاج تحديد نقطة بداية الآن. تقدر تكمل إعداد حسابك.
@@ -566,9 +570,9 @@ export default function Onboarding({ editMode = false }: { editMode?: boolean })
                   ) : selectedSubjects.filter(subject => {
                     const teacherId = form.teacherSelections[subject.subjectId];
                     const teacher = teacherId && teacherId !== SKIP_TEACHER ? getSIETeacher(teacherId) : undefined;
-                    return teacher?.studentInputRequired === true;
+                    return teacher?.studentInputRequired === true && form.checkpointSelections[subject.subjectId] === undefined;
                   }).map(subject => {
-                    const teacherId = form.teacherSelections[subject.subjectId];
+                    const teacherId = form.teacherSelections[subject.subjectId] ?? "";
                     const teacher = getSIETeacher(teacherId);
                     const allChoices = getSIECheckpointChoices(subject.subjectId);
                     const initialChoices = getSIECheckpointChoicesForTeacher(teacherId);
@@ -579,7 +583,7 @@ export default function Onboarding({ editMode = false }: { editMode?: boolean })
                     ];
                     const hasMoreChoices = visibleChoices.length < allChoices.length;
                     const publicSegments = getSIEPublicSegments(teacherId);
-                    const selected = form.checkpointSelections[subject.subjectId] ?? CHECKPOINT_DEFERRED;
+                    const selected = form.checkpointSelections[subject.subjectId] ?? "";
                     return (
                       <section key={subject.subjectId} className="rounded-2xl border border-border p-4 sm:p-5">
                         <div className="mb-4">
