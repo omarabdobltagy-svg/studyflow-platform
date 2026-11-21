@@ -183,9 +183,11 @@ export default function DashboardLayout({ title, description, children, action }
 
       <div className={cn(isDesktopNavHidden ? "lg:pr-0" : "lg:pr-[272px]")}>
         <header className="sticky top-0 z-30 border-b border-border/65 bg-background/90 backdrop-blur-xl">
-          <div className="container dashboard-header flex min-h-[72px] items-center justify-between gap-3 py-2">
+          <div className="pointer-events-none absolute left-[16%] top-0 hidden h-[72px] w-[220px] opacity-85 xl:block"><ThreeAmbientScene /></div>
+          <div className="container dashboard-header relative z-10 flex min-h-[72px] items-center justify-between gap-3 py-2">
             <div className="dashboard-header-main flex min-w-0 items-center gap-3">
-              <Button variant="outline" size="icon" className="pressable rounded-xl lg:hidden" onClick={() => setMobileNavOpen(true)} aria-label="فتح التنقل"><Menu className="size-5" /></Button>\n              <Button variant="outline" size="icon" className="pressable hidden rounded-xl lg:inline-flex" onClick={() => setDesktopNavHidden(current => !current)} aria-label={isDesktopNavHidden ? "إظهار شريط التنقل" : "إخفاء شريط التنقل"} title={isDesktopNavHidden ? "إظهار شريط التنقل" : "ملء الشاشة"}>{isDesktopNavHidden ? <PanelRightOpen className="size-4" /> : <PanelRightClose className="size-4" />}</Button>
+              <Button variant="outline" size="icon" className="pressable rounded-xl lg:hidden" onClick={() => setMobileNavOpen(true)} aria-label="فتح التنقل"><Menu className="size-5" /></Button>
+              <Button variant="outline" size="icon" className="pressable hidden rounded-xl lg:inline-flex" onClick={() => setDesktopNavHidden(current => !current)} aria-label={isDesktopNavHidden ? "إظهار شريط التنقل" : "إخفاء شريط التنقل"} title={isDesktopNavHidden ? "إظهار شريط التنقل" : "ملء الشاشة"}>{isDesktopNavHidden ? <PanelRightOpen className="size-4" /> : <PanelRightClose className="size-4" />}</Button>
               <div className="min-w-0"><p className="eyebrow mb-0.5 hidden sm:block">مساحتك الشخصية</p><h1 className="truncate text-lg font-bold tracking-tight sm:text-2xl">{title}</h1></div>
             </div>
             <div className="flex shrink-0 items-center gap-2">
