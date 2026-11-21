@@ -279,7 +279,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                 <GraduationCap className="size-6" />
               </span>
             </div>
-            <Progress value={((step + 1) / activeSteps.length) * 100} className="relative mt-7 h-2 bg-white/15 [&>div]:bg-violet-200" />
+            <Progress value={((step + 1) / activeSteps.length) * 100} className="relative mt-7 h-2 bg-white/15 [&>div]:bg-amber-300" />
             <div className="relative mt-3 flex justify-between gap-2 text-[10px] text-primary-foreground/60 sm:text-xs">
               {activeSteps.map((label, index) => (
                 <span key={label} className={index <= step ? "font-bold text-white" : ""}>{label}</span>
