@@ -25,6 +25,7 @@ import {
   ensureLocalAuthUser,
   getBookDetail,
   getDashboard,
+  getLibraryAttachmentForDownload,
   getStudyAnalytics,
   getStudentProfile,
   startStudySession,
@@ -55,7 +56,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { generatePersonalPlan } from "./planGenerator";
-import { storagePut } from "./storage";
+import { storageDelete, storagePut } from "./storage";
 import { decodeAndValidateAttachment } from "./attachments";
 import { parse as parseCookie } from "cookie";
 import { createHeartbeatJob, updateHeartbeatJob } from "./_core/heartbeat";
@@ -606,20 +607,37 @@ export const appRouter = router({
         await assertLibraryAttachmentTarget(ctx.user.id, input.bookId, input.chapterId);
         const safeName = input.fileName.replace(/[^\w.\- \u0600-\u06FF]/g, "_").slice(0, 180) || "attachment";
         const stored = await storagePut(`library/${ctx.user.id}/${input.bookId}/${Date.now()}_${safeName}`, binary, input.mimeType);
-        const attachmentId = await addLibraryAttachment(ctx.user.id, {
-          bookId: input.bookId,
-          chapterId: input.chapterId,
-          fileName: input.fileName,
-          fileKey: stored.key,
-          fileUrl: "",
-          mimeType: input.mimeType,
-          sizeBytes: binary.length,
-        });
+        let attachmentId: number;
+        try {
+          attachmentId = await addLibraryAttachment(ctx.user.id, {
+            bookId: input.bookId,
+            chapterId: input.chapterId,
+            fileName: input.fileName,
+            fileKey: stored.key,
+            fileUrl: "",
+            mimeType: input.mimeType,
+            sizeBytes: binary.length,
+          });
+        } catch (error) {
+          // Avoid orphaned S3 objects if the database insert fails after upload.
+          try { await storageDelete(stored.key); } catch (cleanupError) {
+            console.error("[Storage] Upload rollback cleanup failed:", cleanupError);
+          }
+          throw error;
+        }
         return { attachmentId, url: `/library-attachments/${attachmentId}/download` };
       }),
     deleteAttachment: protectedProcedure
       .input(z.object({ attachmentId: z.number().int().positive() }))
-      .mutation(({ ctx, input }) => deleteLibraryAttachment(ctx.user.id, input.attachmentId)),
+      .mutation(async ({ ctx, input }) => {
+        const attachment = await getLibraryAttachmentForDownload(ctx.user.id, input.attachmentId);
+        if (!attachment) throw new TRPCError({ code: "NOT_FOUND", message: "المرفق غير موجود أو لا تملك حذفه." });
+        await deleteLibraryAttachment(ctx.user.id, input.attachmentId);
+        try { await storageDelete(attachment.fileKey); } catch (error) {
+          console.error("[Storage] Deleted attachment left an orphaned object:", error);
+        }
+        return { success: true };
+      }),
   }),
 
   study: router({
