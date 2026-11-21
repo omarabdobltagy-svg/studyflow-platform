@@ -1,0 +1,62 @@
+name: StudyFlow validation
+
+on:
+  push:
+    branches:
+      - feature/google-auth-student-onboarding
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test-password
+          MYSQL_DATABASE: studyflow_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -ptest-password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+    env:
+      DATABASE_URL: mysql://root:test-password@127.0.0.1:3306/studyflow_test
+      JWT_SECRET: ci-only-test-secret-not-for-production
+      NODE_ENV: test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Extract application source and apply overlays
+        run: |
+          tar -xf studyflow-source.tar -C .
+          cp -a overrides/. .
+          test -f package.json
+          test -f pnpm-lock.yaml
+          test -f server/_core/index.ts
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Enable pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@9.15.4 --activate
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Type check
+        run: pnpm check
+      - name: Build
+        run: pnpm build
+      - name: Apply all MySQL migrations on an isolated database
+        run: pnpm db:push
+      - name: Unit tests
+        run: pnpm test
