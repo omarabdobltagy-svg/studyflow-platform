@@ -436,6 +436,12 @@ export default function Onboarding({ editMode = false }: { editMode?: boolean })
                                     <p className="mt-2 text-[11px] leading-6 text-muted-foreground">
                                       آخر نقطة عامة موثقة: {teacher.latestPublicCheckpoint}
                                     </p>
+                                  )} 
+                                  {teacher.teachingAdvice && (
+                                    <div className="mt-2 rounded-lg border border-border/70 px-3 py-2 text-[11px] leading-6">
+                                      <span className="font-semibold">إرشاد تعليمي من مصدر:</span> {teacher.teachingAdvice}
+                                      <span className="mt-1 block text-muted-foreground">{teacher.teachingAdviceEvidence}</span>
+                                    </div>
                                   )}
 
                                   <div className="mt-3 flex flex-wrap items-center gap-2">
