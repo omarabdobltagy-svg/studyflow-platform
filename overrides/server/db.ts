@@ -662,14 +662,15 @@ export async function createBook(
   data: { title: string; author?: string | null; subject?: string; totalPages?: number; coverColor?: string }
 ) {
   const db = await requireDb();
-  await db.insert(books).values({
+  const result = await db.insert(books).values({
     userId,
     title: data.title,
     author: data.author ?? null,
     subject: data.subject ?? "دراسة",
     totalPages: data.totalPages ?? 0,
-    coverColor: data.coverColor ?? "violet",
+    coverColor: data.coverColor ?? "amber",
   });
+  return Number(result[0].insertId);
 }
 
 export async function updateBook(
