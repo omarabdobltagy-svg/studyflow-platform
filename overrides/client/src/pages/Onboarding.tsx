@@ -456,7 +456,7 @@ export default function Onboarding({ editMode = false }: { editMode?: boolean })
                                   </div>
                                   <p className="mt-3 text-xs leading-6 text-muted-foreground">{teacher.evidenceLabel}</p>
                                   <div className="mt-2 rounded-xl bg-muted/30 px-3 py-2 text-[11px] leading-6">
-                                    <p><span className="font-semibold">مرشح أولي:</span> {teacher.selectionLabel}</p>
+                                    <p><span className="font-semibold">الترشيح الأولي:</span> {teacher.shortlistPosition} من 3 · {teacher.selectionLabel}</p>
                                     <p><span className="font-semibold">الصف/السنة المثبتة:</span> {teacher.courseVerifiedFor}</p>
                                     <p className="mt-1">{teacher.courseProgressEvidence}</p>
                                   </div>
