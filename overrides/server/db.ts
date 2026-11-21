@@ -99,15 +99,6 @@ export function getDateKeyInTimezone(date = new Date(), timeZone = "UTC") {
   return `${values.year}-${values.month}-${values.day}`;
 }
 
-function getWeekRangeForDateKey(dateKey: string) {
-  const date = new Date(`${dateKey}T00:00:00.000Z`);
-  const start = new Date(date);
-  start.setUTCDate(start.getUTCDate() - ((start.getUTCDay() + 1) % 7));
-  const end = new Date(start);
-  end.setUTCDate(end.getUTCDate() + 6);
-  return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) };
-}
-
 export function analyticsPeriodsForDate(date: Date, now = new Date(), timeZone = "UTC") {
   const dateKey = getDateKeyInTimezone(date, timeZone);
   const todayKey = getDateKeyInTimezone(now, timeZone);
@@ -116,10 +107,11 @@ export function analyticsPeriodsForDate(date: Date, now = new Date(), timeZone =
   const periods: Array<"daily" | "weekly" | "monthly"> = [];
   if (dateKey === todayKey) periods.push("daily");
 
-  // The app's calendar week runs Saturday through Friday. Weekly and monthly
-  // metrics are cumulative windows, so a completion today belongs to all three.
-  const week = getWeekRangeForDateKey(todayKey);
-  if (dateKey >= week.start && dateKey <= week.end) periods.push("weekly");
+  // Weekly analytics use a rolling seven-day window ending on the local current day.
+  const windowStart = new Date(`${todayKey}T00:00:00.000Z`);
+  windowStart.setUTCDate(windowStart.getUTCDate() - 6);
+  const weekStartKey = windowStart.toISOString().slice(0, 10);
+  if (dateKey >= weekStartKey && dateKey <= todayKey) periods.push("weekly");
   if (dateKey.slice(0, 7) === todayKey.slice(0, 7)) periods.push("monthly");
   return periods;
 }
