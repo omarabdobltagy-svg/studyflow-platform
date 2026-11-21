@@ -73,7 +73,7 @@ function daysSince(dateString: string) {
   return Math.floor((Date.now() - date.getTime()) / 86_400_000);
 }
 
-export default function Onboarding({ editMode = false }: { editMode?: boolean }) {
+export default function Onboarding({ editMode = false }: { editMode?: boolean; [key: string]: unknown }) {
   const [, setLocation] = useLocation();
   const auth = trpc.auth.me.useQuery(undefined, { retry: false });
   const profile = trpc.studentProfile.get.useQuery(undefined, { enabled: Boolean(auth.data) });
