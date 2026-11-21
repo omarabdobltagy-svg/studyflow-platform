@@ -54,8 +54,8 @@ function safeRedirect(res: Response, path: string) {
 
 export function registerGoogleOAuthRoutes(app: Express) {
   app.get("/api/oauth/google", (req: Request, res: Response) => {
-    if (!ENV.googleClientId || !ENV.googleClientSecret) {
-      res.status(503).send("تسجيل الدخول باستخدام Google غير مهيأ بعد. يلزم إعداد بيانات OAuth في بيئة التشغيل.");
+    if (!ENV.googleClientId || !ENV.googleClientSecret || !ENV.cookieSecret) {
+      res.status(503).send("تسجيل الدخول باستخدام Google غير مهيأ بعد. يلزم إعداد بيانات OAuth وJWT_SECRET في بيئة التشغيل.");
       return;
     }
 
