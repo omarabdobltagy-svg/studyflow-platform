@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import superjson from "superjson";
 import App from "./App";
 import "./index.css";
+import "./experience.css";
 
 // Analytics is optional. Do not emit a broken /umami request when no endpoint is configured.
 const analyticsEndpoint = import.meta.env.VITE_ANALYTICS_ENDPOINT?.trim();
