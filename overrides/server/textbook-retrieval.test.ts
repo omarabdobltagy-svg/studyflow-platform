@@ -48,12 +48,14 @@ describe("textbook page retrieval", () => {
 describe("uploaded official textbook corpus", () => {
   it("parses the page markers from the actual source files", () => {
     const history = inspectTextbookIndex("HIS_G2_BAC");
+    const arabic = inspectTextbookIndex("ARB_G2_BAC");
     const programming = inspectTextbookIndex("PROG_AI_G2_BAC");
     expect(history.files.every(file => file.exists && file.bytes > 0)).toBe(true);
     expect(programming.files.every(file => file.exists && file.bytes > 0)).toBe(true);
-    console.log("[TEXTBOOK HISTORY INDEX]", JSON.stringify(history));
-    console.log("[TEXTBOOK PROGRAMMING INDEX]", JSON.stringify(programming));
-    expect(history.files.reduce((sum, file) => sum + file.markerCount, 0), JSON.stringify(history.files)).toBeGreaterThan(100);
+    expect(history.files.reduce((sum, file) => sum + file.markerCount, 0), JSON.stringify(history.files)).toBeGreaterThan(120);
+    expect(arabic.files.every(file => file.exists && file.bytes > 0)).toBe(true);
+    expect(arabic.files.reduce((sum, file) => sum + file.markerCount, 0)).toBeGreaterThan(150);
+    expect(arabic.pageCount).toBeGreaterThan(150);
     expect(programming.files.reduce((sum, file) => sum + file.markerCount, 0)).toBeGreaterThan(50);
     expect(history.pageCount).toBeGreaterThan(100);
     expect(programming.pageCount).toBeGreaterThan(50);
