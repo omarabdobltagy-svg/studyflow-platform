@@ -3,7 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { SignJWT } from "jose";
 import { TRPCError } from "@trpc/server";
 import { COOKIE_NAME } from "@shared/const";
-import { SIE_CATALOG_META, SIE_SYSTEMS, getSIEEducationSystem, getSIESubject, getSIETeacher, getSIETeachersForSubject, getSIETrack, getSIECheckpointChoices, validateSIESubjectSelection } from "@shared/sie-catalog";
+import { SIE_CATALOG_META, SIE_SYSTEMS, getSIEEducationSystem, getSIESubject, getSIETeacher, getSIETeachersForSubject, getSIETrack, getSIECheckpointChoices, getSIECheckpointBranches, validateSIESubjectSelection } from "@shared/sie-catalog";
 import { calculateLearningGap } from "@shared/sie-learning-progress";
 import {
   addChapter,
@@ -731,6 +731,42 @@ export const appRouter = router({
       const courseProgress = (selection.learningCourseProgress ?? {}) as Record<string, any>;
       const legacyTeacherFrontiers = (selection.teacherFrontiers ?? {}) as Record<string, string>;
       const legacyTeacherState = (selection.teacherProgressState ?? {}) as Record<string, Record<string, any>>;
+      const sq3rProgress = (selection.subjectLessonProgress ?? {}) as Record<string, Record<string, any>>;
+      const gapByBranch = Object.fromEntries(profile.subjects.map(subjectId => {
+        const subjectRecord = courseProgress[subjectId] ?? {};
+        const branchRecords = subjectRecord.branches ?? {};
+        const legacyStudentFrontier = legacyTeacherFrontiers[subjectId] || legacyTeacherState[subjectId]?.studentAttendedFrontier;
+        const subjectLessonRecords = sq3rProgress[subjectId] ?? {};
+        const branches = getSIECheckpointBranches(subjectId);
+        const gaps = Object.fromEntries(branches.map(branch => {
+          const saved = branchRecords[branch.branchId] ?? {};
+          const belongsToBranch = (frontierId: unknown) =>
+            typeof frontierId === "string" &&
+            (frontierId === "__UNKNOWN__" || frontierId === "__NOT_STARTED__" ||
+              branch.choices.some(choice => choice.nodeId === frontierId));
+          const latestSq3rCompleted = [...branch.choices].reverse().find(choice => {
+            const steps = subjectLessonRecords[choice.nodeId]?.completedSteps;
+            return Array.isArray(steps) && steps.length === 5;
+          })?.nodeId;
+          const studentFrontierId = Object.prototype.hasOwnProperty.call(saved, "lastCompletedLessonId")
+            ? saved.lastCompletedLessonId
+            : belongsToBranch(subjectRecord.lastCompletedLessonId)
+              ? subjectRecord.lastCompletedLessonId
+              : belongsToBranch(legacyStudentFrontier) ? legacyStudentFrontier : latestSq3rCompleted ?? "__UNKNOWN__";
+          const teacherFrontierId = Object.prototype.hasOwnProperty.call(saved, "teacherTeachingFrontierId")
+            ? saved.teacherTeachingFrontierId
+            : belongsToBranch(subjectRecord.teacherTeachingFrontierId) ? subjectRecord.teacherTeachingFrontierId : "__UNKNOWN__";
+          const schoolFrontierId = Object.prototype.hasOwnProperty.call(saved, "schoolClassFrontierId")
+            ? saved.schoolClassFrontierId
+            : belongsToBranch(subjectRecord.schoolClassFrontierId) ? subjectRecord.schoolClassFrontierId : "__UNKNOWN__";
+          return [branch.branchId, calculateLearningGap(branch.choices, {
+            studentFrontierId,
+            teacherTeachingFrontierId: teacherFrontierId,
+            schoolClassFrontierId: schoolFrontierId,
+          })];
+        }));
+        return [subjectId, gaps];
+      }));
       const gapBySubject = Object.fromEntries(profile.subjects.map(subjectId => {
         const record = courseProgress[subjectId] ?? {};
         const legacyStudentFrontier = legacyTeacherFrontiers[subjectId] || legacyTeacherState[subjectId]?.studentAttendedFrontier;
@@ -745,6 +781,7 @@ export const appRouter = router({
         obstacle: profile.obstacle,
         courseProgress,
         gapBySubject,
+        gapByBranch,
         assessments: Array.isArray(selection.learningAssessments) ? selection.learningAssessments.slice(-40) : [],
         sq3rProgress: selection.subjectLessonProgress ?? {},
         memoryUpdatedAt: selection.assistantMemoryUpdatedAt ?? null,
@@ -753,6 +790,7 @@ export const appRouter = router({
     updateCourseProgress: protectedProcedure
       .input(z.object({
         subjectId: z.string().trim().min(1).max(80),
+        branchId: z.string().trim().min(1).max(120).optional(),
         teacherId: z.string().trim().min(1).max(80).nullable().optional(),
         lastCompletedLessonId: z.string().trim().min(1).max(120).nullable().optional(),
         teacherTeachingFrontierId: z.string().trim().min(1).max(120).default("__UNKNOWN__"),
@@ -770,7 +808,13 @@ export const appRouter = router({
         if (!profile.subjects.includes(input.subjectId)) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "هذه المادة ليست ضمن ملفك الدراسي." });
         }
-        const choices = getSIECheckpointChoices(input.subjectId);
+        const branch = input.branchId
+          ? getSIECheckpointBranches(input.subjectId).find(item => item.branchId === input.branchId)
+          : undefined;
+        if (input.branchId && !branch) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "فرع المنهج غير موجود في فهرس المادة." });
+        }
+        const choices = branch?.choices ?? getSIECheckpointChoices(input.subjectId);
         const isAllowedFrontier = (value: string, allowUnknown: boolean) =>
           (allowUnknown && value === "__UNKNOWN__")
           || value === "__NOT_STARTED__"
@@ -802,13 +846,14 @@ export const appRouter = router({
           teacherTeachingFrontierId: teacherFrontierId,
           schoolClassFrontierId: schoolFrontierId,
         });
-        const record = {
+        const now = new Date().toISOString();
+        const evidenceRecord = {
           subjectId: input.subjectId,
           teacherId: teacherId && teacherId !== "__SKIP__" ? teacherId : null,
-          lastCompletedLessonId: input.lastCompletedLessonId ?? null,
-          teacherTeachingFrontierId: teacherFrontierId,
+          lastCompletedLessonId: input.lastCompletedLessonId ?? "__UNKNOWN__",
+          teacherTeachingFrontierId: teacherFrontierId ?? "__UNKNOWN__",
           teacherTeachingFrontierEvidence: teacherFrontierId ? "student_observed_teacher" : null,
-          schoolClassFrontierId: schoolFrontierId,
+          schoolClassFrontierId: schoolFrontierId ?? "__UNKNOWN__",
           schoolClassFrontierEvidence: schoolFrontierId ? "student_reported_school_class" : null,
           teacherCourseFrontier: input.teacherCourseFrontier,
           status: input.status,
@@ -819,10 +864,27 @@ export const appRouter = router({
           notes: input.notes,
           evidenceSource: "student_self_report",
           confidence: "student_reported",
-          updatedAt: new Date().toISOString(),
+          updatedAt: now,
         };
+        const existingSubjectRecord = courseProgress[input.subjectId] ?? {};
+        const record = branch ? {
+          ...existingSubjectRecord,
+          teacherId: evidenceRecord.teacherId,
+          status: input.status,
+          teacherCourseFrontier: input.teacherCourseFrontier,
+          estimatedMinutesPerLesson: input.estimatedMinutesPerLesson,
+          difficulty: input.difficulty,
+          notes: input.notes,
+          obstacle: input.obstacle,
+          branches: {
+            ...(existingSubjectRecord.branches ?? {}),
+            [branch.branchId]: evidenceRecord,
+          },
+          updatedAt: now,
+        } : evidenceRecord;
         await updateStudentLearningBaseline(ctx.user.id, {
-          backlog: learningGap.gapCount === null ? {} : { [input.subjectId]: learningGap.gapCount },
+          // A single branch gap must never masquerade as a whole-subject backlog.
+          backlog: branch ? {} : learningGap.gapCount === null ? {} : { [input.subjectId]: learningGap.gapCount },
           removeBacklogKeys: [input.subjectId, getSIESubject(input.subjectId)?.nameAr ?? ""].filter(Boolean),
           obstacle: input.obstacle,
         });
@@ -833,7 +895,7 @@ export const appRouter = router({
           ...latestSelection,
           learningCourseProgress: { ...latestCourseProgress, [input.subjectId]: record },
         });
-        return { success: true, record, learningGap };
+        return { success: true, record, learningGap, branchId: branch?.branchId ?? null };
       }),
     addAssessment: protectedProcedure
       .input(z.object({
