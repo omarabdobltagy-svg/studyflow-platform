@@ -7,29 +7,19 @@ import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import {
-  ArrowLeft,
-  BookOpenText,
-  CalendarDays,
-  Check,
-  CheckCircle2,
-  ChevronLeft,
-  Circle,
-  Clock3,
-  Goal,
-  ListChecks,
-  Plus,
-  Sparkles,
+  BookOpenText, CalendarDays, Check, CheckCircle2, ChevronLeft, Clock3,
+  Goal, ListChecks, Plus, Sparkles, Target, Timer, TrendingUp,
 } from "lucide-react";
+import { motion, useReducedMotion } from "framer-motion";
 import { useLocation } from "wouter";
 
-const priorityStyle = { high: "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-200", medium: "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-200", low: "bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-200" };
-const priorityLabel = { high: "عالية", medium: "متوسطة", low: "مرنة" };
+const priorityStyle = { high: "sf-priority-high", medium: "sf-priority-medium", low: "sf-priority-low" } as const;
+const priorityLabel = { high: "عالية", medium: "متوسطة", low: "مرنة" } as const;
 
 function arabicDate(date = new Date()) {
   return new Intl.DateTimeFormat("ar-EG", { weekday: "long", day: "numeric", month: "long" }).format(date);
 }
-
-function shortDate(date: Date) {
+function shortDate(date: Date | string) {
   return new Intl.DateTimeFormat("ar-EG", { day: "numeric", month: "short" }).format(new Date(date));
 }
 
@@ -39,88 +29,197 @@ export default function Home() {
   const utils = trpc.useUtils();
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
   const summary = trpc.dashboard.summary.useQuery({ timeZone });
-  const toggleTask = trpc.tasks.toggle.useMutation({ onSuccess: () => void utils.dashboard.summary.invalidate() });
-  const toggleRoutine = trpc.routines.toggleItem.useMutation({ onSuccess: () => void utils.dashboard.summary.invalidate() });
+  const toggleTask = trpc.tasks.toggle.useMutation({ onSuccess: () => {
+    void utils.dashboard.summary.invalidate();
+    void utils.tasks.list.invalidate();
+  }});
+  const toggleRoutine = trpc.routines.toggleItem.useMutation({ onSuccess: () => {
+    void utils.dashboard.summary.invalidate();
+    void utils.routines.list.invalidate();
+  }});
+  const reduceMotion = useReducedMotion();
   const data = summary.data;
-  const completedRate = data ? (data.taskStats.total ? Math.round((data.taskStats.completed / data.taskStats.total) * 100) : 0) : null;
-  const routineRate = data ? (data.routineStats.total ? Math.round((data.routineStats.completed / data.routineStats.total) * 100) : 0) : null;
+  const completedRate = data ? (data.taskStats.total ? Math.round(data.taskStats.completed / data.taskStats.total * 100) : 0) : null;
+  const routineRate = data ? (data.routineStats.total ? Math.round(data.routineStats.completed / data.routineStats.total * 100) : 0) : null;
+  const focusTask = data?.tasks?.[0];
+  const upcomingTasks = data?.tasks?.slice(0, 5) ?? [];
+  const priorityCounts = {
+    high: upcomingTasks.filter(task => task.priority === "high").length,
+    medium: upcomingTasks.filter(task => task.priority === "medium").length,
+    low: upcomingTasks.filter(task => task.priority === "low").length,
+  };
+  const activeRoutines = data?.routines?.filter(routine => routine.isActive && routine.items.some(item => item.isActive)) ?? [];
+  const activeGoals = data?.goals?.slice(0, 2) ?? [];
+  const activeBooks = data?.books?.slice(0, 3) ?? [];
 
   return (
-    <DashboardLayout
-      title="لوحة اليوم"
-      description="رتّب يومك من مهمة صغيرة إلى هدف بعيد، ثم اترك الإيقاع الهادئ يرافقك خطوة بخطوة."
-      action={<Button onClick={() => setLocation("/planner")} className="pressable hidden rounded-2xl bg-primary px-4 sm:flex"><Sparkles className="size-4" />أنشئ خطة</Button>}
-    >
+    <DashboardLayout title="نظرة اليوم" description="صورة واضحة لما أنجزته، وما يحتاج انتباهك، والخطوة التالية التي يمكنك البدء بها."
+      action={<Button onClick={() => setLocation("/planner")} className="pressable rounded-xl bg-primary px-4"><Sparkles className="size-4" /> خطّط يومك</Button>}>
       {summary.isError && <QueryErrorNotice onRetry={() => void summary.refetch()} label="تعذّر تحميل ملخص يومك. لن نعرض أرقامًا صفرية قد توحي بأن بياناتك فارغة." />}
+
       {!summary.isError && <>
-      <section className="sf-welcome-hero sf-home-stage enter relative mb-6 overflow-hidden rounded-[1.6rem] px-5 py-6 text-primary-foreground sm:px-8 sm:py-8">
-        <div className="relative flex flex-col justify-between gap-7 md:flex-row md:items-end">
-          <div className="sf-home-intro"><p className="sf-home-date">{arabicDate()}</p><p className="sf-home-eyebrow">YOUR DAY, IN FOCUS</p><h2>أهلًا {user?.name?.split(" ")[0] || "بك"}، ابدأ بالأهم.</h2><p className="sf-home-description">مش مطلوب تخلّص كل حاجة مرة واحدة. اختار الخطوة الأهم، وخلّي تقدمك يقود باقي اليوم.</p><div className="sf-home-actions"><Button type="button" onClick={() => setLocation("/tasks")} variant="secondary" className="rounded-xl bg-white text-[#38214d] hover:bg-[#f0e6f8]">افتح مهامي<ChevronLeft className="size-4" /></Button><Button type="button" onClick={() => setLocation("/planner")} variant="outline" className="rounded-xl border-white/25 bg-white/8 text-white hover:bg-white/15">راجع خطتي</Button></div></div>
-          <div className="sf-home-progress">
-          <div className="sf-home-ring" role="progressbar" aria-label="نسبة إنجاز المهام" aria-valuemin={0} aria-valuemax={100} aria-valuenow={completedRate ?? 0} style={{ background: `conic-gradient(#f1d89b ${completedRate ?? 0}%, rgb(255 255 255 / 17%) 0)` }}>
-            <div className="sf-home-ring-center"><strong>{completedRate === null ? "—" : `${completedRate}%`}</strong><span>إنجاز المهام</span></div>
-          </div>
-          <div className="sf-home-progress-copy"><span>مكتمل حتى الآن</span><strong>{data ? data.taskStats.completed : "—"} <small>من {data ? data.taskStats.total : "—"} مهام</small></strong><p>كل مهمة تُنجزها تقرّبك من نهاية يوم أخف.</p></div>
-        </div>
-        </div>
-      </section>
-
-      <section className="sf-kpi-grid sf-home-metrics mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="المهام المفتوحة" value={data ? data.taskStats.remaining : "—"} sublabel={data ? "خطوة بانتظارك" : "جار تحميل البيانات"} icon={<ListChecks className="size-5" />} tone="violet" />
-        <StatCard label="التزام الروتين" value={routineRate === null ? "—" : `${routineRate}%`} sublabel={data ? `${data.routineStats.completed} من ${data.routineStats.total} عادة` : "جار تحميل البيانات"} icon={<Clock3 className="size-5" />} tone="amber" />
-        <StatCard label="أهداف نشطة" value={data ? data.goalStats.active : "—"} sublabel="وجهتك في هذا الفصل" icon={<Goal className="size-5" />} tone="emerald" />
-        <StatCard label="كتب في المسار" value={data ? data.bookStats.total : "—"} sublabel="تعلم على مهل" icon={<BookOpenText className="size-5" />} tone="sky" />
-      </section>
-
-      <section className="sf-home-grid sf-home-workspace grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(340px,.75fr)]">
-        <div className="sf-home-column space-y-6">
-          <div className="app-card sf-home-panel sf-home-task-panel overflow-hidden">
-            <CardHeader icon={<ListChecks className="size-5" />} title="مهامك القادمة" subtitle="اختر المهمة التالية لتبقى في تدفقك." action={<Button variant="ghost" size="sm" onClick={() => setLocation("/tasks")} className="gap-1 rounded-xl text-primary hover:bg-secondary">كل المهام<ChevronLeft className="size-4" /></Button>} />
-            <div className="divide-y divide-border/65 px-5 pb-2 sm:px-6">
-              {summary.isLoading ? <LoadingRows count={4} /> : data?.tasks.length ? data.tasks.map(task => (
-                <div key={task.id} className="flex items-center gap-3 py-4">
-                  <button onClick={() => toggleTask.mutate({ id: task.id, done: true })} disabled={toggleTask.isPending} className="pressable flex size-6 shrink-0 items-center justify-center rounded-full border-2 border-primary/35 text-primary hover:bg-primary hover:text-primary-foreground" aria-label={`إكمال ${task.title}`}><Check className="size-3.5" /></button>
-                  <div className="min-w-0 flex-1"><p className="truncate font-semibold">{task.title}</p><div className="mt-1.5 flex flex-wrap gap-2 text-xs text-muted-foreground"><span>{task.category}</span>{task.dueAt && <span className="inline-flex items-center gap-1"><CalendarDays className="size-3" />{shortDate(task.dueAt)}</span>}</div></div>
-                  <Badge className={cn("rounded-lg border-0 px-2 py-1 text-[11px] font-medium", priorityStyle[task.priority])}>{priorityLabel[task.priority]}</Badge>
+        <motion.section className="sf-daily-stage" initial={reduceMotion ? false : { opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: reduceMotion ? 0 : .42, ease: [0.22, 1, .36, 1] }}>
+          <div className="sf-daily-stage-copy">
+            <div className="sf-daily-date"><span className="sf-live-dot" />{arabicDate()}</div>
+            <p className="sf-daily-kicker">TODAY / IN FOCUS</p>
+            <h2>أهلًا {user?.name?.split(" ")[0] || "بك"}، خلّي البداية واضحة.</h2>
+            <p className="sf-daily-intro">مش مطلوب تخلّص كل حاجة مرة واحدة. راجع الصورة، اختار خطوة مناسبة، وسيب الباقي يتظبط على تقدمك الفعلي.</p>
+            <div className="sf-focus-task">
+              <div className="sf-focus-task-top">
+                <span>الخطوة التالية في قائمتك</span>
+                {focusTask && <Badge className={cn("sf-priority-badge", priorityStyle[focusTask.priority])}>أولوية {priorityLabel[focusTask.priority]}</Badge>}
+              </div>
+              {summary.isLoading ? <div className="sf-focus-skeleton"><span /><span /><span /></div> : focusTask ? <>
+                <h3>{focusTask.title}</h3>
+                <div className="sf-focus-meta">
+                  {focusTask.category && <span>{focusTask.category}</span>}
+                  {focusTask.dueAt && <span><CalendarDays />{shortDate(focusTask.dueAt)}</span>}
                 </div>
-              )) : <EmptyBlock label="لا توجد مهام مفتوحة الآن. أضف خطوتك التالية لتبدأ." action="أضف مهمة" onClick={() => setLocation("/tasks")} />}
+                <div className="sf-focus-actions">
+                  <Button onClick={() => setLocation("/tasks")} className="rounded-xl bg-white text-[#38204f] hover:bg-[#f3eaf8]">فتح المهمة <ChevronLeft className="size-4" /></Button>
+                  <Button type="button" variant="ghost" disabled={toggleTask.isPending} onClick={() => toggleTask.mutate({ id: focusTask.id, done: true })} className="rounded-xl text-white hover:bg-white/10 hover:text-white"><CheckCircle2 className="size-4" /> تسجيل الإنجاز</Button>
+                </div>
+              </> : <div className="sf-focus-empty">
+                <h3>قائمتك خفيفة حاليًا.</h3><p>أضف مهمة واضحة أو استخدم المخطط لتقسيم هدف كبير إلى خطوات.</p>
+                <Button onClick={() => setLocation("/tasks")} className="mt-3 rounded-xl bg-white text-[#38204f] hover:bg-[#f3eaf8]"><Plus className="size-4" /> إضافة مهمة</Button>
+              </div>}
             </div>
           </div>
 
-          <div className="app-card sf-home-panel sf-home-library-panel overflow-hidden">
-            <CardHeader icon={<BookOpenText className="size-5" />} title="رحلة التعلّم" subtitle="كتبك الحالية ونِسب التقدّم فيها." action={<Button variant="ghost" size="sm" onClick={() => setLocation("/books")} className="gap-1 rounded-xl text-primary hover:bg-secondary">المكتبة<ChevronLeft className="size-4" /></Button>} />
-            <div className="grid gap-3 px-5 pb-5 sm:grid-cols-2 sm:px-6">
-              {summary.isLoading ? <LoadingBookCards /> : data?.books.length ? data.books.map(book => <button key={book.id} onClick={() => setLocation(`/books/${book.id}`)} className="pressable group rounded-2xl border border-border/65 bg-muted/28 p-4 text-right hover:border-primary/25 hover:bg-secondary/35"><div className="mb-5 flex items-start justify-between gap-3"><span className={cn("flex h-12 w-10 shrink-0 items-center justify-center rounded-xl text-white shadow-sm", book.coverColor === "emerald" ? "bg-emerald-600" : book.coverColor === "amber" ? "bg-amber-600" : book.coverColor === "sky" ? "bg-sky-600" : "bg-violet-600")}><BookOpenText className="size-5" /></span><span className="num rounded-lg bg-background px-2 py-1 text-xs text-muted-foreground">{book.progress}%</span></div><p className="line-clamp-1 font-bold">{book.title}</p><p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{book.subject}{book.author ? ` · ${book.author}` : ""}</p><Progress value={book.progress} className="mt-4 h-1.5 bg-border" /></button>) : <EmptyBlock label="أضف أول كتاب، ثم قسّمه إلى فصول لتتابع رحلتك." action="أضف كتابًا" onClick={() => setLocation("/books")} />}
+          <div className="sf-daily-stage-aside">
+            <div className="sf-day-progress">
+              <div className="sf-day-progress-heading"><span>إنجاز المهام</span><TrendingUp className="size-4" /></div>
+              <div className="sf-day-ring" role="progressbar" aria-label="نسبة إنجاز المهام" aria-valuemin={0} aria-valuemax={100} aria-valuenow={completedRate ?? 0}
+                style={{ background: "conic-gradient(#d6b6f0 " + (completedRate ?? 0) + "%, rgb(255 255 255 / 16%) 0)" }}>
+                <div><strong>{completedRate === null ? "—" : completedRate + "%"}</strong><span>من مهامك</span></div>
+              </div>
+              <div className="sf-day-progress-stat"><strong>{data ? data.taskStats.completed : "—"} <small>/ {data ? data.taskStats.total : "—"}</small></strong><span>مهام مكتملة</span></div>
+              <div className="sf-day-progress-track"><span style={{ width: (completedRate ?? 0) + "%" }} /></div>
+              <p>النسبة محسوبة من المهام المسجّلة، وليست تقديرًا تلقائيًا.</p>
+            </div>
+            <div className="sf-day-priority">
+              <div className="sf-day-priority-head"><span>توزيع الأولوية</span><small>المهام القادمة المعروضة</small></div>
+              {([
+                { key: "high", label: "عالية", tone: "high" },
+                { key: "medium", label: "متوسطة", tone: "medium" },
+                { key: "low", label: "مرنة", tone: "low" },
+              ] as const).map(item => {
+                const count = priorityCounts[item.key];
+                const total = Math.max(1, upcomingTasks.length);
+                return <div className="sf-priority-row" key={item.key}>
+                  <span>{item.label}</span><div className="sf-priority-rail"><i className={item.tone} style={{ width: (count / total) * 100 + "%" }} /></div><b>{count}</b>
+                </div>;
+              })}
             </div>
           </div>
-        </div>
+          <span className="sf-stage-orbit sf-stage-orbit-one" aria-hidden="true" />
+          <span className="sf-stage-orbit sf-stage-orbit-two" aria-hidden="true" />
+        </motion.section>
 
-        <div className="sf-home-column space-y-6">
-          <div className="app-card sf-home-panel sf-home-goal-panel overflow-hidden"><CardHeader icon={<Goal className="size-5" />} title="أهداف قريبة" subtitle="حافظ على الوجهة حاضرة." action={<Button variant="ghost" size="sm" onClick={() => setLocation("/goals")} className="gap-1 rounded-xl text-primary hover:bg-secondary">عرض<ChevronLeft className="size-4" /></Button>} /><div className="space-y-3 px-5 pb-5">{summary.isLoading ? <LoadingRows count={3} /> : data?.goals.length ? data.goals.map(goal => <button key={goal.id} onClick={() => setLocation("/goals")} className="pressable w-full rounded-2xl bg-muted/40 p-4 text-right hover:bg-secondary/55"><div className="mb-3 flex items-center justify-between gap-3"><p className="truncate font-semibold">{goal.title}</p><span className="num text-sm font-medium text-primary">{goal.progress}%</span></div><Progress value={goal.progress} className="h-1.5 bg-background" /><p className="mt-2 text-xs text-muted-foreground">{goal.completedTaskCount} من {goal.taskCount} مهام مكتملة</p></button>) : <EmptyBlock label="ابدأ بهدف واضح، ثم اربطه بمهام صغيرة." action="أنشئ هدفًا" onClick={() => setLocation("/goals")} />}</div></div>
+        <motion.section className="sf-daily-metrics" initial={reduceMotion ? false : "hidden"} animate="visible"
+          variants={{ hidden: {}, visible: { transition: { staggerChildren: reduceMotion ? 0 : .07, delayChildren: reduceMotion ? 0 : .08 } } }}>
+          <MetricTile tone="lilac" icon={<ListChecks />} label="المهام المتبقية" value={data ? data.taskStats.remaining : "—"} detail="خطوات لم تُغلق بعد" loading={summary.isLoading} />
+          <MetricTile tone="mint" icon={<Clock3 />} label="التزام الروتين" value={routineRate === null ? "—" : routineRate + "%"} detail={data ? data.routineStats.completed + " من " + data.routineStats.total + " عادة" : "بانتظار البيانات"} loading={summary.isLoading} />
+          <MetricTile tone="sun" icon={<Goal />} label="الأهداف النشطة" value={data ? data.goalStats.active : "—"} detail="وجهات تعمل عليها" loading={summary.isLoading} />
+          <MetricTile tone="blue" icon={<BookOpenText />} label="الكتب في مكتبتك" value={data ? data.bookStats.total : "—"} detail="مواد محفوظة في المسار" loading={summary.isLoading} />
+        </motion.section>
 
-          <div className="app-card sf-home-panel sf-home-routine-panel overflow-hidden"><CardHeader icon={<SunMediumIcon />} title="إيقاع اليوم" subtitle="روتينك الصغير يصنع ثباتك." action={<Button variant="ghost" size="sm" onClick={() => setLocation("/routines")} className="gap-1 rounded-xl text-primary hover:bg-secondary">تعديل<ChevronLeft className="size-4" /></Button>} /><div className="px-5 pb-5">{summary.isLoading ? <LoadingRows count={3} /> : data?.routines.some(routine => routine.isActive && routine.items.some(item => item.isActive)) ? <div className="space-y-4">{data.routines.filter(routine => routine.isActive).map(routine => <div key={routine.id}><div className="mb-2 flex items-center justify-between"><p className="text-sm font-semibold">{routine.name}</p><span className="text-xs text-muted-foreground">{routine.period === "morning" ? "صباحًا" : routine.period === "evening" ? "مساءً" : "مخصص"}</span></div><div className="space-y-2">{routine.items.filter(item => item.isActive).slice(0, 4).map(item => <button key={item.id} onClick={() => toggleRoutine.mutate({ id: item.id, done: !item.completedToday, timeZone })} className="pressable flex w-full items-center gap-3 rounded-xl px-2 py-1.5 text-right hover:bg-muted/70"><span className={cn("flex size-5 shrink-0 items-center justify-center rounded-md border", item.completedToday ? "border-emerald-500 bg-emerald-500 text-white" : "border-border bg-background")}>{item.completedToday && <Check className="size-3" />}</span><span className={cn("flex-1 text-sm", item.completedToday && "text-muted-foreground line-through")}>{item.title}</span><span className="num text-[11px] text-muted-foreground">{item.durationMinutes} د</span></button>)}</div></div>)}</div> : <EmptyBlock label="صمّم روتينًا بسيطًا يساند يومك." action="أنشئ روتينًا" onClick={() => setLocation("/routines")} />}</div></div>
+        <section className="sf-daily-grid">
+          <div className="sf-daily-main-column">
+            <motion.section className="sf-work-panel sf-tasks-panel" initial={reduceMotion ? false : { opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: reduceMotion ? 0 : .32, delay: reduceMotion ? 0 : .12 }}>
+              <PanelHeading overline="NEXT ACTIONS" title="مهامك القادمة" description="قائمة قصيرة تساعدك تختار ما تبدأ به." icon={<ListChecks />} action={<Button variant="ghost" size="sm" onClick={() => setLocation("/tasks")} className="sf-panel-link">كل المهام <ChevronLeft /></Button>} />
+              {summary.isLoading ? <TaskSkeleton /> : upcomingTasks.length ? <div className="sf-upcoming-list">
+                {upcomingTasks.map((task, index) => <article className="sf-upcoming-row" key={task.id}>
+                  <button type="button" className="sf-task-complete" onClick={() => toggleTask.mutate({ id: task.id, done: true })} disabled={toggleTask.isPending} aria-label={"تسجيل إنجاز " + task.title}><Check /></button>
+                  <div className="sf-upcoming-index">{String(index + 1).padStart(2, "0")}</div>
+                  <div className="sf-upcoming-copy"><h3>{task.title}</h3><div>
+                    {task.category && <span>{task.category}</span>}
+                    {task.dueAt && <span><CalendarDays />{shortDate(task.dueAt)}</span>}
+                  </div></div>
+                  <span className={cn("sf-priority-dot", priorityStyle[task.priority])} title={"أولوية " + priorityLabel[task.priority]} />
+                </article>)}
+              </div> : <EmptyState icon={<CheckCircle2 />} title="لا توجد مهام قادمة." description="أضف خطوة صغيرة أو قسّم هدفك من المخطط الذكي." action="إضافة مهمة" onClick={() => setLocation("/tasks")} />}
+            </motion.section>
 
-          <div className="rounded-[1.35rem] border border-primary/10 bg-gradient-to-br from-secondary/85 to-card p-5 shadow-[0_16px_40px_-30px_rgba(45,37,92,.55)]"><div className="flex gap-4"><span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground"><Sparkles className="size-5" /></span><div><p className="font-bold">لست متأكدًا من البداية؟</p><p className="mt-1 text-sm leading-6 text-muted-foreground">اكتب ما تريد إنجازه، وسيحوّله المخطط الذكي إلى خطوات واقعية.</p><Button onClick={() => setLocation("/planner")} variant="link" className="mt-2 h-auto gap-1 px-0 text-primary">ابدأ التخطيط<ArrowLeft className="size-4" /></Button></div></div></div>
-        </div>
-      </section>
+            <motion.section className="sf-work-panel sf-library-panel" initial={reduceMotion ? false : { opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: reduceMotion ? 0 : .32, delay: reduceMotion ? 0 : .2 }}>
+              <PanelHeading overline="YOUR LEARNING SHELF" title="مسارات التعلّم" description="المواد التي أضفتها وتقدمك المسجل فيها." icon={<BookOpenText />} action={<Button variant="ghost" size="sm" onClick={() => setLocation("/books")} className="sf-panel-link">فتح المكتبة <ChevronLeft /></Button>} />
+              {summary.isLoading ? <div className="sf-book-skeletons"><span /><span /><span /></div> : activeBooks.length ? <div className="sf-book-shelf">
+                {activeBooks.map((book, index) => <button type="button" key={book.id} onClick={() => setLocation("/books/" + book.id)} className={cn("sf-book-shelf-item", "tone-" + (index + 1))}>
+                  <span className="sf-book-glyph"><BookOpenText /></span>
+                  <span className="sf-book-copy"><b>{book.title}</b><small>{book.subject}{book.author ? " · " + book.author : ""}</small><span className="sf-book-progress"><i style={{ width: book.progress + "%" }} /></span></span>
+                  <strong>{book.progress}%</strong>
+                </button>)}
+              </div> : <EmptyState icon={<BookOpenText />} title="مكتبتك لسه فاضية." description="أضف كتابك أو ملف المنهج حتى تتابع تقدمه من مكان واحد." action="إضافة كتاب" onClick={() => setLocation("/books")} />}
+            </motion.section>
+          </div>
+
+          <aside className="sf-daily-side-column">
+            <section className="sf-work-panel sf-goals-panel">
+              <PanelHeading overline="KEEP THE DIRECTION" title="أهدافك القريبة" description="تقدم مبني على المهام التي أنجزتها." icon={<Target />} action={<Button variant="ghost" size="sm" onClick={() => setLocation("/goals")} className="sf-panel-link">الأهداف <ChevronLeft /></Button>} />
+              {summary.isLoading ? <TaskSkeleton compact /> : activeGoals.length ? <div className="sf-goal-stack">
+                {activeGoals.map(goal => <button type="button" key={goal.id} onClick={() => setLocation("/goals")} className="sf-goal-item">
+                  <div className="sf-goal-item-top"><b>{goal.title}</b><strong>{goal.progress}%</strong></div>
+                  <Progress value={goal.progress} className="sf-goal-progress" />
+                  <small>{goal.completedTaskCount} من {goal.taskCount} مهام مكتملة</small>
+                </button>)}
+              </div> : <EmptyState icon={<Goal />} title="حدد وجهة قريبة." description="اربط الهدف بخطوات صغيرة عشان تتابع التقدم الفعلي." action="إنشاء هدف" onClick={() => setLocation("/goals")} />}
+            </section>
+
+            <section className="sf-work-panel sf-routine-panel">
+              <PanelHeading overline="DAILY RHYTHM" title="إيقاع اليوم" description="العادات النشطة التي اخترت متابعتها." icon={<Timer />} action={<Button variant="ghost" size="sm" onClick={() => setLocation("/routines")} className="sf-panel-link">إدارة <ChevronLeft /></Button>} />
+              {summary.isLoading ? <TaskSkeleton compact /> : activeRoutines.length ? <div className="sf-routine-stack">
+                {activeRoutines.slice(0, 2).map(routine => <div className="sf-routine-block" key={routine.id}>
+                  <div className="sf-routine-block-heading"><b>{routine.name}</b><small>{routine.period === "morning" ? "صباحًا" : routine.period === "evening" ? "مساءً" : "مخصص"}</small></div>
+                  {routine.items.filter(item => item.isActive).slice(0, 3).map(item => <button type="button" key={item.id} className={cn("sf-routine-check", item.completedToday && "is-done")} onClick={() => toggleRoutine.mutate({ id: item.id, done: !item.completedToday, timeZone })} disabled={toggleRoutine.isPending} aria-pressed={item.completedToday}>
+                    <span>{item.completedToday && <Check />}</span><b>{item.title}</b><small>{item.durationMinutes} د</small>
+                  </button>)}
+                </div>)}
+              </div> : <EmptyState icon={<Timer />} title="ابنِ إيقاعك الخاص." description="الروتين المرن يساعدك تكرر خطوات مناسبة ليومك." action="إنشاء روتين" onClick={() => setLocation("/routines")} />}
+            </section>
+
+            <button type="button" className="sf-planner-callout" onClick={() => setLocation("/planner")}>
+              <span className="sf-planner-callout-icon"><Sparkles /></span>
+              <span><small>NEED A PLAN?</small><b>حوّل التراكم إلى خطوات قابلة للتنفيذ.</b><em>ابدأ من المخطط <ChevronLeft /></em></span>
+            </button>
+          </aside>
+        </section>
       </>}
     </DashboardLayout>
   );
 }
 
-function StatCard({ label, value, sublabel, icon, tone }: { label: string; value: string | number; sublabel: string; icon: React.ReactNode; tone: "violet" | "amber" | "emerald" | "sky" }) {
-  const toneClass = { violet: "bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-200", amber: "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-200", emerald: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-200", sky: "bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-200" }[tone];
-  return <div className="app-card sf-stat-card pressable p-4 sm:p-5"><div className="flex items-start justify-between"><span className={cn("flex size-10 items-center justify-center rounded-2xl", toneClass)}>{icon}</span><span className="num text-2xl font-medium tracking-tight">{value}</span></div><p className="mt-5 text-sm font-semibold">{label}</p><p className="mt-1 text-xs text-muted-foreground">{sublabel}</p></div>;
+function MetricTile({ tone, icon, label, value, detail, loading }: {
+  tone: "lilac" | "mint" | "sun" | "blue"; icon: React.ReactNode;
+  label: string; value: string | number; detail: string; loading: boolean;
+}) {
+  const reduceMotion = useReducedMotion();
+  return <motion.article className={"sf-metric-tile tone-" + tone} variants={{
+    hidden: reduceMotion ? false : { opacity: 0, y: 8 }, visible: { opacity: 1, y: 0 },
+  }} transition={{ duration: reduceMotion ? 0 : .28 }}>
+    <span className="sf-metric-icon">{icon}</span><div className="sf-metric-number">{loading ? "—" : value}</div>
+    <b>{label}</b><small>{detail}</small>
+  </motion.article>;
 }
 
-function CardHeader({ icon, title, subtitle, action }: { icon: React.ReactNode; title: string; subtitle: string; action?: React.ReactNode }) {
-  return <div className="sf-card-header flex items-start justify-between gap-3 px-5 pb-4 pt-5 sm:px-6"><div className="flex gap-3"><span className="mt-0.5 flex size-9 items-center justify-center rounded-xl bg-secondary text-primary">{icon}</span><div><h2 className="font-bold">{title}</h2><p className="mt-1 text-xs text-muted-foreground">{subtitle}</p></div></div>{action}</div>;
+function PanelHeading({ overline, title, description, icon, action }: {
+  overline: string; title: string; description: string; icon: React.ReactNode; action?: React.ReactNode;
+}) {
+  return <div className="sf-panel-heading">
+    <span className="sf-panel-heading-icon">{icon}</span>
+    <div className="sf-panel-heading-copy"><small>{overline}</small><h2>{title}</h2><p>{description}</p></div>
+    {action}
+  </div>;
 }
-
-function EmptyBlock({ label, action, onClick }: { label: string; action: string; onClick: () => void }) {
-  return <div className="flex min-h-32 flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted/25 px-5 py-5 text-center"><Circle className="mb-2 size-5 text-muted-foreground/60" /><p className="max-w-xs text-sm leading-6 text-muted-foreground">{label}</p><Button variant="link" onClick={onClick} className="mt-1 h-auto gap-1 text-primary"><Plus className="size-3.5" />{action}</Button></div>;
+function EmptyState({ icon, title, description, action, onClick }: {
+  icon: React.ReactNode; title: string; description: string; action: string; onClick: () => void;
+}) {
+  return <div className="sf-empty-state">
+    <span>{icon}</span><b>{title}</b><p>{description}</p>
+    <Button type="button" variant="outline" onClick={onClick} className="mt-3 rounded-xl">{action} <ChevronLeft className="size-4" /></Button>
+  </div>;
 }
-
-function LoadingRows({ count }: { count: number }) { return <>{Array.from({ length: count }).map((_, i) => <div key={i} className="flex items-center gap-3 py-4"><span className="size-6 animate-pulse rounded-full bg-muted" /><div className="flex-1 space-y-2"><div className="h-3.5 w-3/5 animate-pulse rounded bg-muted" /><div className="h-2.5 w-1/4 animate-pulse rounded bg-muted" /></div></div>)}</>; }
-function LoadingBookCards() { return <>{[0, 1].map(i => <div key={i} className="h-44 animate-pulse rounded-2xl bg-muted" />)}</>; }
-function SunMediumIcon() { return <Clock3 className="size-5" />; }
+function TaskSkeleton({ compact = false }: { compact?: boolean }) {
+  return <div className={cn("sf-task-skeleton", compact && "is-compact")}>
+    {Array.from({ length: compact ? 2 : 4 }).map((_, index) => <span key={index} />)}
+  </div>;
+}

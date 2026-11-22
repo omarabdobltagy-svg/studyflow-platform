@@ -13,6 +13,7 @@ import {
   CheckSquare2, ChevronLeft, Goal, LayoutDashboard, LibraryBig, LogOut,
   Menu, Moon, Settings2, Sparkles, Sun,
 } from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ReactNode, useEffect, useState } from "react";
 import { useLocation } from "wouter";
 
@@ -66,6 +67,7 @@ export default function DashboardLayout({ title, description, children, action }
   const [isMobileNavOpen, setMobileNavOpen] = useState(false);
   const studentProfile = trpc.studentProfile.get.useQuery(undefined, { enabled: Boolean(user) });
   const { theme, toggleTheme } = useTheme();
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
     if (user && studentProfile.isSuccess && studentProfile.data == null && location !== "/onboarding") {
@@ -237,115 +239,99 @@ export default function DashboardLayout({ title, description, children, action }
     </nav>
   );
 
-  const account = (
-    <div className="sf-account">
-      <span className="sf-account-avatar">{initial}</span>
-      <div className="sf-account-copy">
-        <b>{user.name || "مستخدم التطبيق"}</b>
-        <span>مساحتك الشخصية</span>
-      </div>
-      <Button variant="ghost" size="icon" onClick={() => void logout()} className="sf-account-logout" aria-label="تسجيل الخروج" title="تسجيل الخروج">
-        <LogOut className="size-4" />
-      </Button>
-    </div>
-  );
-
   return (
-    <div className="sf-app-shell sf-shell-v3">
-      <div className="sf-app-frame" data-page={pageKey}>
-        <aside className="sf-sidebar" aria-label="القائمة الرئيسية">
-          <button onClick={() => navigate("/")} className="sf-brand" aria-label="العودة إلى لوحة اليوم">
-            <span className="sf-brand-mark"><BrandMark className="size-5" /></span>
-            <span className="sf-brand-copy"><b>StudyFlow</b><small>STUDENT WORKSPACE</small></span>
+    <div className="sf-premium-shell" data-theme={theme}>
+      <div className="sf-shell-ornament sf-shell-ornament-top" aria-hidden="true" />
+      <div className="sf-shell-ornament sf-shell-ornament-bottom" aria-hidden="true" />
+      <div className="sf-app-frame sf-premium-frame" data-page={pageKey}>
+        <header className="sf-global-nav">
+          <button onClick={() => navigate("/")} className="sf-premium-brand" aria-label="العودة إلى لوحة اليوم">
+            <span className="sf-premium-brand-mark"><BrandMark className="size-5" /></span>
+            <span><b>StudyFlow</b><small>STUDENT WORKSPACE</small></span>
           </button>
-
-          <div className="sf-sidebar-caption">مساحة التعلّم</div>
-          {renderNavigation()}
-
-          <div className="sf-sidebar-bottom">
-            <div className="sf-sidebar-note">
-              <span className="sf-sidebar-note-icon"><Sparkles className="size-4" /></span>
-              <div><b>تقدمك يبدأ بخطوة</b><span>تابع ما عليك، واحتفل بما أنجزت.</span></div>
-            </div>
-            {account}
+          <nav className="sf-primary-nav" aria-label="التنقل الرئيسي">
+            {[
+              { label: "اليوم", path: "/", icon: LayoutDashboard },
+              { label: "المهام", path: "/tasks", icon: CheckSquare2 },
+              { label: "المذاكرة", path: "/study", icon: BookOpenText },
+              { label: "المكتبة", path: "/books", icon: LibraryBig },
+              { label: "المخطط", path: "/planner", icon: BrainCircuit },
+              { label: "التحليل", path: "/analytics", icon: BarChart3 },
+            ].map(item => {
+              const active = isActive(item.path);
+              return (
+                <button key={item.path} type="button" onClick={() => navigate(item.path)} aria-current={active ? "page" : undefined} className={cn("sf-primary-link", active && "is-active")}>
+                  {active && !reduceMotion && <motion.span layoutId="sf-active-link" className="sf-primary-active-bg" transition={{ type: "spring", stiffness: 430, damping: 34 }} />}
+                  <item.icon aria-hidden="true" /><span>{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+          <div className="sf-global-actions">
+            <Button type="button" variant="ghost" size="icon" className="sf-global-icon" onClick={() => setMobileNavOpen(true)} aria-label="عرض كل الصفحات"><Menu className="size-5" /></Button>
+            <Button type="button" variant="ghost" size="icon" className="sf-global-icon" onClick={toggleTheme} aria-label={theme === "dark" ? "تفعيل الوضع الفاتح" : "تفعيل الوضع الداكن"}>
+              {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
+            </Button>
+            <span className="sf-global-avatar" aria-label={user.name || "ملف الطالب"}>{initial}</span>
           </div>
-        </aside>
+        </header>
 
-        <div className="sf-app-main">
-          <header className="sf-topbar">
-            <div className="sf-topbar-title">
-              <Button variant="outline" size="icon" className="sf-mobile-menu pressable" onClick={() => setMobileNavOpen(true)} aria-label="فتح التنقل">
-                <Menu className="size-5" />
-              </Button>
-              <div className="sf-heading-copy">
-                <p className="sf-topbar-kicker">مساحة الدراسة <span>/</span> STUDYFLOW</p>
-                <h1>{title}</h1>
-                <p className="sf-page-description">{description}</p>
-              </div>
+        <main className={"sf-main sf-premium-main sf-main-" + pageKey}>
+          <div className="sf-page-heading">
+            <div className="sf-page-heading-copy">
+              <p className="sf-page-overline">STUDYFLOW <span>/</span> {pageKey.replace(/-/g, " ").toUpperCase()}</p>
+              <h1>{title}</h1>
+              <p>{description}</p>
             </div>
-            <div className="sf-topbar-actions">
-              {action ? <div className="dashboard-header-actions">{action}</div> : null}
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                className="sf-theme-button pressable"
-                onClick={toggleTheme}
-                aria-label={theme === "dark" ? "تفعيل الوضع الفاتح" : "تفعيل الوضع الداكن"}
-                title={theme === "dark" ? "الوضع الفاتح" : "الوضع الداكن"}
-              >
-                {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
-              </Button>
-              <span className="sf-topbar-avatar" aria-label={user.name || "ملف الطالب"}>{initial}</span>
-            </div>
-          </header>
-
-          <main className={`sf-main sf-main-${pageKey}`}>
-            <div className={`sf-page sf-page-${pageKey}`} data-page={pageKey}>
-            {studentProfile.isError && (
-              <QueryErrorNotice onRetry={() => void studentProfile.refetch()} label="تعذّر التحقق من ملفك الدراسي. بياناتك لم تُحذف؛ أعد المحاولة." />
-            )}
-            {children}
-            </div>
-          </main>
-        </div>
-      </div>
-
-      <nav className="sf-mobile-dock" aria-label="التنقل السريع">
-        {mobileDockItems.map(item => {
-          const active = item.path === "/" ? location === "/" : location.startsWith(item.path);
-          return (
-            <button
-              key={item.path}
-              type="button"
-              onClick={() => navigate(item.path)}
-              aria-current={active ? "page" : undefined}
-              className={cn("sf-mobile-dock-item", active && "is-active")}
+            {action ? <div className="sf-page-heading-action">{action}</div> : null}
+          </div>
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={location}
+              initial={reduceMotion ? false : { opacity: 0, y: 10, filter: "blur(3px)" }}
+              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+              exit={reduceMotion ? undefined : { opacity: 0, y: -5 }}
+              transition={{ duration: reduceMotion ? 0 : 0.24, ease: [0.22, 1, 0.36, 1] }}
+              className={"sf-page sf-page-" + pageKey}
+              data-page={pageKey}
             >
-              <item.icon className="size-[18px]" />
-              <span>{item.label}</span>
-            </button>
-          );
-        })}
-        <button type="button" className="sf-mobile-dock-item" onClick={() => setMobileNavOpen(true)} aria-label="عرض باقي الصفحات">
-          <Menu className="size-[18px]" />
-          <span>المزيد</span>
-        </button>
-      </nav>
+              {studentProfile.isError && <QueryErrorNotice onRetry={() => void studentProfile.refetch()} label="تعذّر التحقق من ملفك الدراسي. بياناتك لم تُحذف؛ أعد المحاولة." />}
+              {children}
+            </motion.div>
+          </AnimatePresence>
+        </main>
+
+        <nav className="sf-mobile-dock" aria-label="التنقل السريع">
+          {[
+            { label: "اليوم", path: "/", icon: LayoutDashboard },
+            { label: "المهام", path: "/tasks", icon: CheckSquare2 },
+            { label: "المذاكرة", path: "/study", icon: BookOpenText },
+            { label: "المخطط", path: "/planner", icon: BrainCircuit },
+          ].map(item => {
+            const active = isActive(item.path);
+            return <button key={item.path} type="button" onClick={() => navigate(item.path)} aria-current={active ? "page" : undefined} className={cn("sf-mobile-dock-item", active && "is-active")}><item.icon /><span>{item.label}</span></button>;
+          })}
+          <button type="button" className="sf-mobile-dock-item" onClick={() => setMobileNavOpen(true)} aria-label="عرض باقي الصفحات"><Menu /><span>المزيد</span></button>
+        </nav>
+      </div>
 
       <Sheet open={isMobileNavOpen} onOpenChange={setMobileNavOpen}>
-        <SheetContent side="right" className="sf-mobile-sheet w-[min(88vw,340px)] border-l-0 p-0 text-sidebar-foreground">
-          <SheetHeader className="sf-mobile-sheet-header">
-            <div className="sf-brand">
-              <span className="sf-brand-mark"><BrandMark className="size-5" /></span>
-              <span className="sf-brand-copy"><b>StudyFlow</b><small>STUDENT WORKSPACE</small></span>
+        <SheetContent side="right" className="sf-premium-drawer w-[min(90vw,380px)] border-0 p-0 text-sidebar-foreground">
+          <SheetHeader className="sf-premium-drawer-header">
+            <div className="sf-premium-brand">
+              <span className="sf-premium-brand-mark"><BrandMark className="size-5" /></span>
+              <span><b>StudyFlow</b><small>STUDENT WORKSPACE</small></span>
             </div>
-            <SheetTitle className="sr-only">التنقل الرئيسي</SheetTitle>
-            <SheetDescription className="sr-only">اختر الصفحة التي تريد فتحها.</SheetDescription>
+            <SheetTitle className="sr-only">كل صفحات StudyFlow</SheetTitle>
+            <SheetDescription className="sr-only">اختر القسم الذي تريد فتحه.</SheetDescription>
           </SheetHeader>
-          <div className="sf-mobile-sheet-body">
+          <div className="sf-premium-drawer-scroll">
             {renderNavigation(true)}
-            {account}
+            <div className="sf-drawer-account">
+              <span className="sf-global-avatar">{initial}</span>
+              <div><b>{user.name || "مستخدم StudyFlow"}</b><small>مساحتك الشخصية</small></div>
+              <Button variant="ghost" size="icon" onClick={() => void logout()} aria-label="تسجيل الخروج"><LogOut className="size-4" /></Button>
+            </div>
           </div>
         </SheetContent>
       </Sheet>
