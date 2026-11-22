@@ -8,11 +8,10 @@ import BrandMark from "@/components/BrandMark";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
 import { useTheme } from "@/contexts/ThemeContext";
-import ThreeAmbientScene from "@/components/ThreeAmbientScene";
 import {
-  BarChart3, BellRing, BookOpenCheck, BookOpenText, BrainCircuit, CalendarDays,
-  CheckSquare2, ChevronLeft, Goal, LayoutDashboard, LibraryBig, LogOut, Menu,
-  Moon, Settings2, Sparkles, Sun, PanelRightClose, PanelRightOpen,
+  BarChart3, BookOpenCheck, BookOpenText, BrainCircuit, CalendarDays,
+  CheckSquare2, ChevronLeft, Goal, LayoutDashboard, LibraryBig, LogOut,
+  Menu, Moon, Settings2, Sparkles, Sun,
 } from "lucide-react";
 import { ReactNode, useEffect, useState } from "react";
 import { useLocation } from "wouter";
@@ -23,7 +22,7 @@ type NavigationGroup = {
 };
 
 const navigation: NavigationGroup[] = [
-  { label: "اليوم", items: [
+  { label: "مساحة اليوم", items: [
     { label: "لوحة اليوم", path: "/", icon: LayoutDashboard },
     { label: "المهام", path: "/tasks", icon: CheckSquare2 },
     { label: "روتيني", path: "/routines", icon: Sparkles },
@@ -34,16 +33,23 @@ const navigation: NavigationGroup[] = [
     { label: "المذاكرة والتقدم", path: "/study", icon: BookOpenText },
     { label: "المساعد الذكي", path: "/assistant", icon: BrainCircuit },
   ] },
-  { label: "التخطيط والمتابعة", items: [
+  { label: "التخطيط", items: [
     { label: "الأهداف", path: "/goals", icon: Goal },
     { label: "المخطط الذكي", path: "/planner", icon: BookOpenCheck },
-    { label: "لوحة التقدم", path: "/analytics", icon: BarChart3 },
-    { label: "التذكيرات", path: "/reminders", icon: BellRing },
+    { label: "تحليل الأداء", path: "/analytics", icon: BarChart3 },
   ] },
-  { label: "الإعدادات", items: [{ label: "الملف الدراسي", path: "/settings", icon: Settings2 }] },
+  { label: "إدارة المساحة", items: [
+    { label: "التذكيرات", path: "/reminders", icon: CalendarDays },
+    { label: "الملف الدراسي", path: "/settings", icon: Settings2 },
+  ] },
 ];
 
-type DashboardLayoutProps = { title: string; description: string; children: ReactNode; action?: ReactNode };
+type DashboardLayoutProps = {
+  title: string;
+  description: string;
+  children: ReactNode;
+  action?: ReactNode;
+};
 
 export default function DashboardLayout({ title, description, children, action }: DashboardLayoutProps) {
   const { user, loading, logout, error: authError, refresh: refreshAuth } = useAuth();
@@ -58,7 +64,6 @@ export default function DashboardLayout({ title, description, children, action }
   });
   const [location, setLocation] = useLocation();
   const [isMobileNavOpen, setMobileNavOpen] = useState(false);
-  const [isDesktopNavHidden, setDesktopNavHidden] = useState(false);
   const studentProfile = trpc.studentProfile.get.useQuery(undefined, { enabled: Boolean(user) });
   const { theme, toggleTheme } = useTheme();
 
@@ -68,116 +73,72 @@ export default function DashboardLayout({ title, description, children, action }
     }
   }, [location, setLocation, studentProfile.data, studentProfile.isSuccess, user]);
 
-  useEffect(() => {
-    const root = document.querySelector<HTMLElement>(".sf-main");
-    if (!root) return;
-
-    const targets = Array.from(root.querySelectorAll<HTMLElement>(
-      ":scope > section, :scope > div, .sf-main .app-card",
-    ));
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-    targets.forEach((target, index) => {
-      target.classList.add("sf-reveal");
-      target.style.setProperty("--sf-reveal-delay", `${Math.min(index * 45, 225)}ms`);
-    });
-
-    if (reducedMotion || !("IntersectionObserver" in window)) {
-      targets.forEach(target => target.classList.add("sf-visible"));
-      return () => targets.forEach(target => {
-        target.classList.remove("sf-reveal", "sf-visible");
-        target.style.removeProperty("--sf-reveal-delay");
-      });
-    }
-
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (!entry.isIntersecting) return;
-        entry.target.classList.add("sf-visible");
-        observer.unobserve(entry.target);
-      });
-    }, { threshold: 0.12, rootMargin: "0px 0px -5% 0px" });
-
-    targets.forEach(target => observer.observe(target));
-    return () => {
-      observer.disconnect();
-      targets.forEach(target => {
-        target.classList.remove("sf-reveal", "sf-visible");
-        target.style.removeProperty("--sf-reveal-delay");
-      });
-    };
-  }, [location, user]);
-
   if (loading) return (
-    <div className="sf-auth-screen min-h-screen p-4 sm:p-8">
-      <div className="sf-auth-frame mx-auto flex min-h-[calc(100vh-2rem)] max-w-5xl items-center justify-center p-8">
-        <div className="sf-auth-card w-full max-w-xl p-8 text-center" role="status" aria-live="polite">
-          <div className="sf-auth-brand mx-auto mb-6 flex size-16 items-center justify-center rounded-3xl"><BrandMark className="size-7" /></div>
-          <p className="eyebrow mb-2">STUDYFLOW / SYSTEM</p>
-          <p className="text-xl font-black">نجهّز مساحتك الشخصية</p>
-          <p className="mt-2 text-sm text-muted-foreground">يتم تحميل بيانات مساحتك الآن.</p>
-          <div className="sf-loading-line mx-auto mt-6 h-1.5 w-40 overflow-hidden rounded-full" />
-        </div>
+    <div className="sf-auth-screen">
+      <div className="sf-auth-frame sf-auth-loading" role="status" aria-live="polite">
+        <div className="sf-auth-logo"><BrandMark className="size-7" /></div>
+        <p className="sf-auth-eyebrow">STUDYFLOW / YOUR SPACE</p>
+        <h1>نجهّز مساحتك الدراسية</h1>
+        <p>يتم تحميل بيانات مساحتك الآن.</p>
+        <div className="sf-loading-line" />
       </div>
     </div>
   );
 
   if (!user && authError) return (
-    <div className="sf-auth-screen min-h-screen p-4 sm:p-8">
-      <div className="sf-auth-frame mx-auto flex min-h-[calc(100vh-2rem)] max-w-5xl items-center justify-center p-8">
-        <div className="sf-auth-card w-full max-w-xl p-7 sm:p-10">
-          <QueryErrorNotice onRetry={() => void refreshAuth()} label="تعذّر التحقق من جلسة الدخول. لم يتم تسجيل خروجك؛ أعد المحاولة." />
-        </div>
+    <div className="sf-auth-screen">
+      <div className="sf-auth-frame sf-auth-error">
+        <div className="sf-auth-logo"><BrandMark className="size-7" /></div>
+        <QueryErrorNotice onRetry={() => void refreshAuth()} label="تعذّر التحقق من جلسة الدخول. لم يتم تسجيل خروجك؛ أعد المحاولة." />
       </div>
     </div>
   );
 
   if (!user) return (
-    <div className="sf-auth-screen min-h-screen p-3 sm:p-6 lg:p-8">
-      <div className="sf-auth-frame mx-auto grid min-h-[calc(100vh-1.5rem)] max-w-[1500px] grid-cols-1 overflow-hidden lg:grid-cols-[1.08fr_.92fr]">
-        <section className="sf-auth-showcase relative flex min-h-[360px] flex-col justify-between overflow-hidden p-7 sm:p-10 lg:min-h-[760px] lg:p-14">
-          <div className="relative z-10 flex items-center gap-3">
-            <span className="sf-auth-logo flex size-12 items-center justify-center rounded-2xl"><BrandMark className="size-6" /></span>
-            <div><p className="text-lg font-black tracking-tight text-white">StudyFlow</p><p className="text-[10px] font-bold tracking-[.22em] text-violet-200/70">LEARN / LEVEL UP</p></div>
+    <div className="sf-login-screen">
+      <div className="sf-login-frame">
+        <section className="sf-login-story">
+          <div className="sf-login-brand">
+            <span className="sf-login-brand-mark"><BrandMark className="size-6" /></span>
+            <span><b>StudyFlow</b><small>LEARNING, WITH CLARITY</small></span>
           </div>
 
-          <div className="sf-auth-art pointer-events-none absolute inset-0" aria-hidden="true">
-            <ThreeAmbientScene />
-          </div>
-          <div className="sf-auth-orbit-label sf-orbit-label-one" aria-hidden="true"><span className="sf-orbit-dot" /> FOCUS MODE</div>
-          <div className="sf-auth-orbit-label sf-orbit-label-two" aria-hidden="true"><span className="sf-orbit-dot sf-orbit-dot-cyan" /> YOUR NEXT LEVEL</div>
-
-          <div className="relative z-10 mt-16 max-w-2xl lg:mt-0">
-            <p className="mb-4 text-xs font-black tracking-[.28em] text-violet-200">YOUR LEARNING UNIVERSE</p>
-            <h1 className="max-w-xl text-4xl font-black leading-[1.2] tracking-tight text-white sm:text-5xl xl:text-7xl">
-              تعلّم بذكاء.
-              <span className="sf-gradient-text block">اتقدّم بطريقتك.</span>
+          <div className="sf-login-copy">
+            <p className="sf-login-eyebrow">YOUR LEARNING SPACE</p>
+            <h1>كل يوم أوضح.
+              <span>وكل خطوة لها أثر.</span>
             </h1>
-            <p className="mt-6 max-w-lg text-sm leading-8 text-violet-100/75 sm:text-base">
-              مساحة واحدة تجمع مذاكرتك، أهدافك، تقدمك، ومساعدك الذكي — في تجربة تتحرك معك خطوة بخطوة.
+            <p className="sf-login-description">
+              خطتك، مهامك، تقدمك، وموادك الدراسية في مساحة واحدة. نظرة واضحة على ما أنجزته، وما يستحق تركيزك بعد ذلك.
             </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <span className="sf-auth-feature-chip"><Sparkles className="size-4" /> تخطيط ذكي</span>
-              <span className="sf-auth-feature-chip"><BookOpenText className="size-4" /> مكتبة متصلة</span>
-              <span className="sf-auth-feature-chip"><BarChart3 className="size-4" /> تقدم مرئي</span>
+            <div className="sf-login-pill-list">
+              <span><CheckSquare2 /> متابعة المهام</span>
+              <span><BookOpenText /> تنظيم التعلّم</span>
+              <span><BarChart3 /> قياس التقدم</span>
             </div>
           </div>
-          <p className="relative z-10 mt-12 text-[10px] font-semibold tracking-[.2em] text-violet-200/45">BUILT AROUND YOUR MOMENTUM · 2026</p>
+
+          <div className="sf-login-story-footer">
+            <span className="sf-login-footer-line" />
+            <span>STUDYFLOW · BUILT AROUND YOUR PROGRESS</span>
+          </div>
+          <div className="sf-login-shape sf-login-shape-one" aria-hidden="true" />
+          <div className="sf-login-shape sf-login-shape-two" aria-hidden="true" />
         </section>
 
-        <section className="sf-auth-form-wrap flex items-center justify-center p-5 sm:p-10 lg:p-14">
-          <div className="sf-auth-card w-full max-w-lg p-7 sm:p-10">
-            <div className="mb-8 flex items-center justify-between gap-3">
-              <div><p className="eyebrow mb-2">مساحتك في انتظارك</p><h2 className="text-3xl font-black tracking-tight sm:text-4xl">أهلاً بعودتك</h2></div>
-              <span className="sf-auth-step-mark"><Sparkles className="size-5" /></span>
+        <section className="sf-login-form-side">
+          <div className="sf-login-form-card">
+            <div className="sf-login-form-heading">
+              <p className="sf-auth-eyebrow">مساحتك في انتظارك</p>
+              <h2>أهلًا بعودتك</h2>
+              <p>سجّل الدخول للعودة إلى خطتك ومتابعة يومك من حيث توقفت.</p>
             </div>
-            <p className="mb-8 text-sm leading-7 text-muted-foreground">سجّل دخولك للعودة إلى خطتك، ومهامك، وكل ما أنجزته حتى الآن.</p>
             <form
               onSubmit={(event) => {
                 event.preventDefault();
                 loginMutation.mutate({ username: loginUsername, password: loginPassword });
               }}
-              className="space-y-5 text-right"
+              className="sf-login-form"
             >
               <div className="space-y-2">
                 <Label htmlFor="studyflow-username">اسم المستخدم</Label>
@@ -206,21 +167,26 @@ export default function DashboardLayout({ title, description, children, action }
                 />
               </div>
               {loginMutation.error && (
-                <p role="alert" className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                <p role="alert" className="sf-auth-error-message">
                   {loginMutation.error.message}
                 </p>
               )}
-              <Button type="submit" disabled={loginMutation.isPending} size="lg" className="sf-auth-submit pressable mt-2 w-full rounded-2xl px-7 font-bold">
+              <Button
+                type="submit"
+                disabled={loginMutation.isPending}
+                size="lg"
+                className="sf-auth-submit pressable w-full rounded-2xl font-bold"
+              >
                 {loginMutation.isPending ? "جارٍ تسجيل الدخول..." : "ادخل إلى مساحتك"}
                 <ChevronLeft className="size-4" />
               </Button>
             </form>
-            <div className="sf-auth-security mt-8 flex items-center gap-3 rounded-2xl px-4 py-3">
-              <span className="sf-security-pulse" />
-              <p className="text-xs leading-6 text-muted-foreground">جلسة خاصة وآمنة لمتابعة رحلتك التعليمية.</p>
+            <div className="sf-login-security">
+              <span className="sf-security-mark"><span /></span>
+              <p>جلسة خاصة لمتابعة بياناتك الدراسية.</p>
             </div>
-            <p className="mt-8 text-center text-[10px] font-bold tracking-[.2em] text-muted-foreground">STUDYFLOW · YOUR MOMENTUM, VISUALIZED</p>
           </div>
+          <p className="sf-login-legal">STUDYFLOW · YOUR PROGRESS, IN ONE PLACE</p>
         </section>
       </div>
     </div>
@@ -228,79 +194,126 @@ export default function DashboardLayout({ title, description, children, action }
 
   const initial = user.name?.trim().charAt(0) || "م";
   const isActive = (path: string) => path === "/" ? location === "/" : location.startsWith(path);
-  const navigate = (path: string) => { setLocation(path); setMobileNavOpen(false); };
-  const renderNavigation = () => (
-    <nav className="sf-nav-list space-y-5" aria-label="التنقل الرئيسي">
-      {navigation.map(group => <section key={group.label} className="sf-nav-group">
-        <h2 className="mb-2 px-3 text-[11px] font-semibold text-sidebar-foreground/45">{group.label}</h2>
-        <div className="space-y-1">{group.items.map(item => {
-          const active = isActive(item.path);
-          return <button key={item.path} type="button" onClick={() => navigate(item.path)} aria-current={active ? "page" : undefined}
-            className={cn("sf-nav-item pressable flex min-h-11 w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-right text-sm font-medium transition-colors", active ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:bg-white/8 hover:text-sidebar-foreground")}
-            aria-label={item.label} title={item.label}>
-            <item.icon className={cn("size-[18px] shrink-0", active && "text-sidebar-primary")} />
-            <span>{item.label}</span>
-            {active && <span className="sf-active-dot mr-auto size-1.5 rounded-full bg-sidebar-primary" />}
-          </button>;
-        })}</div>
-      </section>)}
+  const navigate = (path: string) => {
+    setLocation(path);
+    setMobileNavOpen(false);
+  };
+
+  const renderNavigation = (mobile = false) => (
+    <nav className={cn("sf-nav-list", mobile && "sf-nav-list-mobile")} aria-label="التنقل الرئيسي">
+      {navigation.map(group => (
+        <section key={group.label} className="sf-nav-group">
+          <h2>{group.label}</h2>
+          <div className="sf-nav-items">
+            {group.items.map(item => {
+              const active = isActive(item.path);
+              return (
+                <button
+                  key={item.path}
+                  type="button"
+                  onClick={() => navigate(item.path)}
+                  aria-current={active ? "page" : undefined}
+                  className={cn("sf-nav-item pressable", active && "is-active")}
+                  aria-label={item.label}
+                  title={item.label}
+                >
+                  <item.icon className="sf-nav-icon" />
+                  <span>{item.label}</span>
+                  {active && <span className="sf-nav-indicator" />}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      ))}
     </nav>
   );
 
-  return (
-    <div className="app-shell bg-background text-foreground">
-      <aside className={cn("sf-sidebar fixed inset-y-0 right-0 z-40 hidden w-[272px] flex-col overflow-y-auto bg-sidebar px-4 py-5 text-sidebar-foreground lg:flex", isDesktopNavHidden && "lg:hidden")}>
-        <button onClick={() => navigate("/")} className="sf-sidebar-brand pressable mb-7 flex items-center gap-3 rounded-xl px-2 text-right" aria-label="العودة إلى لوحة اليوم">
-          <span className="sf-sidebar-mark flex size-10 items-center justify-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground"><BrandMark className="size-5" /></span>
-          <span><span className="block text-lg font-bold tracking-tight">StudyFlow</span><span className="block text-[9px] font-bold tracking-[.18em] text-sidebar-foreground/55">LEARN / LEVEL UP</span></span>
-        </button>
-        {renderNavigation()}
-        <div className="sf-sidebar-account mt-auto border-t border-white/10 pt-4">
-          <div className="mb-3 flex items-center gap-3 rounded-xl px-2 py-2"><span className="sf-avatar flex size-9 items-center justify-center rounded-xl bg-white/10 text-sm font-bold">{initial}</span>
-            <div className="min-w-0"><p className="truncate text-sm font-semibold">{user.name || "مستخدم التطبيق"}</p><p className="truncate text-xs text-sidebar-foreground/55">مساحتك الشخصية</p></div>
-          </div>
-          <Button variant="ghost" onClick={() => void logout()} className="sf-logout w-full justify-start gap-3 rounded-xl px-3 text-sidebar-foreground/65 hover:bg-white/8 hover:text-sidebar-foreground"><LogOut className="size-4" /><span>خروج</span></Button>
-        </div>
-      </aside>
+  const account = (
+    <div className="sf-account">
+      <span className="sf-account-avatar">{initial}</span>
+      <div className="sf-account-copy">
+        <b>{user.name || "مستخدم التطبيق"}</b>
+        <span>مساحتك الشخصية</span>
+      </div>
+      <Button variant="ghost" size="icon" onClick={() => void logout()} className="sf-account-logout" aria-label="تسجيل الخروج" title="تسجيل الخروج">
+        <LogOut className="size-4" />
+      </Button>
+    </div>
+  );
 
-      <div className="sf-app-content">
-        <header className="sf-topbar sticky top-0 z-30 border-b border-border/65 bg-background/90 backdrop-blur-xl">
-          <div className="sf-topbar-visual pointer-events-none absolute left-[16%] top-0 hidden h-[72px] w-[220px] opacity-85 xl:block" aria-hidden="true"><ThreeAmbientScene /></div>
-          <div className="container dashboard-header relative z-10 flex min-h-[72px] items-center justify-between gap-3 py-2">
-            <div className="dashboard-header-main flex min-w-0 items-center gap-3">
-              <Button variant="outline" size="icon" className="sf-header-button pressable rounded-xl lg:hidden" onClick={() => setMobileNavOpen(true)} aria-label="فتح التنقل"><Menu className="size-5" /></Button>
-              <Button variant="outline" size="icon" className="sf-header-button pressable hidden rounded-xl lg:inline-flex" onClick={() => setDesktopNavHidden(current => !current)} aria-label={isDesktopNavHidden ? "إظهار شريط التنقل" : "إخفاء شريط التنقل"} title={isDesktopNavHidden ? "إظهار شريط التنقل" : "ملء الشاشة"}>{isDesktopNavHidden ? <PanelRightOpen className="size-4" /> : <PanelRightClose className="size-4" />}</Button>
-              <div className="min-w-0"><p className="sf-topbar-kicker mb-1 hidden sm:block">YOUR LEARNING SPACE</p><h1 className="truncate text-lg font-bold tracking-tight sm:text-3xl">{title}</h1><p className="sf-page-intro mt-2 hidden max-w-2xl text-sm leading-7 sm:block">{description}</p></div>
+  return (
+    <div className="sf-app-shell">
+      <div className="sf-app-frame">
+        <aside className="sf-sidebar" aria-label="القائمة الرئيسية">
+          <button onClick={() => navigate("/")} className="sf-brand" aria-label="العودة إلى لوحة اليوم">
+            <span className="sf-brand-mark"><BrandMark className="size-5" /></span>
+            <span className="sf-brand-copy"><b>StudyFlow</b><small>STUDENT WORKSPACE</small></span>
+          </button>
+
+          <div className="sf-sidebar-caption">مساحة التعلّم</div>
+          {renderNavigation()}
+
+          <div className="sf-sidebar-bottom">
+            <div className="sf-sidebar-note">
+              <span className="sf-sidebar-note-icon"><Sparkles className="size-4" /></span>
+              <div><b>تقدمك يبدأ بخطوة</b><span>تابع ما عليك، واحتفل بما أنجزت.</span></div>
             </div>
-            <div className="flex shrink-0 items-center gap-2">
-              {action ? <div className="dashboard-header-actions flex items-center gap-2">{action}</div> : null}
-              <Button type="button" variant="outline" size="icon" className="sf-header-button pressable rounded-xl" onClick={toggleTheme}
-                aria-label={theme === "dark" ? "تفعيل الوضع الفاتح" : "تفعيل الوضع الداكن"} title={theme === "dark" ? "الوضع الفاتح" : "الوضع الداكن"}>
+            {account}
+          </div>
+        </aside>
+
+        <div className="sf-app-main">
+          <header className="sf-topbar">
+            <div className="sf-topbar-title">
+              <Button variant="outline" size="icon" className="sf-mobile-menu pressable" onClick={() => setMobileNavOpen(true)} aria-label="فتح التنقل">
+                <Menu className="size-5" />
+              </Button>
+              <div className="sf-heading-copy">
+                <p className="sf-topbar-kicker">مساحة الدراسة <span>/</span> STUDYFLOW</p>
+                <h1>{title}</h1>
+                <p className="sf-page-description">{description}</p>
+              </div>
+            </div>
+            <div className="sf-topbar-actions">
+              {action ? <div className="dashboard-header-actions">{action}</div> : null}
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="sf-theme-button pressable"
+                onClick={toggleTheme}
+                aria-label={theme === "dark" ? "تفعيل الوضع الفاتح" : "تفعيل الوضع الداكن"}
+                title={theme === "dark" ? "الوضع الفاتح" : "الوضع الداكن"}
+              >
                 {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
               </Button>
+              <span className="sf-topbar-avatar" aria-label={user.name || "ملف الطالب"}>{initial}</span>
             </div>
-          </div>
-        </header>
-        <main className="sf-main container enter py-5 sm:py-7">
-          <p className="sf-main-description mb-5 max-w-2xl text-sm leading-7 text-muted-foreground sm:mb-6 sm:text-base">{description}</p>
-          {studentProfile.isError && <QueryErrorNotice onRetry={() => void studentProfile.refetch()} label="تعذّر التحقق من ملفك الدراسي. بياناتك لم تُحذف؛ أعد المحاولة." />}
-          {children}
-        </main>
+          </header>
+
+          <main className="sf-main">
+            {studentProfile.isError && (
+              <QueryErrorNotice onRetry={() => void studentProfile.refetch()} label="تعذّر التحقق من ملفك الدراسي. بياناتك لم تُحذف؛ أعد المحاولة." />
+            )}
+            {children}
+          </main>
+        </div>
       </div>
 
       <Sheet open={isMobileNavOpen} onOpenChange={setMobileNavOpen}>
-        <SheetContent side="right" className="sf-mobile-sheet w-[min(88vw,340px)] border-l-0 bg-sidebar p-0 text-sidebar-foreground">
-          <SheetHeader className="border-b border-white/10 px-5 pb-4 pt-6 text-right">
-            <div className="mb-2 flex items-center gap-3"><span className="sf-sidebar-mark flex size-10 items-center justify-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground"><BrandMark className="size-5" /></span>
-              <div><SheetTitle className="text-base text-sidebar-foreground">StudyFlow</SheetTitle><SheetDescription className="mt-1 text-xs text-sidebar-foreground/55">التنقل في مساحتك الدراسية</SheetDescription></div>
+        <SheetContent side="right" className="sf-mobile-sheet w-[min(88vw,340px)] border-l-0 p-0 text-sidebar-foreground">
+          <SheetHeader className="sf-mobile-sheet-header">
+            <div className="sf-brand">
+              <span className="sf-brand-mark"><BrandMark className="size-5" /></span>
+              <span className="sf-brand-copy"><b>StudyFlow</b><small>STUDENT WORKSPACE</small></span>
             </div>
+            <SheetTitle className="sr-only">التنقل الرئيسي</SheetTitle>
+            <SheetDescription className="sr-only">اختر الصفحة التي تريد فتحها.</SheetDescription>
           </SheetHeader>
-          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4">{renderNavigation()}</div>
-          <div className="border-t border-white/10 p-4">
-            <div className="mb-3 flex items-center gap-3 px-2"><span className="flex size-9 items-center justify-center rounded-xl bg-white/10 text-sm font-bold">{initial}</span>
-              <div className="min-w-0"><p className="truncate text-sm font-semibold">{user.name || "مستخدم التطبيق"}</p><p className="text-xs text-sidebar-foreground/55">مساحتك الشخصية</p></div>
-            </div>
-            <Button variant="ghost" onClick={() => { setMobileNavOpen(false); void logout(); }} className="w-full justify-start gap-3 rounded-xl text-sidebar-foreground/75 hover:bg-white/8 hover:text-white"><LogOut className="size-4" />تسجيل الخروج</Button>
+          <div className="sf-mobile-sheet-body">
+            {renderNavigation(true)}
+            {account}
           </div>
         </SheetContent>
       </Sheet>
