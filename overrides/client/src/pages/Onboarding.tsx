@@ -256,7 +256,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
         />
       ) : (
         <div className="mx-auto max-w-4xl">
-          <section className="relative overflow-hidden rounded-[2rem] bg-primary p-6 text-primary-foreground shadow-xl sm:p-9">
+          <section className="sf-onboarding-hero relative overflow-hidden rounded-[2rem] bg-primary p-6 text-primary-foreground shadow-xl sm:p-9">
             <div className="pointer-events-none absolute -left-10 -top-16 size-56 rounded-full bg-white/10 blur-3xl" />
             <div className="relative flex items-start justify-between gap-4">
               <div>
@@ -282,8 +282,8 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
             </div>
           </section>
 
-          <section className="app-card mt-5 overflow-hidden">
-            <header className="border-b border-border/70 bg-muted/20 px-5 py-5 sm:px-7">
+          <section className="sf-onboarding-card app-card mt-5 overflow-hidden">
+            <header className="sf-onboarding-step-heading border-b border-border/70 bg-muted/20 px-5 py-5 sm:px-7">
               <p className="eyebrow">الخطوة {step + 1} من {activeSteps.length}</p>
               <h2 className="mt-1 text-xl font-bold">{steps[step]}</h2>
             </header>
@@ -442,7 +442,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                       : [];
                     const selectedTeacher = form.teacherSelections[subject.subjectId] || "";
                     return (
-                      <section key={subject.subjectId} className="rounded-2xl border border-border p-4 sm:p-5">
+                      <section key={subject.subjectId} className="sf-onboarding-subject rounded-2xl border border-border p-4 sm:p-5">
                         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
                           <div>
                             <p className="font-bold">مدرس {subject.nameAr}</p>
@@ -654,7 +654,7 @@ function StudentProfileOverview({
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 enter">
-      <section className="relative overflow-hidden rounded-[2rem] border border-primary/20 bg-card p-6 shadow-xl sm:p-8">
+      <section className="sf-profile-hero relative overflow-hidden rounded-[2rem] border border-primary/20 bg-card p-6 shadow-xl sm:p-8">
         <div className="pointer-events-none absolute -left-10 -top-14 size-52 rounded-full bg-primary/10 blur-3xl" />
         <div className="relative flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
           <div>
@@ -674,7 +674,7 @@ function StudentProfileOverview({
         </div>
       </section>
 
-      <section className="app-card overflow-hidden">
+      <section className="sf-profile-section app-card overflow-hidden">
         <div className="border-b border-border/70 p-5 sm:p-6">
           <p className="eyebrow">المدرسون</p>
           <h3 className="mt-1 text-lg font-bold">المدرس المختار لكل مادة</h3>

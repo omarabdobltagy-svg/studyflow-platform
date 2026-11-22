@@ -8,6 +8,7 @@ import superjson from "superjson";
 import App from "./App";
 import "./index.css";
 import "./experience.css";
+import "./experience-dark.css";
 
 // Analytics is optional. Do not emit a broken /umami request when no endpoint is configured.
 const analyticsEndpoint = import.meta.env.VITE_ANALYTICS_ENDPOINT?.trim();
@@ -22,8 +23,11 @@ if (analyticsEndpoint && analyticsWebsiteId) {
 
 const queryClient = new QueryClient();
 
+const isExpectedAuthError = (error: unknown) =>
+  error instanceof TRPCClientError && error.message === UNAUTHED_ERR_MSG;
+
 const showQueryError = (error: unknown, queryKey: readonly unknown[]) => {
-  if (error instanceof TRPCClientError && error.message === UNAUTHED_ERR_MSG) return;
+  if (isExpectedAuthError(error)) return;
   toast.error("تعذّر تحميل البيانات الآن.", {
     description: "تحقق من اتصالك ثم أعد المحاولة.",
     action: {
@@ -35,6 +39,7 @@ const showQueryError = (error: unknown, queryKey: readonly unknown[]) => {
 
 queryClient.getQueryCache().subscribe(event => {
   if (event.type === "updated" && event.action.type === "error") {
+    if (isExpectedAuthError(event.query.state.error)) return;
     showQueryError(event.query.state.error, event.query.queryKey);
     console.error("[API Query Error]", event.query.state.error);
   }

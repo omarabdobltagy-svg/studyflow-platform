@@ -19,7 +19,7 @@ export default function Settings() {
       description="تحكم في مظهر مساحتك، وراجع بيانات ملفك الدراسي، وعدّل اختياراتك عند الحاجة."
     >
       {profile.isError && <QueryErrorNotice onRetry={() => void profile.refetch()} label="تعذّر تحميل ملخص ملفك الدراسي." />}
-      <section className="sf-settings-intro mb-6">
+      <section className="sf-settings-intro sf-settings-hero mb-6">
         <div>
           <p className="sf-settings-kicker">مساحتك · تفضيلاتك</p>
           <h2>خلّي StudyFlow مناسب لطريقتك.</h2>

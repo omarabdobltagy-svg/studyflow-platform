@@ -16,15 +16,17 @@ interface ThemeProviderProps {
   switchable?: boolean;
 }
 
+const THEME_STORAGE_KEY = "studyflow-theme-v3";
+
 export function ThemeProvider({
   children,
-  defaultTheme = "light",
+  defaultTheme = "dark",
   switchable = false,
 }: ThemeProviderProps) {
   const [theme, setTheme] = useState<Theme>(() => {
     if (switchable && typeof window !== "undefined") {
       try {
-        const stored = window.localStorage.getItem("studyflow-theme-v2");
+        const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
         return stored === "dark" || stored === "light" ? stored : defaultTheme;
       } catch {
         return defaultTheme;
@@ -35,15 +37,11 @@ export function ThemeProvider({
 
   useEffect(() => {
     const root = document.documentElement;
-    if (theme === "dark") {
-      root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
-    }
+    root.classList.toggle("dark", theme === "dark");
 
     if (switchable && typeof window !== "undefined") {
       try {
-        window.localStorage.setItem("studyflow-theme-v2", theme);
+        window.localStorage.setItem(THEME_STORAGE_KEY, theme);
       } catch {
         // The theme still applies for this session when storage is unavailable.
       }

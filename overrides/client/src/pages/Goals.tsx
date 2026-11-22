@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
-import { ArrowDown, ArrowUp, CalendarDays, CheckCircle2, CircleDashed, Flag, ListTree, Pencil, Plus, Target, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, CalendarDays, CheckCircle2, CircleDashed, Flag, ListTree, Pencil, Plus, Target, Trash2, X, Search, TrendingUp } from "lucide-react";
 import { FormEvent, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -18,7 +18,7 @@ type EditableGoal = { id: number; title: string; description: string | null; kin
 type GoalRecord = EditableGoal & { parentGoalId: number | null; sortOrder: number; taskCount: number; completedTaskCount: number; progress: number };
 
 export default function Goals() {
-  const utils = trpc.useUtils(); const [formOpen, setFormOpen] = useState(false); const [editingGoal, setEditingGoal] = useState<EditableGoal | null>(null); const [progressFilter, setProgressFilter] = useState<ProgressFilter>("all"); const [progressSort, setProgressSort] = useState<ProgressSort>("progress"); const [categoryFilter, setCategoryFilter] = useState("all"); const goalsQuery = trpc.goals.list.useQuery(); const tasksQuery = trpc.tasks.list.useQuery();
+  const utils = trpc.useUtils(); const [formOpen, setFormOpen] = useState(false); const [editingGoal, setEditingGoal] = useState<EditableGoal | null>(null); const [progressFilter, setProgressFilter] = useState<ProgressFilter>("all"); const [progressSort, setProgressSort] = useState<ProgressSort>("progress"); const [categoryFilter, setCategoryFilter] = useState("all"); const [goalSearch, setGoalSearch] = useState(""); const goalsQuery = trpc.goals.list.useQuery(); const tasksQuery = trpc.tasks.list.useQuery();
   const createGoal = trpc.goals.create.useMutation({ onSuccess: () => { void utils.goals.list.invalidate(); void utils.dashboard.summary.invalidate(); setFormOpen(false); toast.success("تم إنشاء الهدف."); }, onError: error => toast.error(error.message) });
   const setStatus = trpc.goals.setStatus.useMutation({ onSuccess: () => { void utils.goals.list.invalidate(); void utils.dashboard.summary.invalidate(); toast.success("تم تحديث حالة الهدف."); }, onError: error => toast.error(error.message) });
   const updateGoal = trpc.goals.update.useMutation({ onSuccess: () => { void utils.goals.list.invalidate(); void utils.dashboard.summary.invalidate(); setEditingGoal(null); toast.success("تم حفظ تعديلات الهدف."); }, onError: error => toast.error(error.message) });
@@ -33,19 +33,96 @@ export default function Goals() {
     const summary = goalProgress(goal, stagesFor(goal.id), allTasks);
     const categoryMatch = categoryFilter === "all" || goal.category === categoryFilter;
     const filterMatch = progressFilter === "all" || (progressFilter === "overdue" && summary.overdueCount > 0) || (progressFilter === "incomplete" && summary.progress < 100) || (progressFilter === "completed" && summary.progress === 100);
-    return categoryMatch && filterMatch;
-  }).sort((first, second) => compareGoals(first, second, stagesFor, allTasks, progressSort)), [active, allTasks, categoryFilter, progressFilter, progressSort]);
-  return <DashboardLayout title="الأهداف" description="احتفظ بوجهتك في مكان واضح، وحوّل كل هدف إلى مهام صغيرة يمكن قياسها وإتمامها." action={<Button onClick={() => setFormOpen(true)} className="pressable rounded-2xl bg-primary"><Plus className="size-4" />هدف جديد</Button>}>
-    {goalsQuery.isError && <QueryErrorNotice onRetry={() => void goalsQuery.refetch()} label="تعذّر تحميل أهدافك." />}
-    {tasksQuery.isError && <QueryErrorNotice onRetry={() => void tasksQuery.refetch()} label="تعذّر تحميل المهام اللازمة لحساب تقدم الأهداف." />}
-    {formOpen && <GoalForm onClose={() => setFormOpen(false)} loading={createGoal.isPending} onSubmit={data => createGoal.mutate(data)} />}
-    {editingGoal && <GoalEditForm goal={editingGoal} onClose={() => setEditingGoal(null)} loading={updateGoal.isPending} onSubmit={data => updateGoal.mutate({ id: editingGoal.id, ...data, status: editingGoal.status })} />}
-    <section className="mb-6 grid gap-4 sm:grid-cols-3"><Overview icon={<Target className="size-5" />} value={active.length} label="أهداف نشطة" /><Overview icon={<CheckCircle2 className="size-5" />} value={completed.length} label="أهداف مكتملة" /><Overview icon={<CircleDashed className="size-5" />} value={`${active.length ? Math.round(active.reduce((sum, goal) => sum + goalProgress(goal, stagesFor(goal.id), allTasks).progress, 0) / active.length) : 0}%`} label="متوسط التقدم" /></section>
-    <ProgressToolbar filter={progressFilter} sort={progressSort} category={categoryFilter} categories={categories} onFilterChange={setProgressFilter} onSortChange={setProgressSort} onCategoryChange={setCategoryFilter} resultCount={visibleActive.length} />
-    <section className="space-y-5"><div className="flex items-center gap-3"><span className="h-px flex-1 bg-border" /><h2 className="text-sm font-bold text-muted-foreground">الأهداف النشطة</h2><span className="h-px flex-1 bg-border" /></div>{goalsQuery.isLoading ? <GoalSkeletons /> : visibleActive.length ? visibleActive.map(goal => <GoalCard key={goal.id} goal={goal} stages={stagesFor(goal.id)} tasks={allTasks} completing={setStatus.isPending} onComplete={id => setStatus.mutate({ id, status: "completed" })} onEdit={setEditingGoal} onDelete={id => { if (window.confirm("حذف هذا الهدف؟ ستبقى المهام دون ربط به.")) deleteGoal.mutate({ id }); }} />) : active.length ? <div className="app-card flex min-h-48 flex-col items-center justify-center p-6 text-center"><ListTree className="mb-3 size-8 text-primary/45" /><p className="font-semibold">لا توجد أهداف تطابق هذه التصفية</p><p className="mt-1 text-sm text-muted-foreground">غيّر الحالة أو التصنيف حتى ترى بقية خطتك.</p></div> : <EmptyGoals onClick={() => setFormOpen(true)} />}
-      {completed.length > 0 && <><div className="mt-10 flex items-center gap-3"><span className="h-px flex-1 bg-border" /><h2 className="text-sm font-bold text-muted-foreground">منجزاتك</h2><span className="h-px flex-1 bg-border" /></div><div className="grid gap-3 md:grid-cols-2">{completed.map(goal => <article key={goal.id} className="app-card flex items-center gap-4 p-5 opacity-75"><span className="flex size-10 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-200"><CheckCircle2 className="size-5" /></span><div className="min-w-0 flex-1"><p className="truncate font-semibold">{goal.title}</p><p className="mt-1 text-xs text-muted-foreground">{goal.category}</p></div><span className="num text-sm font-semibold text-emerald-700 dark:text-emerald-300">{goalProgress(goal, stagesFor(goal.id), allTasks).progress}%</span></article>)}</div></>}
-    </section>
-  </DashboardLayout>;
+    const searchMatch = !goalSearch.trim() || [goal.title, goal.description || "", goal.category].join(" ").toLowerCase().includes(goalSearch.trim().toLowerCase());
+    return categoryMatch && filterMatch && searchMatch;
+  }).sort((first, second) => compareGoals(first, second, stagesFor, allTasks, progressSort)), [active, allTasks, categoryFilter, progressFilter, progressSort, goalSearch]);
+  const averageProgress = goalsQuery.isSuccess && tasksQuery.isSuccess && active.length
+    ? Math.round(active.reduce((sum, goal) => sum + goalProgress(goal, stagesFor(goal.id), allTasks).progress, 0) / active.length)
+    : goalsQuery.isSuccess && tasksQuery.isSuccess ? 0 : null;
+  const totalTaskCount = goalsQuery.isSuccess && tasksQuery.isSuccess ? allTasks.filter(task => task.goalId !== null && allGoals.some(goal => goal.id === task.goalId)).length : null;
+  const highProgressGoals = goalsQuery.isSuccess && tasksQuery.isSuccess
+    ? active.filter(goal => goalProgress(goal, stagesFor(goal.id), allTasks).progress >= 75).length : null;
+  return (
+    <DashboardLayout
+      title="الأهداف"
+      description="وجهاتك الكبيرة، مقسمة إلى مراحل وخطوات يمكن تتبعها من إنجاز المهام الفعلي."
+    >
+      {goalsQuery.isError && <QueryErrorNotice onRetry={() => void goalsQuery.refetch()} label="تعذّر تحميل أهدافك." />}
+      {tasksQuery.isError && <QueryErrorNotice onRetry={() => void tasksQuery.refetch()} label="تعذّر تحميل المهام اللازمة لحساب تقدم الأهداف." />}
+
+      <section className="sf-goals-hero">
+        <div className="sf-goals-hero-copy">
+          <p className="sf-goals-overline">DIRECTION / LONG-TERM PROGRESS</p>
+          <h2>النتيجة الكبيرة تبدأ بخطوات يمكن رؤيتها.</h2>
+          <p>اربط كل هدف بمراحل ومهام فعلية. التقدم هنا يتغير مع إنجازك المسجل، وليس بنسبة تقديرية تكتبها بنفسك.</p>
+          <div className="sf-goals-hero-actions">
+            <Button onClick={() => setFormOpen(true)} className="rounded-xl bg-white text-[#3b214c] hover:bg-[#f2eaf7]"><Plus /> إنشاء هدف</Button>
+            <span><ListTree /> {goalsQuery.isLoading || goalsQuery.isError ? "—" : active.length} أهداف تعمل عليها</span>
+          </div>
+        </div>
+        <div className="sf-goals-hero-panel">
+          <div className="sf-goals-hero-stat">
+            <span>متوسط تقدم الأهداف النشطة</span>
+            <TrendingUp />
+          </div>
+          <strong>{averageProgress === null ? "—" : averageProgress + "%"}</strong>
+          <div className="sf-goals-hero-rail"><i style={{ width: (averageProgress ?? 0) + "%" }} /></div>
+          <div className="sf-goals-hero-breakdown">
+            <div><b>{goalsQuery.isLoading || goalsQuery.isError ? "—" : active.length}</b><span>نشطة</span></div>
+            <div><b>{goalsQuery.isLoading || goalsQuery.isError ? "—" : completed.length}</b><span>مكتملة</span></div>
+            <div><b>{totalTaskCount === null ? "—" : totalTaskCount}</b><span>مهام مرتبطة</span></div>
+          </div>
+        </div>
+        <span className="sf-goals-hero-orbit" aria-hidden="true" />
+      </section>
+
+      {formOpen && <GoalForm onClose={() => setFormOpen(false)} loading={createGoal.isPending} onSubmit={data => createGoal.mutate(data)} />}
+      {editingGoal && <GoalEditForm goal={editingGoal} onClose={() => setEditingGoal(null)} loading={updateGoal.isPending} onSubmit={data => updateGoal.mutate({ id: editingGoal.id, ...data, status: editingGoal.status })} />}
+
+      <section className="sf-goal-quick-stats">
+        <Overview icon={<Target />} value={goalsQuery.isLoading || goalsQuery.isError ? "—" : active.length} label="أهداف نشطة" />
+        <Overview icon={<CheckCircle2 />} value={goalsQuery.isLoading || goalsQuery.isError ? "—" : completed.length} label="أهداف مكتملة" />
+        <Overview icon={<CircleDashed />} value={highProgressGoals === null ? "—" : highProgressGoals} label="أهداف تجاوزت 75%" />
+      </section>
+
+      <div className="sf-goal-control-panel">
+        <div className="sf-goal-control-heading">
+          <div><p className="sf-goals-section-kicker">GOAL CONTROL</p><h2>تابع وجهاتك</h2><p>صفِّ الأهداف حسب الحالة، ورتبها حسب أقرب موعد أو التقدم أو التأخير.</p></div>
+          <span>{goalsQuery.isError ? "تعذّر التحميل" : goalsQuery.isLoading ? "جارٍ التحميل" : visibleActive.length + " نتيجة"}</span>
+        </div>
+        <div className="sf-goal-search">
+          <Search />
+          <Input value={goalSearch} onChange={event => setGoalSearch(event.target.value)} placeholder="ابحث باسم الهدف أو وصفه أو تصنيفه..." aria-label="البحث في الأهداف" />
+          {goalSearch && <button type="button" onClick={() => setGoalSearch("")} aria-label="مسح البحث"><X /></button>}
+        </div>
+        <ProgressToolbar filter={progressFilter} sort={progressSort} category={categoryFilter} categories={categories} onFilterChange={setProgressFilter} onSortChange={setProgressSort} onCategoryChange={setCategoryFilter} resultCount={visibleActive.length} />
+      </div>
+
+      <section className="sf-goal-results">
+        <div className="sf-goals-section-heading"><span>01</span><div><h2>الأهداف النشطة</h2><p>كل هدف يحتفظ بمراحله ومهامه وحالة تقدمه.</p></div></div>
+        {goalsQuery.isLoading ? <GoalSkeletons /> : goalsQuery.isError ? null : visibleActive.length ? (
+          <div className="sf-goal-list">
+            {visibleActive.map(goal => <GoalCard key={goal.id} goal={goal} stages={stagesFor(goal.id)} tasks={allTasks} completing={setStatus.isPending} onComplete={id => setStatus.mutate({ id, status: "completed" })} onEdit={setEditingGoal} onDelete={id => { if (window.confirm("حذف هذا الهدف؟ ستبقى المهام دون ربط به.")) deleteGoal.mutate({ id }); }} />)}
+          </div>
+        ) : active.length ? (
+          <div className="sf-goal-empty"><ListTree /><h3>لا توجد نتائج مطابقة.</h3><p>جرّب تعديل البحث أو حالة التقدم أو التصنيف.</p><Button variant="outline" onClick={() => { setGoalSearch(""); setCategoryFilter("all"); setProgressFilter("all"); }}>إعادة ضبط التصفية</Button></div>
+        ) : <EmptyGoals onClick={() => setFormOpen(true)} />}
+
+        {completed.length > 0 && (
+          <section className="sf-completed-goals">
+            <div className="sf-goals-section-heading"><span>02</span><div><h2>منجزاتك</h2><p>الأهداف التي وصلت إلى حالتها المكتملة.</p></div></div>
+            <div className="sf-completed-goal-grid">
+              {completed.map(goal => <article key={goal.id} className="sf-completed-goal">
+                <span><CheckCircle2 /></span>
+                <div><h3>{goal.title}</h3><p>{goal.category}</p></div>
+                <strong>{goalProgress(goal, stagesFor(goal.id), allTasks).progress}%</strong>
+              </article>)}
+            </div>
+          </section>
+        )}
+      </section>
+    </DashboardLayout>
+  );
 }
 
 type TaskRecord = { id: number; title: string; goalId: number | null; status: "todo" | "done"; dueAt: Date | null; updatedAt: Date; };
@@ -89,49 +166,50 @@ function GoalCard({ goal, stages, tasks, completing, onComplete, onEdit, onDelet
     addTask.mutate({ title: taskTitle.trim(), category: goal.category || "عام", priority: "medium", goalId: goal.id, dueAt: null });
   };
   return (
-    <article className="goal-card app-card overflow-hidden">
-      <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:p-6">
+    <article className="sf-goal-card app-card">
+      <div className="sf-goal-card-header">
         <span className={cn("goal-emblem flex size-12 shrink-0 items-center justify-center rounded-2xl text-white shadow-sm", goalColor[goal.color as keyof typeof goalColor] || goalColor.teal)}><Flag className="size-5" /></span>
-        <div className="min-w-0 flex-1">
+        <div className="sf-goal-identity-copy">
+          <p className="sf-goal-overline">GOAL / {goal.kind === "long" ? "LONG-TERM" : "SHORT-TERM"}</p>
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="font-bold">{goal.title}</h3>
+            <h3 className="sf-goal-title">{goal.title}</h3>
             <Badge variant="secondary" className="rounded-lg text-[11px]">{goal.kind === "long" ? "طويل المدى" : "قصير المدى"}</Badge>
             {summary.overdueCount > 0 && <Badge className="rounded-lg bg-amber-100 text-[11px] text-amber-900 hover:bg-amber-100 dark:bg-amber-950/60 dark:text-amber-200 dark:hover:bg-amber-950/60">{summary.overdueCount} متأخرة</Badge>}
           </div>
-          {goal.description && <p className="mt-1.5 line-clamp-2 text-sm leading-6 text-muted-foreground">{goal.description}</p>}
-          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          {goal.description && <p className="sf-goal-description">{goal.description}</p>}
+          <div className="sf-goal-meta">
             <span>{goal.category}</span><span>{summary.completedTaskCount} من {summary.taskCount} مهام</span>
             {goal.targetDate && <span className="inline-flex items-center gap-1"><CalendarDays className="size-3" />ينتهي {new Intl.DateTimeFormat("ar-EG", { day: "numeric", month: "long" }).format(new Date(goal.targetDate))}</span>}
           </div>
         </div>
-        <div className="sm:w-44"><div className="mb-2 flex items-center justify-between"><span className="text-xs text-muted-foreground">التقدم</span><span className="num text-sm font-semibold text-primary">{summary.progress}%</span></div><Progress value={summary.progress} className="h-2 bg-muted" /></div>
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="sf-goal-progress-block"><div className="mb-2 flex items-center justify-between"><span className="text-xs text-muted-foreground">التقدم</span><span className="num text-sm font-semibold text-primary">{summary.progress}%</span></div><Progress value={summary.progress} className="h-2 bg-muted" /></div>
+        <div className="sf-goal-actions">
           <Button variant="outline" title={!canComplete ? "أكمل مهام المراحل أولًا" : undefined} onClick={() => onComplete(goal.id)} disabled={completing || !canComplete} className="pressable rounded-xl">إتمام</Button>
           <Button variant="ghost" size="icon" onClick={() => onEdit(goal)} className="rounded-xl" aria-label={`تعديل ${goal.title}`}><Pencil className="size-4" /></Button>
           <Button variant="ghost" size="icon" onClick={() => onDelete(goal.id)} className="rounded-xl text-destructive hover:text-destructive" aria-label={`حذف ${goal.title}`}><Trash2 className="size-4" /></Button>
         </div>
       </div>
-      {stages.length > 0 && <div className="border-t border-border/70 bg-muted/15 px-5 py-4 sm:px-6">
-        <div className="mb-3 flex items-center gap-2"><ListTree className="size-4 text-primary" /><p className="text-sm font-bold">مراحل هذه الخطة</p><span className="text-xs text-muted-foreground">{stages.length} مراحل</span></div>
-        <div className="space-y-2">{stages.map((stage, index) => (
-          <div key={stage.id} className="flex flex-col gap-3 rounded-xl border border-border/70 bg-card p-3 sm:flex-row sm:items-center">
+      {stages.length > 0 && <div className="sf-goal-stages">
+        <div className="sf-goal-subheading"><ListTree className="size-4 text-primary" /><p className="text-sm font-bold">مراحل هذه الخطة</p><span className="text-xs text-muted-foreground">{stages.length} مراحل</span></div>
+        <div className="sf-goal-stage-list">{stages.map((stage, index) => (
+          <div key={stage.id} className="sf-goal-stage-row">
             <span className="num flex size-7 shrink-0 items-center justify-center rounded-lg bg-secondary text-xs font-bold text-primary">{index + 1}</span>
             <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-semibold">{stage.title}</p>{stage.status === "completed" && <Badge className="rounded-md bg-emerald-600 text-[11px] text-white hover:bg-emerald-600">مكتملة</Badge>}</div><p className="mt-1 text-xs text-muted-foreground">{stage.completedTaskCount} من {stage.taskCount} مهام</p></div>
             <div className="flex items-center gap-3 sm:w-44"><Progress value={stage.progress} className="h-1.5 flex-1 bg-muted" /><span className="num text-xs font-semibold text-primary">{stage.progress}%</span>{stage.status === "active" && <Button variant="ghost" size="sm" onClick={() => onComplete(stage.id)} disabled={completing || stage.progress < 100} className="pressable h-8 rounded-lg text-xs">إتمام</Button>}</div>
           </div>
         ))}</div>
       </div>}
-      <div className="border-t border-border/70 bg-muted/10 px-5 py-4 sm:px-6">
-        <div className="mb-3 flex items-center justify-between gap-2">
+      <div className="sf-goal-tasks">
+        <div className="sf-goal-task-heading">
           <div><div className="flex items-center gap-2"><ListTree className="size-4 text-primary" /><p className="text-sm font-bold">خطوات التنفيذ</p><span className="text-xs text-muted-foreground">{relatedTasks.length}</span></div><p className="mt-1 text-xs text-muted-foreground">التقدم يتحسب من المهام المكتملة فعلًا، وليس من نسبة يدوية.</p></div>
           <Button type="button" variant="outline" size="sm" onClick={() => setShowTaskEntry(value => !value)} className="shrink-0 rounded-xl"><Plus className="size-3.5" />إضافة خطوة</Button>
         </div>
-        {showTaskEntry && <form onSubmit={submitTask} className="mb-3 flex flex-col gap-2 rounded-xl border border-border/70 bg-card p-3 sm:flex-row">
+        {showTaskEntry && <form onSubmit={submitTask} className="sf-goal-task-entry">
           <Input autoFocus value={taskTitle} onChange={event => setTaskTitle(event.target.value)} placeholder="ما الخطوة التالية لتحقيق الهدف؟" className="h-10 rounded-xl" />
           <div className="flex gap-2"><Button type="submit" disabled={addTask.isPending || !taskTitle.trim()} className="rounded-xl">{addTask.isPending ? "إضافة..." : "إضافة"}</Button><Button type="button" variant="ghost" onClick={() => setShowTaskEntry(false)} className="rounded-xl">إلغاء</Button></div>
         </form>}
-        {relatedTasks.length ? <div className="space-y-1.5">
-          {relatedTasks.slice(0, 5).map(task => <div key={task.id} className="flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-muted/60">
+        {relatedTasks.length ? <div className="sf-goal-task-list">
+          {relatedTasks.slice(0, 5).map(task => <div key={task.id} className="sf-goal-task-row">
             <button type="button" onClick={() => toggleTask.mutate({ id: task.id, done: task.status !== "done" })} disabled={toggleTask.isPending} aria-label={task.status === "done" ? "إعادة فتح المهمة" : "إكمال المهمة"} className={cn("flex size-5 shrink-0 items-center justify-center rounded-md border", task.status === "done" ? "border-emerald-500 bg-emerald-500 text-white" : "border-border bg-background")}>
               {task.status === "done" && <CheckCircle2 className="size-3.5" />}
             </button>
@@ -144,9 +222,9 @@ function GoalCard({ goal, stages, tasks, completing, onComplete, onEdit, onDelet
     </article>
   );
 }
-function Overview({ icon, value, label }: { icon: React.ReactNode; value: string | number; label: string }) { return <div className="app-card flex items-center gap-4 p-5"><span className="flex size-11 items-center justify-center rounded-2xl bg-secondary text-primary">{icon}</span><div><p className="num text-2xl font-semibold">{value}</p><p className="mt-1 text-xs text-muted-foreground">{label}</p></div></div>; }
-function EmptyGoals({ onClick }: { onClick: () => void }) { return <div className="app-card flex min-h-72 flex-col items-center justify-center p-6 text-center"><Target className="mb-4 size-10 text-primary/40" /><h3 className="font-bold">امنح يومك وجهة</h3><p className="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">أنشئ هدفًا، ثم اربطه بمهام صغيرة. سيحسب التطبيق نسبة تقدمك تلقائيًا.</p><Button onClick={onClick} className="pressable mt-5 rounded-xl"><Plus className="size-4" />أنشئ أول هدف</Button></div>; }
-function GoalEditForm({ goal, onClose, onSubmit, loading }: { goal: EditableGoal; onClose: () => void; loading: boolean; onSubmit: (data: { title: string; description: string | null; kind: "short" | "long"; category: string; color: string; targetDate: Date | null }) => void }) { const [title, setTitle] = useState(goal.title); const [description, setDescription] = useState(goal.description || ""); const [kind, setKind] = useState<"short" | "long">(goal.kind); const [category, setCategory] = useState(goal.category); const [color, setColor] = useState(goal.color === "violet" ? "charcoal" : goal.color === "teal" ? "red" : goal.color === "sky" || goal.color === "emerald" || goal.color === "amber" ? "gold" : goal.color); const [date, setDate] = useState(goal.targetDate ? new Date(goal.targetDate).toISOString().slice(0, 10) : ""); const submit = (event: FormEvent) => { event.preventDefault(); if (!title.trim()) return toast.error("اكتب عنوان الهدف أولًا."); onSubmit({ title: title.trim(), description: description.trim() || null, kind, category: category.trim() || "شخصي", color, targetDate: date ? new Date(`${date}T12:00:00`) : null }); }; return <section className="enter app-card mb-6 overflow-hidden border-primary/20"><div className="flex items-center justify-between border-b border-border/65 px-5 py-4"><div><p className="eyebrow">تعديل الهدف</p><h2 className="mt-1 font-bold">حدّث وجهتك وخطتك</h2></div><Button variant="ghost" size="icon" onClick={onClose} className="rounded-xl"><X className="size-4" /></Button></div><form onSubmit={submit} className="grid gap-4 p-5 sm:grid-cols-2"><div className="sm:col-span-2"><label className="mb-2 block text-sm font-semibold">عنوان الهدف</label><Input autoFocus value={title} onChange={event => setTitle(event.target.value)} className="h-11 rounded-xl bg-background" /></div><div className="sm:col-span-2"><label className="mb-2 block text-sm font-semibold">الوصف</label><Textarea value={description} onChange={event => setDescription(event.target.value)} className="min-h-20 rounded-xl bg-background" /></div><div><label className="mb-2 block text-sm font-semibold">مدى الهدف</label><Select value={kind} onValueChange={(value: "short" | "long") => setKind(value)}><SelectTrigger className="h-11 rounded-xl bg-background"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="short">قصير المدى</SelectItem><SelectItem value="long">طويل المدى</SelectItem></SelectContent></Select></div><div><label className="mb-2 block text-sm font-semibold">التصنيف</label><Input value={category} onChange={event => setCategory(event.target.value)} className="h-11 rounded-xl bg-background" /></div><div><label className="mb-2 block text-sm font-semibold">اللون</label><Select value={color} onValueChange={setColor}><SelectTrigger className="h-11 rounded-xl bg-background"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="red">أحمر</SelectItem><SelectItem value="gold">ذهبي</SelectItem><SelectItem value="charcoal">فحمي</SelectItem></SelectContent></Select></div><div><label className="mb-2 block text-sm font-semibold">التاريخ المستهدف</label><Input type="date" value={date} onChange={event => setDate(event.target.value)} className="h-11 rounded-xl bg-background" /></div><div className="flex justify-end gap-2 sm:col-span-2"><Button type="button" variant="outline" onClick={onClose} className="rounded-xl">إلغاء</Button><Button disabled={loading} className="pressable rounded-xl bg-primary">حفظ التعديلات</Button></div></form></section>; }
+function Overview({ icon, value, label }: { icon: React.ReactNode; value: string | number; label: string }) { return <div className="sf-goal-overview"><span className="flex size-11 items-center justify-center rounded-2xl bg-secondary text-primary">{icon}</span><div><p className="num text-2xl font-semibold">{value}</p><p className="mt-1 text-xs text-muted-foreground">{label}</p></div></div>; }
+function EmptyGoals({ onClick }: { onClick: () => void }) { return <div className="sf-goal-empty"><Target className="mb-4 size-10 text-primary/40" /><h3 className="font-bold">امنح يومك وجهة</h3><p className="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">أنشئ هدفًا، ثم اربطه بمهام صغيرة. سيحسب التطبيق نسبة تقدمك تلقائيًا.</p><Button onClick={onClick} className="pressable mt-5 rounded-xl"><Plus className="size-4" />أنشئ أول هدف</Button></div>; }
+function GoalEditForm({ goal, onClose, onSubmit, loading }: { goal: EditableGoal; onClose: () => void; loading: boolean; onSubmit: (data: { title: string; description: string | null; kind: "short" | "long"; category: string; color: string; targetDate: Date | null }) => void }) { const [title, setTitle] = useState(goal.title); const [description, setDescription] = useState(goal.description || ""); const [kind, setKind] = useState<"short" | "long">(goal.kind); const [category, setCategory] = useState(goal.category); const [color, setColor] = useState(goal.color === "violet" ? "charcoal" : goal.color === "teal" ? "red" : goal.color === "sky" || goal.color === "emerald" || goal.color === "amber" ? "gold" : goal.color); const [date, setDate] = useState(goal.targetDate ? new Date(goal.targetDate).toISOString().slice(0, 10) : ""); const submit = (event: FormEvent) => { event.preventDefault(); if (!title.trim()) return toast.error("اكتب عنوان الهدف أولًا."); onSubmit({ title: title.trim(), description: description.trim() || null, kind, category: category.trim() || "شخصي", color, targetDate: date ? new Date(`${date}T12:00:00`) : null }); }; return <section className="sf-goal-form enter app-card mb-6 overflow-hidden border-primary/20"><div className="flex items-center justify-between border-b border-border/65 px-5 py-4"><div><p className="eyebrow">تعديل الهدف</p><h2 className="mt-1 font-bold">حدّث وجهتك وخطتك</h2></div><Button variant="ghost" size="icon" onClick={onClose} className="rounded-xl"><X className="size-4" /></Button></div><form onSubmit={submit} className="grid gap-4 p-5 sm:grid-cols-2"><div className="sm:col-span-2"><label className="mb-2 block text-sm font-semibold">عنوان الهدف</label><Input autoFocus value={title} onChange={event => setTitle(event.target.value)} className="h-11 rounded-xl bg-background" /></div><div className="sm:col-span-2"><label className="mb-2 block text-sm font-semibold">الوصف</label><Textarea value={description} onChange={event => setDescription(event.target.value)} className="min-h-20 rounded-xl bg-background" /></div><div><label className="mb-2 block text-sm font-semibold">مدى الهدف</label><Select value={kind} onValueChange={(value: "short" | "long") => setKind(value)}><SelectTrigger className="h-11 rounded-xl bg-background"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="short">قصير المدى</SelectItem><SelectItem value="long">طويل المدى</SelectItem></SelectContent></Select></div><div><label className="mb-2 block text-sm font-semibold">التصنيف</label><Input value={category} onChange={event => setCategory(event.target.value)} className="h-11 rounded-xl bg-background" /></div><div><label className="mb-2 block text-sm font-semibold">اللون</label><Select value={color} onValueChange={setColor}><SelectTrigger className="h-11 rounded-xl bg-background"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="red">أحمر</SelectItem><SelectItem value="gold">ذهبي</SelectItem><SelectItem value="charcoal">فحمي</SelectItem></SelectContent></Select></div><div><label className="mb-2 block text-sm font-semibold">التاريخ المستهدف</label><Input type="date" value={date} onChange={event => setDate(event.target.value)} className="h-11 rounded-xl bg-background" /></div><div className="flex justify-end gap-2 sm:col-span-2"><Button type="button" variant="outline" onClick={onClose} className="rounded-xl">إلغاء</Button><Button disabled={loading} className="pressable rounded-xl bg-primary">حفظ التعديلات</Button></div></form></section>; }
 
 type GoalStepDraft = { id: string; title: string; estimatedMinutes: number };
 
@@ -204,7 +282,7 @@ function GoalForm({ onClose, onSubmit, loading }: {
   };
 
   return (
-    <section className="enter app-card mb-6 overflow-hidden border-primary/15">
+    <section className="sf-goal-form enter app-card mb-6 overflow-hidden border-primary/15">
       <div className="flex items-center justify-between border-b border-border/65 px-5 py-4">
         <div>
           <p className="eyebrow">وجهة جديدة</p>
