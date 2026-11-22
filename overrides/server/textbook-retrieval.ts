@@ -71,14 +71,36 @@ function normalizeExtractedDocument(value: string): string {
 type PageMarker = { start: number; end: number; pageNumber: number; pageTotal: number };
 
 function findPageMarkers(content: string): PageMarker[] {
+  const normalized = normalizeExtractedDocument(content);
   const markers: PageMarker[] = [];
+  const lines = normalized.split(/\\r?\\n/);
+  let offset = 0;
+
+  for (const line of lines) {
+    const compact = line.replace(/[^A-Z0-9]/gi, "").toUpperCase();
+    if (compact.startsWith("PARSEDTEXTOFPAGE")) {
+      const numbers = line.match(/\\d+/g) ?? [];
+      if (numbers.length >= 2) {
+        markers.push({
+          start: offset,
+          end: offset + line.length,
+          pageNumber: Number(numbers[0]),
+          pageTotal: Number(numbers[1]),
+        });
+      }
+    }
+    offset += line.length + 1;
+  }
+
+  if (markers.length) return markers;
+
+  // Fallback for page markers that were flattened into surrounding text.
   const candidates = /<([^<>]{1,200})>/g;
-  for (const match of content.matchAll(candidates)) {
+  for (const match of normalized.matchAll(candidates)) {
     const inner = (match[1] ?? "")
-      .normalize("NFKC")
-      .replace(/[\p{C}\p{Z}\s]/gu, "")
+      .replace(/[\\p{C}\\p{Z}\\s]/gu, "")
       .toUpperCase();
-    const parsed = /^PARSEDTEXTOFPAGE:(\d+)\/(\d+)$/.exec(inner);
+    const parsed = /^PARSEDTEXTOFPAGE:(\\d+)\\/(\\d+)$/.exec(inner);
     if (!parsed) continue;
     markers.push({
       start: match.index ?? 0,
