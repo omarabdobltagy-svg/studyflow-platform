@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import { useLocation } from "wouter";
+import type { ReactNode } from "react";
 
 const priorityStyle = { high: "sf-priority-high", medium: "sf-priority-medium", low: "sf-priority-low" } as const;
 const priorityLabel = { high: "عالية", medium: "متوسطة", low: "مرنة" } as const;
@@ -189,7 +190,7 @@ export default function Home() {
 }
 
 function MetricTile({ tone, icon, label, value, detail, loading }: {
-  tone: "lilac" | "mint" | "sun" | "blue"; icon: React.ReactNode;
+  tone: "lilac" | "mint" | "sun" | "blue"; icon: ReactNode;
   label: string; value: string | number; detail: string; loading: boolean;
 }) {
   const reduceMotion = useReducedMotion();
@@ -202,7 +203,7 @@ function MetricTile({ tone, icon, label, value, detail, loading }: {
 }
 
 function PanelHeading({ overline, title, description, icon, action }: {
-  overline: string; title: string; description: string; icon: React.ReactNode; action?: React.ReactNode;
+  overline: string; title: string; description: string; icon: ReactNode; action?: ReactNode;
 }) {
   return <div className="sf-panel-heading">
     <span className="sf-panel-heading-icon">{icon}</span>
@@ -211,7 +212,7 @@ function PanelHeading({ overline, title, description, icon, action }: {
   </div>;
 }
 function EmptyState({ icon, title, description, action, onClick }: {
-  icon: React.ReactNode; title: string; description: string; action: string; onClick: () => void;
+  icon: ReactNode; title: string; description: string; action: string; onClick: () => void;
 }) {
   return <div className="sf-empty-state">
     <span>{icon}</span><b>{title}</b><p>{description}</p>
