@@ -857,6 +857,7 @@ export const appRouter = router({
           throw new TRPCError({ code: "BAD_REQUEST", message: "موضع المدرسة غير موجود في فهرس المادة." });
         }
         const selection = (profile.selection ?? {}) as Record<string, any>;
+        const courseProgress = (selection.learningCourseProgress ?? {}) as Record<string, any>;
         const teacherId = input.teacherId ?? selection.teacherChoices?.[input.subjectId] ?? profile.teacherSelections?.[input.subjectId] ?? null;
         if (teacherId && teacherId !== "__SKIP__") {
           const teacher = getSIETeacher(teacherId);
