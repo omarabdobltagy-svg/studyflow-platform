@@ -729,7 +729,7 @@ const ENGLISH_SECTION_TITLES: Record<string, string> = {
  */
 function getOfficialBranch(subjectId: string, choice: SIECheckpointChoice) {
   if (subjectId === "ENG1_G2_BAC") {
-    const section = choice.nodeId.match(/^(ENG_U\\d+_SEC_[AB])/i)?.[1];
+    const section = choice.nodeId.match(/^(ENG_U\d+_SEC_[AB])/i)?.[1];
     if (section) {
       return {
         branchId: section,
@@ -740,11 +740,11 @@ function getOfficialBranch(subjectId: string, choice: SIECheckpointChoice) {
   }
 
   const prefixPattern = subjectId === "PROG_AI_G2_BAC"
-    ? /^(PROG_\\d+)_/
+    ? /^(PROG_\d+)_/
     : subjectId === "ARB_G2_BAC"
-      ? /^(ARB_U\\d+)/
+      ? /^(ARB_U\d+)/
       : subjectId === "HIS_G2_BAC"
-        ? /^(HIS_U\\d+)/
+        ? /^(HIS_U\d+)/
         : null;
   const prefix = prefixPattern ? choice.nodeId.match(prefixPattern)?.[1] : null;
   return {
