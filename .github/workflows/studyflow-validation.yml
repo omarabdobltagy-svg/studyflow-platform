@@ -59,5 +59,15 @@ jobs:
         run: pnpm build
       - name: Apply all MySQL migrations on an isolated database
         run: pnpm db:push
+      - name: Upload generated Drizzle migration artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: studyflow-drizzle-migrations
+          path: |
+            drizzle/*.sql
+            drizzle/meta/*.json
+          if-no-files-found: error
+          retention-days: 1
       - name: Unit tests
         run: pnpm test
