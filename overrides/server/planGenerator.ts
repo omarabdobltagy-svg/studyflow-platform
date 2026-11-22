@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getSIECheckpointChoices, getSIESubject, getSIETeacher } from "@shared/sie-catalog";
+import { getSIECheckpointBranches, getSIECheckpointChoices, getSIESubject, getSIETeacher } from "@shared/sie-catalog";
 import { calculateLearningGap } from "@shared/sie-learning-progress";
 import { invokeLLM } from "./_core/llm";
 import { getStudentProfile, saveAiPlan } from "./db";
@@ -49,66 +49,100 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
   const teacherStates = (selection.teacherProgressState || {}) as Record<string, Record<string, any>>;
   const lessonProgress = (selection.subjectLessonProgress || {}) as Record<string, Record<string, any>>;
   const courseProgress = (selection.learningCourseProgress || {}) as Record<string, any>;
-  const assessmentHistory = Array.isArray(selection.learningAssessments) ? selection.learningAssessments as Array<Record<string, any>> : [];
+  const assessmentHistory = Array.isArray(selection.learningAssessments)
+    ? selection.learningAssessments as Array<Record<string, any>>
+    : [];
+
   const subjectContext = (profile.subjects || []).map(subjectId => {
     const subject = getSIESubject(subjectId);
     const teacherId = choices[subjectId];
     const teacher = teacherId ? getSIETeacher(teacherId) : undefined;
     const state = teacherStates[subjectId] || {};
-    const catalog = getSIECheckpointChoices(subjectId);
     const reported = courseProgress[subjectId] || {};
-    const studentFrontier = reported.lastCompletedLessonId || frontiers[subjectId] || state.studentAttendedFrontier || "";
-    const frontierName = catalog.find(item => item.nodeId === studentFrontier);
-    const learningGap = calculateLearningGap(catalog, {
-      studentFrontierId: studentFrontier || null,
-      teacherTeachingFrontierId: reported.teacherTeachingFrontierId,
-      schoolClassFrontierId: reported.schoolClassFrontierId,
-    });
-    const referenceLabel = learningGap.referenceSource === "teacher" ? "المدرس"
-      : learningGap.referenceSource === "school" ? "المدرسة" : "غير متاح";
-    const referenceLesson = catalog.find(item => item.nodeId === learningGap.referenceFrontierId);
-    const records = lessonProgress[subjectId] || {};
-    const completed = Object.values(records).filter((item: any) => Array.isArray(item.completedSteps) && item.completedSteps.length === 5).length;
-    const underway = Object.values(records).filter((item: any) => Array.isArray(item.completedSteps) && item.completedSteps.length > 0 && item.completedSteps.length < 5).length;
-    const hard = Object.entries(records).filter((entry: any) => entry[1].difficulty === "hard").map((entry: any) => {
-      const lesson = catalog.find(item => item.nodeId === entry[0]);
-      return lesson ? lesson.title : entry[0];
-    });
-    const legacyBacklog = profile.backlog[subjectId] ?? profile.backlog[(subject && subject.nameAr) || ""] ?? null;
-    const backlog = learningGap.gapCount;
-    const lastLesson = catalog.find(item => item.nodeId === studentFrontier);
+    const branchRecords = (reported.branches || {}) as Record<string, Record<string, any>>;
+    const catalog = getSIECheckpointChoices(subjectId);
+    const branches = getSIECheckpointBranches(subjectId);
+    const studentLegacyFrontier = reported.lastCompletedLessonId || frontiers[subjectId] || state.studentAttendedFrontier || null;
+    const subjectLessonRecords = lessonProgress[subjectId] || {};
+
+    const branchSummaries = branches.map(branch => {
+      const saved = branchRecords[branch.branchId] || {};
+      const belongsToBranch = (value: unknown) =>
+        typeof value === "string" &&
+        (value === "__UNKNOWN__" || value === "__NOT_STARTED__" ||
+          branch.choices.some(choice => choice.nodeId === value));
+      const latestSq3rCompleted = [...branch.choices].reverse().find(choice => {
+        const completedSteps = subjectLessonRecords[choice.nodeId]?.completedSteps;
+        return Array.isArray(completedSteps) && completedSteps.length === 5;
+      })?.nodeId;
+      const studentFrontier = Object.prototype.hasOwnProperty.call(saved, "lastCompletedLessonId")
+        ? saved.lastCompletedLessonId
+        : belongsToBranch(studentLegacyFrontier) ? studentLegacyFrontier : latestSq3rCompleted ?? "__UNKNOWN__";
+      const teacherFrontier = Object.prototype.hasOwnProperty.call(saved, "teacherTeachingFrontierId")
+        ? saved.teacherTeachingFrontierId
+        : belongsToBranch(reported.teacherTeachingFrontierId) ? reported.teacherTeachingFrontierId : "__UNKNOWN__";
+      const schoolFrontier = Object.prototype.hasOwnProperty.call(saved, "schoolClassFrontierId")
+        ? saved.schoolClassFrontierId
+        : belongsToBranch(reported.schoolClassFrontierId) ? reported.schoolClassFrontierId : "__UNKNOWN__";
+      const gap = calculateLearningGap(branch.choices, {
+        studentFrontierId: studentFrontier,
+        teacherTeachingFrontierId: teacherFrontier,
+        schoolClassFrontierId: schoolFrontier,
+      });
+      const referenceLabel = gap.referenceSource === "teacher" ? "المدرس"
+        : gap.referenceSource === "school" ? "المدرسة" : "غير متاح";
+      const studentLabel = branch.choices.find(choice => choice.nodeId === studentFrontier)?.title
+        || (studentFrontier === "__NOT_STARTED__" ? "لم يبدأ بعد" : "غير محدد");
+      const referenceLabelTitle = branch.choices.find(choice => choice.nodeId === gap.referenceFrontierId)?.title
+        || (gap.referenceFrontierId === "__NOT_STARTED__" ? "لم يبدأ بعد" : "غير محدد");
+      const records = branch.choices.map(choice => subjectLessonRecords[choice.nodeId]).filter(Boolean);
+      const completed = records.filter((item: any) => Array.isArray(item.completedSteps) && item.completedSteps.length === 5).length;
+      const underway = records.filter((item: any) => Array.isArray(item.completedSteps) && item.completedSteps.length > 0 && item.completedSteps.length < 5).length;
+      const hard = branch.choices.filter(choice => subjectLessonRecords[choice.nodeId]?.difficulty === "hard").map(choice => choice.title);
+
+      return [
+        "الفرع الرسمي: " + branch.branchTitle,
+        "موضع الطالب: " + studentLabel,
+        "مرجع المقارنة: " + referenceLabel + " — " + referenceLabelTitle,
+        "الفجوة داخل هذا الفرع فقط: " + (gap.gapCount === null
+          ? "غير محسوبة لعدم اكتمال البيانات داخل الفرع"
+          : gap.gapCount + " درسًا؛ متقدم عن المرجع: " + (gap.aheadCount ?? 0)),
+        "إنجاز SQ3R في الفرع: " + completed + " مكتمل؛ " + underway + " قيد الدراسة",
+        "نقاط صعبة: " + (hard.join("، ") || "لا توجد بيانات"),
+      ].join(" | ");
+    }).join("\n");
+
     const recentAssessments = assessmentHistory.filter(item => item.subjectId === subjectId).slice(-5);
     const assessmentSummary = recentAssessments.map(item =>
       String(item.assessmentType || "تقييم") + ": " + String(item.scorePercent) + "%"
-      + (Array.isArray(item.weakConcepts) && item.weakConcepts.length ? "؛ نقاط تحتاج تقوية: " + item.weakConcepts.join("، ") : "")
+      + (Array.isArray(item.weakConcepts) && item.weakConcepts.length
+        ? "؛ نقاط تحتاج تقوية: " + item.weakConcepts.join("، ") : "")
     ).join(" | ");
-    const lessonList = catalog.map(item => item.unitTitle + " / " + item.title).join("؛ ");
+    const legacyBacklog = profile.backlog[subjectId] ?? (subject && profile.backlog[subject.nameAr]) ?? null;
+    const lessonList = branches.map(branch =>
+      branch.branchTitle + ": " + branch.choices.map(choice => choice.title).join("، ")
+    ).join("؛ ");
+
     return [
       "المادة: " + ((subject && subject.nameAr) || subjectId),
-      "مصدر المرجع المختار لحساب الفجوة: " + referenceLabel,
-      "موضع المدرس الذي رصده الطالب (إن توفر): " + (learningGap.referenceSource === "teacher" ? (referenceLesson?.title || reported.teacherTeachingFrontierId) : "غير مستخدم"),
-      "موضع الفصل في المدرسة الذي أبلغ عنه الطالب: " + (reported.schoolClassFrontierId === "__NOT_STARTED__" ? "لم يبدأ الفصل بعد" : catalog.find(item => item.nodeId === reported.schoolClassFrontierId)?.title || "غير معروف"),
-      "آخر درس أتمه الطالب في المنهج: " + (lastLesson ? lastLesson.unitTitle + " / " + lastLesson.title : reported.lastCompletedLessonId || "غير محدد"),
-      "الفجوة المحسوبة تلقائيًا: " + (backlog === null ? "غير محسوبة لعدم توفر موضع مرجعي أو موضع للطالب" : backlog + " درسًا؛ المتقدم على المرجع: " + (learningGap.aheadCount ?? 0)),
-      "التراكم القديم المسجل يدويًا (لا يُعامل كفجوة مؤكدة): " + (legacyBacklog === null ? "لا يوجد" : legacyBacklog),
+      "تقدم كل فرع مستقل (ممنوع جمع فجوات الفروع أو مقارنة موضع من فرع بفرع آخر):\n" + (branchSummaries || "الفهرس غير متاح"),
+      "التراكم القديم المسجل يدويًا (غير مؤكد ولا يحل محل الفجوات الفرعية): " + (legacyBacklog === null ? "لا يوجد" : legacyBacklog),
       "آخر محاضرة/عنصر في كورس المدرس كما أبلغ الطالب: " + (reported.teacherCourseFrontier || "غير محدد"),
-      "الوقت التقديري للدرس: " + (reported.estimatedMinutesPerLesson ?? "غير محدد") + " دقيقة",
+      "الوقت التقديري للدرس: " + (reported.estimatedMinutesPerLesson ?? 45) + " دقيقة",
       "صعوبة المادة حسب الطالب: " + (reported.difficulty || "غير محددة"),
       "نتائج التقييمات الحديثة: " + (assessmentSummary || "لا توجد نتائج مسجلة"),
       "المدرس المختار: " + ((teacher && teacher.nameAr) || teacherId || "لم يحدد"),
-      "أحدث محتوى عام معروف للمدرس: " + ((teacher && teacher.latestPublicCheckpoint) || "غير متاح"),
-      "الموضع الذي أبلغ الطالب أنه وصل إليه: " + ((frontierName && frontierName.title) || studentFrontier || "غير محدد"),
-      "مصدر/ثقة تقرير الطالب: " + (state.evidenceSource || "تقرير الطالب") + " / " + (state.confidence || "غير محددة"),
+      "أحدث محتوى عام معروف للمدرس (ليس مرجع تقدم مدفوع): " + ((teacher && teacher.latestPublicCheckpoint) || "غير متاح"),
       "فهرس الكورس المدفوع: " + ((teacher && teacher.paidCourseCatalogFrontier) ? JSON.stringify(teacher.paidCourseCatalogFrontier) : "غير موثق"),
-      "دروس المنهج: " + (lessonList || "فهرس المنهج غير محمّل"),
-      "دروس أُنجزت SQ3R: " + completed + "؛ قيد الدراسة: " + underway + "؛ صعبة حسب تقييم الطالب: " + (hard.join("، ") || "لا توجد بيانات"),
+      "دروس المنهج بحسب الفروع: " + (lessonList || "فهرس المنهج غير محمّل"),
     ].join("\n");
   }).join("\n\n");
+
   return [
     "اسم الطالب: " + profile.studentName,
     "النظام: " + profile.educationSystem + "؛ الصف: " + profile.gradeYear + "؛ المسار: " + profile.track,
     "المواد ومواضعها: \n" + (subjectContext || "لا توجد مواد مسجلة"),
-    "قيم التراكم المحفوظة (تُفضّل الفجوة المحسوبة عند توفر المرجع): " + Object.entries(profile.backlog).map(entry => entry[0] + ": " + entry[1]).join("، "),
+    "قيم التراكم القديمة (تُعامل كمدخلات غير مؤكدة فقط): " + Object.entries(profile.backlog).map(entry => entry[0] + ": " + entry[1]).join("، "),
     "العائق المعلن: " + (profile.obstacle || "غير محدد"),
   ].join("\n");
 }
