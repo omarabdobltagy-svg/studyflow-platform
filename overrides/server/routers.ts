@@ -775,7 +775,7 @@ export const appRouter = router({
           (allowUnknown && value === "__UNKNOWN__")
           || value === "__NOT_STARTED__"
           || choices.some(lesson => lesson.nodeId === value);
-        if (input.lastCompletedLessonId && !isAllowedFrontier(input.lastCompletedLessonId, false)) {
+        if (input.lastCompletedLessonId && !isAllowedFrontier(input.lastCompletedLessonId, true)) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "موضع الطالب غير موجود في فهرس المادة." });
         }
         if (!isAllowedFrontier(input.teacherTeachingFrontierId, true)) {
@@ -823,6 +823,9 @@ export const appRouter = router({
         };
         await updateStudentLearningBaseline(ctx.user.id, {
           backlog: learningGap.gapCount === null ? {} : { [input.subjectId]: learningGap.gapCount },
+          removeBacklogKeys: learningGap.gapCount === null
+            ? [input.subjectId, getSIESubject(input.subjectId)?.nameAr ?? ""].filter(Boolean)
+            : [],
           obstacle: input.obstacle,
         });
         const latestProfile = await getStudentProfile(ctx.user.id);
