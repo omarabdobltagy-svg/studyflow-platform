@@ -68,6 +68,46 @@ export default function DashboardLayout({ title, description, children, action }
     }
   }, [location, setLocation, studentProfile.data, studentProfile.isSuccess, user]);
 
+  useEffect(() => {
+    const root = document.querySelector<HTMLElement>(".sf-main");
+    if (!root) return;
+
+    const targets = Array.from(root.querySelectorAll<HTMLElement>(
+      ":scope > section, :scope > div, .sf-main .app-card",
+    ));
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    targets.forEach((target, index) => {
+      target.classList.add("sf-reveal");
+      target.style.setProperty("--sf-reveal-delay", `${Math.min(index * 45, 225)}ms`);
+    });
+
+    if (reducedMotion || !("IntersectionObserver" in window)) {
+      targets.forEach(target => target.classList.add("sf-visible"));
+      return () => targets.forEach(target => {
+        target.classList.remove("sf-reveal", "sf-visible");
+        target.style.removeProperty("--sf-reveal-delay");
+      });
+    }
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add("sf-visible");
+        observer.unobserve(entry.target);
+      });
+    }, { threshold: 0.12, rootMargin: "0px 0px -5% 0px" });
+
+    targets.forEach(target => observer.observe(target));
+    return () => {
+      observer.disconnect();
+      targets.forEach(target => {
+        target.classList.remove("sf-reveal", "sf-visible");
+        target.style.removeProperty("--sf-reveal-delay");
+      });
+    };
+  }, [location, user]);
+
   if (loading) return (
     <div className="sf-auth-screen min-h-screen p-4 sm:p-8">
       <div className="sf-auth-frame mx-auto flex min-h-[calc(100vh-2rem)] max-w-5xl items-center justify-center p-8">
