@@ -31,7 +31,7 @@ const SOURCES: Record<string, BookSource> = {
   },
   HIS_G2_BAC: {
     title: "كتاب التاريخ الوطني - البكالوريا المصرية - الصف الثاني - الجزء الأول",
-    files: ["history-part1.txt"],
+    files: ["history-part1.txt", "history-part2.txt"],
     coverage: "full_text_part_1",
   },
   PROG_AI_G2_BAC: {
