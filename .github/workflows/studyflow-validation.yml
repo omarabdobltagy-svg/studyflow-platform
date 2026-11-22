@@ -117,10 +117,15 @@ jobs:
           DEALLOCATE PREPARE studyflow_users_phone_stmt;
           --> statement-breakpoint""",
           }
+          existing_guards = {
+              "ALTER TABLE `studentProfiles` ADD `selectionJson` text;--> statement-breakpoint": "@studyflow_has_selection_json",
+              "ALTER TABLE `users` ADD `phone` varchar(20);--> statement-breakpoint": "@studyflow_has_users_phone",
+          }
           for old, replacement in replacements.items():
-              if old not in sql:
-                  raise SystemExit(f"Expected schema-drift statement missing in {migration.name}: {old}")
-              sql = sql.replace(old, replacement, 1)
+              if old in sql:
+                  sql = sql.replace(old, replacement, 1)
+              elif existing_guards[old] not in sql:
+                  raise SystemExit(f"Expected schema-drift statement or its idempotent guard missing in {migration.name}")
           migration.write_text(sql)
 
           overlay = Path("overrides/drizzle")
