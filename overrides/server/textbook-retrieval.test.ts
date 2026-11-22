@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   formatTextbookEvidence,
   rankTextbookPassages,
+  retrieveTextbookEvidence,
   splitTextbookPages,
 } from "./textbook-retrieval";
 
@@ -39,5 +40,29 @@ describe("textbook page retrieval", () => {
     const formatted = formatTextbookEvidence({ passages: result, coverageNotes: [] });
     expect(formatted).toContain("كتاب التاريخ الوطني");
     expect(formatted).toContain("صفحة PDF الفعلية: 3");
+  });
+});
+
+
+describe("uploaded official textbook corpus", () => {
+  it("retrieves a page from the uploaded National History Part 1 source", () => {
+    const result = retrieveTextbookEvidence(
+      ["HIS_G2_BAC"],
+      "بناء الدولة المصرية واستمرارها عبر التاريخ",
+      3,
+    );
+    expect(result.passages.length).toBeGreaterThan(0);
+    expect(result.passages.every(item => item.sourceFile.includes("history-part1"))).toBe(true);
+    expect(result.passages.some(item => item.bookTitle.includes("التاريخ الوطني") && item.pdfPage > 0)).toBe(true);
+  });
+
+  it("retrieves a page from Programming and AI Part 2", () => {
+    const result = retrieveTextbookEvidence(
+      ["PROG_AI_G2_BAC"],
+      "الشبكات العصبية والتعلم العميق",
+      3,
+    );
+    expect(result.passages.length).toBeGreaterThan(0);
+    expect(result.passages.every(item => item.sourceFile.includes("programming-part2"))).toBe(true);
   });
 });
