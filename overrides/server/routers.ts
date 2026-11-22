@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { randomUUID, timingSafeEqual } from "node:crypto";
+import type { User } from "../drizzle/schema";
 import { SignJWT } from "jose";
 import { TRPCError } from "@trpc/server";
 import { COOKIE_NAME } from "@shared/const";
@@ -24,6 +25,9 @@ import {
   deleteTask,
   deleteCalendarEvent,
   ensureLocalAuthUser,
+  createLocalStudentAccount,
+  getLocalStudentAuthByUsername,
+  updateUserLastSignedIn,
   getBookDetail,
   getDashboard,
   getLibraryAttachmentForDownload,
@@ -55,6 +59,8 @@ import {
   undoTaskChange,
 } from "./db";
 import { getSessionCookieOptions } from "./_core/cookies";
+import type { TrpcContext } from "./_core/context";
+import { hashStudentPassword, normalizeStudentUsername, verifyStudentPassword } from "./local-auth";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { generatePersonalPlan } from "./planGenerator";
@@ -87,6 +93,37 @@ function getLoginAttemptBucket(ip: string, now: number) {
     loginAttempts.set(ip, bucket);
   }
   return bucket;
+}
+
+function getAuthIp(ctx: TrpcContext) {
+  return ctx.req.ip || ctx.req.socket.remoteAddress || "unknown";
+}
+
+function hasUniqueUsernameViolation(error: unknown) {
+  const candidate = error as {
+    code?: string;
+    message?: string;
+    cause?: { code?: string; message?: string };
+  };
+  return candidate?.code === "ER_DUP_ENTRY"
+    || candidate?.cause?.code === "ER_DUP_ENTRY"
+    || /duplicate entry/i.test(candidate?.message || candidate?.cause?.message || "");
+}
+
+async function issueLocalSession(ctx: TrpcContext, user: User, sessionSecret: string) {
+  const token = await new SignJWT({})
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject(user.openId)
+    .setIssuer(LOCAL_SESSION_ISSUER)
+    .setAudience(LOCAL_SESSION_AUDIENCE)
+    .setIssuedAt()
+    .setExpirationTime("30d")
+    .sign(new TextEncoder().encode(sessionSecret));
+
+  ctx.res.cookie(COOKIE_NAME, token, {
+    ...getSessionCookieOptions(ctx.req),
+    maxAge: LOCAL_SESSION_MS,
+  });
 }
 
 const dateInput = z.coerce.date().nullable().optional();
@@ -133,56 +170,110 @@ export const appRouter = router({
         password: z.string().min(1).max(160),
       }))
       .mutation(async ({ ctx, input }) => {
-        const expectedUsername = process.env.APP_LOGIN_USERNAME?.trim();
-        const expectedPassword = process.env.APP_LOGIN_PASSWORD;
         const sessionSecret = process.env.APP_SESSION_SECRET;
-        if (!expectedUsername || !expectedPassword || !sessionSecret) {
+        if (!sessionSecret) {
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "تسجيل الدخول غير مُهيأ على الخادم." });
         }
 
-        const ip = ctx.req.ip || ctx.req.socket.remoteAddress || "unknown";
+        const ip = getAuthIp(ctx);
         const bucket = getLoginAttemptBucket(ip, Date.now());
         if (bucket.count >= 5) {
           throw new TRPCError({ code: "FORBIDDEN", message: "محاولات كثيرة. انتظر 15 دقيقة ثم حاول مرة أخرى." });
         }
 
-        const validUsername = secureStringEqual(input.username, expectedUsername);
-        const validPassword = secureStringEqual(input.password, expectedPassword);
-        if (!validUsername || !validPassword) {
+        const expectedOwnerUsername = process.env.APP_LOGIN_USERNAME?.trim();
+        const expectedOwnerPassword = process.env.APP_LOGIN_PASSWORD;
+        const isOwnerAttempt = Boolean(
+          expectedOwnerUsername
+          && expectedOwnerPassword
+          && secureStringEqual(input.username.trim(), expectedOwnerUsername)
+        );
+
+        let user: User | undefined;
+        if (isOwnerAttempt) {
+          if (!secureStringEqual(input.password, expectedOwnerPassword!)) {
+            bucket.count += 1;
+            throw new TRPCError({ code: "UNAUTHORIZED", message: "اسم المستخدم أو كلمة المرور غير صحيحة." });
+          }
+
+          try {
+            user = await ensureLocalAuthUser(expectedOwnerUsername!);
+          } catch (error) {
+            if (error instanceof Error && error.message === "MULTIPLE_EXISTING_USERS") {
+              throw new TRPCError({
+                code: "CONFLICT",
+                message: "وجدنا أكثر من حساب محفوظ. لم ندمج الحسابات أو ننقل البيانات تلقائيًا.",
+              });
+            }
+            console.error("[Local Auth] Could not prepare the owner account", error);
+            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "تعذّر تجهيز حساب الإدارة. لم يتم حذف أي بيانات." });
+          }
+        } else {
+          try {
+            const account = await getLocalStudentAuthByUsername(normalizeStudentUsername(input.username));
+            if (account && await verifyStudentPassword(input.password, account.passwordHash)) {
+              user = account.user;
+              await updateUserLastSignedIn(user.id);
+            }
+          } catch (error) {
+            console.error("[Local Auth] Student sign-in lookup failed", error);
+            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "تعذّر التحقق من الحساب الآن." });
+          }
+        }
+
+        if (!user) {
           bucket.count += 1;
           throw new TRPCError({ code: "UNAUTHORIZED", message: "اسم المستخدم أو كلمة المرور غير صحيحة." });
         }
+
         loginAttempts.delete(ip);
-
-        let user;
-        try {
-          user = await ensureLocalAuthUser(expectedUsername);
-        } catch (error) {
-          if (error instanceof Error && error.message === "MULTIPLE_EXISTING_USERS") {
-            throw new TRPCError({
-              code: "CONFLICT",
-              message: "وجدنا أكثر من حساب محفوظ. لم ندمج الحسابات أو ننقل البيانات تلقائيًا.",
-            });
-          }
-          console.error("[Local Auth] Could not prepare the local user", error);
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "تعذّر تجهيز حسابك. لم يتم حذف أي بيانات." });
-        }
-
-        const token = await new SignJWT({})
-          .setProtectedHeader({ alg: "HS256" })
-          .setSubject(LOCAL_AUTH_OPEN_ID)
-          .setIssuer(LOCAL_SESSION_ISSUER)
-          .setAudience(LOCAL_SESSION_AUDIENCE)
-          .setIssuedAt()
-          .setExpirationTime("30d")
-          .sign(new TextEncoder().encode(sessionSecret));
-
-        ctx.res.cookie(COOKIE_NAME, token, {
-          ...getSessionCookieOptions(ctx.req),
-          maxAge: LOCAL_SESSION_MS,
-        });
+        await issueLocalSession(ctx, user, sessionSecret);
         return user;
       }),
+
+    register: publicProcedure
+      .input(z.object({
+        username: z.string().trim().min(4).max(32).regex(
+          /^[A-Za-z0-9][A-Za-z0-9._-]{3,31}$/,
+          "اسم المستخدم يجب أن يكون من 4 إلى 32 حرفًا إنجليزيًا أو رقمًا، ويمكن استخدام النقطة والشرطة والشرطة السفلية."
+        ),
+        password: z.string().min(10).max(128),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const sessionSecret = process.env.APP_SESSION_SECRET;
+        if (!sessionSecret) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "إنشاء الحساب غير مُهيأ على الخادم." });
+        }
+
+        const ip = getAuthIp(ctx);
+        const bucket = getLoginAttemptBucket(ip, Date.now());
+        if (bucket.count >= 5) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "محاولات كثيرة. انتظر 15 دقيقة ثم حاول مرة أخرى." });
+        }
+
+        const normalizedUsername = normalizeStudentUsername(input.username);
+        const expectedOwnerUsername = process.env.APP_LOGIN_USERNAME?.trim();
+        if (expectedOwnerUsername && normalizedUsername === normalizeStudentUsername(expectedOwnerUsername)) {
+          throw new TRPCError({ code: "CONFLICT", message: "اسم المستخدم غير متاح." });
+        }
+
+        let user: User;
+        try {
+          const passwordHash = await hashStudentPassword(input.password);
+          user = await createLocalStudentAccount(input.username, passwordHash);
+        } catch (error) {
+          if (hasUniqueUsernameViolation(error)) {
+            throw new TRPCError({ code: "CONFLICT", message: "اسم المستخدم مستخدم بالفعل. اختر اسمًا آخر." });
+          }
+          console.error("[Local Auth] Student registration failed", error);
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "تعذّر إنشاء الحساب الآن. لم يتم إنشاء حساب جزئي." });
+        }
+
+        loginAttempts.delete(ip);
+        await issueLocalSession(ctx, user, sessionSecret);
+        return user;
+      }),
+
     me: publicProcedure.query(opts => opts.ctx.user ?? null),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);

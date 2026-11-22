@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   aiPlans,
@@ -12,6 +13,7 @@ import {
   routineItems,
   routines,
   studentProfiles,
+  studentAuthCredentials,
   studySessions,
   taskChangeLogs,
   tasks,
@@ -188,9 +190,9 @@ export async function upsertUser(user: InsertUser): Promise<void> {
 
 
 /**
- * Creates the single local StudyFlow account, or adopts the only existing user row.
- * Reusing the existing row preserves every study record linked by userId.
- * If multiple identities exist, refuse to guess which account owns the data.
+ * Keeps the legacy owner identity separate from student identities.
+ * The only legacy non-student row may be adopted to preserve its linked data.
+ * Student rows are identified by their credentials and are never promoted to admin.
  */
 export async function ensureLocalAuthUser(name: string) {
   const db = await requireDb();
@@ -205,20 +207,28 @@ export async function ensureLocalAuthUser(name: string) {
       lastSignedIn: new Date(),
     }).where(eq(users.id, localRows[0].id));
   } else {
-    const existingRows = await db.select().from(users).orderBy(asc(users.id)).limit(2);
-    if (existingRows.length > 1) {
+    const [existingRows, credentialRows] = await Promise.all([
+      db.select().from(users).orderBy(asc(users.id)),
+      db.select({ userId: studentAuthCredentials.userId }).from(studentAuthCredentials),
+    ]);
+    const studentUserIds = new Set(credentialRows.map(row => row.userId));
+    const legacyCandidates = existingRows.filter(row => !studentUserIds.has(row.id));
+
+    if (legacyCandidates.length > 1) {
       throw new Error("MULTIPLE_EXISTING_USERS");
     }
-    if (existingRows.length === 1) {
-      // Keep the existing user id so profiles, tasks, books and other records remain linked.
+
+    if (legacyCandidates.length === 1) {
+      // Keep the legacy user id so profiles, tasks, books and linked records remain intact.
       await db.update(users).set({
         openId,
         name,
         loginMethod: "local",
         role: "admin",
         lastSignedIn: new Date(),
-      }).where(eq(users.id, existingRows[0].id));
+      }).where(eq(users.id, legacyCandidates[0].id));
     } else {
+      // Student identities may already exist. Create the owner as a separate admin row.
       await db.insert(users).values({
         openId,
         name,
@@ -232,6 +242,55 @@ export async function ensureLocalAuthUser(name: string) {
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
   if (!result[0]) throw new Error("LOCAL_USER_CREATION_FAILED");
   return result[0];
+}
+
+/** Create an isolated local student identity. The caller provides a one-way password hash. */
+export async function createLocalStudentAccount(username: string, passwordHash: string) {
+  const db = await requireDb();
+  const normalizedUsername = username.trim().toLowerCase();
+  const openId = `studyflow-student-${randomUUID()}`;
+  const now = new Date();
+
+  return db.transaction(async tx => {
+    await tx.insert(users).values({
+      openId,
+      name: username.trim(),
+      loginMethod: "local_student",
+      role: "user",
+      lastSignedIn: now,
+    });
+    const rows = await tx.select().from(users).where(eq(users.openId, openId)).limit(1);
+    const user = rows[0];
+    if (!user) throw new Error("LOCAL_STUDENT_USER_CREATION_FAILED");
+
+    await tx.insert(studentAuthCredentials).values({
+      userId: user.id,
+      username: username.trim(),
+      normalizedUsername,
+      passwordHash,
+    });
+    return user;
+  });
+}
+
+/** Returns only the student identity and password hash needed for authentication. */
+export async function getLocalStudentAuthByUsername(normalizedUsername: string) {
+  const db = await requireDb();
+  const rows = await db
+    .select({
+      user: users,
+      passwordHash: studentAuthCredentials.passwordHash,
+    })
+    .from(studentAuthCredentials)
+    .innerJoin(users, eq(studentAuthCredentials.userId, users.id))
+    .where(eq(studentAuthCredentials.normalizedUsername, normalizedUsername))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function updateUserLastSignedIn(userId: number) {
+  const db = await requireDb();
+  await db.update(users).set({ lastSignedIn: new Date() }).where(eq(users.id, userId));
 }
 
 export async function getUserByOpenId(openId: string) {

@@ -36,6 +36,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.ref || github.ref }}
+          persist-credentials: true
       - name: Extract application source and apply overlays
         run: |
           tar -xf studyflow-source.tar -C .
@@ -59,5 +63,15 @@ jobs:
         run: pnpm build
       - name: Apply all MySQL migrations on an isolated database
         run: pnpm db:push
+      - name: Upload generated Drizzle migration artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: studyflow-drizzle-migrations
+          path: |
+            overrides/drizzle/*.sql
+            overrides/drizzle/meta/*.json
+          if-no-files-found: error
+          retention-days: 1
       - name: Unit tests
         run: pnpm test

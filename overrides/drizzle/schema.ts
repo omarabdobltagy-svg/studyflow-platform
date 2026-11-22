@@ -25,6 +25,24 @@ export const users = mysqlTable("users", {
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
 });
 
+/** بيانات دخول الطالب المحلية؛ كلمات المرور تحفظ كـhash فقط. */
+export const studentAuthCredentials = mysqlTable(
+  "studentAuthCredentials",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+    username: varchar("username", { length: 32 }).notNull(),
+    normalizedUsername: varchar("normalizedUsername", { length: 32 }).notNull(),
+    passwordHash: varchar("passwordHash", { length: 255 }).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [
+    uniqueIndex("student_auth_user_id_idx").on(table.userId),
+    uniqueIndex("student_auth_username_idx").on(table.normalizedUsername),
+  ]
+);
+
 export const studentProfiles = mysqlTable(
   "studentProfiles",
   {
