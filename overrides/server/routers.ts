@@ -729,10 +729,13 @@ export const appRouter = router({
       if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "أكمل ملفك الدراسي أولًا." });
       const selection = (profile.selection ?? {}) as Record<string, any>;
       const courseProgress = (selection.learningCourseProgress ?? {}) as Record<string, any>;
+      const legacyTeacherFrontiers = (selection.teacherFrontiers ?? {}) as Record<string, string>;
+      const legacyTeacherState = (selection.teacherProgressState ?? {}) as Record<string, Record<string, any>>;
       const gapBySubject = Object.fromEntries(profile.subjects.map(subjectId => {
         const record = courseProgress[subjectId] ?? {};
+        const legacyStudentFrontier = legacyTeacherFrontiers[subjectId] || legacyTeacherState[subjectId]?.studentAttendedFrontier;
         return [subjectId, calculateLearningGap(getSIECheckpointChoices(subjectId), {
-          studentFrontierId: record.lastCompletedLessonId,
+          studentFrontierId: record.lastCompletedLessonId || legacyStudentFrontier,
           teacherTeachingFrontierId: record.teacherTeachingFrontierId,
           schoolClassFrontierId: record.schoolClassFrontierId,
         })];
