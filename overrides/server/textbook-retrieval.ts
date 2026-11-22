@@ -113,6 +113,33 @@ export function splitTextbookPages(
   }).filter(page => page.text.length >= 40);
 }
 
+export function inspectTextbookIndex(subjectId: string): {
+  sourceRoot: string;
+  files: Array<{ file: string; exists: boolean; bytes: number; markerCount: number }>;
+  pageCount: number;
+  indexedCharacters: number;
+} {
+  const source = SOURCES[subjectId];
+  if (!source) return { sourceRoot: ROOT, files: [], pageCount: 0, indexedCharacters: 0 };
+  const files = source.files.map(file => {
+    const fullPath = join(ROOT, file);
+    const content = readFileSync(fullPath, "utf8");
+    return {
+      file,
+      exists: true,
+      bytes: Buffer.byteLength(content, "utf8"),
+      markerCount: [...content.matchAll(/<PARSED TEXT OF PAGE:\\s*\\d+\\s*\\/\\s*\\d+>/g)].length,
+    };
+  });
+  const pages = loadPages(subjectId);
+  return {
+    sourceRoot: ROOT,
+    files,
+    pageCount: pages.length,
+    indexedCharacters: pages.reduce((total, page) => total + page.text.length, 0),
+  };
+}
+
 function loadPages(subjectId: string): TextbookPage[] {
   if (pageCache.has(subjectId)) return pageCache.get(subjectId)!;
   const source = SOURCES[subjectId];
