@@ -123,7 +123,7 @@
   }
   button:not(:disabled), [role="button"]:not([aria-disabled="true"]), [type="button"]:not(:disabled), [type="submit"]:not(:disabled), [type="reset"]:not(:disabled), a[href], select:not(:disabled), input[type="checkbox"]:not(:disabled), input[type="radio"]:not(:disabled) { @apply cursor-pointer; }
   :where(button, a, input, textarea, select, [role="button"], [tabindex]):focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
-  ::selection { background: oklch(0.76 0.12 298 / 55%); color: oklch(0.21 0.05 289); }
+  ::selection { background: color-mix(in oklab, var(--sf-gold, #dfb64e) 42%, transparent); color: var(--foreground); }
 }
 
 @layer components {
@@ -166,7 +166,7 @@
   @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
   @keyframes float-orb { 0%, 100% { transform: translate3d(0, 0, 0) scale(1); } 50% { transform: translate3d(12px, 10px, 0) scale(1.05); } }
   .app-card { transition: box-shadow 180ms ease, border-color 180ms ease; }
-  .app-card:hover { border-color: color-mix(in oklab, var(--primary) 24%, var(--border)); box-shadow: 0 12px 28px -22px rgba(45,37,92,.32); }
+  .app-card:hover { border-color: color-mix(in oklab, var(--primary) 24%, var(--border)); box-shadow: 0 12px 28px -22px rgba(23,22,19,.30); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -212,17 +212,6 @@
 }
 
 
-/* StudyFlow signature system: charcoal structure, gold action, saturated red signal. */
-:root {
-  --studyflow-charcoal: #171613;
-  --studyflow-gold: #e0b23f;
-  --studyflow-red: #c9233b;
-}
-.dark .app-card { box-shadow: 0 16px 40px -32px rgba(0, 0, 0, .72); }
-.teacher-choice-card[aria-pressed="true"],
-button[aria-current="page"] { box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--primary) 36%, transparent); }
-
-
 /* Learning intelligence surfaces: depth, restrained glow and motion-safe transitions. */
 .learning-progress-panel {
   position: relative;
@@ -264,89 +253,96 @@ button[aria-current="page"] { box-shadow: inset 0 0 0 1px color-mix(in oklab, va
 }
 
 
-/* StudyFlow brand foundation: charcoal surfaces, red action, metallic gold detail. */
+/* StudyFlow semantic palette. Keep one source of truth:
+   charcoal defines structure, red defines primary actions, gold is a restrained accent.
+   Success/warning/error remain status colors, not decorative brand colors. */
 :root {
-  --studyflow-charcoal: #171613;
-  --studyflow-charcoal-soft: #211f1a;
-  --studyflow-red: #c9233b;
-  --studyflow-gold: #e0b23f;
-  --studyflow-gold-light: #f1d27a;
-}
-.dark {
-  --background: oklch(0.145 0.012 50);
-  --foreground: oklch(0.94 0.01 80);
-  --card: oklch(0.195 0.014 52);
-  --card-foreground: oklch(0.94 0.01 80);
-  --popover: oklch(0.215 0.015 52);
-  --popover-foreground: oklch(0.94 0.01 80);
-  --primary: oklch(0.62 0.22 25);
+  --sf-charcoal: #171613;
+  --sf-charcoal-raised: #211f1a;
+  --sf-red: #c9233b;
+  --sf-red-hover: #a91d32;
+  --sf-gold: #dfb64e;
+  --sf-gold-light: #f0d58b;
+
+  --background: oklch(0.97 0.006 80);
+  --foreground: oklch(0.19 0.014 55);
+  --card: oklch(0.995 0.002 80);
+  --card-foreground: oklch(0.19 0.014 55);
+  --popover: oklch(0.995 0.002 80);
+  --popover-foreground: oklch(0.19 0.014 55);
+  --primary: oklch(0.53 0.19 25);
   --primary-foreground: oklch(0.985 0.006 80);
-  --secondary: oklch(0.245 0.015 52);
-  --secondary-foreground: oklch(0.92 0.01 80);
-  --muted: oklch(0.225 0.014 52);
-  --muted-foreground: oklch(0.7 0.012 76);
-  --accent: oklch(0.77 0.15 82);
-  --accent-foreground: oklch(0.15 0.015 50);
-  --ring: oklch(0.62 0.22 25);
-  --sidebar: oklch(0.115 0.01 50);
-  --sidebar-foreground: oklch(0.94 0.01 80);
-  --sidebar-primary: oklch(0.77 0.15 82);
-  --sidebar-primary-foreground: oklch(0.15 0.015 50);
-  --sidebar-accent: oklch(0.22 0.016 50);
-  --sidebar-accent-foreground: oklch(0.94 0.01 80);
-  --sidebar-ring: oklch(0.77 0.15 82);
-  --chart-1: oklch(0.62 0.22 25);
-  --chart-2: oklch(0.77 0.15 82);
-  color-scheme: dark;
-}
-:root {
-  --primary: oklch(0.54 0.205 25);
-  --primary-foreground: oklch(0.985 0.006 80);
-  --accent: oklch(0.72 0.15 82);
-  --accent-foreground: oklch(0.17 0.018 55);
-  --ring: oklch(0.54 0.205 25);
+  --secondary: oklch(0.935 0.012 78);
+  --secondary-foreground: oklch(0.22 0.014 55);
+  --muted: oklch(0.945 0.006 78);
+  --muted-foreground: oklch(0.48 0.014 55);
+  --accent: oklch(0.87 0.07 82);
+  --accent-foreground: oklch(0.22 0.02 55);
+  --border: oklch(0.87 0.012 72 / 85%);
+  --input: oklch(0.89 0.01 72);
+  --ring: oklch(0.56 0.17 25);
   --sidebar: oklch(0.16 0.012 50);
   --sidebar-foreground: oklch(0.94 0.01 80);
-  --sidebar-primary: oklch(0.76 0.15 82);
-  --sidebar-primary-foreground: oklch(0.15 0.015 50);
+  --sidebar-primary: oklch(0.56 0.19 25);
+  --sidebar-primary-foreground: oklch(0.985 0.006 80);
   --sidebar-accent: oklch(0.24 0.018 48);
   --sidebar-accent-foreground: oklch(0.97 0.006 80);
-  --sidebar-ring: oklch(0.76 0.15 82);
+  --sidebar-ring: oklch(0.56 0.17 25);
+}
+.dark {
+  --background: oklch(0.135 0.009 52);
+  --foreground: oklch(0.94 0.01 80);
+  --card: oklch(0.185 0.012 52);
+  --card-foreground: oklch(0.94 0.01 80);
+  --popover: oklch(0.205 0.014 52);
+  --popover-foreground: oklch(0.94 0.01 80);
+  --primary: oklch(0.60 0.19 25);
+  --primary-foreground: oklch(0.985 0.006 80);
+  --secondary: oklch(0.235 0.012 52);
+  --secondary-foreground: oklch(0.91 0.01 80);
+  --muted: oklch(0.215 0.012 52);
+  --muted-foreground: oklch(0.70 0.012 76);
+  --accent: oklch(0.77 0.12 82);
+  --accent-foreground: oklch(0.17 0.018 55);
+  --border: oklch(1 0 0 / 9%);
+  --input: oklch(1 0 0 / 12%);
+  --ring: oklch(0.60 0.19 25);
+  --sidebar: oklch(0.105 0.008 50);
+  --sidebar-foreground: oklch(0.94 0.01 80);
+  --sidebar-primary: oklch(0.60 0.19 25);
+  --sidebar-primary-foreground: oklch(0.985 0.006 80);
+  --sidebar-accent: oklch(0.205 0.014 52);
+  --sidebar-accent-foreground: oklch(0.94 0.01 80);
+  --sidebar-ring: oklch(0.60 0.19 25);
+  --chart-1: oklch(0.60 0.19 25);
+  --chart-2: oklch(0.77 0.12 82);
+  color-scheme: dark;
 }
 @layer base {
   body {
     background-color: var(--background);
     background-image:
-      radial-gradient(circle at 88% -12%, color-mix(in oklab, var(--studyflow-gold) 11%, transparent), transparent 33rem),
-      radial-gradient(circle at 0% 42%, color-mix(in oklab, var(--studyflow-red) 7%, transparent), transparent 29rem);
+      radial-gradient(circle at 90% -15%, color-mix(in oklab, var(--sf-gold) 7%, transparent), transparent 33rem),
+      radial-gradient(circle at 0% 42%, color-mix(in oklab, var(--sf-red) 4%, transparent), transparent 29rem);
   }
-  ::selection { background: color-mix(in oklab, var(--studyflow-gold) 48%, transparent); color: var(--foreground); }
+  ::selection { background: color-mix(in oklab, var(--sf-gold) 42%, transparent); color: var(--foreground); }
 }
 .dark body {
-  background-color: var(--studyflow-charcoal);
+  background-color: var(--sf-charcoal);
   background-image:
-    radial-gradient(circle at 88% -10%, color-mix(in oklab, var(--studyflow-gold) 10%, transparent), transparent 30rem),
-    radial-gradient(circle at 0% 42%, color-mix(in oklab, var(--studyflow-red) 8%, transparent), transparent 28rem);
+    radial-gradient(circle at 90% -15%, color-mix(in oklab, var(--sf-gold) 7%, transparent), transparent 33rem),
+    radial-gradient(circle at 0% 42%, color-mix(in oklab, var(--sf-red) 5%, transparent), transparent 29rem);
 }
+.app-card { box-shadow: 0 12px 32px -28px rgba(0, 0, 0, .42); }
 .dark .app-card { box-shadow: 0 16px 40px -32px rgba(0, 0, 0, .72); }
-.app-card { box-shadow: 0 12px 32px -26px rgba(23, 22, 19, .32); }
-
-/* Map leftover violet utility classes to the approved gold/red system. */
-[class~="bg-violet-100"] { background-color: color-mix(in oklab, var(--studyflow-gold) 16%, transparent) !important; }
-[class~="bg-violet-950/50"] { background-color: color-mix(in oklab, var(--studyflow-gold) 14%, var(--studyflow-charcoal)) !important; }
-[class~="text-violet-700"] { color: #936b18 !important; }
-[class~="dark:text-violet-200"] { color: var(--studyflow-gold-light) !important; }
-[class~="text-violet-600"] { color: #a77a1c !important; }
-[class~="dark:text-violet-300"] { color: var(--studyflow-gold-light) !important; }
-[class~="bg-violet-500"] { background-color: var(--studyflow-red) !important; }
-[class~="bg-violet-600"] { background-color: var(--studyflow-red) !important; }
-[class~="bg-violet-300/20"] { background-color: color-mix(in oklab, var(--studyflow-gold) 18%, transparent) !important; }
-[class~="bg-violet-300/15"] { background-color: color-mix(in oklab, var(--studyflow-gold) 14%, transparent) !important; }
-[class~="text-violet-200"] { color: var(--studyflow-gold-light) !important; }
-[class~="dark:bg-violet-950/50"] { background-color: color-mix(in oklab, var(--studyflow-gold) 13%, var(--studyflow-charcoal)) !important; }
-[class~="border-violet-200"] { border-color: color-mix(in oklab, var(--studyflow-gold) 30%, transparent) !important; }
-[class~="from-violet-500"] { --tw-gradient-from: var(--studyflow-red) var(--tw-gradient-from-position) !important; }
-[class~="to-indigo-700"] { --tw-gradient-to: var(--studyflow-charcoal) var(--tw-gradient-to-position) !important; }
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+@media (prefers-reduced-motion: no-preference) {
+  .app-card:hover {
+    border-color: color-mix(in oklab, var(--primary) 18%, var(--border));
+    box-shadow: 0 16px 40px -30px rgba(0, 0, 0, .58);
+  }
 }
+.text-brand-gold { color: var(--sf-gold-light); }
+.bg-brand-gold-soft { background: color-mix(in oklab, var(--sf-gold) 12%, transparent); }
+.border-brand-gold { border-color: color-mix(in oklab, var(--sf-gold) 30%, transparent); }
+.text-brand-red { color: var(--sf-red); }
+.bg-brand-red-soft { background: color-mix(in oklab, var(--sf-red) 10%, transparent); }
