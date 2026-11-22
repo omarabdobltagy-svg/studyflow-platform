@@ -3,6 +3,7 @@ import { getSIECheckpointBranches, getSIESubject, getSIETeacher } from "@shared/
 import { calculateLearningGap } from "@shared/sie-learning-progress";
 import { invokeLLM } from "./_core/llm";
 import { getStudentProfile, saveAiPlan } from "./db";
+import { formatTextbookEvidence, retrieveTextbookEvidence } from "./textbook-retrieval";
 
 const planSchema = z.object({
   title: z.string().min(3).max(100),
@@ -154,13 +155,19 @@ export async function generatePersonalPlan(
 ): Promise<GeneratedPlan> {
   const dailyMinutes = Math.max(20, Math.min(600, Math.trunc(constraints.dailyMinutes ?? 120)));
   const profile = includeStudentProfile ? await getStudentProfile(userId) : null;
-  const context = profile ? buildLearningContext(profile) : "لم يطلب المستخدم تخصيص الخطة بالملف الدراسي.";
+  const textbookRetrieval = profile
+    ? retrieveTextbookEvidence(profile.subjects || [], prompt, 4)
+    : { passages: [], coverageNotes: [] };
+  const textbookContext = formatTextbookEvidence(textbookRetrieval);
+  const context = profile
+    ? buildLearningContext(profile) + "\\n\\nمصادر نصية من الكتب الرسمية مرتبطة بطلب الخطة:\\n" + (textbookContext || "لم يتم استرجاع مقتطف مطابق من كتاب متاح.")
+    : "لم يطلب المستخدم تخصيص الخطة بالملف الدراسي.";
   const system = [
     "أنت محرك التخطيط الدراسي داخل StudyFlow، ولست مساعد دردشة عام.",
     "حلّل فجوة المنهج المحسوبة تلقائيًا لكل فرع مستقل داخل المادة، وموضع الطالب وموضع التدريس المرجعي داخل الفرع نفسه، وتقدم SQ3R ونتائج التقييم وصعوبة الدروس؛ ثم ابنِ خطة عملية متوازنة.",
     "مصدر المرجع له أولوية صارمة داخل كل فرع: استخدم موضع المدرس إذا كان معروفًا، وإلا استخدم موضع الفصل في المدرسة داخل الفرع نفسه. موضع الطالب يظل مستقلًا عن الاثنين. لا تقارن أو تجمع فجوات فروع متوازية، ولا تستخدم رقم التراكم القديم كأنه فجوة مؤكدة.",
     "لا تخلط بين آخر محتوى عام للمدرس، محتوى الكورس المدفوع، موضع ما شرحه المدرس، موضع المدرسة، وما أتمه الطالب. لا تخترع أرقام محاضرات أو أسماء دروس أو مواضع غير مسجلة.",
-    "إذا كان فهرس مادة غير محمّل فاذكر هذا القيد ولا تخترع محتوى منهجيًا لها.",
+    "إذا توفرت مقتطفات مسترجعة من كتاب رسمي، اجعلها المرجع الأول عند تحديد موضوعات الخطة واذكر صفحات PDF في التفاصيل عند الاستناد إليها. المعرفة العامة تستخدم لسد المتطلبات السابقة غير المشروحة وتوضع بوضوح كتمهيد مساند، ولا تنسب للكتاب. إذا كان فهرس مادة غير محمّل فاذكر هذا القيد ولا تخترع محتوى منهجيًا لها.",
     "رتّب الأولويات بحسب موعد الاختبار إن ذُكر، والمتطلبات السابقة، وحجم التراكم، وصعوبة الدرس. الدرس الصعب أو التأسيسي يحتاج فهمًا وتدريبًا واسترجاعًا، وليس قراءة سريعة؛ الدرس المألوف القصير يمكن أن يأخذ مراجعة مركزة.",
     "الحد الأقصى لوقت الدراسة اليومي هو " + dailyMinutes + " دقيقة. مجموع دقائق الخطوات التي تحمل اسم اليوم نفسه يجب ألا يتجاوز هذا الحد، مع ترك هامش تعويض واقعي.",
     constraints.startDate ? "تاريخ بداية التنفيذ: " + constraints.startDate + "." : "تاريخ البداية يحدده الطالب عند اعتماد الخطة.",
