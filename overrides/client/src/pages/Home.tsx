@@ -54,8 +54,6 @@ export default function Home() {
       {summary.isError && <QueryErrorNotice onRetry={() => void summary.refetch()} label="تعذّر تحميل ملخص يومك. لن نعرض أرقامًا صفرية قد توحي بأن بياناتك فارغة." />}
       {!summary.isError && <>
       <section className="sf-welcome-hero enter relative mb-6 overflow-hidden rounded-[1.6rem] px-5 py-6 text-primary-foreground sm:px-8 sm:py-8">
-        <div className="absolute -left-12 -top-16 size-52 rounded-full bg-violet-300/20 blur-2xl" />
-        <div className="absolute bottom-0 right-[36%] size-36 rounded-full bg-amber-200/10 blur-2xl" />
         <div className="relative flex flex-col justify-between gap-7 md:flex-row md:items-end">
           <div><p className="mb-2 text-sm text-primary-foreground/65">{arabicDate()}</p><h2 className="text-2xl font-bold tracking-tight sm:text-3xl">أهلًا {user?.name?.split(" ")[0] || "بك"}، ما الذي يستحق تركيزك اليوم؟</h2><p className="mt-3 max-w-xl text-sm leading-7 text-primary-foreground/72">تقدم بسيط ومتّسق يصنع مسارًا أكبر. اختر المهمة التالية وابدأ الآن.</p></div>
           <div className="flex items-center gap-4 rounded-2xl border border-white/12 bg-white/8 px-4 py-3 backdrop-blur-sm"><div className="flex size-11 items-center justify-center rounded-xl bg-white/12"><CheckCircle2 className="size-5 text-violet-200" /></div><div><p className="text-xs text-primary-foreground/65">إنجاز المهام</p><p className="num mt-0.5 text-xl font-medium">{completedRate === null ? "—" : `${completedRate}%`}</p></div><div className="h-8 w-px bg-white/12" /><p className="text-sm font-semibold">{data ? data.taskStats.completed : "—"}<span className="mr-1 text-primary-foreground/60">من {data ? data.taskStats.total : "—"}</span></p></div>
