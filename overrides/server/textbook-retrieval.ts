@@ -115,7 +115,7 @@ export function splitTextbookPages(
 
 export function inspectTextbookIndex(subjectId: string): {
   sourceRoot: string;
-  files: Array<{ file: string; exists: boolean; bytes: number; markerCount: number }>;
+  files: Array<{ file: string; exists: boolean; bytes: number; markerCount: number; markerTextCount: number; prefix: string }>;
   pageCount: number;
   indexedCharacters: number;
 } {
