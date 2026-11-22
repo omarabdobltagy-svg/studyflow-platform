@@ -1,77 +1,10 @@
-// @ts-nocheck -- this repository does not install the three.js declaration package.
 import * as THREE from "three";
 import { useEffect, useRef } from "react";
 
-type RibbonOptions = {
-  color: THREE.ColorRepresentation;
-  width: number;
-  phase: number;
-  opacity?: number;
-};
-
-function createRibbonGeometry(curve: THREE.CatmullRomCurve3, width: number, phase: number) {
-  const segments = 220;
-  const frames = curve.computeFrenetFrames(segments, true);
-  const positions: number[] = [];
-  const uvs: number[] = [];
-  const indices: number[] = [];
-
-  for (let index = 0; index <= segments; index += 1) {
-    const progress = index / segments;
-    const center = curve.getPointAt(progress);
-    const normal = frames.normals[index];
-    const binormal = frames.binormals[index];
-    const twist = Math.sin(progress * Math.PI * 4 + phase) * 0.34;
-    const direction = normal.clone().multiplyScalar(Math.cos(twist))
-      .add(binormal.clone().multiplyScalar(Math.sin(twist)))
-      .normalize();
-    const taper = 0.72 + 0.28 * Math.pow(Math.sin(progress * Math.PI), 0.45);
-    const halfWidth = width * taper * 0.5;
-
-    const left = center.clone().addScaledVector(direction, -halfWidth);
-    const right = center.clone().addScaledVector(direction, halfWidth);
-    positions.push(left.x, left.y, left.z, right.x, right.y, right.z);
-    uvs.push(0, progress, 1, progress);
-
-    if (index < segments) {
-      const start = index * 2;
-      indices.push(start, start + 1, start + 2, start + 1, start + 3, start + 2);
-    }
-  }
-
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-  geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
-  geometry.setIndex(indices);
-  geometry.computeVertexNormals();
-  geometry.computeBoundingSphere();
-  return geometry;
-}
-
-function createRibbon(
-  curve: THREE.CatmullRomCurve3,
-  options: RibbonOptions,
-) {
-  const geometry = createRibbonGeometry(curve, options.width, options.phase);
-  const material = new THREE.MeshPhysicalMaterial({
-    color: options.color,
-    metalness: 0.52,
-    roughness: 0.29,
-    clearcoat: 1,
-    clearcoatRoughness: 0.2,
-    side: THREE.DoubleSide,
-    transparent: Boolean(options.opacity && options.opacity < 1),
-    opacity: options.opacity ?? 1,
-  });
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.castShadow = false;
-  mesh.receiveShadow = false;
-  return mesh;
-}
-
 /**
- * A lightweight abstract 3D accent built from interwoven metallic ribbons.
- * It remains decorative, has no interaction target, and respects reduced motion.
+ * Motion-first StudyFlow sculpture.
+ * A saturated violet glass-core with orbital geometry, soft particles and pointer parallax.
+ * The scene stays decorative and automatically becomes static for reduced-motion users.
  */
 export default function ThreeAmbientScene() {
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -84,11 +17,14 @@ export default function ThreeAmbientScene() {
     let animationFrame = 0;
     let resizeObserver: ResizeObserver | null = null;
     let disposed = false;
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let targetX = 0;
+    let targetY = 0;
 
     try {
       const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 30);
-      camera.position.set(0, 0, 4.7);
+      const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 40);
+      camera.position.set(0, 0, 5.2);
 
       renderer = new THREE.WebGLRenderer({
         alpha: true,
@@ -96,92 +32,118 @@ export default function ThreeAmbientScene() {
         powerPreference: "low-power",
         precision: "mediump",
       });
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.2));
       renderer.setClearColor(0x000000, 0);
       renderer.outputColorSpace = THREE.SRGBColorSpace;
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      renderer.toneMappingExposure = 1.12;
+      renderer.toneMappingExposure = 1.18;
+      Object.assign(renderer.domElement.style, { display: "block", width: "100%", height: "100%" });
       renderer.domElement.setAttribute("aria-hidden", "true");
-      Object.assign(renderer.domElement.style, {
-        display: "block",
-        width: "100%",
-        height: "100%",
-      });
       host.appendChild(renderer.domElement);
 
-      scene.add(new THREE.AmbientLight(0xe8e1d2, 1.65));
-      const keyLight = new THREE.DirectionalLight(0xffe0a3, 2.8);
-      keyLight.position.set(2.4, 2.1, 4);
-      scene.add(keyLight);
-      const pearlLight = new THREE.PointLight(0xd8d0c2, 10, 8);
-      pearlLight.position.set(-2.3, 1.4, 2.5);
-      scene.add(pearlLight);
-      const garnetLight = new THREE.PointLight(0x9d4653, 7, 7);
-      garnetLight.position.set(1.7, -1.6, 1.6);
-      scene.add(garnetLight);
+      scene.add(new THREE.AmbientLight(0xded3ff, 1.55));
+      const key = new THREE.DirectionalLight(0xffffff, 3.2);
+      key.position.set(2.6, 3.1, 4);
+      scene.add(key);
+      const violetLight = new THREE.PointLight(0x9b35ff, 24, 12);
+      violetLight.position.set(-2.1, 0.8, 2.2);
+      scene.add(violetLight);
+      const cyanLight = new THREE.PointLight(0x16d9e8, 13, 10);
+      cyanLight.position.set(2.4, -1.5, 2);
+      scene.add(cyanLight);
+      const pinkLight = new THREE.PointLight(0xf044b8, 16, 10);
+      pinkLight.position.set(0.1, 2.1, -1);
+      scene.add(pinkLight);
 
       const sculpture = new THREE.Group();
       scene.add(sculpture);
 
-      const ribbonCurves = [
-        {
-          options: { color: 0xc6a66d, width: 0.19, phase: 0.2 },
-          points: [
-            [-1.35, -0.24, -0.12], [-1.05, 0.55, 0.18], [-0.24, 0.78, 0.34],
-            [0.68, 0.43, -0.08], [1.3, -0.12, 0.18], [0.75, -0.78, 0.12],
-            [-0.12, -0.83, -0.2], [-0.95, -0.56, -0.16],
-          ],
-        },
-        {
-          options: { color: 0x98505a, width: 0.15, phase: 1.8 },
-          points: [
-            [-1.18, 0.43, 0.2], [-0.7, -0.35, -0.28], [0.08, -0.72, 0.14],
-            [0.88, -0.38, 0.32], [1.22, 0.37, -0.12], [0.42, 0.82, -0.24],
-            [-0.48, 0.65, 0.24],
-          ],
-        },
-        {
-          options: { color: 0xd8d1c5, width: 0.075, phase: 2.7, opacity: 0.84 },
-          points: [
-            [-1.08, -0.08, 0.38], [-0.62, 0.64, 0.46], [0.27, 0.7, 0.38],
-            [1.08, 0.12, 0.42], [0.7, -0.56, 0.48], [-0.2, -0.68, 0.38],
-          ],
-        },
-      ];
-
-      const ribbonMeshes: THREE.Mesh[] = [];
-      ribbonCurves.forEach(({ options, points }) => {
-        const curve = new THREE.CatmullRomCurve3(
-          points.map(([x, y, z]) => new THREE.Vector3(x, y, z)),
-          true,
-          "catmullrom",
-          0.48,
-        );
-        const mesh = createRibbon(curve, options);
-        sculpture.add(mesh);
-        ribbonMeshes.push(mesh);
-      });
-
       const coreMaterial = new THREE.MeshPhysicalMaterial({
-        color: 0xe6dfd2,
-        metalness: 0.18,
+        color: 0x8a32e8,
+        emissive: 0x351064,
+        emissiveIntensity: 0.7,
+        metalness: 0.38,
         roughness: 0.16,
-        transmission: 0.42,
-        thickness: 0.8,
-        ior: 1.28,
         clearcoat: 1,
         clearcoatRoughness: 0.08,
+        iridescence: 0.78,
+        iridescenceIOR: 1.35,
+        iridescenceThicknessRange: [180, 520],
       });
-      const core = new THREE.Mesh(new THREE.SphereGeometry(0.27, 48, 36), coreMaterial);
-      core.scale.set(1, 1.13, 0.82);
+      const core = new THREE.Mesh(new THREE.TorusKnotGeometry(0.92, 0.28, 220, 28, 2, 3), coreMaterial);
+      core.scale.set(1.13, 0.92, 0.78);
       sculpture.add(core);
 
-      const highlight = new THREE.Mesh(
-        new THREE.SphereGeometry(0.055, 24, 20),
-        new THREE.MeshBasicMaterial({ color: 0xf2d8a7, transparent: true, opacity: 0.74 }),
+      const inner = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(0.42, 2),
+        new THREE.MeshPhysicalMaterial({
+          color: 0x9eeaff,
+          emissive: 0x155a9b,
+          emissiveIntensity: 0.32,
+          metalness: 0.25,
+          roughness: 0.09,
+          transmission: 0.22,
+          thickness: 0.7,
+          clearcoat: 1,
+        }),
       );
-      highlight.position.set(-0.09, 0.15, 0.29);
-      sculpture.add(highlight);
+      inner.rotation.set(0.25, 0.6, 0.1);
+      sculpture.add(inner);
+
+      const ringMaterials = [
+        new THREE.MeshBasicMaterial({ color: 0xe7c4ff, transparent: true, opacity: 0.72 }),
+        new THREE.MeshBasicMaterial({ color: 0x43e4f2, transparent: true, opacity: 0.64 }),
+        new THREE.MeshBasicMaterial({ color: 0xff70ce, transparent: true, opacity: 0.52 }),
+      ];
+      const rings: THREE.Mesh[] = [];
+      const ringConfigs = [
+        { radius: 1.52, tube: 0.012, rotation: [0.95, 0.1, 0.28] as const },
+        { radius: 1.78, tube: 0.008, rotation: [0.25, 1.05, -0.48] as const },
+        { radius: 1.28, tube: 0.009, rotation: [1.3, 0.4, 0.86] as const },
+      ];
+      ringConfigs.forEach((config, index) => {
+        const ring = new THREE.Mesh(
+          new THREE.TorusGeometry(config.radius, config.tube, 8, 160),
+          ringMaterials[index],
+        );
+        ring.rotation.set(...config.rotation);
+        sculpture.add(ring);
+        rings.push(ring);
+      });
+
+      const satellites: THREE.Mesh[] = [];
+      const satelliteGeometry = new THREE.OctahedronGeometry(0.13, 1);
+      const satelliteMaterials = [
+        new THREE.MeshPhysicalMaterial({ color: 0xc6a0ff, metalness: 0.52, roughness: 0.18, clearcoat: 1 }),
+        new THREE.MeshPhysicalMaterial({ color: 0x5fe8ed, metalness: 0.36, roughness: 0.15, clearcoat: 1 }),
+        new THREE.MeshPhysicalMaterial({ color: 0xff86d5, metalness: 0.34, roughness: 0.18, clearcoat: 1 }),
+        new THREE.MeshPhysicalMaterial({ color: 0xd3f27a, metalness: 0.22, roughness: 0.2, clearcoat: 1 }),
+      ];
+      for (let index = 0; index < 4; index += 1) {
+        const satellite = new THREE.Mesh(satelliteGeometry, satelliteMaterials[index]);
+        const angle = (index / 4) * Math.PI * 2 + 0.4;
+        satellite.position.set(Math.cos(angle) * 1.63, Math.sin(angle) * 0.86, index % 2 ? 0.58 : -0.48);
+        satellite.scale.setScalar(index === 3 ? 0.78 : 1);
+        sculpture.add(satellite);
+        satellites.push(satellite);
+      }
+
+      const particleCount = 180;
+      const particlePositions = new Float32Array(particleCount * 3);
+      for (let index = 0; index < particleCount; index += 1) {
+        const angle = (index / particleCount) * Math.PI * 2;
+        const radius = 1.95 + ((index * 37) % 100) / 100 * 0.82;
+        particlePositions[index * 3] = Math.cos(angle) * radius;
+        particlePositions[index * 3 + 1] = Math.sin(angle) * radius * 0.58;
+        particlePositions[index * 3 + 2] = ((index * 19) % 100) / 100 * 1.5 - 0.75;
+      }
+      const particleGeometry = new THREE.BufferGeometry();
+      particleGeometry.setAttribute("position", new THREE.BufferAttribute(particlePositions, 3));
+      const particles = new THREE.Points(
+        particleGeometry,
+        new THREE.PointsMaterial({ color: 0xd7b9ff, size: 0.018, transparent: true, opacity: 0.72, sizeAttenuation: true }),
+      );
+      sculpture.add(particles);
 
       const resize = () => {
         if (!renderer || disposed) return;
@@ -189,27 +151,44 @@ export default function ThreeAmbientScene() {
         const height = Math.max(1, host.clientHeight);
         renderer.setSize(width, height, false);
         camera.aspect = width / height;
-        camera.position.z = width < 180 ? 5.2 : 4.7;
+        camera.position.z = width < 420 ? 6.1 : 5.2;
         camera.updateProjectionMatrix();
-        const scale = Math.min(0.94, Math.max(0.58, Math.min(width / 230, height / 170)));
+        const scale = Math.min(1.05, Math.max(0.46, Math.min(width / 390, height / 300)));
         sculpture.scale.setScalar(scale);
       };
       resize();
       resizeObserver = new ResizeObserver(resize);
       resizeObserver.observe(host);
 
-      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const onPointerMove = (event: PointerEvent) => {
+        const bounds = host.getBoundingClientRect();
+        targetX = ((event.clientX - bounds.left) / Math.max(1, bounds.width) - 0.5) * 0.24;
+        targetY = ((event.clientY - bounds.top) / Math.max(1, bounds.height) - 0.5) * 0.18;
+      };
+      const onPointerLeave = () => { targetX = 0; targetY = 0; };
+      host.addEventListener("pointermove", onPointerMove, { passive: true });
+      host.addEventListener("pointerleave", onPointerLeave);
+
       const renderFrame = () => {
         if (disposed || !renderer) return;
         if (!reduceMotion) {
           const elapsed = performance.now() * 0.001;
-          sculpture.rotation.y = Math.sin(elapsed * 0.24) * 0.19;
-          sculpture.rotation.x = Math.sin(elapsed * 0.31) * 0.07;
-          sculpture.rotation.z = Math.sin(elapsed * 0.18) * 0.035;
-          core.scale.y = 1.13 + Math.sin(elapsed * 1.1) * 0.035;
-          ribbonMeshes.forEach((mesh, index) => {
-            mesh.rotation.z = Math.sin(elapsed * 0.32 + index * 1.8) * 0.018;
+          sculpture.rotation.y += ((Math.sin(elapsed * 0.22) * 0.24 + targetX) - sculpture.rotation.y) * 0.025;
+          sculpture.rotation.x += ((Math.sin(elapsed * 0.29) * 0.08 + targetY) - sculpture.rotation.x) * 0.025;
+          sculpture.rotation.z = Math.sin(elapsed * 0.16) * 0.035;
+          core.rotation.x = elapsed * 0.09;
+          core.rotation.y = elapsed * 0.17;
+          inner.rotation.x = elapsed * 0.12;
+          inner.rotation.y = -elapsed * 0.2;
+          rings.forEach((ring, index) => {
+            ring.rotation.z += (index % 2 ? 1 : -1) * 0.0009 * (index + 1);
           });
+          satellites.forEach((satellite, index) => {
+            satellite.position.y += Math.sin(elapsed * 1.1 + index * 2) * 0.0015;
+            satellite.rotation.x += 0.004 + index * 0.0006;
+            satellite.rotation.y += 0.006 + index * 0.0008;
+          });
+          particles.rotation.z = elapsed * 0.018;
         }
         renderer.render(scene, camera);
         if (!reduceMotion) animationFrame = window.requestAnimationFrame(renderFrame);
@@ -220,8 +199,10 @@ export default function ThreeAmbientScene() {
         disposed = true;
         window.cancelAnimationFrame(animationFrame);
         resizeObserver?.disconnect();
+        host.removeEventListener("pointermove", onPointerMove);
+        host.removeEventListener("pointerleave", onPointerLeave);
         scene.traverse(object => {
-          if (object instanceof THREE.Mesh) {
+          if (object instanceof THREE.Mesh || object instanceof THREE.Points) {
             object.geometry.dispose();
             const materials = Array.isArray(object.material) ? object.material : [object.material];
             materials.forEach(material => material.dispose());
@@ -230,7 +211,8 @@ export default function ThreeAmbientScene() {
         renderer?.dispose();
         renderer?.domElement.remove();
       };
-    } catch {
+    } catch (error) {
+      console.error("StudyFlow 3D scene unavailable:", error);
       disposed = true;
       window.cancelAnimationFrame(animationFrame);
       resizeObserver?.disconnect();
