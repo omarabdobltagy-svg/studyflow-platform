@@ -494,7 +494,8 @@ export const appRouter = router({
           const branchRecords = (record.branches ?? {}) as Record<string, Record<string, any>>;
           const legacyTeacherState = teacherProgressState[subjectId] ?? {};
           const legacyStudentFrontier = teacherFrontiers[subjectId] || legacyTeacherState.studentAttendedFrontier || null;
-          const subjectLessonRecords = (selection.subjectLessonProgress ?? {})[subjectId] ?? {};
+          const subjectLessonProgress = (selection.subjectLessonProgress ?? {}) as Record<string, Record<string, any>>;
+          const subjectLessonRecords = subjectLessonProgress[subjectId] ?? {};
           const branches = getSIECheckpointBranches(subjectId);
           const branchContext = branches.map(branch => {
             const saved = branchRecords[branch.branchId] ?? {};
