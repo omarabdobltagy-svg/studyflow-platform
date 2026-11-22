@@ -68,7 +68,7 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
       const saved = branchRecords[branch.branchId] || {};
       const belongsToBranch = (value: unknown) =>
         typeof value === "string" &&
-        (value === "__UNKNOWN__" || value === "__NOT_STARTED__" ||
+        (value === "__NOT_STARTED__" ||
           branch.choices.some(choice => choice.nodeId === value));
       const latestSq3rCompleted = [...branch.choices].reverse().find(choice => {
         const completedSteps = subjectLessonRecords[choice.nodeId]?.completedSteps;
