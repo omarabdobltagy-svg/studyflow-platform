@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   aiPlans,
@@ -12,6 +13,7 @@ import {
   routineItems,
   routines,
   studentProfiles,
+  studentAuthCredentials,
   studySessions,
   taskChangeLogs,
   tasks,
@@ -232,6 +234,55 @@ export async function ensureLocalAuthUser(name: string) {
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
   if (!result[0]) throw new Error("LOCAL_USER_CREATION_FAILED");
   return result[0];
+}
+
+/** Create an isolated local student identity. The caller provides a one-way password hash. */
+export async function createLocalStudentAccount(username: string, passwordHash: string) {
+  const db = await requireDb();
+  const normalizedUsername = username.trim().toLowerCase();
+  const openId = `studyflow-student-${randomUUID()}`;
+  const now = new Date();
+
+  return db.transaction(async tx => {
+    await tx.insert(users).values({
+      openId,
+      name: username.trim(),
+      loginMethod: "local_student",
+      role: "user",
+      lastSignedIn: now,
+    });
+    const rows = await tx.select().from(users).where(eq(users.openId, openId)).limit(1);
+    const user = rows[0];
+    if (!user) throw new Error("LOCAL_STUDENT_USER_CREATION_FAILED");
+
+    await tx.insert(studentAuthCredentials).values({
+      userId: user.id,
+      username: username.trim(),
+      normalizedUsername,
+      passwordHash,
+    });
+    return user;
+  });
+}
+
+/** Returns only the student identity and password hash needed for authentication. */
+export async function getLocalStudentAuthByUsername(normalizedUsername: string) {
+  const db = await requireDb();
+  const rows = await db
+    .select({
+      user: users,
+      passwordHash: studentAuthCredentials.passwordHash,
+    })
+    .from(studentAuthCredentials)
+    .innerJoin(users, eq(studentAuthCredentials.userId, users.id))
+    .where(eq(studentAuthCredentials.normalizedUsername, normalizedUsername))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function updateUserLastSignedIn(userId: number) {
+  const db = await requireDb();
+  await db.update(users).set({ lastSignedIn: new Date() }).where(eq(users.id, userId));
 }
 
 export async function getUserByOpenId(openId: string) {
