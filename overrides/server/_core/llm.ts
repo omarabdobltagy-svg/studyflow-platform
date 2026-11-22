@@ -433,12 +433,17 @@ export type ModelsResponse = {
 export async function listLLMModels(): Promise<ModelsResponse> {
   assertApiKey();
 
-  const url = ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
-    ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/models`
-    : "https://forge.manus.im/v1/models";
+  // Model discovery must use the same OpenAI-compatible provider and API key
+  // as chat completions; the old Forge endpoint belongs to the retired auth stack.
+  const configuredBase = ENV.aiApiBaseUrl.trim() || "https://openrouter.ai/api/v1";
+  const modelsBase = configuredBase
+    .replace(/\/+$/, "")
+    .replace(/\/chat\/completions$/i, "")
+    .replace(/\/models$/i, "");
+  const url = `${modelsBase}/models`;
 
   const response = await fetchWithBackoff(url, {
-    headers: { authorization: `Bearer ${ENV.forgeApiKey}` },
+    headers: { authorization: `Bearer ${ENV.aiApiKey}` },
   });
 
   if (!response.ok) {

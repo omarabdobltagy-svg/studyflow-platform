@@ -8,10 +8,11 @@ import BrandMark from "@/components/BrandMark";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
 import { useTheme } from "@/contexts/ThemeContext";
+import ThreeAmbientScene from "@/components/ThreeAmbientScene";
 import {
   BarChart3, BellRing, BookOpenCheck, BookOpenText, BrainCircuit, CalendarDays,
   CheckSquare2, ChevronLeft, Goal, LayoutDashboard, LibraryBig, LogOut, Menu,
-  Moon, Settings2, Sparkles, Sun,
+  Moon, Settings2, Sparkles, Sun, PanelRightClose, PanelRightOpen,
 } from "lucide-react";
 import { ReactNode, useEffect, useState } from "react";
 import { useLocation } from "wouter";
@@ -57,6 +58,7 @@ export default function DashboardLayout({ title, description, children, action }
   });
   const [location, setLocation] = useLocation();
   const [isMobileNavOpen, setMobileNavOpen] = useState(false);
+  const [isDesktopNavHidden, setDesktopNavHidden] = useState(false);
   const studentProfile = trpc.studentProfile.get.useQuery(undefined, { enabled: Boolean(user) });
   const { theme, toggleTheme } = useTheme();
 
@@ -165,7 +167,7 @@ export default function DashboardLayout({ title, description, children, action }
 
   return (
     <div className="app-shell bg-background text-foreground">
-      <aside className="fixed inset-y-0 right-0 z-40 hidden w-[272px] flex-col overflow-y-auto bg-sidebar px-4 py-5 text-sidebar-foreground lg:flex">
+      <aside className={cn("fixed inset-y-0 right-0 z-40 hidden w-[272px] flex-col overflow-y-auto bg-sidebar px-4 py-5 text-sidebar-foreground lg:flex", isDesktopNavHidden && "lg:hidden")}>
         <button onClick={() => navigate("/")} className="pressable mb-7 flex items-center gap-3 rounded-xl px-2 text-right" aria-label="العودة إلى لوحة اليوم">
           <span className="flex size-10 items-center justify-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground"><BrandMark className="size-5" /></span>
           <span><span className="block text-lg font-bold tracking-tight">مسار التعلّم</span><span className="block text-xs text-sidebar-foreground/55">مساحة اليوم بوضوح</span></span>
@@ -179,11 +181,13 @@ export default function DashboardLayout({ title, description, children, action }
         </div>
       </aside>
 
-      <div className="lg:pr-[272px]">
+      <div className={cn(isDesktopNavHidden ? "lg:pr-0" : "lg:pr-[272px]")}>
         <header className="sticky top-0 z-30 border-b border-border/65 bg-background/90 backdrop-blur-xl">
-          <div className="container dashboard-header flex min-h-[72px] items-center justify-between gap-3 py-2">
+          <div className="pointer-events-none absolute left-[16%] top-0 hidden h-[72px] w-[220px] opacity-85 xl:block"><ThreeAmbientScene /></div>
+          <div className="container dashboard-header relative z-10 flex min-h-[72px] items-center justify-between gap-3 py-2">
             <div className="dashboard-header-main flex min-w-0 items-center gap-3">
               <Button variant="outline" size="icon" className="pressable rounded-xl lg:hidden" onClick={() => setMobileNavOpen(true)} aria-label="فتح التنقل"><Menu className="size-5" /></Button>
+              <Button variant="outline" size="icon" className="pressable hidden rounded-xl lg:inline-flex" onClick={() => setDesktopNavHidden(current => !current)} aria-label={isDesktopNavHidden ? "إظهار شريط التنقل" : "إخفاء شريط التنقل"} title={isDesktopNavHidden ? "إظهار شريط التنقل" : "ملء الشاشة"}>{isDesktopNavHidden ? <PanelRightOpen className="size-4" /> : <PanelRightClose className="size-4" />}</Button>
               <div className="min-w-0"><p className="eyebrow mb-0.5 hidden sm:block">مساحتك الشخصية</p><h1 className="truncate text-lg font-bold tracking-tight sm:text-2xl">{title}</h1></div>
             </div>
             <div className="flex shrink-0 items-center gap-2">
@@ -195,7 +199,7 @@ export default function DashboardLayout({ title, description, children, action }
             </div>
           </div>
         </header>
-        <main className="container py-5 sm:py-7">
+        <main className="container enter py-5 sm:py-7">
           <p className="mb-5 max-w-2xl text-sm leading-7 text-muted-foreground sm:mb-6 sm:text-base">{description}</p>
           {studentProfile.isError && <QueryErrorNotice onRetry={() => void studentProfile.refetch()} label="تعذّر التحقق من ملفك الدراسي. بياناتك لم تُحذف؛ أعد المحاولة." />}
           {children}
