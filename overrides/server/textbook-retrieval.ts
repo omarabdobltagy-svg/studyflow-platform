@@ -100,7 +100,7 @@ function findPageMarkers(content: string): PageMarker[] {
     const inner = (match[1] ?? "")
       .replace(/[\p{C}\p{Z}\s]/gu, "")
       .toUpperCase();
-    const parsed = /^PARSEDTEXTOFPAGE:(\d+)\/(\d+)$/.exec(inner);
+    const parsed = /^PARSEDTEXT(?:OF|FOR)PAGE:(\d+)\/(\d+)$/.exec(inner);
     if (!parsed) continue;
     markers.push({
       start: match.index ?? 0,
