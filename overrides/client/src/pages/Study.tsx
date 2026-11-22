@@ -5,7 +5,8 @@ import ThreeAmbientScene from "@/components/ThreeAmbientScene";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
-import { getSIECheckpointChoices, getSIESubject, getSIETeacher } from "@shared/sie-catalog";
+import { getSIECheckpointBranches, getSIECheckpointChoices, getSIESubject, getSIETeacher } from "@shared/sie-catalog";
+import { calculateLearningGap } from "@shared/sie-learning-progress";
 import { Activity, BookOpenText, Check, CircleHelp, Eye, Gauge, Mic2, RefreshCcw, Sparkles, TrendingUp } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -24,13 +25,23 @@ type LessonProgress = { completedSteps?: StepId[]; difficulty?: "unknown" | "eas
 export default function Study() {
   const utils = trpc.useUtils();
   const profile = trpc.studentProfile.get.useQuery();
+  const learning = trpc.learning.get.useQuery();
+  const activeExternalSession = trpc.learning.activeExternalSession.useQuery();
+  const [sessionNow, setSessionNow] = useState(Date.now());
+  const [markSessionLessonCompleted, setMarkSessionLessonCompleted] = useState(false);
   const [subjectId, setSubjectId] = useState("");
+  const [branchId, setBranchId] = useState("");
   const [lessonId, setLessonId] = useState("");
   const [completedSteps, setCompletedSteps] = useState<StepId[]>([]);
   const [difficulty, setDifficulty] = useState<"unknown" | "easy" | "medium" | "hard">("unknown");
   const [notes, setNotes] = useState("");
   const subjects = profile.data?.subjects || [];
   const lessons = useMemo(() => getSIECheckpointChoices(subjectId), [subjectId]);
+  const branches = useMemo(() => getSIECheckpointBranches(subjectId), [subjectId]);
+  const currentBranch = branches.find(branch => branch.branchId === branchId) ?? branches[0];
+  const branchChoices = currentBranch?.choices ?? [];
+  const currentBranchId = currentBranch?.branchId ?? "";
+  const currentBranchPointLabel = currentBranch?.branchType === "official_section" ? "موضوع" : "درس";
   const selection = (profile.data?.selection || {}) as Record<string, unknown>;
   const progressMap = (selection.subjectLessonProgress || {}) as Record<string, Record<string, LessonProgress>>;
   const currentProgress = progressMap[subjectId] && progressMap[subjectId][lessonId];
@@ -38,15 +49,19 @@ export default function Study() {
   type CourseStatus = "not_started" | "in_progress" | "caught_up" | "needs_review";
   const courseProgressMap = (selection.learningCourseProgress || {}) as Record<string, any>;
   const currentCourseProgress = courseProgressMap[subjectId] || {};
+  const branchProgressMap = (currentCourseProgress.branches || {}) as Record<string, Record<string, any>>;
+  const currentBranchProgress = currentBranchId ? branchProgressMap[currentBranchId] || {} : {};
+  const branchGapMap = ((learning.data as any)?.gapByBranch?.[subjectId] || {}) as Record<string, any>;
   const assessmentHistory = Array.isArray(selection.learningAssessments) ? selection.learningAssessments as Array<any> : [];
   const subjectAssessments = assessmentHistory.filter(item => item.subjectId === subjectId).slice(-5).reverse();
   const selectedTeacherId = ((selection.teacherChoices || {}) as Record<string, string>)[subjectId]
     || (profile.data?.teacherSelections || {})[subjectId];
   const selectedTeacher = selectedTeacherId ? getSIETeacher(selectedTeacherId) : undefined;
   const [lastCompletedLessonId, setLastCompletedLessonId] = useState("");
+  const [teacherTeachingFrontierId, setTeacherTeachingFrontierId] = useState("__UNKNOWN__");
+  const [schoolClassFrontierId, setSchoolClassFrontierId] = useState("__UNKNOWN__");
   const [teacherCourseFrontier, setTeacherCourseFrontier] = useState("");
   const [courseStatus, setCourseStatus] = useState<CourseStatus>("not_started");
-  const [backlogCount, setBacklogCount] = useState(0);
   const [estimatedMinutes, setEstimatedMinutes] = useState(45);
   const [courseDifficulty, setCourseDifficulty] = useState<"unknown" | "easy" | "medium" | "hard">("unknown");
   const [courseNotes, setCourseNotes] = useState("");
@@ -58,18 +73,34 @@ export default function Study() {
   const [weakConcepts, setWeakConcepts] = useState("");
   const [assessmentNotes, setAssessmentNotes] = useState("");
 
+  const currentGap = calculateLearningGap(branchChoices, {
+    studentFrontierId: lastCompletedLessonId || null,
+    teacherTeachingFrontierId,
+    schoolClassFrontierId,
+  });
+
 
   useEffect(() => {
     if (!subjectId && subjects.length) setSubjectId(subjects[0]);
   }, [subjects, subjectId]);
 
   useEffect(() => {
-    if (!lessons.length) {
+    if (!branches.length) {
+      setBranchId("");
+      return;
+    }
+    if (!branches.some(branch => branch.branchId === branchId)) setBranchId(branches[0].branchId);
+  }, [subjectId, branches, branchId]);
+
+  useEffect(() => {
+    if (!branchChoices.length) {
       setLessonId("");
       return;
     }
-    if (!lessons.some(lesson => lesson.nodeId === lessonId)) setLessonId(lessons[0].nodeId);
-  }, [subjectId, lessons, lessonId]);
+    if (!branchChoices.some(lesson => lesson.nodeId === lessonId)) {
+      setLessonId(branchChoices[0].nodeId);
+    }
+  }, [subjectId, currentBranchId, branchChoices, lessonId]);
 
   useEffect(() => {
     setCompletedSteps(currentProgress?.completedSteps || []);
@@ -78,15 +109,43 @@ export default function Study() {
   }, [subjectId, lessonId, currentProgress?.updatedAt]);
 
   useEffect(() => {
-    setLastCompletedLessonId(currentCourseProgress.lastCompletedLessonId || "");
+    const legacyTeacherState = ((selection.teacherProgressState || {}) as Record<string, Record<string, any>>)[subjectId] || {};
+    const subjectLessonRecords = progressMap[subjectId] || {};
+    const latestSq3rCompleted = [...branchChoices].reverse().find(lesson => {
+      const record = subjectLessonRecords[lesson.nodeId];
+      return Array.isArray(record?.completedSteps) && record.completedSteps.length === 5;
+    })?.nodeId;
+    const belongsToCurrentBranch = (value: unknown): value is string =>
+      typeof value === "string" &&
+      (value === "__NOT_STARTED__" ||
+        branchChoices.some(lesson => lesson.nodeId === value));
+    const legacyStudentFrontier = currentCourseProgress.lastCompletedLessonId
+      ?? legacyTeacherState.studentAttendedFrontier;
+    const studentFrontier = Object.prototype.hasOwnProperty.call(currentBranchProgress, "lastCompletedLessonId")
+      ? currentBranchProgress.lastCompletedLessonId
+      : belongsToCurrentBranch(legacyStudentFrontier)
+        ? legacyStudentFrontier
+        : latestSq3rCompleted ?? "__UNKNOWN__";
+    const teacherFrontier = Object.prototype.hasOwnProperty.call(currentBranchProgress, "teacherTeachingFrontierId")
+      ? currentBranchProgress.teacherTeachingFrontierId
+      : belongsToCurrentBranch(currentCourseProgress.teacherTeachingFrontierId)
+        ? currentCourseProgress.teacherTeachingFrontierId
+        : "__UNKNOWN__";
+    const schoolFrontier = Object.prototype.hasOwnProperty.call(currentBranchProgress, "schoolClassFrontierId")
+      ? currentBranchProgress.schoolClassFrontierId
+      : belongsToCurrentBranch(currentCourseProgress.schoolClassFrontierId)
+        ? currentCourseProgress.schoolClassFrontierId
+        : "__UNKNOWN__";
+    setLastCompletedLessonId(studentFrontier || "__UNKNOWN__");
+    setTeacherTeachingFrontierId(teacherFrontier || "__UNKNOWN__");
+    setSchoolClassFrontierId(schoolFrontier || "__UNKNOWN__");
     setTeacherCourseFrontier(currentCourseProgress.teacherCourseFrontier || "");
     setCourseStatus(currentCourseProgress.status || "not_started");
-    setBacklogCount(Number(profile.data?.backlog?.[subjectId] ?? profile.data?.backlog?.[getSIESubject(subjectId)?.nameAr || ""] ?? currentCourseProgress.backlogCount ?? 0));
     setEstimatedMinutes(Number(currentCourseProgress.estimatedMinutesPerLesson ?? 45));
     setCourseDifficulty(currentCourseProgress.difficulty || "unknown");
-    setCourseNotes(currentCourseProgress.notes || "");
-    setLearningObstacle(profile.data?.obstacle || "");
-  }, [subjectId, currentCourseProgress.updatedAt, profile.data?.backlog?.[subjectId], profile.data?.obstacle]);
+    setCourseNotes(currentBranchProgress.notes ?? currentCourseProgress.notes ?? "");
+    setLearningObstacle(currentCourseProgress.obstacle ?? profile.data?.obstacle ?? "");
+  }, [subjectId, currentBranchId, currentBranchProgress.updatedAt, currentCourseProgress.updatedAt, profile.data?.obstacle, branches, branchChoices, progressMap]);
 
 
   const saveProgress = trpc.study.saveSubjectLessonProgress.useMutation({
@@ -99,11 +158,33 @@ export default function Study() {
 
   const saveCourseProgress = trpc.learning.updateCourseProgress.useMutation({
     onSuccess: async () => {
-      await utils.studentProfile.get.invalidate();
+      await Promise.all([utils.studentProfile.get.invalidate(), utils.learning.get.invalidate()]);
       toast.success("تم تحديث التراكم والتقدم الدراسي.");
     },
     onError: error => toast.error(error.message),
   });
+  const startExternalSession = trpc.learning.startExternalSession.useMutation({
+    onSuccess: async () => {
+      setMarkSessionLessonCompleted(false);
+      await utils.learning.activeExternalSession.invalidate();
+      await utils.studentProfile.get.invalidate();
+      toast.success("بدأت جلسة المذاكرة الخارجية. يمكنك الانتقال إلى تطبيق المدرس أو ملف PDF.");
+    },
+    onError: error => toast.error(error.message),
+  });
+  const finishExternalSession = trpc.learning.finishExternalSession.useMutation({
+    onSuccess: async result => {
+      await utils.learning.activeExternalSession.invalidate();
+      await Promise.all([utils.studentProfile.get.invalidate(), utils.learning.get.invalidate()]);
+      const minutes = Math.floor(result.durationSeconds / 60);
+      toast.success(result.lessonMarkedCompleted
+        ? `انتهت الجلسة: ${minutes} دقيقة، وتم تحديث موضعك في المنهج.`
+        : `انتهت الجلسة: ${minutes} دقيقة. لم يتم تغيير موضع المنهج.`);
+      if (result.requiresTimeReview) toast.warning("الجلسة تجاوزت 12 ساعة؛ تم تسجيل الحد الأعلى فقط.");
+    },
+    onError: error => toast.error(error.message),
+  });
+
   const saveAssessment = trpc.learning.addAssessment.useMutation({
     onSuccess: async () => {
       await utils.studentProfile.get.invalidate();
@@ -120,15 +201,38 @@ export default function Study() {
     if (!subjectId) return;
     saveCourseProgress.mutate({
       subjectId,
+      branchId: currentBranchId,
       teacherId: selectedTeacherId || null,
-      lastCompletedLessonId: lastCompletedLessonId || null,
+      lastCompletedLessonId: lastCompletedLessonId || "__UNKNOWN__",
+      teacherTeachingFrontierId,
+      schoolClassFrontierId,
       teacherCourseFrontier: teacherCourseFrontier.trim(),
       status: courseStatus,
-      backlogCount: Math.max(0, Math.min(200, backlogCount)),
       estimatedMinutesPerLesson: Math.max(5, Math.min(480, estimatedMinutes)),
       difficulty: courseDifficulty,
       notes: courseNotes,
       obstacle: learningObstacle,
+    });
+  };
+
+  const beginExternalStudy = () => {
+    if (!subjectId || !currentBranchId || !lessonId) {
+      toast.error("اختر المادة والفرع والدرس أولًا.");
+      return;
+    }
+    startExternalSession.mutate({
+      subjectId,
+      branchId: currentBranchId,
+      lessonId,
+    });
+  };
+
+  const endExternalStudy = () => {
+    const session = activeExternalSession.data;
+    if (!session?.sessionId) return;
+    finishExternalSession.mutate({
+      sessionId: session.sessionId,
+      markLessonCompleted: markSessionLessonCompleted,
     });
   };
 
@@ -178,18 +282,84 @@ export default function Study() {
   const doneCount = completedSteps.length;
   const completion = Math.round((doneCount / steps.length) * 100);
   const selectedLesson = lessons.find(item => item.nodeId === lessonId);
+  const externalSession = activeExternalSession.data;
+  const externalSessionElapsed = externalSession?.startedAt
+    ? Math.max(0, Math.floor((sessionNow - Date.parse(externalSession.startedAt)) / 1_000))
+    : 0;
+  const formatSessionDuration = (totalSeconds: number) => {
+    const hours = Math.floor(totalSeconds / 3_600);
+    const minutes = Math.floor((totalSeconds % 3_600) / 60);
+    const seconds = totalSeconds % 60;
+    return [hours, minutes, seconds].map((value, index) =>
+      index === 0 && value === 0 ? null : String(value).padStart(2, "0")
+    ).filter(Boolean).join(":") || "00:00";
+  };
+  const externalSessionSubjectName = externalSession ? getSIESubject(externalSession.subjectId)?.nameAr || externalSession.subjectId : "";
+  const externalSessionLessonTitle = externalSession
+    ? getSIECheckpointChoices(externalSession.subjectId).find(item => item.nodeId === externalSession.lessonId)?.title || "درس غير معروف"
+    : "";
+
+  useEffect(() => {
+    if (!externalSession?.startedAt) {
+      setSessionNow(Date.now());
+      return;
+    }
+    const update = () => setSessionNow(Date.now());
+    update();
+    const interval = window.setInterval(update, 1_000);
+    return () => window.clearInterval(interval);
+  }, [externalSession?.sessionId, externalSession?.startedAt]);
 
   return (
     <DashboardLayout title="المذاكرة وذكاء التقدم" description="تابع تقدمك وتراكمك ونتائجك، ثم استخدم SQ3R لتحويل كل درس إلى خطوات تعلم قابلة للقياس.">
       {profile.isError && <div className="rounded-2xl border border-destructive/20 bg-destructive/5 p-4 text-sm">تعذّر تحميل ملفك الدراسي. <button className="font-bold underline" onClick={() => void profile.refetch()}>إعادة المحاولة</button></div>}
       <section className="app-card mb-5 p-5 sm:p-6">
         <div className="mb-4 flex items-center gap-3"><span className="flex size-10 items-center justify-center rounded-xl bg-secondary text-primary"><BookOpenText className="size-5" /></span><div><h2 className="font-bold">حدد موضع مذاكرتك</h2><p className="text-xs text-muted-foreground">المواد المضافة إلى ملفك فقط</p></div></div>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-3">
           <div><label className="mb-2 block text-sm font-semibold">المادة</label><Select value={subjectId} onValueChange={setSubjectId} disabled={profile.isLoading || subjects.length === 0}><SelectTrigger className="h-12 rounded-xl bg-background"><SelectValue placeholder="اختر المادة" /></SelectTrigger><SelectContent>{subjects.map(id => <SelectItem key={id} value={id}>{getSIESubject(id)?.nameAr || id}</SelectItem>)}</SelectContent></Select></div>
-          <div><label className="mb-2 block text-sm font-semibold">الدرس</label><Select value={lessonId} onValueChange={setLessonId} disabled={!lessons.length}><SelectTrigger className="h-12 rounded-xl bg-background"><SelectValue placeholder="اختر درسًا" /></SelectTrigger><SelectContent>{lessons.map(lesson => <SelectItem key={lesson.nodeId} value={lesson.nodeId}>{lesson.unitTitle} · {lesson.title}</SelectItem>)}</SelectContent></Select></div>
+          <div><label className="mb-2 block text-sm font-semibold">فرع المنهج الرسمي</label><Select value={currentBranchId} onValueChange={setBranchId} disabled={!branches.length}><SelectTrigger className="h-12 rounded-xl bg-background"><SelectValue placeholder="اختر الفرع" /></SelectTrigger><SelectContent>{branches.map(branch => <SelectItem key={branch.branchId} value={branch.branchId}>{branch.branchTitle}</SelectItem>)}</SelectContent></Select></div>
+          <div><label className="mb-2 block text-sm font-semibold">الدرس</label><Select value={lessonId} onValueChange={value => { setLessonId(value); const selected = lessons.find(item => item.nodeId === value); if (selected?.branchId) setBranchId(selected.branchId); }} disabled={!lessons.length}><SelectTrigger className="h-12 rounded-xl bg-background"><SelectValue placeholder="اختر درسًا" /></SelectTrigger><SelectContent>{lessons.map(lesson => <SelectItem key={lesson.nodeId} value={lesson.nodeId}>{lesson.unitTitle} · {lesson.title}</SelectItem>)}</SelectContent></Select></div>
         </div>
         {subjectId && !lessons.length && <p className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-sm leading-6 text-muted-foreground">فهرس هذه المادة غير محمّل في النسخة الحالية؛ لذلك لن أعرض دروسًا مخمّنة. ستظهر هنا تلقائيًا عندما يُضاف فهرس المنهج المعتمد.</p>}
         {!subjects.length && !profile.isLoading && <p className="mt-4 rounded-xl bg-muted/50 p-3 text-sm text-muted-foreground">لم تُضف مواد إلى ملفك الدراسي بعد. أضف المواد من الملف الشخصي أولًا.</p>}
+      </section>
+      <section className="app-card mb-5 p-5 sm:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">CROSS-APP STUDY SESSION</p>
+            <h2 className="mt-1 font-bold">جلسة مذاكرة خارج SIE</h2>
+            {externalSession ? (
+              <>
+                <p className="mt-1 text-sm text-muted-foreground">{externalSessionSubjectName} · {externalSessionLessonTitle}</p>
+                <p className="mt-2 text-xs leading-6 text-muted-foreground">الجلسة محفوظة على الخادم وتستمر عند انتقالك إلى منصة المدرس أو قارئ PDF. ارجع إلى SIE واضغط إنهاء عند الانتهاء.</p>
+              </>
+            ) : (
+              <p className="mt-1 text-xs leading-6 text-muted-foreground">ابدأ المؤقت قبل فتح منصة المدرس أو ملف PDF. عند رجوعك، أوقفه وسجّل ما إذا كنت أنهيت الدرس.</p>
+            )}
+          </div>
+          {externalSession ? (
+            <div className="flex shrink-0 flex-col items-center gap-2 rounded-2xl border border-primary/20 bg-primary/5 px-5 py-3">
+              <p className="text-[10px] font-semibold text-muted-foreground">الوقت المسجل</p>
+              <p className="text-3xl font-bold tabular-nums text-primary">{formatSessionDuration(externalSessionElapsed)}</p>
+              <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">جلسة نشطة</span>
+            </div>
+          ) : (
+            <Button type="button" onClick={beginExternalStudy} disabled={startExternalSession.isPending || activeExternalSession.isLoading || !subjectId || !currentBranchId || !lessonId} className="shrink-0 rounded-xl bg-primary">
+              {startExternalSession.isPending ? "جارٍ بدء الجلسة..." : "ابدأ جلسة خارج SIE"}
+            </Button>
+          )}
+        </div>
+        {externalSession && (
+          <div className="mt-4 flex flex-col gap-3 rounded-xl border border-border/70 bg-muted/25 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <label className="flex items-start gap-2 text-sm leading-6">
+              <input type="checkbox" checked={markSessionLessonCompleted} onChange={event => setMarkSessionLessonCompleted(event.target.checked)} className="mt-1 size-4 accent-primary" />
+              <span>أنهيت دراسة هذا الدرس؛ حدّث موضعي في فرع المنهج عند إنهاء الجلسة.</span>
+            </label>
+            <Button type="button" variant="outline" onClick={endExternalStudy} disabled={finishExternalSession.isPending} className="shrink-0 rounded-xl">
+              {finishExternalSession.isPending ? "جارٍ إنهاء الجلسة..." : "إنهاء الجلسة وحفظ الوقت"}
+            </Button>
+          </div>
+        )}
       </section>
       <motion.section
         className="learning-progress-panel app-card mb-6 overflow-hidden"
@@ -202,7 +372,7 @@ export default function Study() {
           <div className="relative z-10 max-w-[70%] sm:max-w-[74%]">
             <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#e5bd55]">LEARNING INTELLIGENCE</p>
             <h2 className="mt-2 text-xl font-bold sm:text-2xl">حالة تعلّمك الفعلية</h2>
-            <p className="mt-2 max-w-xl text-xs leading-6 text-white/65 sm:text-sm">سجّل موضعك والتراكم من هنا. لا نحتاج اتصالًا بمنصة المدرس كي يبدأ النظام في فهم تقدمك.</p>
+            <p className="mt-2 max-w-xl text-xs leading-6 text-white/65 sm:text-sm">يتابع SIE موضعك وموضع التدريس داخل كل فرع رسمي بصورة مستقلة؛ ولن يقارن بين وحدات أو أقسام مختلفة.</p>
             <div className="mt-4 flex flex-wrap gap-2">
               <span className="rounded-full border border-white/15 bg-white/8 px-3 py-1.5 text-[11px] text-white/80">{subjectName}</span>
               <span className="rounded-full border border-[#e5bd55]/25 bg-[#e5bd55]/10 px-3 py-1.5 text-[11px] text-[#f1d58c]">{selectedTeacher?.nameAr || "لم تحدد مدرسًا"}</span>
@@ -213,20 +383,47 @@ export default function Study() {
 
         <div className="grid gap-5 p-5 sm:p-6 xl:grid-cols-[1.2fr_.8fr]">
           <div className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               <label className="text-sm font-semibold">
-                آخر درس أنهيته في فهرس المنهج
-                <Select value={lastCompletedLessonId || "__NONE__"} onValueChange={value => setLastCompletedLessonId(value === "__NONE__" ? "" : value)} disabled={!lessons.length}>
-                  <SelectTrigger className="mt-2 h-11 rounded-xl bg-background"><SelectValue placeholder="لم أحدد بعد" /></SelectTrigger>
+                آخر درس أتمه الطالب في المنهج
+                <Select value={lastCompletedLessonId || "__UNKNOWN__"} onValueChange={setLastCompletedLessonId} disabled={!lessons.length}>
+                  <SelectTrigger className="mt-2 h-11 rounded-xl bg-background"><SelectValue placeholder="غير محدد" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__NONE__">لم أحدد بعد</SelectItem>
-                    {lessons.map(lesson => <SelectItem key={lesson.nodeId} value={lesson.nodeId}>{lesson.unitTitle} · {lesson.title}</SelectItem>)}
+                    <SelectItem value="__UNKNOWN__">غير محدد</SelectItem>
+                    <SelectItem value="__NOT_STARTED__">لم أبدأ المنهج بعد</SelectItem>
+                    {branchChoices.map(lesson => <SelectItem key={lesson.nodeId} value={lesson.nodeId}>{lesson.title}</SelectItem>)}
                   </SelectContent>
                 </Select>
+                <span className="mt-1 block text-[11px] font-normal text-muted-foreground">ده موضع الطالب، وليس موضع المدرس أو المدرسة.</span>
               </label>
               <label className="text-sm font-semibold">
-                آخر محاضرة/عنصر شاهدته في كورس المدرس
-                <Input value={teacherCourseFrontier} onChange={event => setTeacherCourseFrontier(event.target.value)} placeholder="مثال: المحاضرة 12 – مراجعة الوحدة الأولى" maxLength={120} className="mt-2 h-11 rounded-xl bg-background" />
+                آخر درس شرحه المدرس فعليًا
+                <Select value={teacherTeachingFrontierId} onValueChange={setTeacherTeachingFrontierId} disabled={!selectedTeacher || !lessons.length}>
+                  <SelectTrigger className="mt-2 h-11 rounded-xl bg-background"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__UNKNOWN__">لا أعرف / غير متاح</SelectItem>
+                    <SelectItem value="__NOT_STARTED__">لم يبدأ التدريس بعد</SelectItem>
+                    {branchChoices.map(lesson => <SelectItem key={lesson.nodeId} value={lesson.nodeId}>{lesson.title}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <span className="mt-1 block text-[11px] font-normal text-muted-foreground">يُستخدم كمرجع أول فقط عندما يكون معروفًا.</span>
+              </label>
+              <label className="text-sm font-semibold">
+                آخر درس وصل إليه فصلك في المدرسة
+                <Select value={schoolClassFrontierId} onValueChange={setSchoolClassFrontierId} disabled={!lessons.length}>
+                  <SelectTrigger className="mt-2 h-11 rounded-xl bg-background"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__UNKNOWN__">غير معروف حتى الآن</SelectItem>
+                    <SelectItem value="__NOT_STARTED__">لم يبدأ الفصل المادة بعد</SelectItem>
+                    {branchChoices.map(lesson => <SelectItem key={lesson.nodeId} value={lesson.nodeId}>{lesson.title}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <span className="mt-1 block text-[11px] font-normal text-muted-foreground">يُحدَّث حسب آخر درس وصل إليه فصل الطالب في المدرسة، ويُستخدم بديلًا عند عدم معرفة موضع المدرس.</span>
+              </label>
+              <label className="text-sm font-semibold">
+                آخر محاضرة شاهدتها على منصة المدرس (اختياري)
+                <Input value={teacherCourseFrontier} onChange={event => setTeacherCourseFrontier(event.target.value)} placeholder="مثال: المحاضرة 12" maxLength={120} className="mt-2 h-11 rounded-xl bg-background" />
+                <span className="mt-1 block text-[11px] font-normal text-muted-foreground">للتوثيق فقط؛ لا تدخل في حساب فجوة المنهج.</span>
               </label>
               <label className="text-sm font-semibold">
                 وضعك الحالي مع المادة
@@ -239,10 +436,6 @@ export default function Study() {
                     <SelectItem value="needs_review">أنهيت المحتوى ويحتاج مراجعة</SelectItem>
                   </SelectContent>
                 </Select>
-              </label>
-              <label className="text-sm font-semibold">
-                عدد الدروس/المحاضرات المتأخرة
-                <Input type="number" min={0} max={200} value={backlogCount} onChange={event => setBacklogCount(Math.max(0, Math.min(200, Number(event.target.value) || 0)))} className="mt-2 h-11 rounded-xl bg-background" />
               </label>
               <label className="text-sm font-semibold">
                 الوقت المعتاد للدرس بالدقائق
@@ -272,7 +465,7 @@ export default function Study() {
               <Textarea value={learningObstacle} onChange={event => setLearningObstacle(event.target.value)} placeholder="مثال: صعوبة البدء، تشتت، وقت قليل، أو تراكم كبير" maxLength={600} className="mt-2 min-h-20 rounded-xl bg-background leading-7" />
             </label>
             <div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-muted/25 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-xs leading-6 text-muted-foreground">هذه بيانات يقرّ بها الطالب وليست مزامنة تلقائية. موضع الدرس من فهرس المنهج، ورقم المحاضرة من كورس المدرس حقل مستقل؛ حدّثهما كلما تقدمت.</p>
+              <p className="text-xs leading-6 text-muted-foreground">أنت الآن تسجل التقدم داخل فرع «{currentBranch?.branchTitle || "غير محدد"}» فقط. يُفضّل النظام تقدم المدرس في هذا الفرع، ثم تقدم فصلك في الفرع نفسه. وتُحسب الفجوة من دروس الفرع المحدد دون دمج فروع متوازية.</p>
               <Button type="button" onClick={submitCourseProgress} disabled={saveCourseProgress.isPending || !subjectId} className="pressable shrink-0 rounded-xl bg-primary">
                 {saveCourseProgress.isPending ? "جارٍ حفظ التقدم..." : "حفظ حالة المادة"}
               </Button>
@@ -283,13 +476,19 @@ export default function Study() {
             <div className="flex items-center gap-2"><Activity className="size-4 text-primary" /><h3 className="font-bold">مؤشرات المادة</h3></div>
             <div className="mt-4 grid grid-cols-2 gap-3">
               <div className="rounded-xl border border-border/60 bg-background/75 p-3">
-                <p className="text-[11px] text-muted-foreground">التراكم المسجل</p>
-                <p className="mt-1 text-2xl font-bold tabular-nums text-primary">{profile.data?.backlog?.[subjectId] ?? profile.data?.backlog?.[getSIESubject(subjectId)?.nameAr || ""] ?? backlogCount}</p>
+                <p className="text-[11px] text-muted-foreground">فجوة المنهج المحسوبة</p>
+                <p className="mt-1 text-2xl font-bold tabular-nums text-primary">{currentGap.gapCount === null ? "—" : currentGap.gapCount}</p>
+                <p className="mt-1 text-[10px] text-muted-foreground">{currentBranch?.branchTitle || "الفرع غير محدد"} · {currentGap.referenceSource === "teacher" ? "المرجع: المدرس" : currentGap.referenceSource === "school" ? "المرجع: المدرسة" : "لا يوجد مرجع داخل هذا الفرع"}</p>
               </div>
               <div className="rounded-xl border border-border/60 bg-background/75 p-3">
                 <p className="text-[11px] text-muted-foreground">التقييمات المسجلة</p>
                 <p className="mt-1 text-2xl font-bold tabular-nums">{subjectAssessments.length}</p>
               </div>
+            </div>
+            <div className="mt-3 rounded-xl border border-border/60 bg-background/75 p-3">
+              <p className="text-[11px] text-muted-foreground">حالة المقارنة</p>
+              <p className="mt-1 text-sm font-semibold">{currentGap.status === "calculated" ? (currentGap.gapCount! > 0 ? "الطالب متأخر عن المرجع" : currentGap.aheadCount! > 0 ? "الطالب متقدم على المرجع" : "الطالب مواكب للمرجع") : currentGap.status === "student_position_missing" ? "موضع الطالب غير محدد" : "لا يوجد موضع مرجعي معروف"}</p>
+              {currentGap.aheadCount !== null && currentGap.aheadCount > 0 && <p className="mt-1 text-[11px] text-muted-foreground">تقدم بمقدار {currentGap.aheadCount} {currentBranchPointLabel} عن المرجع.</p>}
             </div>
             <div className="mt-3 rounded-xl border border-border/60 bg-background/75 p-3">
               <p className="text-[11px] text-muted-foreground">متوسط آخر التقييمات المحفوظة</p>
@@ -301,6 +500,56 @@ export default function Study() {
             </div>
           </aside>
         </div>
+
+        <section className="border-t border-border/70 p-5 sm:p-6">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">BRANCH OVERVIEW</p>
+              <h3 className="mt-1 font-bold">ملخص التقدم في كل فروع المادة</h3>
+              <p className="mt-1 text-xs text-muted-foreground">كل وحدة أو فصل أو قسم يُقارن بمرجعه داخل حدوده فقط. اضغط على أي فرع لتحديث مواضعه.</p>
+            </div>
+            <span className="rounded-full border border-border bg-background px-3 py-1 text-[11px] text-muted-foreground">{branches.length} فروع مستقلة</span>
+          </div>
+          {learning.isLoading ? (
+            <p className="rounded-xl border border-border/70 bg-background/70 p-4 text-sm text-muted-foreground">جارٍ تحميل مؤشرات الفروع...</p>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {branches.map(branch => {
+                const gap = branchGapMap[branch.branchId];
+                const saved = branchProgressMap[branch.branchId] || {};
+                const studentLabel = gap?.studentFrontierTitle
+                  || (gap?.studentFrontierId === "__NOT_STARTED__" || saved.lastCompletedLessonId === "__NOT_STARTED__" ? "لم يبدأ بعد" : "غير محدد");
+                const referenceLabel = gap?.referenceFrontierTitle
+                  || (gap?.referenceFrontierId === "__NOT_STARTED__" ? "لم يبدأ بعد" : "غير معروف");
+                const referenceSourceLabel = gap?.referenceSource === "teacher"
+                  ? "المدرس" : gap?.referenceSource === "school" ? "المدرسة" : "لا يوجد مرجع";
+                const branchPointLabel = branch.branchType === "official_section" ? "موضوع" : "درس";
+                const gapLabel = gap?.gapCount === null || gap?.gapCount === undefined
+                  ? "غير محسوبة" : `${gap.gapCount} ${branchPointLabel}`;
+                const isSelected = branch.branchId === currentBranchId;
+                return (
+                  <button
+                    key={branch.branchId}
+                    type="button"
+                    onClick={() => setBranchId(branch.branchId)}
+                    className={`rounded-xl border p-4 text-start transition-colors ${isSelected ? "border-primary/50 bg-primary/5" : "border-border/70 bg-background/70 hover:bg-muted/50"}`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <h4 className="text-sm font-semibold leading-6">{branch.branchTitle}</h4>
+                      <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground">{branch.choices.length} {branchPointLabel === "موضوع" ? "موضوعات" : "دروس"}</span>
+                    </div>
+                    <p className="mt-3 text-xs text-muted-foreground">موضع الطالب: <span className="font-medium text-foreground">{studentLabel}</span></p>
+                    <p className="mt-1 text-xs text-muted-foreground">موضع {referenceSourceLabel}: <span className="font-medium text-foreground">{referenceLabel}</span></p>
+                    <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/60 pt-3">
+                      <span className="text-[11px] text-muted-foreground">فجوة هذا الفرع</span>
+                      <span className="text-sm font-bold tabular-nums text-primary">{gapLabel}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </section>
 
         <div className="border-t border-border/70 bg-muted/15 p-5 sm:p-6">
           <div className="mb-4 flex items-center justify-between gap-3">
