@@ -53,21 +53,26 @@ export default function Home() {
     >
       {summary.isError && <QueryErrorNotice onRetry={() => void summary.refetch()} label="تعذّر تحميل ملخص يومك. لن نعرض أرقامًا صفرية قد توحي بأن بياناتك فارغة." />}
       {!summary.isError && <>
-      <section className="sf-welcome-hero enter relative mb-6 overflow-hidden rounded-[1.6rem] px-5 py-6 text-primary-foreground sm:px-8 sm:py-8">
+      <section className="sf-welcome-hero sf-home-stage enter relative mb-6 overflow-hidden rounded-[1.6rem] px-5 py-6 text-primary-foreground sm:px-8 sm:py-8">
         <div className="relative flex flex-col justify-between gap-7 md:flex-row md:items-end">
-          <div><p className="mb-2 text-sm text-primary-foreground/65">{arabicDate()}</p><h2 className="text-2xl font-bold tracking-tight sm:text-3xl">أهلًا {user?.name?.split(" ")[0] || "بك"}، ما الذي يستحق تركيزك اليوم؟</h2><p className="mt-3 max-w-xl text-sm leading-7 text-primary-foreground/72">تقدم بسيط ومتّسق يصنع مسارًا أكبر. اختر المهمة التالية وابدأ الآن.</p></div>
-          <div className="flex items-center gap-4 rounded-2xl border border-white/12 bg-white/8 px-4 py-3 backdrop-blur-sm"><div className="flex size-11 items-center justify-center rounded-xl bg-white/12"><CheckCircle2 className="size-5 text-violet-200" /></div><div><p className="text-xs text-primary-foreground/65">إنجاز المهام</p><p className="num mt-0.5 text-xl font-medium">{completedRate === null ? "—" : `${completedRate}%`}</p></div><div className="h-8 w-px bg-white/12" /><p className="text-sm font-semibold">{data ? data.taskStats.completed : "—"}<span className="mr-1 text-primary-foreground/60">من {data ? data.taskStats.total : "—"}</span></p></div>
+          <div className="sf-home-intro"><p className="sf-home-date">{arabicDate()}</p><p className="sf-home-eyebrow">YOUR DAY, IN FOCUS</p><h2>أهلًا {user?.name?.split(" ")[0] || "بك"}، ابدأ بالأهم.</h2><p className="sf-home-description">مش مطلوب تخلّص كل حاجة مرة واحدة. اختار الخطوة الأهم، وخلّي تقدمك يقود باقي اليوم.</p><div className="sf-home-actions"><Button type="button" onClick={() => setLocation("/tasks")} variant="secondary" className="rounded-xl bg-white text-[#38214d] hover:bg-[#f0e6f8]">افتح مهامي<ChevronLeft className="size-4" /></Button><Button type="button" onClick={() => setLocation("/planner")} variant="outline" className="rounded-xl border-white/25 bg-white/8 text-white hover:bg-white/15">راجع خطتي</Button></div></div>
+          <div className="sf-home-progress">
+          <div className="sf-home-ring" role="progressbar" aria-label="نسبة إنجاز المهام" aria-valuemin={0} aria-valuemax={100} aria-valuenow={completedRate ?? 0} style={{ background: `conic-gradient(#f1d89b ${completedRate ?? 0}%, rgb(255 255 255 / 17%) 0)` }}>
+            <div className="sf-home-ring-center"><strong>{completedRate === null ? "—" : `${completedRate}%`}</strong><span>إنجاز المهام</span></div>
+          </div>
+          <div className="sf-home-progress-copy"><span>مكتمل حتى الآن</span><strong>{data ? data.taskStats.completed : "—"} <small>من {data ? data.taskStats.total : "—"} مهام</small></strong><p>كل مهمة تُنجزها تقرّبك من نهاية يوم أخف.</p></div>
+        </div>
         </div>
       </section>
 
-      <section className="sf-kpi-grid mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="sf-kpi-grid sf-home-metrics mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="المهام المفتوحة" value={data ? data.taskStats.remaining : "—"} sublabel={data ? "خطوة بانتظارك" : "جار تحميل البيانات"} icon={<ListChecks className="size-5" />} tone="violet" />
         <StatCard label="التزام الروتين" value={routineRate === null ? "—" : `${routineRate}%`} sublabel={data ? `${data.routineStats.completed} من ${data.routineStats.total} عادة` : "جار تحميل البيانات"} icon={<Clock3 className="size-5" />} tone="amber" />
         <StatCard label="أهداف نشطة" value={data ? data.goalStats.active : "—"} sublabel="وجهتك في هذا الفصل" icon={<Goal className="size-5" />} tone="emerald" />
         <StatCard label="كتب في المسار" value={data ? data.bookStats.total : "—"} sublabel="تعلم على مهل" icon={<BookOpenText className="size-5" />} tone="sky" />
       </section>
 
-      <section className="sf-home-grid grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(340px,.75fr)]">
+      <section className="sf-home-grid sf-home-workspace grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(340px,.75fr)]">
         <div className="sf-home-column space-y-6">
           <div className="app-card sf-home-panel overflow-hidden">
             <CardHeader icon={<ListChecks className="size-5" />} title="مهامك القادمة" subtitle="اختر المهمة التالية لتبقى في تدفقك." action={<Button variant="ghost" size="sm" onClick={() => setLocation("/tasks")} className="gap-1 rounded-xl text-primary hover:bg-secondary">كل المهام<ChevronLeft className="size-4" /></Button>} />
