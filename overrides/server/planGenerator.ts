@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getSIECheckpointChoices, getSIESubject, getSIETeacher } from "@shared/sie-catalog";
+import { calculateLearningGap } from "@shared/sie-learning-progress";
 import { invokeLLM } from "./_core/llm";
 import { getStudentProfile, saveAiPlan } from "./db";
 
@@ -55,8 +56,17 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
     const teacher = teacherId ? getSIETeacher(teacherId) : undefined;
     const state = teacherStates[subjectId] || {};
     const catalog = getSIECheckpointChoices(subjectId);
-    const studentFrontier = frontiers[subjectId] || state.studentAttendedFrontier || "";
+    const reported = courseProgress[subjectId] || {};
+    const studentFrontier = reported.lastCompletedLessonId || frontiers[subjectId] || state.studentAttendedFrontier || "";
     const frontierName = catalog.find(item => item.nodeId === studentFrontier);
+    const learningGap = calculateLearningGap(catalog, {
+      studentFrontierId: studentFrontier || null,
+      teacherTeachingFrontierId: reported.teacherTeachingFrontierId,
+      schoolClassFrontierId: reported.schoolClassFrontierId,
+    });
+    const referenceLabel = learningGap.referenceSource === "teacher" ? "المدرس"
+      : learningGap.referenceSource === "school" ? "المدرسة" : "غير متاح";
+    const referenceLesson = catalog.find(item => item.nodeId === learningGap.referenceFrontierId);
     const records = lessonProgress[subjectId] || {};
     const completed = Object.values(records).filter((item: any) => Array.isArray(item.completedSteps) && item.completedSteps.length === 5).length;
     const underway = Object.values(records).filter((item: any) => Array.isArray(item.completedSteps) && item.completedSteps.length > 0 && item.completedSteps.length < 5).length;
@@ -64,8 +74,8 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
       const lesson = catalog.find(item => item.nodeId === entry[0]);
       return lesson ? lesson.title : entry[0];
     });
-    const backlog = profile.backlog[subjectId] || profile.backlog[(subject && subject.nameAr) || ""] || 0;
-    const reported = courseProgress[subjectId] || {};
+    const legacyBacklog = profile.backlog[subjectId] ?? profile.backlog[(subject && subject.nameAr) || ""] ?? null;
+    const backlog = learningGap.gapCount;
     const lastLesson = catalog.find(item => item.nodeId === reported.lastCompletedLessonId);
     const recentAssessments = assessmentHistory.filter(item => item.subjectId === subjectId).slice(-5);
     const assessmentSummary = recentAssessments.map(item =>
@@ -75,11 +85,13 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
     const lessonList = catalog.map(item => item.unitTitle + " / " + item.title).join("؛ ");
     return [
       "المادة: " + ((subject && subject.nameAr) || subjectId),
-      "التراكم المسجل: " + backlog,
-      "حالة الكورس حسب آخر تحديث من الطالب: " + (reported.status || "لم تُحدّث بعد"),
-      "آخر درس في فهرس المنهج أبلغ الطالب أنه أتمه: " + (lastLesson ? lastLesson.unitTitle + " / " + lastLesson.title : reported.lastCompletedLessonId || "غير محدد"),
-      "آخر محاضرة/عنصر في كورس المدرس حسب الطالب: " + (reported.teacherCourseFrontier || "غير محدد"),
-      "عدد الدروس/المحاضرات المتأخرة حسب الطالب: " + (reported.backlogCount ?? backlog),
+      "مصدر المرجع المختار لحساب الفجوة: " + referenceLabel,
+      "موضع المدرس الذي رصده الطالب (إن توفر): " + (learningGap.referenceSource === "teacher" ? (referenceLesson?.title || reported.teacherTeachingFrontierId) : "غير مستخدم"),
+      "موضع الفصل في المدرسة الذي أبلغ عنه الطالب: " + (reported.schoolClassFrontierId === "__NOT_STARTED__" ? "لم يبدأ الفصل بعد" : catalog.find(item => item.nodeId === reported.schoolClassFrontierId)?.title || "غير معروف"),
+      "آخر درس أتمه الطالب في المنهج: " + (lastLesson ? lastLesson.unitTitle + " / " + lastLesson.title : reported.lastCompletedLessonId || "غير محدد"),
+      "الفجوة المحسوبة تلقائيًا: " + (backlog === null ? "غير محسوبة لعدم توفر موضع مرجعي أو موضع للطالب" : backlog + " درسًا؛ المتقدم على المرجع: " + (learningGap.aheadCount ?? 0)),
+      "التراكم القديم المسجل يدويًا (لا يُعامل كفجوة مؤكدة): " + (legacyBacklog === null ? "لا يوجد" : legacyBacklog),
+      "آخر محاضرة/عنصر في كورس المدرس كما أبلغ الطالب: " + (reported.teacherCourseFrontier || "غير محدد"),
       "الوقت التقديري للدرس: " + (reported.estimatedMinutesPerLesson ?? "غير محدد") + " دقيقة",
       "صعوبة المادة حسب الطالب: " + (reported.difficulty || "غير محددة"),
       "نتائج التقييمات الحديثة: " + (assessmentSummary || "لا توجد نتائج مسجلة"),
@@ -112,8 +124,9 @@ export async function generatePersonalPlan(
   const context = profile ? buildLearningContext(profile) : "لم يطلب المستخدم تخصيص الخطة بالملف الدراسي.";
   const system = [
     "أنت محرك التخطيط الدراسي داخل StudyFlow، ولست مساعد دردشة عام.",
-    "حلّل تراكم كل مادة، تقدم الطالب مع المدرس، تقدم SQ3R، وصعوبة الدروس المسجلة؛ ثم ابنِ خطة عملية متوازنة.",
-    "لا تخلط بين آخر محتوى عام للمدرس، محتوى الكورس المدفوع، وما شاهده الطالب. لا تخترع أرقام محاضرات أو أسماء دروس.",
+    "حلّل فجوة المنهج المحسوبة تلقائيًا لكل مادة، وموضع الطالب، وموضع التدريس المرجعي، وتقدم SQ3R، ونتائج التقييم، وصعوبة الدروس؛ ثم ابنِ خطة عملية متوازنة.",
+    "مصدر المرجع له أولوية صارمة: استخدم موضع المدرس إذا كان معروفًا، وإلا استخدم موضع الفصل في المدرسة. موضع الطالب يظل مستقلًا عن الاثنين. لا تستخدم رقم التراكم القديم كأنه فجوة مؤكدة.",
+    "لا تخلط بين آخر محتوى عام للمدرس، محتوى الكورس المدفوع، موضع ما شرحه المدرس، موضع المدرسة، وما أتمه الطالب. لا تخترع أرقام محاضرات أو أسماء دروس أو مواضع غير مسجلة.",
     "إذا كان فهرس مادة غير محمّل فاذكر هذا القيد ولا تخترع محتوى منهجيًا لها.",
     "رتّب الأولويات بحسب موعد الاختبار إن ذُكر، والمتطلبات السابقة، وحجم التراكم، وصعوبة الدرس. الدرس الصعب أو التأسيسي يحتاج فهمًا وتدريبًا واسترجاعًا، وليس قراءة سريعة؛ الدرس المألوف القصير يمكن أن يأخذ مراجعة مركزة.",
     "الحد الأقصى لوقت الدراسة اليومي هو " + dailyMinutes + " دقيقة. مجموع دقائق الخطوات التي تحمل اسم اليوم نفسه يجب ألا يتجاوز هذا الحد، مع ترك هامش تعويض واقعي.",
