@@ -31,7 +31,7 @@ const SOURCES: Record<string, BookSource> = {
   },
   HIS_G2_BAC: {
     title: "كتاب التاريخ الوطني - البكالوريا المصرية - الصف الثاني - الجزء الأول",
-    files: ["history-part1.txt", "history-part2.txt"],
+    files: ["history-part1.txt"],
     coverage: "full_text_part_1",
   },
   PROG_AI_G2_BAC: {
@@ -78,7 +78,7 @@ function findPageMarkers(content: string): PageMarker[] {
 
   for (const line of lines) {
     const compact = line.replace(/[^A-Z0-9]/gi, "").toUpperCase();
-    if (compact.startsWith("PARSEDTEXTOFPAGE")) {
+    if (compact.startsWith("PARSEDTEXTOFPAGE") || compact.startsWith("PARSEDTEXTFORPAGE")) {
       const numbers = line.match(/\d+/g) ?? [];
       if (numbers.length >= 2) {
         markers.push({
