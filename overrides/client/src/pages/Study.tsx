@@ -385,7 +385,7 @@ export default function Study() {
                   </Select>
                 </label>
                 <label className="mt-3 block text-sm font-semibold">مصدر المعلومة
-                  <Select value={schoolClassEvidenceSource} onValueChange={setSchoolClassEvidenceSource}>
+                  <Select value={schoolClassEvidenceSource} onValueChange={value => setSchoolClassEvidenceSource(value as typeof schoolClassEvidenceSource)}>
                     <SelectTrigger className="mt-2 h-11 rounded-xl bg-background"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="unknown">لم أتحقق بعد</SelectItem>
