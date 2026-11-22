@@ -1,7 +1,6 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import ThreeAmbientScene from "@/components/ThreeAmbientScene";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
@@ -273,7 +272,7 @@ export default function Study() {
   return (
     <DashboardLayout title="المذاكرة وذكاء التقدم" description="تابع تقدمك وتراكمك، ثم استخدم SQ3R لتحويل كل درس إلى خطوات تعلم قابلة للقياس.">
       {profile.isError && <div className="rounded-2xl border border-destructive/20 bg-destructive/5 p-4 text-sm">تعذّر تحميل ملفك الدراسي. <button className="font-bold underline" onClick={() => void profile.refetch()}>إعادة المحاولة</button></div>}
-      <section className="app-card mb-5 p-5 sm:p-6">
+      <section className="sf-study-selector app-card mb-5 p-5 sm:p-6">
         <div className="mb-4 flex items-center gap-3"><span className="flex size-10 items-center justify-center rounded-xl bg-secondary text-primary"><BookOpenText className="size-5" /></span><div><h2 className="font-bold">حدد موضع مذاكرتك</h2><p className="text-xs text-muted-foreground">المواد المضافة إلى ملفك فقط</p></div></div>
         <div className="grid gap-4 sm:grid-cols-3">
           <div><label className="mb-2 block text-sm font-semibold">المادة</label><Select value={subjectId} onValueChange={setSubjectId} disabled={profile.isLoading || subjects.length === 0}><SelectTrigger className="h-12 rounded-xl bg-background"><SelectValue placeholder="اختر المادة" /></SelectTrigger><SelectContent>{subjects.map(id => <SelectItem key={id} value={id}>{getSIESubject(id)?.nameAr || id}</SelectItem>)}</SelectContent></Select></div>
@@ -283,7 +282,7 @@ export default function Study() {
         {subjectId && !lessons.length && <p className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-sm leading-6 text-muted-foreground">فهرس هذه المادة غير محمّل في النسخة الحالية؛ لذلك لن أعرض دروسًا مخمّنة. ستظهر هنا تلقائيًا عندما يُضاف فهرس المنهج المعتمد.</p>}
         {!subjects.length && !profile.isLoading && <p className="mt-4 rounded-xl bg-muted/50 p-3 text-sm text-muted-foreground">لم تُضف مواد إلى ملفك الدراسي بعد. أضف المواد من الملف الشخصي أولًا.</p>}
       </section>
-      <section className="app-card mb-5 p-5 sm:p-6">
+      <section className="sf-study-session app-card mb-5 p-5 sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">CROSS-APP STUDY SESSION</p>
@@ -322,13 +321,13 @@ export default function Study() {
         )}
       </section>
       <motion.section
-        className="learning-progress-panel app-card mb-6 overflow-hidden"
+        className="sf-study-intelligence learning-progress-panel app-card mb-6 overflow-hidden"
         initial={{ opacity: 0, y: 22, rotateX: -1.5 }}
         animate={{ opacity: 1, y: 0, rotateX: 0 }}
         transition={{ duration: 0.48, ease: [0.22, 1, 0.36, 1] }}
       >
         <div className="sf-learning-hero relative overflow-hidden rounded-t-2xl px-5 py-6 text-white sm:px-7">
-          <div className="pointer-events-none absolute -left-4 -top-5 h-48 w-64 opacity-80 sm:h-56 sm:w-72"><ThreeAmbientScene /></div>
+          <span className="sf-learning-hero-orbit sf-learning-hero-orbit-one" aria-hidden="true" /><span className="sf-learning-hero-orbit sf-learning-hero-orbit-two" aria-hidden="true" />
           <div className="relative z-10 max-w-[70%] sm:max-w-[74%]">
             <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--sf-gold-light)]">LEARNING INTELLIGENCE</p>
             <h2 className="mt-2 text-xl font-bold sm:text-2xl">حالة تعلّمك الفعلية</h2>
@@ -341,8 +340,8 @@ export default function Study() {
           <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-l from-transparent via-[var(--sf-gold)]/70 to-transparent" />
         </div>
 
-        <div className="grid gap-5 p-5 sm:p-6 xl:grid-cols-[1.2fr_.8fr]">
-          <div className="rounded-2xl border border-accent/25 bg-accent/5 p-4 text-sm leading-7 text-muted-foreground xl:col-span-2">
+        <div className="sf-study-intelligence-body grid gap-5 p-5 sm:p-6 xl:grid-cols-[1.2fr_.8fr]">
+          <div className="sf-study-guidance rounded-2xl border border-accent/25 bg-accent/5 p-4 text-sm leading-7 text-muted-foreground xl:col-span-2">
             <p className="font-bold text-foreground">تحديث موضع الفصل في المدرسة — إدخال يدوي، وليس ربطًا آليًا</p>
             <p className="mt-1">افتح كشكول المادة أو اسأل المدرس أو زميلًا موثوقًا: ما آخر درس انتهت الحصة من شرحه بالفعل؟ اختر هذا الدرس أدناه. لا تختَر الدرس التالي أو الدرس الموجود فقط في جدول المنهج.</p>
             <p className="mt-1">لكي تُحسب الفجوة، حدّد أيضًا آخر درس أنهيته أنت. موضع المدرس له الأولوية؛ وموضع الفصل يُستخدم بديلًا فقط عندما لا يكون موضع المدرس معروفًا.</p>
@@ -450,7 +449,7 @@ export default function Study() {
             </div>
           </div>
 
-          <aside className="learning-glass-card rounded-2xl border border-border/70 bg-muted/20 p-4 sm:p-5">
+          <aside className="sf-study-insights learning-glass-card rounded-2xl border border-border/70 bg-muted/20 p-4 sm:p-5">
             <div className="flex items-center gap-2"><Activity className="size-4 text-primary" /><h3 className="font-bold">مؤشرات المادة</h3></div>
             <div className="mt-4 grid grid-cols-2 gap-3">
               <div className="rounded-xl border border-border/60 bg-background/75 p-3">
@@ -471,7 +470,7 @@ export default function Study() {
           </aside>
         </div>
 
-        <section className="border-t border-border/70 p-5 sm:p-6">
+        <section className="sf-study-branch-overview border-t border-border/70 p-5 sm:p-6">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">BRANCH OVERVIEW</p>
@@ -525,19 +524,19 @@ export default function Study() {
 
       {lessonId && selectedLesson ? (
         <>
-          <section className="app-card mb-5 overflow-hidden">
+          <section className="sf-study-lesson-hero app-card mb-5 overflow-hidden">
             <div className="flex flex-col gap-4 bg-gradient-to-l from-secondary/70 to-card p-5 sm:flex-row sm:items-center sm:justify-between">
               <div><p className="text-xs font-semibold text-primary">{subjectName} · {selectedLesson.unitTitle}</p><h2 className="mt-1 text-xl font-bold">{selectedLesson.title}</h2><p className="mt-2 text-sm text-muted-foreground">تقدم خطوات SQ3R لهذا الدرس</p></div>
               <div className="min-w-32 rounded-2xl border border-border/70 bg-background/80 p-3 text-center"><p className="text-2xl font-bold tabular-nums text-primary">{completion}%</p><p className="text-[11px] text-muted-foreground">{doneCount} من 5 خطوات</p></div>
             </div>
             <div className="h-1.5 bg-muted"><div className="h-full bg-primary transition-all" style={{ width: completion + "%" }} /></div>
           </section>
-          <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+          <section className="sf-study-method-grid grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
             <div className="space-y-3">
               {steps.map((step, index) => {
                 const Icon = step.icon;
                 const done = completedSteps.includes(step.id);
-                return <button type="button" key={step.id} onClick={() => toggleStep(step.id)} disabled={saveProgress.isPending} className={"app-card flex w-full items-center gap-4 p-4 text-right transition-colors sm:p-5 " + (done ? "border-emerald-500/30 bg-emerald-500/5" : "hover:border-primary/25")}>
+                return <button type="button" key={step.id} onClick={() => toggleStep(step.id)} disabled={saveProgress.isPending} className={"sf-study-step app-card flex w-full items-center gap-4 p-4 text-right transition-colors sm:p-5 " + (done ? "is-done border-emerald-500/30 bg-emerald-500/5" : "hover:border-primary/25")}>
                   <span className={"flex size-9 shrink-0 items-center justify-center rounded-xl text-sm font-bold " + (done ? "bg-emerald-500 text-white" : "bg-muted text-muted-foreground")}>{done ? <Check className="size-4" /> : index + 1}</span>
                   <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-secondary text-primary"><Icon className="size-5" /></span>
                   <span className="min-w-0 flex-1"><span className="block font-bold">{step.title}</span><span className="mt-1 block text-sm leading-6 text-muted-foreground">{step.hint}</span></span>
@@ -545,7 +544,7 @@ export default function Study() {
                 </button>;
               })}
             </div>
-            <aside className="app-card h-fit p-5">
+            <aside className="sf-study-notes app-card h-fit p-5">
               <h3 className="font-bold">صعوبة الدرس</h3>
               <p className="mt-1 text-xs leading-5 text-muted-foreground">تساعد هذه المعلومة المخطط على تقدير الوقت المناسب.</p>
               <Select value={difficulty} onValueChange={value => { const next = value as typeof difficulty; setDifficulty(next); updateProgress(completedSteps, next); }}>
@@ -560,7 +559,7 @@ export default function Study() {
           </section>
         </>
       ) : (
-        <section className="app-card soft-grid flex min-h-64 flex-col items-center justify-center p-6 text-center">
+        <section className="sf-study-empty app-card soft-grid flex min-h-64 flex-col items-center justify-center p-6 text-center">
           <span className="flex size-14 items-center justify-center rounded-2xl bg-secondary text-primary"><Sparkles className="size-6" /></span>
           <h2 className="mt-4 text-lg font-bold">اختر المادة والدرس للبدء</h2>
           <p className="mt-2 max-w-md text-sm leading-7 text-muted-foreground">لن تحتاج إلى اختيار كتاب. بعد تحديد الدرس ستظهر خطوات المسح والتساؤل والقراءة والتسميع والمراجعة.</p>
