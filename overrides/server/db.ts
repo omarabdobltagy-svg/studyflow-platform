@@ -190,9 +190,9 @@ export async function upsertUser(user: InsertUser): Promise<void> {
 
 
 /**
- * Creates the single local StudyFlow account, or adopts the only existing user row.
- * Reusing the existing row preserves every study record linked by userId.
- * If multiple identities exist, refuse to guess which account owns the data.
+ * Keeps the legacy owner identity separate from student identities.
+ * The only legacy non-student row may be adopted to preserve its linked data.
+ * Student rows are identified by their credentials and are never promoted to admin.
  */
 export async function ensureLocalAuthUser(name: string) {
   const db = await requireDb();
@@ -207,20 +207,28 @@ export async function ensureLocalAuthUser(name: string) {
       lastSignedIn: new Date(),
     }).where(eq(users.id, localRows[0].id));
   } else {
-    const existingRows = await db.select().from(users).orderBy(asc(users.id)).limit(2);
-    if (existingRows.length > 1) {
+    const [existingRows, credentialRows] = await Promise.all([
+      db.select().from(users).orderBy(asc(users.id)),
+      db.select({ userId: studentAuthCredentials.userId }).from(studentAuthCredentials),
+    ]);
+    const studentUserIds = new Set(credentialRows.map(row => row.userId));
+    const legacyCandidates = existingRows.filter(row => !studentUserIds.has(row.id));
+
+    if (legacyCandidates.length > 1) {
       throw new Error("MULTIPLE_EXISTING_USERS");
     }
-    if (existingRows.length === 1) {
-      // Keep the existing user id so profiles, tasks, books and other records remain linked.
+
+    if (legacyCandidates.length === 1) {
+      // Keep the legacy user id so profiles, tasks, books and linked records remain intact.
       await db.update(users).set({
         openId,
         name,
         loginMethod: "local",
         role: "admin",
         lastSignedIn: new Date(),
-      }).where(eq(users.id, existingRows[0].id));
+      }).where(eq(users.id, legacyCandidates[0].id));
     } else {
+      // Student identities may already exist. Create the owner as a separate admin row.
       await db.insert(users).values({
         openId,
         name,
