@@ -144,7 +144,7 @@ export function splitTextbookPages(
 
 export function inspectTextbookIndex(subjectId: string): {
   sourceRoot: string;
-  files: Array<{ file: string; exists: boolean; bytes: number; markerCount: number; markerTextCount: number; markerWordCount: number; prefix: string; prefixCodePoints: string }>;
+  files: Array<{ file: string; exists: boolean; bytes: number; markerCount: number; prefix: string }>;
   pageCount: number;
   indexedCharacters: number;
 } {
@@ -153,16 +153,12 @@ export function inspectTextbookIndex(subjectId: string): {
   const files = source.files.map(file => {
     const fullPath = join(ROOT, file);
     const content = readFileSync(fullPath, "utf8");
-    const normalizedContent = normalizeExtractedDocument(content);
     return {
       file,
       exists: true,
       bytes: Buffer.byteLength(content, "utf8"),
-      markerCount: findPageMarkers(content).length,\s*PARSED\s+TEXT\s+OF\s+PAGE:\s*\d+\s*\/\s*\d+\s*>/gi)].length,
-      markerTextCount: normalizedContent.split("PARSED TEXT OF PAGE").length - 1,
-      markerWordCount: normalizedContent.split(/PARSED|TEXT|OF|PAGE/i).length - 1,
-      prefix: JSON.stringify(normalizedContent.slice(0, 140)),
-      prefixCodePoints: Array.from(content.slice(0, 60)).map(char => char.codePointAt(0)?.toString(16)).join(" "),
+      markerCount: findPageMarkers(content).length,
+      prefix: JSON.stringify(normalizeExtractedDocument(content).slice(0, 140)),
     };
   });
   const pages = loadPages(subjectId);
