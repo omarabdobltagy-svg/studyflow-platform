@@ -111,10 +111,10 @@ export default function Assistant() {
 
   return (
     <DashboardLayout title="المساعد الدراسي" description="محادثة مستقلة لكل موضوع، مع سياق ملفك الدراسي ومواضعك المسجلة في المنهج.">
-      <section className="mb-5 overflow-hidden rounded-[1.5rem] border border-border/70 bg-card">
-        <div className="flex flex-col gap-4 border-b border-border/70 bg-gradient-to-l from-secondary/75 via-card to-card p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+      <section className="sf-assistant-shell mb-5 overflow-hidden rounded-[1.5rem] border border-border/70 bg-card">
+        <div className="sf-assistant-header flex flex-col gap-4 border-b border-border/70 bg-gradient-to-l from-secondary/75 via-card to-card p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
           <div className="flex items-start gap-3">
-            <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg"><Sparkles className="size-5" /></span>
+            <span className="sf-assistant-mark flex size-11 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg"><Sparkles className="size-5" /></span>
             <div>
               <div className="flex flex-wrap items-center gap-2"><h2 className="text-lg font-bold">مساعد StudyFlow</h2><span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">متصل بالمخطط الدراسي</span></div>
               <p className="mt-1 text-sm leading-6 text-muted-foreground">اسأل عن الدرس، اطلب شرحًا أو تدريبًا، وارجع لأي محادثة سابقة.</p>
@@ -125,8 +125,8 @@ export default function Assistant() {
             <span className="inline-flex items-center gap-1.5 rounded-xl bg-muted px-3 py-2"><ShieldCheck className="size-3.5" />ذاكرة دراسية خاصة بحسابك</span>
           </div>
         </div>
-        <div className="grid gap-4 p-3 sm:p-4 lg:grid-cols-[250px_minmax(0,1fr)]">
-          <aside className="flex min-w-0 flex-col rounded-2xl border border-border/70 bg-muted/20 p-3">
+        <div className="sf-assistant-body grid gap-4 p-3 sm:p-4 lg:grid-cols-[250px_minmax(0,1fr)]">
+          <aside className="sf-assistant-history flex min-w-0 flex-col rounded-2xl border border-border/70 bg-muted/20 p-3">
             <Button type="button" onClick={createConversation} disabled={chat.isPending} className="mb-3 h-11 w-full justify-center gap-2 rounded-xl bg-primary">
               <Plus className="size-4" />محادثة جديدة
             </Button>
@@ -149,12 +149,12 @@ export default function Assistant() {
             </div>
             <p className="mt-3 hidden text-[11px] leading-5 text-muted-foreground lg:block">سجل المحادثات الحالي محفوظ على هذا المتصفح، بينما تُحفظ خلاصة دراسية مختارة على حسابك لتخصيص المساعد عبر الجلسات.</p>
           </aside>
-          <div className="min-w-0">
+          <div className="sf-assistant-chat min-w-0">
             <div className="mb-3 flex items-center justify-between gap-3 px-1">
               <div className="min-w-0"><p className="truncate text-sm font-bold">{(activeThread && activeThread.title) || "محادثة جديدة"}</p><p className="mt-1 text-[11px] text-muted-foreground">يمكنك تعديل نص الإملاء الصوتي قبل إرساله.</p></div>
               <Button type="button" variant="ghost" size="sm" disabled={!activeThread || !activeThread.messages.length || chat.isPending} onClick={deleteConversation} className="shrink-0 gap-2 rounded-xl text-muted-foreground hover:text-destructive"><Trash2 className="size-3.5" />حذف</Button>
             </div>
-            <AIChatBox
+            <div className="sf-assistant-chatbox"><AIChatBox
               key={activeThread && activeThread.id}
               messages={(activeThread && activeThread.messages) || []}
               onSendMessage={sendMessage}
@@ -163,11 +163,11 @@ export default function Assistant() {
               placeholder="اسأل عن درس أو مفهوم في منهجك..."
               emptyStateMessage="ابدأ بسؤال عن أي درس أو اطلب اختبارًا سريعًا."
               suggestedPrompts={suggestions}
-            />
+            /></div>
           </div>
         </div>
       </section>
-      <p className="px-1 text-xs leading-6 text-muted-foreground">يعتمد الرد على ملفك الدراسي وفهارس المنهج ومواضع المدرسين المتاحة في النظام. فهرسة النص الكامل للكتب المرفوعة وربطه بالبحث المعرفي مرحلة منفصلة؛ لا أعتبر اسم الكتاب وحده دليلًا على أن محتواه أصبح متاحًا للمساعد.</p>
+      <p className="sf-assistant-disclosure px-1 text-xs leading-6 text-muted-foreground">يعتمد الرد على ملفك الدراسي وفهارس المنهج ومواضع المدرسين المتاحة في النظام. فهرسة النص الكامل للكتب المرفوعة وربطه بالبحث المعرفي مرحلة منفصلة؛ لا أعتبر اسم الكتاب وحده دليلًا على أن محتواه أصبح متاحًا للمساعد.</p>
     </DashboardLayout>
   );
 }
