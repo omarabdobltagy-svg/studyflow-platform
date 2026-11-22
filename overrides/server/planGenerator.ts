@@ -76,7 +76,7 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
     });
     const legacyBacklog = profile.backlog[subjectId] ?? profile.backlog[(subject && subject.nameAr) || ""] ?? null;
     const backlog = learningGap.gapCount;
-    const lastLesson = catalog.find(item => item.nodeId === reported.lastCompletedLessonId);
+    const lastLesson = catalog.find(item => item.nodeId === studentFrontier);
     const recentAssessments = assessmentHistory.filter(item => item.subjectId === subjectId).slice(-5);
     const assessmentSummary = recentAssessments.map(item =>
       String(item.assessmentType || "تقييم") + ": " + String(item.scorePercent) + "%"
@@ -108,7 +108,7 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
     "اسم الطالب: " + profile.studentName,
     "النظام: " + profile.educationSystem + "؛ الصف: " + profile.gradeYear + "؛ المسار: " + profile.track,
     "المواد ومواضعها: \n" + (subjectContext || "لا توجد مواد مسجلة"),
-    "التراكم: " + Object.entries(profile.backlog).map(entry => entry[0] + ": " + entry[1]).join("، "),
+    "قيم التراكم المحفوظة (تُفضّل الفجوة المحسوبة عند توفر المرجع): " + Object.entries(profile.backlog).map(entry => entry[0] + ": " + entry[1]).join("، "),
     "العائق المعلن: " + (profile.obstacle || "غير محدد"),
   ].join("\n");
 }
