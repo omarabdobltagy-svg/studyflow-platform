@@ -308,6 +308,7 @@
 .sf-page-description { margin: 2px 0 0; color: var(--muted-foreground); font-size: 11px; line-height: 1.7; }
 .sf-topbar-actions { display: flex; align-items: center; justify-content: flex-end; gap: 9px; flex: 0 0 auto; }
 .dashboard-header-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.sf-topbar-actions button.bg-primary { color: #fff !important; background: linear-gradient(110deg, #6e32c7, #9252de 55%, #6e32c7) !important; box-shadow: 0 10px 23px -15px rgb(103 42 183 / 72%); }
 .sf-theme-button { width: 39px !important; height: 39px !important; border: 1px solid var(--border) !important; border-radius: 12px !important; color: var(--foreground) !important; background: var(--card) !important; }
 .sf-topbar-avatar { display: none; color: #4f2c76; border-color: #e5d5f4; background: linear-gradient(145deg, #f1e3ff, #d5b8f3); }
 .sf-mobile-menu { display: none !important; }
@@ -418,6 +419,7 @@
     linear-gradient(135deg, #241035 0%, #35174f 56%, #1f0d30 100%);
 }
 .sf-login-frame {
+  direction: ltr;
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1.05fr) minmax(390px, .95fr);
@@ -430,6 +432,7 @@
   background: #fbf9fe;
   box-shadow: 0 42px 110px -66px rgb(0 0 0 / 88%), 0 1px 0 rgb(255 255 255 / 10%) inset;
 }
+.sf-login-story, .sf-login-form-side { direction: rtl; }
 .sf-login-story {
   position: relative;
   isolation: isolate;
