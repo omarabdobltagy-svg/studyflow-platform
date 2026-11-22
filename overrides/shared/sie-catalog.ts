@@ -690,13 +690,69 @@ export function validateSIESubjectSelection(systemId: SIESystemId, trackId: stri
 }
 
 
-/** خيارات تحديد نقطة البداية من فهرس المنهج الرسمي، وليست أرقام محاضرات المدرس. */
+/** نقطة منهج رسمية مع فرع مستقل داخل بنية الكتاب. */
 export type SIECheckpointChoice = {
   nodeId: string;
   title: string;
   unitTitle: string;
   note?: string;
+  branchId?: string;
+  branchTitle?: string;
+  branchType?: "official_unit" | "official_section";
 };
+
+export type SIECheckpointBranch = {
+  branchId: string;
+  branchTitle: string;
+  branchType: "official_unit" | "official_section";
+  choices: SIECheckpointChoice[];
+};
+
+const ENGLISH_SECTION_TITLES: Record<string, string> = {
+  ENG_U1_SEC_A: "Social Reflection",
+  ENG_U1_SEC_B: "Shared Responsibility",
+  ENG_U2_SEC_A: "Leisure in a Digital World",
+  ENG_U2_SEC_B: "Lifelong Activity",
+  ENG_U3_SEC_A: "Historical Landscape",
+  ENG_U3_SEC_B: "Documenting History",
+  ENG_U4_SEC_A: "Food Awareness",
+  ENG_U4_SEC_B: "Online Consumption",
+  ENG_U5_SEC_A: "Climate Change",
+  ENG_U5_SEC_B: "Egypt’s Green Change Makers",
+};
+
+/**
+ * الفروع هنا مستخرجة من فهرس الكتاب:
+ * العربية/التاريخ/البرمجة: وحدات أو فصول مستقلة.
+ * الإنجليزية: أقسام A/B داخل كل وحدة، لأن هذا هو التقسيم الرسمي الأدق.
+ * المهارات مثل Grammar وVocabulary تبقى أبعاد إتقان، لا تسلسل دروس مخترع.
+ */
+function getOfficialBranch(subjectId: string, choice: SIECheckpointChoice) {
+  if (subjectId === "ENG1_G2_BAC") {
+    const section = choice.nodeId.match(/^(ENG_U\\d+_SEC_[AB])/i)?.[1];
+    if (section) {
+      return {
+        branchId: section,
+        branchTitle: ENGLISH_SECTION_TITLES[section] ?? choice.unitTitle,
+        branchType: "official_section" as const,
+      };
+    }
+  }
+
+  const prefixPattern = subjectId === "PROG_AI_G2_BAC"
+    ? /^(PROG_\\d+)_/
+    : subjectId === "ARB_G2_BAC"
+      ? /^(ARB_U\\d+)/
+      : subjectId === "HIS_G2_BAC"
+        ? /^(HIS_U\\d+)/
+        : null;
+  const prefix = prefixPattern ? choice.nodeId.match(prefixPattern)?.[1] : null;
+  return {
+    branchId: prefix ?? `${subjectId}:${choice.unitTitle}`,
+    branchTitle: choice.unitTitle,
+    branchType: "official_unit" as const,
+  };
+}
 
 export const SIE_CHECKPOINT_CHOICES: Record<string, SIECheckpointChoice[]> = {
   ARB_G2_BAC: [
@@ -773,9 +829,35 @@ export const SIE_CHECKPOINT_CHOICES: Record<string, SIECheckpointChoice[]> = {
   ],
 };
 
-/** كل الاختيارات هنا من فهرس الوزارة المحمّل، وليست أرقام محاضرات المدرسين. */
+const SIE_CHECKPOINT_CHOICES_WITH_BRANCH: Record<string, SIECheckpointChoice[]> =
+  Object.fromEntries(Object.entries(SIE_CHECKPOINT_CHOICES).map(([subjectId, choices]) => [
+    subjectId,
+    choices.map(choice => ({ ...choice, ...getOfficialBranch(subjectId, choice) })),
+  ]));
+
+/** كل الاختيارات من فهرس الوزارة، ومرفق بها فرعها الرسمي. */
 export function getSIECheckpointChoices(subjectId: string): SIECheckpointChoice[] {
-  return SIE_CHECKPOINT_CHOICES[subjectId] ?? [];
+  return SIE_CHECKPOINT_CHOICES_WITH_BRANCH[subjectId] ?? [];
+}
+
+/** يعيد الوحدات/الأقسام كمسارات تقدم مستقلة بدل تسلسل واحد للمادة كلها. */
+export function getSIECheckpointBranches(subjectId: string): SIECheckpointBranch[] {
+  const groups = new Map<string, SIECheckpointBranch>();
+  for (const choice of getSIECheckpointChoices(subjectId)) {
+    const branchId = choice.branchId ?? `${subjectId}:${choice.unitTitle}`;
+    const branch = groups.get(branchId);
+    if (branch) {
+      branch.choices.push(choice);
+    } else {
+      groups.set(branchId, {
+        branchId,
+        branchTitle: choice.branchTitle ?? choice.unitTitle,
+        branchType: choice.branchType ?? "official_unit",
+        choices: [choice],
+      });
+    }
+  }
+  return [...groups.values()];
 }
 
 export function getSIECheckpointChoicesPreview(subjectId: string, limit = 5): SIECheckpointChoice[] {
