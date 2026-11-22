@@ -89,3 +89,25 @@ export function calculateLearningGap(
         : "calculated",
   };
 }
+
+
+export type LearningBranchDefinition = {
+  branchId: string;
+  choices: Array<{ nodeId: string; title: string }>;
+};
+
+export type LearningBranchInputs = Record<string, LearningGapInput>;
+
+/**
+ * Computes every curriculum branch independently. A frontier from one branch
+ * can never be compared with checkpoints from another branch.
+ */
+export function calculateLearningGapsByBranch(
+  branches: LearningBranchDefinition[],
+  inputs: LearningBranchInputs = {},
+): Record<string, LearningGapResult> {
+  return Object.fromEntries(branches.map(branch => [
+    branch.branchId,
+    calculateLearningGap(branch.choices, inputs[branch.branchId] ?? {}),
+  ]));
+}
