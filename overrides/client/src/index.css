@@ -1122,3 +1122,32 @@ body, .dark body {
   .sf-auth-orbit-label, .sf-main .sf-feature-hero::before,
   .sf-main .sf-learning-hero::before { animation: none !important; }
 }
+
+/* True scroll-reveal: the page and nested cards animate as they enter the viewport. */
+.sf-main > section,
+.sf-main > div,
+.sf-main .app-card { animation: none !important; }
+.sf-reveal {
+  opacity: 0;
+  transform: translate3d(0, 26px, 0) scale(.982);
+  filter: blur(5px);
+  transition:
+    opacity 680ms cubic-bezier(.18,.75,.22,1),
+    transform 760ms cubic-bezier(.18,.75,.22,1),
+    filter 680ms ease;
+  transition-delay: var(--sf-reveal-delay, 0ms);
+  will-change: opacity, transform, filter;
+}
+.sf-reveal.sf-visible {
+  opacity: 1;
+  transform: translate3d(0,0,0) scale(1);
+  filter: blur(0);
+}
+@media (prefers-reduced-motion: reduce) {
+  .sf-reveal, .sf-reveal.sf-visible {
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+    transition: none !important;
+  }
+}
