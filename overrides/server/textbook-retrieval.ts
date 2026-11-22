@@ -129,6 +129,8 @@ export function inspectTextbookIndex(subjectId: string): {
       exists: true,
       bytes: Buffer.byteLength(content, "utf8"),
       markerCount: [...content.matchAll(/<PARSED TEXT OF PAGE:\s*\d+\s*\/\s*\d+>/g)].length,
+      markerTextCount: content.split("PARSED TEXT OF PAGE").length - 1,
+      prefix: JSON.stringify(content.slice(0, 140)),
     };
   });
   const pages = loadPages(subjectId);
