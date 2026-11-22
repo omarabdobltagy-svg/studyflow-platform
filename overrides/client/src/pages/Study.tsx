@@ -517,9 +517,9 @@ export default function Study() {
                 const gap = branchGapMap[branch.branchId];
                 const saved = branchProgressMap[branch.branchId] || {};
                 const studentLabel = gap?.studentFrontierTitle
-                  || (saved.lastCompletedLessonId === "__NOT_STARTED__" ? "لم يبدأ بعد" : "غير محدد");
+                  || (gap?.studentFrontierId === "__NOT_STARTED__" || saved.lastCompletedLessonId === "__NOT_STARTED__" ? "لم يبدأ بعد" : "غير محدد");
                 const referenceLabel = gap?.referenceFrontierTitle
-                  || (saved.teacherTeachingFrontierId === "__NOT_STARTED__" || saved.schoolClassFrontierId === "__NOT_STARTED__" ? "لم يبدأ بعد" : "غير معروف");
+                  || (gap?.referenceFrontierId === "__NOT_STARTED__" ? "لم يبدأ بعد" : "غير معروف");
                 const referenceSourceLabel = gap?.referenceSource === "teacher"
                   ? "المدرس" : gap?.referenceSource === "school" ? "المدرسة" : "لا يوجد مرجع";
                 const gapLabel = gap?.gapCount === null || gap?.gapCount === undefined
