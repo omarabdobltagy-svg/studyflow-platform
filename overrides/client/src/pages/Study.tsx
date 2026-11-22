@@ -5,7 +5,7 @@ import ThreeAmbientScene from "@/components/ThreeAmbientScene";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
-import { getSIECheckpointChoices, getSIESubject, getSIETeacher } from "@shared/sie-catalog";
+import { getSIECheckpointBranches, getSIECheckpointChoices, getSIESubject, getSIETeacher } from "@shared/sie-catalog";
 import { calculateLearningGap } from "@shared/sie-learning-progress";
 import { Activity, BookOpenText, Check, CircleHelp, Eye, Gauge, Mic2, RefreshCcw, Sparkles, TrendingUp } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -26,12 +26,17 @@ export default function Study() {
   const utils = trpc.useUtils();
   const profile = trpc.studentProfile.get.useQuery();
   const [subjectId, setSubjectId] = useState("");
+  const [branchId, setBranchId] = useState("");
   const [lessonId, setLessonId] = useState("");
   const [completedSteps, setCompletedSteps] = useState<StepId[]>([]);
   const [difficulty, setDifficulty] = useState<"unknown" | "easy" | "medium" | "hard">("unknown");
   const [notes, setNotes] = useState("");
   const subjects = profile.data?.subjects || [];
   const lessons = useMemo(() => getSIECheckpointChoices(subjectId), [subjectId]);
+  const branches = useMemo(() => getSIECheckpointBranches(subjectId), [subjectId]);
+  const currentBranch = branches.find(branch => branch.branchId === branchId) ?? branches[0];
+  const branchChoices = currentBranch?.choices ?? [];
+  const currentBranchId = currentBranch?.branchId ?? "";
   const selection = (profile.data?.selection || {}) as Record<string, unknown>;
   const progressMap = (selection.subjectLessonProgress || {}) as Record<string, Record<string, LessonProgress>>;
   const currentProgress = progressMap[subjectId] && progressMap[subjectId][lessonId];
@@ -39,6 +44,8 @@ export default function Study() {
   type CourseStatus = "not_started" | "in_progress" | "caught_up" | "needs_review";
   const courseProgressMap = (selection.learningCourseProgress || {}) as Record<string, any>;
   const currentCourseProgress = courseProgressMap[subjectId] || {};
+  const branchProgressMap = (currentCourseProgress.branches || {}) as Record<string, Record<string, any>>;
+  const currentBranchProgress = currentBranchId ? branchProgressMap[currentBranchId] || {} : {};
   const assessmentHistory = Array.isArray(selection.learningAssessments) ? selection.learningAssessments as Array<any> : [];
   const subjectAssessments = assessmentHistory.filter(item => item.subjectId === subjectId).slice(-5).reverse();
   const selectedTeacherId = ((selection.teacherChoices || {}) as Record<string, string>)[subjectId]
@@ -60,7 +67,7 @@ export default function Study() {
   const [weakConcepts, setWeakConcepts] = useState("");
   const [assessmentNotes, setAssessmentNotes] = useState("");
 
-  const currentGap = calculateLearningGap(lessons, {
+  const currentGap = calculateLearningGap(branchChoices, {
     studentFrontierId: lastCompletedLessonId || null,
     teacherTeachingFrontierId,
     schoolClassFrontierId,
@@ -70,6 +77,14 @@ export default function Study() {
   useEffect(() => {
     if (!subjectId && subjects.length) setSubjectId(subjects[0]);
   }, [subjects, subjectId]);
+
+  useEffect(() => {
+    if (!branches.length) {
+      setBranchId("");
+      return;
+    }
+    if (!branches.some(branch => branch.branchId === branchId)) setBranchId(branches[0].branchId);
+  }, [subjectId, branches, branchId]);
 
   useEffect(() => {
     if (!lessons.length) {
@@ -88,25 +103,41 @@ export default function Study() {
   useEffect(() => {
     const legacyTeacherState = ((selection.teacherProgressState || {}) as Record<string, Record<string, any>>)[subjectId] || {};
     const subjectLessonRecords = progressMap[subjectId] || {};
-    const latestSq3rCompleted = [...lessons].reverse().find(lesson => {
+    const latestSq3rCompleted = [...branchChoices].reverse().find(lesson => {
       const record = subjectLessonRecords[lesson.nodeId];
       return Array.isArray(record?.completedSteps) && record.completedSteps.length === 5;
     })?.nodeId;
-    setLastCompletedLessonId(
-      currentCourseProgress.lastCompletedLessonId
-      || legacyTeacherState.studentAttendedFrontier
-      || latestSq3rCompleted
-      || ""
-    );
-    setTeacherTeachingFrontierId(currentCourseProgress.teacherTeachingFrontierId || "__UNKNOWN__");
-    setSchoolClassFrontierId(currentCourseProgress.schoolClassFrontierId || "__UNKNOWN__");
+    const belongsToCurrentBranch = (value: unknown): value is string =>
+      typeof value === "string" &&
+      (value === "__UNKNOWN__" || value === "__NOT_STARTED__" ||
+        branchChoices.some(lesson => lesson.nodeId === value));
+    const legacyStudentFrontier = currentCourseProgress.lastCompletedLessonId
+      ?? legacyTeacherState.studentAttendedFrontier;
+    const studentFrontier = Object.prototype.hasOwnProperty.call(currentBranchProgress, "lastCompletedLessonId")
+      ? currentBranchProgress.lastCompletedLessonId
+      : belongsToCurrentBranch(legacyStudentFrontier)
+        ? legacyStudentFrontier
+        : latestSq3rCompleted ?? "__UNKNOWN__";
+    const teacherFrontier = Object.prototype.hasOwnProperty.call(currentBranchProgress, "teacherTeachingFrontierId")
+      ? currentBranchProgress.teacherTeachingFrontierId
+      : belongsToCurrentBranch(currentCourseProgress.teacherTeachingFrontierId)
+        ? currentCourseProgress.teacherTeachingFrontierId
+        : "__UNKNOWN__";
+    const schoolFrontier = Object.prototype.hasOwnProperty.call(currentBranchProgress, "schoolClassFrontierId")
+      ? currentBranchProgress.schoolClassFrontierId
+      : belongsToCurrentBranch(currentCourseProgress.schoolClassFrontierId)
+        ? currentCourseProgress.schoolClassFrontierId
+        : "__UNKNOWN__";
+    setLastCompletedLessonId(studentFrontier || "__UNKNOWN__");
+    setTeacherTeachingFrontierId(teacherFrontier || "__UNKNOWN__");
+    setSchoolClassFrontierId(schoolFrontier || "__UNKNOWN__");
     setTeacherCourseFrontier(currentCourseProgress.teacherCourseFrontier || "");
     setCourseStatus(currentCourseProgress.status || "not_started");
     setEstimatedMinutes(Number(currentCourseProgress.estimatedMinutesPerLesson ?? 45));
     setCourseDifficulty(currentCourseProgress.difficulty || "unknown");
-    setCourseNotes(currentCourseProgress.notes || "");
-    setLearningObstacle(profile.data?.obstacle || "");
-  }, [subjectId, currentCourseProgress.updatedAt, profile.data?.obstacle, lessons, progressMap]);
+    setCourseNotes(currentBranchProgress.notes ?? currentCourseProgress.notes ?? "");
+    setLearningObstacle(currentCourseProgress.obstacle ?? profile.data?.obstacle ?? "");
+  }, [subjectId, currentBranchId, currentBranchProgress.updatedAt, currentCourseProgress.updatedAt, profile.data?.obstacle, branches, branchChoices, progressMap]);
 
 
   const saveProgress = trpc.study.saveSubjectLessonProgress.useMutation({
@@ -140,6 +171,7 @@ export default function Study() {
     if (!subjectId) return;
     saveCourseProgress.mutate({
       subjectId,
+      branchId: currentBranchId,
       teacherId: selectedTeacherId || null,
       lastCompletedLessonId: lastCompletedLessonId || "__UNKNOWN__",
       teacherTeachingFrontierId,
@@ -205,9 +237,10 @@ export default function Study() {
       {profile.isError && <div className="rounded-2xl border border-destructive/20 bg-destructive/5 p-4 text-sm">تعذّر تحميل ملفك الدراسي. <button className="font-bold underline" onClick={() => void profile.refetch()}>إعادة المحاولة</button></div>}
       <section className="app-card mb-5 p-5 sm:p-6">
         <div className="mb-4 flex items-center gap-3"><span className="flex size-10 items-center justify-center rounded-xl bg-secondary text-primary"><BookOpenText className="size-5" /></span><div><h2 className="font-bold">حدد موضع مذاكرتك</h2><p className="text-xs text-muted-foreground">المواد المضافة إلى ملفك فقط</p></div></div>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-3">
           <div><label className="mb-2 block text-sm font-semibold">المادة</label><Select value={subjectId} onValueChange={setSubjectId} disabled={profile.isLoading || subjects.length === 0}><SelectTrigger className="h-12 rounded-xl bg-background"><SelectValue placeholder="اختر المادة" /></SelectTrigger><SelectContent>{subjects.map(id => <SelectItem key={id} value={id}>{getSIESubject(id)?.nameAr || id}</SelectItem>)}</SelectContent></Select></div>
-          <div><label className="mb-2 block text-sm font-semibold">الدرس</label><Select value={lessonId} onValueChange={setLessonId} disabled={!lessons.length}><SelectTrigger className="h-12 rounded-xl bg-background"><SelectValue placeholder="اختر درسًا" /></SelectTrigger><SelectContent>{lessons.map(lesson => <SelectItem key={lesson.nodeId} value={lesson.nodeId}>{lesson.unitTitle} · {lesson.title}</SelectItem>)}</SelectContent></Select></div>
+          <div><label className="mb-2 block text-sm font-semibold">فرع المنهج الرسمي</label><Select value={currentBranchId} onValueChange={setBranchId} disabled={!branches.length}><SelectTrigger className="h-12 rounded-xl bg-background"><SelectValue placeholder="اختر الفرع" /></SelectTrigger><SelectContent>{branches.map(branch => <SelectItem key={branch.branchId} value={branch.branchId}>{branch.branchTitle}</SelectItem>)}</SelectContent></Select></div>
+          <div><label className="mb-2 block text-sm font-semibold">الدرس</label><Select value={lessonId} onValueChange={value => { setLessonId(value); const selected = lessons.find(item => item.nodeId === value); if (selected?.branchId) setBranchId(selected.branchId); }} disabled={!lessons.length}><SelectTrigger className="h-12 rounded-xl bg-background"><SelectValue placeholder="اختر درسًا" /></SelectTrigger><SelectContent>{branchChoices.map(lesson => <SelectItem key={lesson.nodeId} value={lesson.nodeId}>{lesson.title}</SelectItem>)}</SelectContent></Select></div>
         </div>
         {subjectId && !lessons.length && <p className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-sm leading-6 text-muted-foreground">فهرس هذه المادة غير محمّل في النسخة الحالية؛ لذلك لن أعرض دروسًا مخمّنة. ستظهر هنا تلقائيًا عندما يُضاف فهرس المنهج المعتمد.</p>}
         {!subjects.length && !profile.isLoading && <p className="mt-4 rounded-xl bg-muted/50 p-3 text-sm text-muted-foreground">لم تُضف مواد إلى ملفك الدراسي بعد. أضف المواد من الملف الشخصي أولًا.</p>}
@@ -223,7 +256,7 @@ export default function Study() {
           <div className="relative z-10 max-w-[70%] sm:max-w-[74%]">
             <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#e5bd55]">LEARNING INTELLIGENCE</p>
             <h2 className="mt-2 text-xl font-bold sm:text-2xl">حالة تعلّمك الفعلية</h2>
-            <p className="mt-2 max-w-xl text-xs leading-6 text-white/65 sm:text-sm">سجّل موضعك والتراكم من هنا. لا نحتاج اتصالًا بمنصة المدرس كي يبدأ النظام في فهم تقدمك.</p>
+            <p className="mt-2 max-w-xl text-xs leading-6 text-white/65 sm:text-sm">يتابع SIE موضعك وموضع التدريس داخل كل فرع رسمي بصورة مستقلة؛ ولن يقارن بين وحدات أو أقسام مختلفة.</p>
             <div className="mt-4 flex flex-wrap gap-2">
               <span className="rounded-full border border-white/15 bg-white/8 px-3 py-1.5 text-[11px] text-white/80">{subjectName}</span>
               <span className="rounded-full border border-[#e5bd55]/25 bg-[#e5bd55]/10 px-3 py-1.5 text-[11px] text-[#f1d58c]">{selectedTeacher?.nameAr || "لم تحدد مدرسًا"}</span>
@@ -242,7 +275,7 @@ export default function Study() {
                   <SelectContent>
                     <SelectItem value="__UNKNOWN__">غير محدد</SelectItem>
                     <SelectItem value="__NOT_STARTED__">لم أبدأ المنهج بعد</SelectItem>
-                    {lessons.map(lesson => <SelectItem key={lesson.nodeId} value={lesson.nodeId}>{lesson.unitTitle} · {lesson.title}</SelectItem>)}
+                    {branchChoices.map(lesson => <SelectItem key={lesson.nodeId} value={lesson.nodeId}>{lesson.title}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 <span className="mt-1 block text-[11px] font-normal text-muted-foreground">ده موضع الطالب، وليس موضع المدرس أو المدرسة.</span>
@@ -254,7 +287,7 @@ export default function Study() {
                   <SelectContent>
                     <SelectItem value="__UNKNOWN__">لا أعرف / غير متاح</SelectItem>
                     <SelectItem value="__NOT_STARTED__">لم يبدأ التدريس بعد</SelectItem>
-                    {lessons.map(lesson => <SelectItem key={lesson.nodeId} value={lesson.nodeId}>{lesson.unitTitle} · {lesson.title}</SelectItem>)}
+                    {branchChoices.map(lesson => <SelectItem key={lesson.nodeId} value={lesson.nodeId}>{lesson.title}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 <span className="mt-1 block text-[11px] font-normal text-muted-foreground">يُستخدم كمرجع أول فقط عندما يكون معروفًا.</span>
@@ -266,7 +299,7 @@ export default function Study() {
                   <SelectContent>
                     <SelectItem value="__UNKNOWN__">غير معروف حتى الآن</SelectItem>
                     <SelectItem value="__NOT_STARTED__">لم يبدأ الفصل المادة بعد</SelectItem>
-                    {lessons.map(lesson => <SelectItem key={lesson.nodeId} value={lesson.nodeId}>{lesson.unitTitle} · {lesson.title}</SelectItem>)}
+                    {branchChoices.map(lesson => <SelectItem key={lesson.nodeId} value={lesson.nodeId}>{lesson.title}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 <span className="mt-1 block text-[11px] font-normal text-muted-foreground">يُحدَّث حسب آخر درس وصل إليه فصل الطالب في المدرسة، ويُستخدم بديلًا عند عدم معرفة موضع المدرس.</span>
@@ -316,7 +349,7 @@ export default function Study() {
               <Textarea value={learningObstacle} onChange={event => setLearningObstacle(event.target.value)} placeholder="مثال: صعوبة البدء، تشتت، وقت قليل، أو تراكم كبير" maxLength={600} className="mt-2 min-h-20 rounded-xl bg-background leading-7" />
             </label>
             <div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-muted/25 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-xs leading-6 text-muted-foreground">افصل بين موضع الطالب وموضع المدرس وموضع المدرسة. النظام يفضّل موضع المدرس إذا كان معروفًا، وإلا يستخدم موضع الفصل في المدرسة. الرقم يُحسب تلقائيًا من ترتيب دروس المنهج؛ إذا لم يتوفر أي مرجع فلن يخترع النظام تراكمًا.</p>
+              <p className="text-xs leading-6 text-muted-foreground">أنت الآن تسجل التقدم داخل فرع «{currentBranch?.branchTitle || "غير محدد"}» فقط. يُفضّل النظام تقدم المدرس في هذا الفرع، ثم تقدم فصلك في الفرع نفسه. وتُحسب الفجوة من دروس الفرع المحدد دون دمج فروع متوازية.</p>
               <Button type="button" onClick={submitCourseProgress} disabled={saveCourseProgress.isPending || !subjectId} className="pressable shrink-0 rounded-xl bg-primary">
                 {saveCourseProgress.isPending ? "جارٍ حفظ التقدم..." : "حفظ حالة المادة"}
               </Button>
@@ -329,7 +362,7 @@ export default function Study() {
               <div className="rounded-xl border border-border/60 bg-background/75 p-3">
                 <p className="text-[11px] text-muted-foreground">فجوة المنهج المحسوبة</p>
                 <p className="mt-1 text-2xl font-bold tabular-nums text-primary">{currentGap.gapCount === null ? "—" : currentGap.gapCount}</p>
-                <p className="mt-1 text-[10px] text-muted-foreground">{currentGap.referenceSource === "teacher" ? "المرجع: موضع المدرس" : currentGap.referenceSource === "school" ? "المرجع: موضع المدرسة" : "حدد موضع المدرس أو المدرسة"}</p>
+                <p className="mt-1 text-[10px] text-muted-foreground">{currentBranch?.branchTitle || "الفرع غير محدد"} · {currentGap.referenceSource === "teacher" ? "المرجع: المدرس" : currentGap.referenceSource === "school" ? "المرجع: المدرسة" : "لا يوجد مرجع داخل هذا الفرع"}</p>
               </div>
               <div className="rounded-xl border border-border/60 bg-background/75 p-3">
                 <p className="text-[11px] text-muted-foreground">التقييمات المسجلة</p>
