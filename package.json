@@ -1,0 +1,9 @@
+{
+  "name": "studyflow-railway-build-wrapper",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Build wrapper: unpacks the StudyFlow source archive and applies overrides in Railway",
+  "scripts": {
+    "build": "echo 'Build is configured by Railway service buildCommand'"
+  }
+}
