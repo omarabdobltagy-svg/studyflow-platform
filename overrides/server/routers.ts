@@ -64,6 +64,7 @@ import { parse as parseCookie } from "cookie";
 import { createHeartbeatJob, updateHeartbeatJob } from "./_core/heartbeat";
 import { callDataApi } from "./_core/dataApi";
 import { invokeLLM } from "./_core/llm";
+import { formatTextbookEvidence, retrieveTextbookEvidence } from "./textbook-retrieval";
 import { createReminderCron, getReminderPreferences, listReminderNotifications, markReminderRead, saveReminderPreferences, saveReminderSchedule } from "./reminders";
 
 
@@ -544,6 +545,14 @@ export const appRouter = router({
             "نقاط الضعف المسجلة: " + (weakConcepts.join("، ") || "لا توجد"),
           ].join(" | ");
         }).join("\\n");
+        const studentQuestion = input.messages
+          .slice(-6)
+          .filter(message => message.role === "user")
+          .map(message => message.content)
+          .join("\\n")
+          .slice(-2_400);
+        const textbookRetrieval = retrieveTextbookEvidence(profile?.subjects ?? [], studentQuestion, 5);
+        const textbookEvidenceContext = formatTextbookEvidence(textbookRetrieval);
         const appContext = [
           `المهام غير المكتملة: ${taskRows.filter(task => task.status !== "done").slice(0, 12).map(task => `- ${task.title} (${task.category}, ${task.priority}, ${dateLabel(task.dueAt)})`).join("\n") || "لا توجد مهام غير مكتملة مسجلة."}`,
           `الأهداف النشطة: ${goalRows.filter(goal => goal.status === "active").slice(0, 8).map(goal => `- ${goal.title} (${goal.progress}%، ${goal.completedTaskCount}/${goal.taskCount})`).join("\n") || "لا توجد أهداف نشطة."}`,
@@ -552,6 +561,7 @@ export const appRouter = router({
           `المواعيد القادمة: ${calendarRows.filter(event => new Date(event.startAt).getTime() >= Date.now()).slice(0, 8).map(event => `- ${event.title} (${dateLabel(event.startAt)})`).join("\n") || "لا توجد مواعيد قادمة مسجلة."}`,
           `مواضع المدرسين وتقدم الطالب (كل مصدر مستقل):\n${teacherProgressContext}`,
           `فهرس المنهج وتقدم دروس SQ3R:\n${curriculumContext || "لا توجد فهارس متاحة للمواد المختارة."}`,
+          `مقتطفات مسترجعة من نصوص الكتب الرسمية (لا تستخدم إلا ما يطابق السؤال، واذكر رقم الصفحة):\n${textbookEvidenceContext || "لم يتم استرجاع مقتطف مطابق من نص كتاب متاح."}`,
           `التقدم المبلغ عنه ونتائج التقييمات:\n${learningEvidenceContext || "لا توجد تحديثات تقدم محفوظة حتى الآن."}`,
         ].join("\n\n");
         const context = `${profileContext}\n\nحالة التطبيق الحالية (قد تتغير بعد تحديث الصفحة):\n${appContext}`;
@@ -559,7 +569,7 @@ export const appRouter = router({
         try {
           response = await invokeLLM({
           messages: [
-            { role: "system", content: `أنت المساعد الدراسي المتخصص في StudyFlow. دورك بناء فهم حقيقي للطالب، لا تلخيص الكتاب آليًا ولا إعادة صياغة فقراته فقط. استخدم الكتاب المدرسي بوصفه المصدر الأساسي لتحديد أهداف المنهج ومفاهيمه ومصطلحاته وأمثلته وتسلسله وحدود ما يُنسب رسميًا إلى الكتاب. لا تستبدل شرح الكتاب بشرح عام، ولا تغيّر مقصده أو مصطلحاته دون توضيح. إذا لم يكن نص الكتاب أو الصفحة متاحًا في السياق أو عبر استرجاع موثوق فلا تدّع أنك اطلعت عليه؛ اطلب الصفحة أو النص المطلوب بدل اختلاق اقتباس أو رقم صفحة.
+            { role: "system", content: `أنت المساعد الدراسي المتخصص في StudyFlow. دورك بناء فهم حقيقي للطالب، لا تلخيص الكتاب آليًا ولا إعادة صياغة فقراته فقط. استخدم الكتاب المدرسي بوصفه المصدر الأساسي لتحديد أهداف المنهج ومفاهيمه ومصطلحاته وأمثلته وتسلسله وحدود ما يُنسب رسميًا إلى الكتاب. عند توفير مقتطفات مسترجعة من كتاب رسمي، اعتمد عليها قبل المعرفة العامة واذكر اسم الكتاب ورقم صفحة PDF الفعلية عند الاستناد إليها. لا تنسب معلومة إلى الكتاب إن لم تظهر في المقتطفات المسترجعة. لا تستبدل شرح الكتاب بشرح عام، ولا تغيّر مقصده أو مصطلحاته دون توضيح. إذا لم يكن نص الكتاب أو الصفحة متاحًا في السياق أو عبر استرجاع موثوق فلا تدّع أنك اطلعت عليه؛ اطلب الصفحة أو النص المطلوب بدل اختلاق اقتباس أو رقم صفحة.
 
 قاعدة سد الفجوة المعرفية إلزامية: لا تفترض أن الكتاب شرح كل المتطلبات السابقة التي يحتاجها الطالب لفهم الدرس. حلّل المفهوم أو المهارة المستهدفة إلى متطلبات سابقة، وابنِ خريطة اعتماد مفاهيمية قصيرة لتحديد ما يجب أن يعرفه الطالب قبلها. اكتشف الفجوات التي يفترضها الكتاب ضمنيًا ولا يشرحها مباشرة، ثم استخدم معرفتك العامة والعلمية الصحيحة لشرح الحد الأدنى اللازم من تلك المتطلبات، بأمثلة متدرجة، ثم اربطها صراحةً بالنقطة المقابلة في الكتاب وارجع إلى مسار المنهج. مثال: إذا كان فهم النقاط 1 و2 و3 و4 يتطلب أساسًا سابقًا غير مشروح، اشرح الأساس أولًا ثم تابع 1 و2 و3 و4؛ لا تتجاوز الأساس ولا تحوّل الدرس إلى موسوعة.
 
