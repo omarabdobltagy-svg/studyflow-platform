@@ -58,6 +58,7 @@ export default function Study() {
   const [lastCompletedLessonId, setLastCompletedLessonId] = useState("");
   const [teacherTeachingFrontierId, setTeacherTeachingFrontierId] = useState("__UNKNOWN__");
   const [schoolClassFrontierId, setSchoolClassFrontierId] = useState("__UNKNOWN__");
+  const [schoolClassEvidenceSource, setSchoolClassEvidenceSource] = useState<"unknown" | "teacher_confirmed" | "classmate_confirmed" | "class_notes" | "class_group">("unknown");
   const [teacherCourseFrontier, setTeacherCourseFrontier] = useState("");
   const [courseStatus, setCourseStatus] = useState<CourseStatus>("not_started");
   const [estimatedMinutes, setEstimatedMinutes] = useState(45);
@@ -131,6 +132,7 @@ export default function Study() {
     setLastCompletedLessonId(studentFrontier || "__UNKNOWN__");
     setTeacherTeachingFrontierId(teacherFrontier || "__UNKNOWN__");
     setSchoolClassFrontierId(schoolFrontier || "__UNKNOWN__");
+    setSchoolClassEvidenceSource(currentBranchProgress.schoolClassFrontierEvidenceSource || "unknown");
     setTeacherCourseFrontier(currentCourseProgress.teacherCourseFrontier || "");
     setCourseStatus(currentCourseProgress.status || "not_started");
     setEstimatedMinutes(Number(currentCourseProgress.estimatedMinutesPerLesson ?? 45));
@@ -186,6 +188,7 @@ export default function Study() {
       lastCompletedLessonId: lastCompletedLessonId || "__UNKNOWN__",
       teacherTeachingFrontierId,
       schoolClassFrontierId,
+      schoolClassFrontierEvidenceSource: schoolClassEvidenceSource,
       teacherCourseFrontier: teacherCourseFrontier.trim(),
       status: courseStatus,
       estimatedMinutesPerLesson: Math.max(5, Math.min(480, estimatedMinutes)),
@@ -339,6 +342,11 @@ export default function Study() {
         </div>
 
         <div className="grid gap-5 p-5 sm:p-6 xl:grid-cols-[1.2fr_.8fr]">
+          <div className="rounded-2xl border border-accent/25 bg-accent/5 p-4 text-sm leading-7 text-muted-foreground xl:col-span-2">
+            <p className="font-bold text-foreground">تحديث موضع الفصل في المدرسة — إدخال يدوي، وليس ربطًا آليًا</p>
+            <p className="mt-1">افتح كشكول المادة أو اسأل المدرس أو زميلًا موثوقًا: ما آخر درس انتهت الحصة من شرحه بالفعل؟ اختر هذا الدرس أدناه. لا تختَر الدرس التالي أو الدرس الموجود فقط في جدول المنهج.</p>
+            <p className="mt-1">لكي تُحسب الفجوة، حدّد أيضًا آخر درس أنهيته أنت. موضع المدرس له الأولوية؛ وموضع الفصل يُستخدم بديلًا فقط عندما لا يكون موضع المدرس معروفًا.</p>
+          </div>
           <div className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               <label className="text-sm font-semibold">
@@ -365,18 +373,31 @@ export default function Study() {
                 </Select>
                 <span className="mt-1 block text-[11px] font-normal text-muted-foreground">يُستخدم كمرجع أول فقط عندما يكون معروفًا.</span>
               </label>
-              <label className="text-sm font-semibold">
-                آخر درس وصل إليه فصلك في المدرسة
-                <Select value={schoolClassFrontierId} onValueChange={setSchoolClassFrontierId} disabled={!lessons.length}>
-                  <SelectTrigger className="mt-2 h-11 rounded-xl bg-background"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__UNKNOWN__">غير معروف حتى الآن</SelectItem>
-                    <SelectItem value="__NOT_STARTED__">لم يبدأ الفصل المادة بعد</SelectItem>
-                    {branchChoices.map(lesson => <SelectItem key={lesson.nodeId} value={lesson.nodeId}>{lesson.title}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <span className="mt-1 block text-[11px] font-normal text-muted-foreground">يُحدَّث حسب آخر درس وصل إليه فصل الطالب في المدرسة، ويُستخدم بديلًا عند عدم معرفة موضع المدرس.</span>
-              </label>
+              <div className="rounded-xl border border-border/70 bg-background/55 p-3">
+                <label className="block text-sm font-semibold">آخر درس انتهت المدرسة من شرحه للفصل
+                  <Select value={schoolClassFrontierId} onValueChange={setSchoolClassFrontierId} disabled={!lessons.length}>
+                    <SelectTrigger className="mt-2 h-11 rounded-xl bg-background"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__UNKNOWN__">لا أعرف حتى الآن</SelectItem>
+                      <SelectItem value="__NOT_STARTED__">لم يبدأ الفصل المادة بعد</SelectItem>
+                      {branchChoices.map(lesson => <SelectItem key={lesson.nodeId} value={lesson.nodeId}>{lesson.title}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </label>
+                <label className="mt-3 block text-sm font-semibold">مصدر المعلومة
+                  <Select value={schoolClassEvidenceSource} onValueChange={value => setSchoolClassEvidenceSource(value as typeof schoolClassEvidenceSource)}>
+                    <SelectTrigger className="mt-2 h-11 rounded-xl bg-background"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unknown">لم أتحقق بعد</SelectItem>
+                      <SelectItem value="teacher_confirmed">أكده المدرس</SelectItem>
+                      <SelectItem value="classmate_confirmed">أكده زميل في الفصل</SelectItem>
+                      <SelectItem value="class_notes">من كشكول/ملاحظات الحصة</SelectItem>
+                      <SelectItem value="class_group">من مجموعة الفصل</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </label>
+                <p className="mt-2 text-[11px] font-normal leading-5 text-muted-foreground">هذه معلومة يبلّغ بها الطالب حاليًا؛ لا يوجد اتصال مباشر بنظام المدرسة. إذا كان موضع المدرس معروفًا فسيظل هو المرجع الأول في حساب الفجوة.</p>
+              </div>
               <label className="text-sm font-semibold">
                 آخر محاضرة شاهدتها على منصة المدرس (اختياري)
                 <Input value={teacherCourseFrontier} onChange={event => setTeacherCourseFrontier(event.target.value)} placeholder="مثال: المحاضرة 12" maxLength={120} className="mt-2 h-11 rounded-xl bg-background" />
@@ -422,9 +443,9 @@ export default function Study() {
               <Textarea value={learningObstacle} onChange={event => setLearningObstacle(event.target.value)} placeholder="مثال: صعوبة البدء، تشتت، وقت قليل، أو تراكم كبير" maxLength={600} className="mt-2 min-h-20 rounded-xl bg-background leading-7" />
             </label>
             <div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-muted/25 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-xs leading-6 text-muted-foreground">أنت الآن تسجل التقدم داخل فرع «{currentBranch?.branchTitle || "غير محدد"}» فقط. يُفضّل النظام تقدم المدرس في هذا الفرع، ثم تقدم فصلك في الفرع نفسه. وتُحسب الفجوة من دروس الفرع المحدد دون دمج فروع متوازية.</p>
+              <p className="text-xs leading-6 text-muted-foreground">سيُحفظ موضعك وموضع المدرس وموضع الفصل داخل فرع «{currentBranch?.branchTitle || "غير محدد"}» فقط. إذا لم تحدد آخر درس أنهيته أنت، فستظل الفجوة غير محسوبة حتى لو حفظت موضع المدرسة.</p>
               <Button type="button" onClick={submitCourseProgress} disabled={saveCourseProgress.isPending || !subjectId} className="pressable shrink-0 rounded-xl bg-primary">
-                {saveCourseProgress.isPending ? "جارٍ حفظ التقدم..." : "حفظ حالة المادة"}
+                {saveCourseProgress.isPending ? "جارٍ حفظ التقدم..." : "حفظ التقدم وموضع الفصل"}
               </Button>
             </div>
           </div>
