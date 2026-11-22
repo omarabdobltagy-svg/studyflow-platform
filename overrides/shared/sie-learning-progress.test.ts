@@ -132,17 +132,21 @@ describe("calculateLearningGapsByBranch", () => {
 
 
 describe("official SIE curriculum branch catalog", () => {
-  it.each([
-    ["ARB_G2_BAC", 3, [3, 3, 3]],
-    ["ENG1_G2_BAC", 10, Array(10).fill(2)],
-    ["HIS_G2_BAC", 3, [4, 4, 4]],
-    ["PROG_AI_G2_BAC", 7, [4, 3, 3, 4, 3, 3, 3]],
-  ])("keeps %s in its official independent branches", (subjectId, expectedCount, expectedLessonCounts) => {
-    const branches = getSIECheckpointBranches(subjectId);
-    expect(branches).toHaveLength(expectedCount);
-    expect(branches.map(branch => branch.choices.length)).toEqual(expectedLessonCounts);
-    expect(new Set(branches.flatMap(branch => branch.choices.map(choice => choice.nodeId))).size)
-      .toBe(branches.reduce((total, branch) => total + branch.choices.length, 0));
+  const cases: Array<{ subjectId: string; expectedCount: number; expectedLessonCounts: number[] }> = [
+    { subjectId: "ARB_G2_BAC", expectedCount: 3, expectedLessonCounts: [3, 3, 3] },
+    { subjectId: "ENG1_G2_BAC", expectedCount: 10, expectedLessonCounts: Array(10).fill(2) },
+    { subjectId: "HIS_G2_BAC", expectedCount: 3, expectedLessonCounts: [4, 4, 4] },
+    { subjectId: "PROG_AI_G2_BAC", expectedCount: 7, expectedLessonCounts: [4, 3, 3, 4, 3, 3, 3] },
+  ];
+
+  it("keeps every subject in its official independent branches", () => {
+    for (const item of cases) {
+      const branches = getSIECheckpointBranches(item.subjectId);
+      expect(branches).toHaveLength(item.expectedCount);
+      expect(branches.map(branch => branch.choices.length)).toEqual(item.expectedLessonCounts);
+      expect(new Set(branches.flatMap(branch => branch.choices.map(choice => choice.nodeId))).size)
+        .toBe(branches.reduce((total, branch) => total + branch.choices.length, 0));
+    }
   });
 
   it("uses the official English A/B sections, not whole-unit cross-comparisons", () => {
