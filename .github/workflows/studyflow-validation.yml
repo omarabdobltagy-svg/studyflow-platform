@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   validate:
@@ -63,90 +63,6 @@ jobs:
         run: pnpm build
       - name: Apply all MySQL migrations on an isolated database
         run: pnpm db:push
-      - name: Preserve generated migration and guard columns already present in production
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        env:
-          TARGET_BRANCH: ${{ github.head_ref }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          candidates = sorted(Path("drizzle").glob("0008_*.sql"))
-          if len(candidates) != 1:
-              raise SystemExit(f"Expected one generated 0008 migration, found {len(candidates)}")
-          migration = candidates[0]
-          sql = migration.read_text()
-          replacements = {
-              "ALTER TABLE `studentProfiles` ADD `selectionJson` text;--> statement-breakpoint": """SET @studyflow_has_selection_json = (
-            SELECT COUNT(*) FROM information_schema.COLUMNS
-            WHERE TABLE_SCHEMA = DATABASE()
-              AND TABLE_NAME = 'studentProfiles'
-              AND COLUMN_NAME = 'selectionJson'
-          );
-          --> statement-breakpoint
-          SET @studyflow_selection_json_ddl = IF(
-            @studyflow_has_selection_json = 0,
-            'ALTER TABLE `studentProfiles` ADD `selectionJson` text',
-            'SELECT 1'
-          );
-          --> statement-breakpoint
-          PREPARE studyflow_selection_json_stmt FROM @studyflow_selection_json_ddl;
-          --> statement-breakpoint
-          EXECUTE studyflow_selection_json_stmt;
-          --> statement-breakpoint
-          DEALLOCATE PREPARE studyflow_selection_json_stmt;
-          --> statement-breakpoint""",
-              "ALTER TABLE `users` ADD `phone` varchar(20);--> statement-breakpoint": """SET @studyflow_has_users_phone = (
-            SELECT COUNT(*) FROM information_schema.COLUMNS
-            WHERE TABLE_SCHEMA = DATABASE()
-              AND TABLE_NAME = 'users'
-              AND COLUMN_NAME = 'phone'
-          );
-          --> statement-breakpoint
-          SET @studyflow_users_phone_ddl = IF(
-            @studyflow_has_users_phone = 0,
-            'ALTER TABLE `users` ADD `phone` varchar(20)',
-            'SELECT 1'
-          );
-          --> statement-breakpoint
-          PREPARE studyflow_users_phone_stmt FROM @studyflow_users_phone_ddl;
-          --> statement-breakpoint
-          EXECUTE studyflow_users_phone_stmt;
-          --> statement-breakpoint
-          DEALLOCATE PREPARE studyflow_users_phone_stmt;
-          --> statement-breakpoint""",
-          }
-          existing_guards = {
-              "ALTER TABLE `studentProfiles` ADD `selectionJson` text;--> statement-breakpoint": "@studyflow_has_selection_json",
-              "ALTER TABLE `users` ADD `phone` varchar(20);--> statement-breakpoint": "@studyflow_has_users_phone",
-          }
-          for old, replacement in replacements.items():
-              if old in sql:
-                  sql = sql.replace(old, replacement, 1)
-              elif existing_guards[old] not in sql:
-                  raise SystemExit(f"Expected schema-drift statement or its idempotent guard missing in {migration.name}")
-          migration.write_text(sql)
-
-          overlay = Path("overrides/drizzle")
-          meta = overlay / "meta"
-          meta.mkdir(parents=True, exist_ok=True)
-          (overlay / migration.name).write_text(sql)
-          for filename in ("0008_snapshot.json", "_journal.json"):
-              generated = Path("drizzle/meta") / filename
-              if not generated.exists():
-                  raise SystemExit(f"Generated Drizzle metadata missing: {generated}")
-              (meta / filename).write_bytes(generated.read_bytes())
-          PY
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add overrides/drizzle/0008_*.sql overrides/drizzle/meta/0008_snapshot.json overrides/drizzle/meta/_journal.json
-          if git diff --cached --quiet; then
-            echo "No generated migration metadata changes to commit."
-          else
-            git commit -m "chore: preserve idempotent student auth migration"
-            git push origin "HEAD:${TARGET_BRANCH}"
-          fi
       - name: Upload generated Drizzle migration artifacts
         if: success()
         uses: actions/upload-artifact@v4
