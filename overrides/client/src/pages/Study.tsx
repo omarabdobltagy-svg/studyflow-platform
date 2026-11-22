@@ -90,7 +90,7 @@ export default function Study() {
     const subjectLessonRecords = progressMap[subjectId] || {};
     const latestSq3rCompleted = [...lessons].reverse().find(lesson => {
       const record = subjectLessonRecords[lesson.nodeId];
-      return record?.status === "completed" || (Array.isArray(record?.completedSteps) && record.completedSteps.length === 5);
+      return Array.isArray(record?.completedSteps) && record.completedSteps.length === 5;
     })?.nodeId;
     setLastCompletedLessonId(
       currentCourseProgress.lastCompletedLessonId
