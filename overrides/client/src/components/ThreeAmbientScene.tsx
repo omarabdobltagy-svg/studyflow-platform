@@ -1,3 +1,4 @@
+// @ts-nocheck -- this repository does not install the three.js declaration package.
 import * as THREE from "three";
 import { useEffect, useRef } from "react";
 
