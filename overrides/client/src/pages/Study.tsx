@@ -44,11 +44,6 @@ export default function Study() {
   const selectedTeacherId = ((selection.teacherChoices || {}) as Record<string, string>)[subjectId]
     || (profile.data?.teacherSelections || {})[subjectId];
   const selectedTeacher = selectedTeacherId ? getSIETeacher(selectedTeacherId) : undefined;
-  const currentGap = calculateLearningGap(lessons, {
-    studentFrontierId: lastCompletedLessonId || null,
-    teacherTeachingFrontierId,
-    schoolClassFrontierId,
-  });
   const [lastCompletedLessonId, setLastCompletedLessonId] = useState("");
   const [teacherTeachingFrontierId, setTeacherTeachingFrontierId] = useState("__UNKNOWN__");
   const [schoolClassFrontierId, setSchoolClassFrontierId] = useState("__UNKNOWN__");
@@ -64,6 +59,12 @@ export default function Study() {
   const [assessmentTotal, setAssessmentTotal] = useState("");
   const [weakConcepts, setWeakConcepts] = useState("");
   const [assessmentNotes, setAssessmentNotes] = useState("");
+
+  const currentGap = calculateLearningGap(lessons, {
+    studentFrontierId: lastCompletedLessonId || null,
+    teacherTeachingFrontierId,
+    schoolClassFrontierId,
+  });
 
 
   useEffect(() => {
@@ -268,7 +269,7 @@ export default function Study() {
                     {lessons.map(lesson => <SelectItem key={lesson.nodeId} value={lesson.nodeId}>{lesson.unitTitle} · {lesson.title}</SelectItem>)}
                   </SelectContent>
                 </Select>
-                <span className="mt-1 block text-[11px] font-normal text-muted-foreground">المدرسة هي المرجع البديل عند عدم معرفة موضع المدرس.</span>
+                <span className="mt-1 block text-[11px] font-normal text-muted-foreground">يُحدَّث حسب آخر درس وصل إليه فصل الطالب في المدرسة، ويُستخدم بديلًا عند عدم معرفة موضع المدرس.</span>
               </label>
               <label className="text-sm font-semibold">
                 آخر محاضرة شاهدتها على منصة المدرس (اختياري)
