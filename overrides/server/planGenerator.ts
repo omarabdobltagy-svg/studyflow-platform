@@ -105,7 +105,7 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
         "مرجع المقارنة: " + referenceLabel + " — " + referenceLabelTitle,
         "الفجوة داخل هذا الفرع فقط: " + (gap.gapCount === null
           ? "غير محسوبة لعدم اكتمال البيانات داخل الفرع"
-          : gap.gapCount + " درسًا؛ متقدم عن المرجع: " + (gap.aheadCount ?? 0)),
+          : gap.gapCount + " نقطة داخل الفرع؛ متقدم عن المرجع: " + (gap.aheadCount ?? 0)),
         "إنجاز SQ3R في الفرع: " + completed + " مكتمل؛ " + underway + " قيد الدراسة",
         "نقاط صعبة: " + (hard.join("، ") || "لا توجد بيانات"),
       ].join(" | ");
