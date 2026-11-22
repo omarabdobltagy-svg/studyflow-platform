@@ -308,8 +308,30 @@ export async function updateStudentProfileSelection(userId: number, selection: R
   if (result[0].affectedRows === 0) throw new Error("ملف الطالب غير موجود.");
 }
 
+/** Saves student-entered backlog data without replacing unrelated profile fields. */
+export async function updateStudentLearningBaseline(
+  userId: number,
+  updates: { backlog: Record<string, number>; obstacle?: string }
+) {
+  const database = await requireDb();
+  const profile = await getStudentProfile(userId);
+  if (!profile) throw new Error("ملف الطالب غير موجود.");
+  const backlog = { ...profile.backlog, ...updates.backlog };
+  await database.update(studentProfiles)
+    .set({
+      backlogJson: JSON.stringify(backlog),
+      ...(updates.obstacle === undefined ? {} : { obstacle: updates.obstacle.trim().slice(0, 600) }),
+    })
+    .where(eq(studentProfiles.userId, userId));
+  return getStudentProfile(userId);
+}
+
+
 export async function saveSIEOnboarding(userId: number, data: SIEOnboardingInput) {
   const db = await requireDb();
+  const existingProfile = await getStudentProfile(userId);
+  const existingSelection = (existingProfile?.selection ?? {}) as Record<string, unknown>;
+  const mergedSelection = { ...existingSelection, ...data.selection };
   const studentName = data.studentName.trim();
   const phone = data.phone.trim();
   await db.update(users).set({ name: studentName, phone }).where(eq(users.id, userId));
@@ -322,7 +344,7 @@ export async function saveSIEOnboarding(userId: number, data: SIEOnboardingInput
     track: data.track.trim(),
     subjectsJson: JSON.stringify(data.subjects),
     teacherSelectionsJson: JSON.stringify(data.teacherSelections),
-    selectionJson: JSON.stringify(data.selection),
+    selectionJson: JSON.stringify(mergedSelection),
     backlogJson: JSON.stringify({}),
     obstacle: "",
     completedAt: new Date(),

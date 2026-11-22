@@ -221,3 +221,44 @@
 .dark .app-card { box-shadow: 0 16px 40px -32px rgba(0, 0, 0, .72); }
 .teacher-choice-card[aria-pressed="true"],
 button[aria-current="page"] { box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--primary) 36%, transparent); }
+
+
+/* Learning intelligence surfaces: depth, restrained glow and motion-safe transitions. */
+.learning-progress-panel {
+  position: relative;
+  isolation: isolate;
+  perspective: 1200px;
+  border-color: color-mix(in oklab, var(--primary) 24%, var(--border));
+  box-shadow: 0 24px 70px -52px rgba(180, 133, 39, .55);
+}
+.learning-progress-panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(128deg, color-mix(in oklab, var(--primary) 7%, transparent), transparent 32%, color-mix(in oklab, var(--accent) 4%, transparent));
+  opacity: .8;
+  z-index: -1;
+}
+.learning-glass-card {
+  backdrop-filter: blur(18px);
+  transform-style: preserve-3d;
+  transition: transform 260ms cubic-bezier(.2,.75,.25,1), box-shadow 260ms ease, border-color 180ms ease;
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .learning-glass-card:hover {
+    transform: perspective(1000px) translateY(-3px) rotateX(.35deg);
+    box-shadow: 0 18px 36px -30px rgba(224, 178, 63, .48);
+    border-color: color-mix(in oklab, var(--primary) 42%, var(--border));
+  }
+  .learning-progress-panel .app-card,
+  .learning-progress-panel label {
+    transition: border-color 180ms ease, background-color 180ms ease, transform 220ms ease;
+  }
+}
+.learning-progress-panel .bg-white\\/8 { background-color: rgb(255 255 255 / .08); }
+@media (prefers-reduced-motion: reduce) {
+  .learning-glass-card,
+  .learning-progress-panel * { transition: none !important; animation: none !important; }
+}

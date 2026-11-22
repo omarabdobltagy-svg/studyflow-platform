@@ -47,6 +47,8 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
   const frontiers = (selection.teacherFrontiers || {}) as Record<string, string>;
   const teacherStates = (selection.teacherProgressState || {}) as Record<string, Record<string, any>>;
   const lessonProgress = (selection.subjectLessonProgress || {}) as Record<string, Record<string, any>>;
+  const courseProgress = (selection.learningCourseProgress || {}) as Record<string, any>;
+  const assessmentHistory = Array.isArray(selection.learningAssessments) ? selection.learningAssessments as Array<Record<string, any>> : [];
   const subjectContext = (profile.subjects || []).map(subjectId => {
     const subject = getSIESubject(subjectId);
     const teacherId = choices[subjectId];
@@ -63,10 +65,24 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
       return lesson ? lesson.title : entry[0];
     });
     const backlog = profile.backlog[subjectId] || profile.backlog[(subject && subject.nameAr) || ""] || 0;
+    const reported = courseProgress[subjectId] || {};
+    const lastLesson = catalog.find(item => item.nodeId === reported.lastCompletedLessonId);
+    const recentAssessments = assessmentHistory.filter(item => item.subjectId === subjectId).slice(-5);
+    const assessmentSummary = recentAssessments.map(item =>
+      String(item.assessmentType || "تقييم") + ": " + String(item.scorePercent) + "%"
+      + (Array.isArray(item.weakConcepts) && item.weakConcepts.length ? "؛ نقاط تحتاج تقوية: " + item.weakConcepts.join("، ") : "")
+    ).join(" | ");
     const lessonList = catalog.map(item => item.unitTitle + " / " + item.title).join("؛ ");
     return [
       "المادة: " + ((subject && subject.nameAr) || subjectId),
       "التراكم المسجل: " + backlog,
+      "حالة الكورس حسب آخر تحديث من الطالب: " + (reported.status || "لم تُحدّث بعد"),
+      "آخر درس في فهرس المنهج أبلغ الطالب أنه أتمه: " + (lastLesson ? lastLesson.unitTitle + " / " + lastLesson.title : reported.lastCompletedLessonId || "غير محدد"),
+      "آخر محاضرة/عنصر في كورس المدرس حسب الطالب: " + (reported.teacherCourseFrontier || "غير محدد"),
+      "عدد الدروس/المحاضرات المتأخرة حسب الطالب: " + (reported.backlogCount ?? backlog),
+      "الوقت التقديري للدرس: " + (reported.estimatedMinutesPerLesson ?? "غير محدد") + " دقيقة",
+      "صعوبة المادة حسب الطالب: " + (reported.difficulty || "غير محددة"),
+      "نتائج التقييمات الحديثة: " + (assessmentSummary || "لا توجد نتائج مسجلة"),
       "المدرس المختار: " + ((teacher && teacher.nameAr) || teacherId || "لم يحدد"),
       "أحدث محتوى عام معروف للمدرس: " + ((teacher && teacher.latestPublicCheckpoint) || "غير متاح"),
       "الموضع الذي أبلغ الطالب أنه وصل إليه: " + ((frontierName && frontierName.title) || studentFrontier || "غير محدد"),
@@ -85,7 +101,13 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
   ].join("\n");
 }
 
-export async function generatePersonalPlan(userId: number, prompt: string, includeStudentProfile = true): Promise<GeneratedPlan> {
+export async function generatePersonalPlan(
+  userId: number,
+  prompt: string,
+  includeStudentProfile = true,
+  constraints: { dailyMinutes?: number; startDate?: string } = {}
+): Promise<GeneratedPlan> {
+  const dailyMinutes = Math.max(20, Math.min(600, Math.trunc(constraints.dailyMinutes ?? 120)));
   const profile = includeStudentProfile ? await getStudentProfile(userId) : null;
   const context = profile ? buildLearningContext(profile) : "لم يطلب المستخدم تخصيص الخطة بالملف الدراسي.";
   const system = [
@@ -94,6 +116,8 @@ export async function generatePersonalPlan(userId: number, prompt: string, inclu
     "لا تخلط بين آخر محتوى عام للمدرس، محتوى الكورس المدفوع، وما شاهده الطالب. لا تخترع أرقام محاضرات أو أسماء دروس.",
     "إذا كان فهرس مادة غير محمّل فاذكر هذا القيد ولا تخترع محتوى منهجيًا لها.",
     "رتّب الأولويات بحسب موعد الاختبار إن ذُكر، والمتطلبات السابقة، وحجم التراكم، وصعوبة الدرس. الدرس الصعب أو التأسيسي يحتاج فهمًا وتدريبًا واسترجاعًا، وليس قراءة سريعة؛ الدرس المألوف القصير يمكن أن يأخذ مراجعة مركزة.",
+    "الحد الأقصى لوقت الدراسة اليومي هو " + dailyMinutes + " دقيقة. مجموع دقائق الخطوات التي تحمل اسم اليوم نفسه يجب ألا يتجاوز هذا الحد، مع ترك هامش تعويض واقعي.",
+    constraints.startDate ? "تاريخ بداية التنفيذ: " + constraints.startDate + "." : "تاريخ البداية يحدده الطالب عند اعتماد الخطة.",
     "احترم سعة اليوم المحددة من الطالب. لا تتجاوزها، ووزع الخطة واقعيًا مع هامش تعويض. إذا نقصت البيانات فاختر بداية تدريجية واذكر الافتراض في الملخص.",
     "لا تعتبر غياب السجل دليلًا على الإنجاز، ولا توبّخ الطالب.",
     "أخرج كائن JSON فقط بالعربية وبالحقول: title, summary, durationLabel, steps (3-10 عناصر فيها day,title,detail,minutes,category), habits (1-4 عناصر فيها title,cue), reviewQuestion.",
@@ -119,6 +143,14 @@ export async function generatePersonalPlan(userId: number, prompt: string, inclu
   const text = contentAsText(result);
   if (!text) throw new Error("لم تصل استجابة من المخطط الذكي. حاول مرة أخرى.");
   const plan = parseGeneratedPlan(text);
+  const minutesByDay = new Map<string, number>();
+  for (const step of plan.steps) {
+    minutesByDay.set(step.day, (minutesByDay.get(step.day) ?? 0) + step.minutes);
+  }
+  const overloadedDay = [...minutesByDay.entries()].find(([, minutes]) => minutes > dailyMinutes);
+  if (overloadedDay) {
+    throw new Error("الخطة المقترحة تجاوزت حدك اليومي في " + overloadedDay[0] + " (" + overloadedDay[1] + " دقيقة مقابل " + dailyMinutes + "). أعد المحاولة لتوليد توزيع أخف.");
+  }
   await saveAiPlan(userId, { prompt, title: plan.title, planJson: JSON.stringify(plan) });
   return plan;
 }
