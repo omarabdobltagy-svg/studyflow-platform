@@ -311,12 +311,14 @@ export async function updateStudentProfileSelection(userId: number, selection: R
 /** Saves student-entered backlog data without replacing unrelated profile fields. */
 export async function updateStudentLearningBaseline(
   userId: number,
-  updates: { backlog: Record<string, number>; obstacle?: string }
+  updates: { backlog: Record<string, number>; removeBacklogKeys?: string[]; obstacle?: string }
 ) {
   const database = await requireDb();
   const profile = await getStudentProfile(userId);
   if (!profile) throw new Error("ملف الطالب غير موجود.");
-  const backlog = { ...profile.backlog, ...updates.backlog };
+  const backlog = { ...profile.backlog };
+  for (const key of updates.removeBacklogKeys ?? []) delete backlog[key];
+  Object.assign(backlog, updates.backlog);
   await database.update(studentProfiles)
     .set({
       backlogJson: JSON.stringify(backlog),
