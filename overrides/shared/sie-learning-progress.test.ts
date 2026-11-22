@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { calculateLearningGap, calculateLearningGapsByBranch } from "./sie-learning-progress";
+import { getSIECheckpointBranches } from "./sie-catalog";
 
 const curriculum = [
   { nodeId: "L1", title: "Lesson 1" },
@@ -126,5 +127,33 @@ describe("calculateLearningGapsByBranch", () => {
     expect(result["unit-a"].status).toBe("reference_missing");
     expect(result["unit-a"].gapCount).toBeNull();
     expect(result["unit-b"].status).toBe("reference_missing");
+  });
+});
+
+
+describe("official SIE curriculum branch catalog", () => {
+  it.each([
+    ["ARB_G2_BAC", 3, [3, 3, 3]],
+    ["ENG1_G2_BAC", 10, Array(10).fill(2)],
+    ["HIS_G2_BAC", 3, [4, 4, 4]],
+    ["PROG_AI_G2_BAC", 7, [4, 3, 3, 4, 3, 3, 3]],
+  ])("keeps %s in its official independent branches", (subjectId, expectedCount, expectedLessonCounts) => {
+    const branches = getSIECheckpointBranches(subjectId);
+    expect(branches).toHaveLength(expectedCount);
+    expect(branches.map(branch => branch.choices.length)).toEqual(expectedLessonCounts);
+    expect(new Set(branches.flatMap(branch => branch.choices.map(choice => choice.nodeId))).size)
+      .toBe(branches.reduce((total, branch) => total + branch.choices.length, 0));
+  });
+
+  it("uses the official English A/B sections, not whole-unit cross-comparisons", () => {
+    const branches = getSIECheckpointBranches("ENG1_G2_BAC");
+    expect(branches.map(branch => branch.branchId)).toEqual([
+      "ENG_U1_SEC_A", "ENG_U1_SEC_B",
+      "ENG_U2_SEC_A", "ENG_U2_SEC_B",
+      "ENG_U3_SEC_A", "ENG_U3_SEC_B",
+      "ENG_U4_SEC_A", "ENG_U4_SEC_B",
+      "ENG_U5_SEC_A", "ENG_U5_SEC_B",
+    ]);
+    expect(branches.every(branch => branch.branchType === "official_section")).toBe(true);
   });
 });
