@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   formatTextbookEvidence,
+  inspectTextbookIndex,
   rankTextbookPassages,
   retrieveTextbookEvidence,
   splitTextbookPages,
@@ -45,6 +46,17 @@ describe("textbook page retrieval", () => {
 
 
 describe("uploaded official textbook corpus", () => {
+  it("parses the page markers from the actual source files", () => {
+    const history = inspectTextbookIndex("HIS_G2_BAC");
+    const programming = inspectTextbookIndex("PROG_AI_G2_BAC");
+    expect(history.files.every(file => file.exists && file.bytes > 0)).toBe(true);
+    expect(programming.files.every(file => file.exists && file.bytes > 0)).toBe(true);
+    expect(history.files.reduce((sum, file) => sum + file.markerCount, 0)).toBeGreaterThan(100);
+    expect(programming.files.reduce((sum, file) => sum + file.markerCount, 0)).toBeGreaterThan(50);
+    expect(history.pageCount).toBeGreaterThan(100);
+    expect(programming.pageCount).toBeGreaterThan(50);
+  });
+
   it("retrieves a page from the uploaded National History Part 1 source", () => {
     const result = retrieveTextbookEvidence(
       ["HIS_G2_BAC"],
