@@ -160,7 +160,7 @@ export async function generatePersonalPlan(
     : { passages: [], coverageNotes: [] };
   const textbookContext = formatTextbookEvidence(textbookRetrieval);
   const context = profile
-    ? buildLearningContext(profile) + "\\n\\nمصادر نصية من الكتب الرسمية مرتبطة بطلب الخطة:\\n" + (textbookContext || "لم يتم استرجاع مقتطف مطابق من كتاب متاح.")
+    ? buildLearningContext(profile) + "\n\nمصادر نصية من الكتب الرسمية مرتبطة بطلب الخطة:\n" + (textbookContext || "لم يتم استرجاع مقتطف مطابق من كتاب متاح.")
     : "لم يطلب المستخدم تخصيص الخطة بالملف الدراسي.";
   const system = [
     "أنت محرك التخطيط الدراسي داخل StudyFlow، ولست مساعد دردشة عام.",
