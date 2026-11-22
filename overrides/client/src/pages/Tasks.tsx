@@ -72,12 +72,12 @@ export default function Tasks() {
         <div className="sf-task-hero-score">
           <div className="sf-task-score-top"><span>معدل الإنجاز</span><ListChecks /></div>
           <div className="sf-task-score-ring" style={{ background: "conic-gradient(#d7b9ec " + (tasksQuery.data?.length ? Math.round(doneCount / tasksQuery.data.length * 100) : 0) + "%,rgb(255 255 255 / 15%) 0)" }}>
-            <div><strong>{tasksQuery.isLoading ? "—" : tasksQuery.data?.length ? Math.round(doneCount / tasksQuery.data.length * 100) + "%" : "0%"}</strong><small>من إجمالي المهام</small></div>
+            <div><strong>{tasksQuery.isLoading || tasksQuery.isError ? "—" : tasksQuery.data?.length ? Math.round(doneCount / tasksQuery.data.length * 100) + "%" : "0%"}</strong><small>من إجمالي المهام</small></div>
           </div>
           <div className="sf-task-score-breakdown">
-            <div><b>{tasksQuery.isLoading ? "—" : todoCount}</b><span>قيد التنفيذ</span></div>
-            <div><b>{tasksQuery.isLoading ? "—" : doneCount}</b><span>مكتملة</span></div>
-            <div><b>{tasksQuery.isLoading ? "—" : tasksQuery.data?.length ?? 0}</b><span>الإجمالي</span></div>
+            <div><b>{tasksQuery.isLoading || tasksQuery.isError ? "—" : todoCount}</b><span>قيد التنفيذ</span></div>
+            <div><b>{tasksQuery.isLoading || tasksQuery.isError ? "—" : doneCount}</b><span>مكتملة</span></div>
+            <div><b>{tasksQuery.isLoading || tasksQuery.isError ? "—" : tasksQuery.data?.length ?? 0}</b><span>الإجمالي</span></div>
           </div>
         </div>
         <span className="sf-task-hero-orbit" aria-hidden="true" />
@@ -91,7 +91,7 @@ export default function Tasks() {
           <span>أنجزته بالفعل</span><strong>{tasksQuery.isLoading ? "—" : doneCount}</strong><small>إنجازات مسجلة في قائمتك</small>
         </article>
         <article className="sf-task-insight tone-sun">
-          <span>أولوية عالية</span><strong>{tasksQuery.isLoading ? "—" : (tasksQuery.data || []).filter(task => task.status === "todo" && task.priority === "high").length}</strong><small>من المهام غير المكتملة</small>
+          <span>أولوية عالية</span><strong>{tasksQuery.isLoading || tasksQuery.isError ? "—" : (tasksQuery.data || []).filter(task => task.status === "todo" && task.priority === "high").length}</strong><small>من المهام غير المكتملة</small>
         </article>
       </section>
 
@@ -104,7 +104,7 @@ export default function Tasks() {
                 <h2>قائمة التنفيذ</h2>
                 <p>افتح المهمة لتعديل تفاصيلها أو حدّث حالتها مباشرة.</p>
               </div>
-              <span className="sf-task-total">{tasksQuery.isLoading ? "—" : (tasksQuery.data || []).length} <small>مهمة</small></span>
+              <span className="sf-task-total">{tasksQuery.isLoading || tasksQuery.isError ? "—" : (tasksQuery.data || []).length} <small>مهمة</small></span>
             </div>
 
             <div className="sf-task-toolbar">
@@ -127,7 +127,7 @@ export default function Tasks() {
             </div>
 
             <div className="sf-task-results">
-              {tasksQuery.isLoading ? <TaskSkeletons /> : shownTasks.length ? shownTasks.map(task => {
+              {tasksQuery.isLoading ? <TaskSkeletons /> : tasksQuery.isError ? null : shownTasks.length ? shownTasks.map(task => {
                 const meta = priorityMeta[task.priority];
                 return (
                   <article key={task.id} className={"sf-task-row " + (task.status === "done" ? "is-complete" : "")}>
