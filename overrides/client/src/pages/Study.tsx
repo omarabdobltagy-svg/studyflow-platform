@@ -116,7 +116,7 @@ export default function Study() {
     })?.nodeId;
     const belongsToCurrentBranch = (value: unknown): value is string =>
       typeof value === "string" &&
-      (value === "__UNKNOWN__" || value === "__NOT_STARTED__" ||
+      (value === "__NOT_STARTED__" ||
         branchChoices.some(lesson => lesson.nodeId === value));
     const legacyStudentFrontier = currentCourseProgress.lastCompletedLessonId
       ?? legacyTeacherState.studentAttendedFrontier;
