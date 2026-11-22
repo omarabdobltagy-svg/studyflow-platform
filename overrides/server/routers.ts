@@ -1015,12 +1015,16 @@ export const appRouter = router({
         const branchRecords = (subjectRecord.branches ?? {}) as Record<string, Record<string, any>>;
         const oldBranchRecord = branchRecords[active.branchId] ?? {};
         const activeBranch = getSIECheckpointBranches(active.subjectId).find(item => item.branchId === active.branchId);
-        const previousFrontierIndex = activeBranch?.choices.findIndex(item => item.nodeId === oldBranchRecord.lastCompletedLessonId) ?? -1;
+        const legacyFrontier = activeBranch?.choices.some(item => item.nodeId === subjectRecord.lastCompletedLessonId)
+          ? subjectRecord.lastCompletedLessonId
+          : null;
+        const previousFrontier = oldBranchRecord.lastCompletedLessonId ?? legacyFrontier;
+        const previousFrontierIndex = activeBranch?.choices.findIndex(item => item.nodeId === previousFrontier) ?? -1;
         const finishedLessonIndex = activeBranch?.choices.findIndex(item => item.nodeId === active.lessonId) ?? -1;
         // Revising an earlier lesson must not move the student's completion frontier backwards.
         const nextFrontierId = finishedLessonIndex >= previousFrontierIndex && finishedLessonIndex >= 0
           ? active.lessonId
-          : oldBranchRecord.lastCompletedLessonId ?? active.lessonId;
+          : previousFrontier ?? active.lessonId;
         const nextBranchRecord = input.markLessonCompleted ? {
           ...oldBranchRecord,
           subjectId: active.subjectId,
