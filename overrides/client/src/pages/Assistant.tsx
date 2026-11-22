@@ -122,7 +122,7 @@ export default function Assistant() {
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1.5 rounded-xl bg-muted px-3 py-2"><BookOpen className="size-3.5" />{profile.data?.subjects?.length || 0} مواد في ملفك</span>
-            <span className="inline-flex items-center gap-1.5 rounded-xl bg-muted px-3 py-2"><ShieldCheck className="size-3.5" />محادثات خاصة بهذا الجهاز</span>
+            <span className="inline-flex items-center gap-1.5 rounded-xl bg-muted px-3 py-2"><ShieldCheck className="size-3.5" />ذاكرة دراسية خاصة بحسابك</span>
           </div>
         </div>
         <div className="grid gap-4 p-3 sm:p-4 lg:grid-cols-[250px_minmax(0,1fr)]">
@@ -147,7 +147,7 @@ export default function Assistant() {
                 </button>
               ))}
             </div>
-            <p className="mt-3 hidden text-[11px] leading-5 text-muted-foreground lg:block">تُحفظ المحادثات على هذا المتصفح. لن تنتقل تلقائيًا إلى جهاز آخر.</p>
+            <p className="mt-3 hidden text-[11px] leading-5 text-muted-foreground lg:block">سجل المحادثات الحالي محفوظ على هذا المتصفح، بينما تُحفظ خلاصة دراسية مختارة على حسابك لتخصيص المساعد عبر الجلسات.</p>
           </aside>
           <div className="min-w-0">
             <div className="mb-3 flex items-center justify-between gap-3 px-1">

@@ -101,6 +101,42 @@ export default function ThreeAmbientScene() {
       }));
       system.add(stars);
 
+      const satelliteGroup = new THREE.Group();
+      system.add(satelliteGroup);
+      const satelliteGeometry = new THREE.OctahedronGeometry(0.075, 1);
+      const satelliteGoldMaterial = new THREE.MeshStandardMaterial({
+        color: 0xf1c452,
+        metalness: 0.72,
+        roughness: 0.24,
+        emissive: 0x6b4a0c,
+        emissiveIntensity: 0.35,
+      });
+      const satelliteRedMaterial = new THREE.MeshStandardMaterial({
+        color: 0xd82b3f,
+        metalness: 0.58,
+        roughness: 0.28,
+        emissive: 0x4a1018,
+        emissiveIntensity: 0.3,
+      });
+      const satellites: THREE.Mesh[] = [];
+      for (let index = 0; index < 4; index += 1) {
+        const angle = (index / 4) * Math.PI * 2;
+        const satellite = new THREE.Mesh(
+          satelliteGeometry,
+          index % 2 === 0 ? satelliteGoldMaterial : satelliteRedMaterial
+        );
+        satellite.position.set(Math.cos(angle) * 1.18, Math.sin(angle) * 0.56, (index % 2 ? 0.42 : -0.3));
+        satelliteGroup.add(satellite);
+        satellites.push(satellite);
+      }
+      const pulseOrbit = new THREE.Mesh(
+        new THREE.TorusGeometry(1.25, 0.004, 5, 120),
+        new THREE.MeshBasicMaterial({ color: 0xe4b849, transparent: true, opacity: 0.34 })
+      );
+      pulseOrbit.rotation.set(0.4, 0.8, 0.2);
+      system.add(pulseOrbit);
+
+
       const resize = () => {
         if (!renderer || disposed) return;
         const width = Math.max(1, host.clientWidth);
@@ -117,8 +153,17 @@ export default function ThreeAmbientScene() {
       const renderFrame = () => {
         if (disposed || !renderer) return;
         if (!reduceMotion) {
+          const elapsed = performance.now() * 0.001;
           system.rotation.y += 0.003;
           system.rotation.x = Math.sin(performance.now() * 0.00028) * 0.075;
+          core.scale.setScalar(1 + Math.sin(elapsed * 1.35) * 0.035);
+          satelliteGroup.rotation.y += 0.004;
+          satellites.forEach((satellite, index) => {
+            satellite.rotation.x += 0.012 + index * 0.001;
+            satellite.rotation.y -= 0.009;
+            satellite.scale.setScalar(1 + Math.sin(elapsed * 2 + index) * 0.12);
+          });
+          pulseOrbit.rotation.z += 0.0011;
           ringTwo.rotation.z -= 0.0016;
           stars.rotation.y -= 0.0008;
         }
@@ -141,6 +186,11 @@ export default function ThreeAmbientScene() {
         (ringThree.material as THREE.Material).dispose();
         starGeometry.dispose();
         (stars.material as THREE.Material).dispose();
+        satelliteGeometry.dispose();
+        satelliteGoldMaterial.dispose();
+        satelliteRedMaterial.dispose();
+        pulseOrbit.geometry.dispose();
+        (pulseOrbit.material as THREE.Material).dispose();
         renderer?.dispose();
         renderer?.domElement.remove();
       };
