@@ -327,18 +327,18 @@ export default function Study() {
         animate={{ opacity: 1, y: 0, rotateX: 0 }}
         transition={{ duration: 0.48, ease: [0.22, 1, 0.36, 1] }}
       >
-        <div className="relative overflow-hidden rounded-t-2xl bg-[#171613] px-5 py-6 text-white sm:px-7">
+        <div className="sf-learning-hero relative overflow-hidden rounded-t-2xl px-5 py-6 text-white sm:px-7">
           <div className="pointer-events-none absolute -left-4 -top-5 h-48 w-64 opacity-80 sm:h-56 sm:w-72"><ThreeAmbientScene /></div>
           <div className="relative z-10 max-w-[70%] sm:max-w-[74%]">
-            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#e5bd55]">LEARNING INTELLIGENCE</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--sf-gold-light)]">LEARNING INTELLIGENCE</p>
             <h2 className="mt-2 text-xl font-bold sm:text-2xl">حالة تعلّمك الفعلية</h2>
             <p className="mt-2 max-w-xl text-xs leading-6 text-white/65 sm:text-sm">يتابع SIE موضعك وموضع التدريس داخل كل فرع رسمي بصورة مستقلة؛ ولن يقارن بين وحدات أو أقسام مختلفة.</p>
             <div className="mt-4 flex flex-wrap gap-2">
               <span className="rounded-full border border-white/15 bg-white/8 px-3 py-1.5 text-[11px] text-white/80">{subjectName}</span>
-              <span className="rounded-full border border-[#e5bd55]/25 bg-[#e5bd55]/10 px-3 py-1.5 text-[11px] text-[#f1d58c]">{selectedTeacher?.nameAr || "لم تحدد مدرسًا"}</span>
+              <span className="rounded-full border border-[var(--sf-gold)]/30 bg-[var(--sf-gold)]/10 px-3 py-1.5 text-[11px] text-[var(--sf-gold-light)]">{selectedTeacher?.nameAr || "لم تحدد مدرسًا"}</span>
             </div>
           </div>
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-l from-transparent via-[#e5bd55]/70 to-transparent" />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-l from-transparent via-[var(--sf-gold)]/70 to-transparent" />
         </div>
 
         <div className="grid gap-5 p-5 sm:p-6 xl:grid-cols-[1.2fr_.8fr]">
