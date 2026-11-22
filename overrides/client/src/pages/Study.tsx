@@ -58,7 +58,7 @@ export default function Study() {
   const [lastCompletedLessonId, setLastCompletedLessonId] = useState("");
   const [teacherTeachingFrontierId, setTeacherTeachingFrontierId] = useState("__UNKNOWN__");
   const [schoolClassFrontierId, setSchoolClassFrontierId] = useState("__UNKNOWN__");
-  const [schoolClassEvidenceSource, setSchoolClassEvidenceSource] = useState("unknown");
+  const [schoolClassEvidenceSource, setSchoolClassEvidenceSource] = useState<"unknown" | "teacher_confirmed" | "classmate_confirmed" | "class_notes" | "class_group">("unknown");
   const [teacherCourseFrontier, setTeacherCourseFrontier] = useState("");
   const [courseStatus, setCourseStatus] = useState<CourseStatus>("not_started");
   const [estimatedMinutes, setEstimatedMinutes] = useState(45);
