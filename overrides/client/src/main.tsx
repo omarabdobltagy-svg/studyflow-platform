@@ -16,7 +16,7 @@ const analyticsWebsiteId = import.meta.env.VITE_ANALYTICS_WEBSITE_ID?.trim();
 if (analyticsEndpoint && analyticsWebsiteId) {
   const analyticsScript = document.createElement("script");
   analyticsScript.defer = true;
-  analyticsScript.src = `${analyticsEndpoint.replace(/\\/+$/, "")}/umami`;
+  analyticsScript.src = `${analyticsEndpoint.replace(/\/+$/, "")}/umami`;
   analyticsScript.dataset.websiteId = analyticsWebsiteId;
   document.head.appendChild(analyticsScript);
 }
