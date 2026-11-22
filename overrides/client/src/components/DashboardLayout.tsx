@@ -53,18 +53,23 @@ export default function DashboardLayout({ title, description, children, action }
   const [confirmPassword, setConfirmPassword] = useState("");
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [authFormError, setAuthFormError] = useState("");
-  const onAuthenticationSuccess = (authenticatedUser: NonNullable<typeof trpcUtils.auth.me.getData>) => {
-    trpcUtils.auth.me.setData(undefined, authenticatedUser);
-    void trpcUtils.invalidate();
-    setLoginPassword("");
-    setConfirmPassword("");
-    setAuthFormError("");
-  };
   const loginMutation = trpc.auth.login.useMutation({
-    onSuccess: onAuthenticationSuccess,
+    onSuccess: (authenticatedUser) => {
+      trpcUtils.auth.me.setData(undefined, authenticatedUser);
+      void trpcUtils.invalidate();
+      setLoginPassword("");
+      setConfirmPassword("");
+      setAuthFormError("");
+    },
   });
   const registerMutation = trpc.auth.register.useMutation({
-    onSuccess: onAuthenticationSuccess,
+    onSuccess: (authenticatedUser) => {
+      trpcUtils.auth.me.setData(undefined, authenticatedUser);
+      void trpcUtils.invalidate();
+      setLoginPassword("");
+      setConfirmPassword("");
+      setAuthFormError("");
+    },
   });
   const [location, setLocation] = useLocation();
   const [isMobileNavOpen, setMobileNavOpen] = useState(false);
