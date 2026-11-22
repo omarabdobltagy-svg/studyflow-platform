@@ -4,6 +4,7 @@ import { SignJWT } from "jose";
 import { TRPCError } from "@trpc/server";
 import { COOKIE_NAME } from "@shared/const";
 import { SIE_CATALOG_META, SIE_SYSTEMS, getSIEEducationSystem, getSIESubject, getSIETeacher, getSIETeachersForSubject, getSIETrack, getSIECheckpointChoices, validateSIESubjectSelection } from "@shared/sie-catalog";
+import { calculateLearningGap } from "@shared/sie-learning-progress";
 import {
   addChapter,
   addLibraryAttachment,
@@ -709,10 +710,20 @@ export const appRouter = router({
       const profile = await getStudentProfile(ctx.user.id);
       if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "أكمل ملفك الدراسي أولًا." });
       const selection = (profile.selection ?? {}) as Record<string, any>;
+      const courseProgress = (selection.learningCourseProgress ?? {}) as Record<string, any>;
+      const gapBySubject = Object.fromEntries(profile.subjects.map(subjectId => {
+        const record = courseProgress[subjectId] ?? {};
+        return [subjectId, calculateLearningGap(getSIECheckpointChoices(subjectId), {
+          studentFrontierId: record.lastCompletedLessonId,
+          teacherTeachingFrontierId: record.teacherTeachingFrontierId,
+          schoolClassFrontierId: record.schoolClassFrontierId,
+        })];
+      }));
       return {
         backlog: profile.backlog,
         obstacle: profile.obstacle,
-        courseProgress: selection.learningCourseProgress ?? {},
+        courseProgress,
+        gapBySubject,
         assessments: Array.isArray(selection.learningAssessments) ? selection.learningAssessments.slice(-40) : [],
         sq3rProgress: selection.subjectLessonProgress ?? {},
         memoryUpdatedAt: selection.assistantMemoryUpdatedAt ?? null,
@@ -723,9 +734,10 @@ export const appRouter = router({
         subjectId: z.string().trim().min(1).max(80),
         teacherId: z.string().trim().min(1).max(80).nullable().optional(),
         lastCompletedLessonId: z.string().trim().min(1).max(120).nullable().optional(),
+        teacherTeachingFrontierId: z.string().trim().min(1).max(120).default("__UNKNOWN__"),
+        schoolClassFrontierId: z.string().trim().min(1).max(120).default("__UNKNOWN__"),
         teacherCourseFrontier: z.string().trim().max(120).default(""),
         status: z.enum(["not_started", "in_progress", "caught_up", "needs_review"]),
-        backlogCount: z.number().int().min(0).max(200),
         estimatedMinutesPerLesson: z.number().int().min(5).max(480),
         difficulty: z.enum(["unknown", "easy", "medium", "hard"]).default("unknown"),
         notes: z.string().trim().max(600).default(""),
@@ -737,9 +749,19 @@ export const appRouter = router({
         if (!profile.subjects.includes(input.subjectId)) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "هذه المادة ليست ضمن ملفك الدراسي." });
         }
-        if (input.lastCompletedLessonId) {
-          const lessonExists = getSIECheckpointChoices(input.subjectId).some(lesson => lesson.nodeId === input.lastCompletedLessonId);
-          if (!lessonExists) throw new TRPCError({ code: "BAD_REQUEST", message: "الدرس المحدد غير موجود في فهرس المادة." });
+        const choices = getSIECheckpointChoices(input.subjectId);
+        const isAllowedFrontier = (value: string, allowUnknown: boolean) =>
+          (allowUnknown && value === "__UNKNOWN__")
+          || value === "__NOT_STARTED__"
+          || choices.some(lesson => lesson.nodeId === value);
+        if (input.lastCompletedLessonId && !isAllowedFrontier(input.lastCompletedLessonId, false)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "موضع الطالب غير موجود في فهرس المادة." });
+        }
+        if (!isAllowedFrontier(input.teacherTeachingFrontierId, true)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "موضع المدرس غير موجود في فهرس المادة." });
+        }
+        if (!isAllowedFrontier(input.schoolClassFrontierId, true)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "موضع المدرسة غير موجود في فهرس المادة." });
         }
         const selection = (profile.selection ?? {}) as Record<string, any>;
         const teacherId = input.teacherId ?? selection.teacherChoices?.[input.subjectId] ?? profile.teacherSelections?.[input.subjectId] ?? null;
@@ -749,13 +771,28 @@ export const appRouter = router({
             throw new TRPCError({ code: "BAD_REQUEST", message: "المدرس المحدد لا يرتبط بهذه المادة." });
           }
         }
+        if (input.teacherTeachingFrontierId !== "__UNKNOWN__" && (!teacherId || teacherId === "__SKIP__")) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "اختر مدرسًا قبل تسجيل موضعه في المنهج." });
+        }
+        const teacherFrontierId = input.teacherTeachingFrontierId === "__UNKNOWN__" ? null : input.teacherTeachingFrontierId;
+        const schoolFrontierId = input.schoolClassFrontierId === "__UNKNOWN__" ? null : input.schoolClassFrontierId;
+        const learningGap = calculateLearningGap(choices, {
+          studentFrontierId: input.lastCompletedLessonId ?? null,
+          teacherTeachingFrontierId: teacherFrontierId,
+          schoolClassFrontierId: schoolFrontierId,
+        });
         const record = {
           subjectId: input.subjectId,
           teacherId: teacherId && teacherId !== "__SKIP__" ? teacherId : null,
           lastCompletedLessonId: input.lastCompletedLessonId ?? null,
+          teacherTeachingFrontierId: teacherFrontierId,
+          teacherTeachingFrontierEvidence: teacherFrontierId ? "student_observed_teacher" : null,
+          schoolClassFrontierId: schoolFrontierId,
+          schoolClassFrontierEvidence: schoolFrontierId ? "student_reported_school_class" : null,
           teacherCourseFrontier: input.teacherCourseFrontier,
           status: input.status,
-          backlogCount: input.backlogCount,
+          learningGap,
+          backlogCount: learningGap.gapCount,
           estimatedMinutesPerLesson: input.estimatedMinutesPerLesson,
           difficulty: input.difficulty,
           notes: input.notes,
@@ -763,7 +800,10 @@ export const appRouter = router({
           confidence: "student_reported",
           updatedAt: new Date().toISOString(),
         };
-        await updateStudentLearningBaseline(ctx.user.id, { backlog: { [input.subjectId]: input.backlogCount }, obstacle: input.obstacle });
+        await updateStudentLearningBaseline(ctx.user.id, {
+          backlog: learningGap.gapCount === null ? {} : { [input.subjectId]: learningGap.gapCount },
+          obstacle: input.obstacle,
+        });
         const latestProfile = await getStudentProfile(ctx.user.id);
         const latestSelection = (latestProfile?.selection ?? selection) as Record<string, any>;
         const latestCourseProgress = (latestSelection.learningCourseProgress ?? {}) as Record<string, any>;
@@ -771,7 +811,7 @@ export const appRouter = router({
           ...latestSelection,
           learningCourseProgress: { ...latestCourseProgress, [input.subjectId]: record },
         });
-        return { success: true, record };
+        return { success: true, record, learningGap };
       }),
     addAssessment: protectedProcedure
       .input(z.object({
