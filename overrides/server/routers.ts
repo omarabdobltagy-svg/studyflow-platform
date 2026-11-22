@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { timingSafeEqual } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import { SignJWT } from "jose";
 import { TRPCError } from "@trpc/server";
 import { COOKIE_NAME } from "@shared/const";
@@ -809,6 +809,7 @@ export const appRouter = router({
         courseProgress,
         gapBySubject,
         gapByBranch,
+        activeExternalSession: selection.learningExternalSession ?? null,
         assessments: Array.isArray(selection.learningAssessments) ? selection.learningAssessments.slice(-40) : [],
         sq3rProgress: selection.subjectLessonProgress ?? {},
         memoryUpdatedAt: selection.assistantMemoryUpdatedAt ?? null,
@@ -923,6 +924,128 @@ export const appRouter = router({
           learningCourseProgress: { ...latestCourseProgress, [input.subjectId]: record },
         });
         return { success: true, record, learningGap, branchId: branch?.branchId ?? null };
+      }),
+    activeExternalSession: protectedProcedure.query(async ({ ctx }) => {
+      const profile = await getStudentProfile(ctx.user.id);
+      if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "أكمل ملفك الدراسي أولًا." });
+      const selection = (profile.selection ?? {}) as Record<string, any>;
+      return selection.learningExternalSession ?? null;
+    }),
+    startExternalSession: protectedProcedure
+      .input(z.object({
+        subjectId: z.string().trim().min(1).max(80),
+        branchId: z.string().trim().min(1).max(120),
+        lessonId: z.string().trim().min(1).max(120),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const profile = await getStudentProfile(ctx.user.id);
+        if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "أكمل ملفك الدراسي أولًا." });
+        if (!profile.subjects.includes(input.subjectId)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "هذه المادة ليست ضمن ملفك الدراسي." });
+        }
+        const branch = getSIECheckpointBranches(input.subjectId).find(item => item.branchId === input.branchId);
+        if (!branch || !branch.choices.some(item => item.nodeId === input.lessonId)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "الدرس لا يتبع فرع المنهج المحدد." });
+        }
+        const selection = (profile.selection ?? {}) as Record<string, any>;
+        const active = selection.learningExternalSession;
+        if (active?.status === "active") {
+          throw new TRPCError({ code: "CONFLICT", message: "لديك جلسة خارج SIE مفتوحة بالفعل. أنهِها أولًا." });
+        }
+        const session = {
+          sessionId: randomUUID(),
+          subjectId: input.subjectId,
+          branchId: input.branchId,
+          lessonId: input.lessonId,
+          startedAt: new Date().toISOString(),
+          status: "active" as const,
+          source: "student_started_external_session" as const,
+        };
+        const latestProfile = await getStudentProfile(ctx.user.id);
+        const latestSelection = (latestProfile?.selection ?? selection) as Record<string, any>;
+        if (latestSelection.learningExternalSession?.status === "active") {
+          throw new TRPCError({ code: "CONFLICT", message: "لديك جلسة خارج SIE مفتوحة بالفعل. أنهِها أولًا." });
+        }
+        await updateStudentProfileSelection(ctx.user.id, {
+          ...latestSelection,
+          learningExternalSession: session,
+        });
+        return session;
+      }),
+    finishExternalSession: protectedProcedure
+      .input(z.object({
+        sessionId: z.string().uuid(),
+        markLessonCompleted: z.boolean().default(false),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const profile = await getStudentProfile(ctx.user.id);
+        if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "ملف الطالب غير موجود." });
+        const selection = (profile.selection ?? {}) as Record<string, any>;
+        const active = selection.learningExternalSession;
+        if (!active || active.status !== "active" || active.sessionId !== input.sessionId) {
+          throw new TRPCError({ code: "CONFLICT", message: "جلسة المذاكرة غير موجودة أو تم إنهاؤها بالفعل." });
+        }
+        const startedAt = Date.parse(active.startedAt);
+        if (!Number.isFinite(startedAt)) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "وقت بداية الجلسة غير صالح؛ لم تُحتسب مدة غير مؤكدة." });
+        }
+        const finishedAt = new Date();
+        const rawDurationSeconds = Math.max(0, Math.floor((finishedAt.getTime() - startedAt) / 1_000));
+        const maxDurationSeconds = 12 * 60 * 60;
+        const completedSession = {
+          ...active,
+          status: "completed" as const,
+          finishedAt: finishedAt.toISOString(),
+          durationSeconds: Math.min(rawDurationSeconds, maxDurationSeconds),
+          requiresTimeReview: rawDurationSeconds > maxDurationSeconds,
+          lessonMarkedCompleted: input.markLessonCompleted,
+        };
+        const latestProfile = await getStudentProfile(ctx.user.id);
+        const latestSelection = (latestProfile?.selection ?? selection) as Record<string, any>;
+        const latestActive = latestSelection.learningExternalSession;
+        if (!latestActive || latestActive.status !== "active" || latestActive.sessionId !== input.sessionId) {
+          throw new TRPCError({ code: "CONFLICT", message: "تم تحديث الجلسة من مكان آخر؛ أعد تحميل الحالة." });
+        }
+        const history = Array.isArray(latestSelection.learningExternalSessions)
+          ? latestSelection.learningExternalSessions as Array<Record<string, any>>
+          : [];
+        const courseProgress = (latestSelection.learningCourseProgress ?? {}) as Record<string, any>;
+        const subjectRecord = courseProgress[active.subjectId] ?? {};
+        const branchRecords = (subjectRecord.branches ?? {}) as Record<string, Record<string, any>>;
+        const oldBranchRecord = branchRecords[active.branchId] ?? {};
+        const nextBranchRecord = input.markLessonCompleted ? {
+          ...oldBranchRecord,
+          subjectId: active.subjectId,
+          lastCompletedLessonId: active.lessonId,
+          evidenceSource: "student_confirmed_after_external_session",
+          confidence: "student_confirmed",
+          lastCompletedAt: finishedAt.toISOString(),
+          updatedAt: finishedAt.toISOString(),
+        } : oldBranchRecord;
+        const nextCourseProgress = input.markLessonCompleted ? {
+          ...courseProgress,
+          [active.subjectId]: {
+            ...subjectRecord,
+            branches: {
+              ...branchRecords,
+              [active.branchId]: nextBranchRecord,
+            },
+            updatedAt: finishedAt.toISOString(),
+          },
+        } : courseProgress;
+        await updateStudentProfileSelection(ctx.user.id, {
+          ...latestSelection,
+          learningExternalSession: null,
+          learningExternalSessions: [...history, completedSession].slice(-100),
+          learningCourseProgress: nextCourseProgress,
+        });
+        return {
+          success: true,
+          session: completedSession,
+          durationSeconds: completedSession.durationSeconds,
+          requiresTimeReview: completedSession.requiresTimeReview,
+          lessonMarkedCompleted: input.markLessonCompleted,
+        };
       }),
     addAssessment: protectedProcedure
       .input(z.object({
