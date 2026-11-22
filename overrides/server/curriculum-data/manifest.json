@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "ingestionDate": "2026-11-22",
+  "books": {
+    "ARB_G2_BAC": {
+      "title": "كتاب اللغة العربية - البكالوريا المصرية - الصف الثاني - الجزء الأول",
+      "files": [
+        "arabic-part1.txt",
+        "arabic-part2.txt"
+      ],
+      "coverage": "full_text_part_1",
+      "sourceType": "official_textbook"
+    },
+    "HIS_G2_BAC": {
+      "title": "كتاب التاريخ الوطني - البكالوريا المصرية - الصف الثاني - الجزء الأول",
+      "files": [
+        "history-part1.txt",
+        "history-part2.txt"
+      ],
+      "coverage": "full_text_part_1",
+      "sourceType": "official_textbook"
+    },
+    "PROG_AI_G2_BAC": {
+      "title": "كتاب البرمجة والذكاء الاصطناعي - البكالوريا المصرية - الصف الثاني - الجزء الثاني",
+      "files": [
+        "programming-part2.txt"
+      ],
+      "coverage": "full_text_part_2_chapters_5_7",
+      "sourceType": "official_textbook"
+    },
+    "ENG1_G2_BAC": {
+      "title": "English - Egyptian Baccalaureate - 2nd Year - Part 1",
+      "files": [],
+      "coverage": "toc_only",
+      "tocPdfPages": [
+        10,
+        11
+      ],
+      "sourceType": "official_textbook"
+    }
+  },
+  "limitations": [
+    "Arabic, History, and Programming content is stored as page-labelled extracted text for retrieval.",
+    "English Part 1 is image-only in the provided PDF; only its table of contents has been verified. Do not claim that lesson body text is indexed.",
+    "Programming Part 1 was not among the newly available source PDFs; the catalog may contain its lesson titles but not its full text in this corpus.",
+    "The literary supplement 'من روائع الأدب العربي' is separate from the core Arabic textbook and is not included as an official syllabus source."
+  ]
+}
