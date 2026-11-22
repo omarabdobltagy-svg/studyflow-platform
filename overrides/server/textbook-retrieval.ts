@@ -81,6 +81,7 @@ function makeSearchTerms(value: string): Set<string> {
   for (const token of tokenize(value)) {
     if (ARABIC_STOP_WORDS.has(token) || token.length < 2) continue;
     result.add(token);
+    if (token.length > 4 && /^[وف]/.test(token)) result.add(token.slice(1));
     if (token.length > 5 && token.startsWith("ال")) result.add(token.slice(2));
     if (token.length > 6 && token.startsWith("بال")) result.add(token.slice(3));
     if (token.length > 6 && token.startsWith("لل")) result.add(token.slice(2));
