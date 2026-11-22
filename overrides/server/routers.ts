@@ -769,7 +769,7 @@ export const appRouter = router({
           const saved = branchRecords[branch.branchId] ?? {};
           const belongsToBranch = (frontierId: unknown) =>
             typeof frontierId === "string" &&
-            (frontierId === "__UNKNOWN__" || frontierId === "__NOT_STARTED__" ||
+            (frontierId === "__NOT_STARTED__" ||
               branch.choices.some(choice => choice.nodeId === frontierId));
           const latestSq3rCompleted = [...branch.choices].reverse().find(choice => {
             const steps = subjectLessonRecords[choice.nodeId]?.completedSteps;
