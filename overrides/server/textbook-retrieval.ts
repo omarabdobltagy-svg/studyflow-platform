@@ -123,7 +123,7 @@ export function splitTextbookPages(
 
 export function inspectTextbookIndex(subjectId: string): {
   sourceRoot: string;
-  files: Array<{ file: string; exists: boolean; bytes: number; markerCount: number; markerTextCount: number; prefix: string }>;
+  files: Array<{ file: string; exists: boolean; bytes: number; markerCount: number; markerTextCount: number; markerWordCount: number; prefix: string; prefixCodePoints: string }>;
   pageCount: number;
   indexedCharacters: number;
 } {
@@ -139,7 +139,9 @@ export function inspectTextbookIndex(subjectId: string): {
       bytes: Buffer.byteLength(content, "utf8"),
       markerCount: [...normalizedContent.matchAll(/<\s*PARSED\s+TEXT\s+OF\s+PAGE:\s*\d+\s*\/\s*\d+\s*>/gi)].length,
       markerTextCount: normalizedContent.split("PARSED TEXT OF PAGE").length - 1,
+      markerWordCount: normalizedContent.split(/PARSED|TEXT|OF|PAGE/i).length - 1,
       prefix: JSON.stringify(normalizedContent.slice(0, 140)),
+      prefixCodePoints: Array.from(content.slice(0, 60)).map(char => char.codePointAt(0)?.toString(16)).join(" "),
     };
   });
   const pages = loadPages(subjectId);
