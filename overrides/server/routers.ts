@@ -473,15 +473,19 @@ export const appRouter = router({
           : "لم يكتمل ملف الطالب بعد.";
         const curriculumContext = (profile?.subjects || []).map(subjectId => {
           const subjectName = getSIESubject(subjectId)?.nameAr || subjectId;
-          const lessons = getSIECheckpointChoices(subjectId);
+          const branches = getSIECheckpointBranches(subjectId);
           const progress = (selection.subjectLessonProgress || {}) as Record<string, Record<string, any>>;
           const records = progress[subjectId] || {};
-          const done = Object.values(records).filter(item => Array.isArray(item.completedSteps) && item.completedSteps.length === 5).length;
-          const underway = Object.values(records).filter(item => Array.isArray(item.completedSteps) && item.completedSteps.length > 0 && item.completedSteps.length < 5).length;
-          const difficult = Object.entries(records).filter((entry: any) => entry[1].difficulty === "hard").map((entry: any) => lessons.find(lesson => lesson.nodeId === entry[0])?.title || entry[0]);
-          return subjectName + ": " + (lessons.map(item => item.unitTitle + " / " + item.title).join("؛ ") || "فهرس المنهج غير محمّل")
-            + " | مكتمل SQ3R: " + done + " | قيد الدراسة: " + underway + " | صعب: " + (difficult.join("، ") || "لا توجد بيانات");
-        }).join("\n");
+          const branchSummary = branches.map(branch => {
+            const done = branch.choices.filter(item => Array.isArray(records[item.nodeId]?.completedSteps) && records[item.nodeId].completedSteps.length === 5).length;
+            const underway = branch.choices.filter(item => Array.isArray(records[item.nodeId]?.completedSteps) && records[item.nodeId].completedSteps.length > 0 && records[item.nodeId].completedSteps.length < 5).length;
+            const difficult = branch.choices.filter(item => records[item.nodeId]?.difficulty === "hard").map(item => item.title);
+            return branch.branchTitle + ": " + branch.choices.map(item => item.title).join("؛ ")
+              + " | مكتمل SQ3R: " + done + " | قيد الدراسة: " + underway
+              + " | صعب: " + (difficult.join("، ") || "لا توجد بيانات");
+          }).join("\\n");
+          return subjectName + ":\\n" + (branchSummary || "فهرس الفروع غير محمّل");
+        }).join("\\n");
         const learningCourseProgress = (selection.learningCourseProgress ?? {}) as Record<string, Record<string, any>>;
         const learningAssessments = Array.isArray(selection.learningAssessments) ? selection.learningAssessments as Array<Record<string, any>> : [];
         const learningEvidenceContext = (profile?.subjects || []).map(subjectId => {
