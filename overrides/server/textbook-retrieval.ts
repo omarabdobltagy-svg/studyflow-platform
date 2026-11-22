@@ -64,8 +64,8 @@ const ARABIC_STOP_WORDS = new Set([
 function normalizeExtractedDocument(value: string): string {
   return value
     .normalize("NFKC")
-    .replace(/\\p{Cf}/gu, "")
-    .replace(/[\\u00A0\\u202F]/g, " ");
+    .replace(/\p{Cf}/gu, "")
+    .replace(/[\u00A0\u202F]/g, " ");
 }
 
 function normalizeArabic(value: string): string {
@@ -104,7 +104,7 @@ export function splitTextbookPages(
   content: string,
 ): TextbookPage[] {
   const normalizedContent = normalizeExtractedDocument(content);
-  const marker = /<\\s*PARSED\\s+TEXT\\s+OF\\s+PAGE:\\s*(\\d+)\\s*\\/\\s*(\\d+)\\s*>/gi;
+  const marker = /<\s*PARSED\s+TEXT\s+OF\s+PAGE:\s*(\d+)\s*\/\s*(\d+)\s*>/gi;
   const matches = [...normalizedContent.matchAll(marker)];
   if (!matches.length) return [];
   return matches.map((match, index) => {
@@ -137,7 +137,7 @@ export function inspectTextbookIndex(subjectId: string): {
       file,
       exists: true,
       bytes: Buffer.byteLength(content, "utf8"),
-      markerCount: [...normalizedContent.matchAll(/<\\s*PARSED\\s+TEXT\\s+OF\\s+PAGE:\\s*\\d+\\s*\\/\\s*\\d+\\s*>/gi)].length,
+      markerCount: [...normalizedContent.matchAll(/<\s*PARSED\s+TEXT\s+OF\s+PAGE:\s*\d+\s*\/\s*\d+\s*>/gi)].length,
       markerTextCount: normalizedContent.split("PARSED TEXT OF PAGE").length - 1,
       prefix: JSON.stringify(normalizedContent.slice(0, 140)),
     };
