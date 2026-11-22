@@ -25,7 +25,7 @@ describe("textbook page retrieval", () => {
 
   it("preserves physical PDF page numbers when splitting source text", () => {
     expect(pages.map(page => page.pdfPage)).toEqual([1, 2, 3]);
-    expect(pages[1].text).toContain("مقاومتها");
+    expect(pages[1].text).toContain("الاحتلال");
   });
 
   it("ranks the relevant book passage for an Arabic question", () => {
