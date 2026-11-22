@@ -29,14 +29,14 @@ export function parseGeneratedPlan(content: string): GeneratedPlan {
   const cleaned = content.replace(/^\s*```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
   const first = cleaned.indexOf("{");
   const last = cleaned.lastIndexOf("}");
-  if (first < 0 || last <= first) throw new Error("استجابة المخطط لم تحتوِ على خطة قابلة للقراءة.");
+  if (first < 0 || last <= first) throw new Error("تعذّر تحويل الخطة الذكية إلى صيغة صالحة. حاول مرة أخرى.");
   let value: unknown;
   try { value = JSON.parse(cleaned.slice(first, last + 1)); }
   catch { throw new Error("تعذّر قراءة بيانات الخطة. حاول مرة أخرى."); }
   const parsed = planSchema.safeParse(value);
   if (!parsed.success) {
     console.error("[StudyFlow planner] Invalid plan structure:", parsed.error.issues);
-    throw new Error("الخطة التي وصلت غير مكتملة. أعد المحاولة أو قلّل نطاقها.");
+    throw new Error("الاستجابة الذكية غير مكتملة. حاول وصف هدفك بصورة أبسط.");
   }
   return parsed.data;
 }
