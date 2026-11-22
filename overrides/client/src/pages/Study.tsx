@@ -90,12 +90,14 @@ export default function Study() {
   }, [subjectId, branches, branchId]);
 
   useEffect(() => {
-    if (!lessons.length) {
+    if (!branchChoices.length) {
       setLessonId("");
       return;
     }
-    if (!lessons.some(lesson => lesson.nodeId === lessonId)) setLessonId(lessons[0].nodeId);
-  }, [subjectId, lessons, lessonId]);
+    if (!branchChoices.some(lesson => lesson.nodeId === lessonId)) {
+      setLessonId(branchChoices[0].nodeId);
+    }
+  }, [subjectId, currentBranchId, branchChoices, lessonId]);
 
   useEffect(() => {
     setCompletedSteps(currentProgress?.completedSteps || []);
