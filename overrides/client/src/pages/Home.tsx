@@ -195,7 +195,7 @@ function MetricTile({ tone, icon, label, value, detail, loading }: {
 }) {
   const reduceMotion = useReducedMotion();
   return <motion.article className={"sf-metric-tile tone-" + tone} variants={{
-    hidden: reduceMotion ? false : { opacity: 0, y: 8 }, visible: { opacity: 1, y: 0 },
+    hidden: reduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }, visible: { opacity: 1, y: 0 },
   }} transition={{ duration: reduceMotion ? 0 : .28 }}>
     <span className="sf-metric-icon">{icon}</span><div className="sf-metric-number">{loading ? "—" : value}</div>
     <b>{label}</b><small>{detail}</small>
