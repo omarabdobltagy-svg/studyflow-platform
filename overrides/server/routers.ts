@@ -492,7 +492,8 @@ export const appRouter = router({
             getSIESubject(subjectId)?.nameAr ?? subjectId,
             "تقدم الطالب المبلغ عنه: " + (record.status || "غير محدد"),
             "المتأخر: " + String(record.backlogCount ?? profile?.backlog?.[subjectId] ?? 0),
-            "آخر درس أتمه: " + (getSIECheckpointChoices(subjectId).find(item => item.nodeId === record.lastCompletedLessonId)?.title || "غير محدد"),
+            "آخر درس في فهرس المنهج أتمه: " + (getSIECheckpointChoices(subjectId).find(item => item.nodeId === record.lastCompletedLessonId)?.title || "غير محدد"),
+            "آخر محاضرة/عنصر في كورس المدرس حسب الطالب: " + (record.teacherCourseFrontier || "غير محدد"),
             "نتائج آخر التقييمات: " + (scores.join("، ") || "لا توجد"),
             "نقاط الضعف المسجلة: " + (weakConcepts.join("، ") || "لا توجد"),
           ].join(" | ");
@@ -712,7 +713,7 @@ export const appRouter = router({
         backlog: profile.backlog,
         obstacle: profile.obstacle,
         courseProgress: selection.learningCourseProgress ?? {},
-        assessments: Array.isArray(selection.learningAssessments) ? selection.learningAssessments.slice(-100) : [],
+        assessments: Array.isArray(selection.learningAssessments) ? selection.learningAssessments.slice(-40) : [],
         sq3rProgress: selection.subjectLessonProgress ?? {},
         memoryUpdatedAt: selection.assistantMemoryUpdatedAt ?? null,
       };
@@ -722,11 +723,13 @@ export const appRouter = router({
         subjectId: z.string().trim().min(1).max(80),
         teacherId: z.string().trim().min(1).max(80).nullable().optional(),
         lastCompletedLessonId: z.string().trim().min(1).max(120).nullable().optional(),
+        teacherCourseFrontier: z.string().trim().max(120).default(""),
         status: z.enum(["not_started", "in_progress", "caught_up", "needs_review"]),
         backlogCount: z.number().int().min(0).max(200),
         estimatedMinutesPerLesson: z.number().int().min(5).max(480),
         difficulty: z.enum(["unknown", "easy", "medium", "hard"]).default("unknown"),
         notes: z.string().trim().max(600).default(""),
+        obstacle: z.string().trim().max(600).default(""),
       }))
       .mutation(async ({ ctx, input }) => {
         const profile = await getStudentProfile(ctx.user.id);
@@ -750,6 +753,7 @@ export const appRouter = router({
           subjectId: input.subjectId,
           teacherId: teacherId && teacherId !== "__SKIP__" ? teacherId : null,
           lastCompletedLessonId: input.lastCompletedLessonId ?? null,
+          teacherCourseFrontier: input.teacherCourseFrontier,
           status: input.status,
           backlogCount: input.backlogCount,
           estimatedMinutesPerLesson: input.estimatedMinutesPerLesson,
@@ -759,7 +763,7 @@ export const appRouter = router({
           confidence: "student_reported",
           updatedAt: new Date().toISOString(),
         };
-        await updateStudentLearningBaseline(ctx.user.id, { backlog: { [input.subjectId]: input.backlogCount } });
+        await updateStudentLearningBaseline(ctx.user.id, { backlog: { [input.subjectId]: input.backlogCount }, obstacle: input.obstacle });
         const latestProfile = await getStudentProfile(ctx.user.id);
         const latestSelection = (latestProfile?.selection ?? selection) as Record<string, any>;
         const latestCourseProgress = (latestSelection.learningCourseProgress ?? {}) as Record<string, any>;
@@ -777,7 +781,7 @@ export const appRouter = router({
         scorePercent: z.number().min(0).max(100),
         correctAnswers: z.number().int().min(0).max(500).nullable().optional(),
         totalQuestions: z.number().int().min(1).max(500).nullable().optional(),
-        weakConcepts: z.array(z.string().trim().min(1).max(120)).max(10).default([]),
+        weakConcepts: z.array(z.string().trim().min(1).max(100)).max(6).default([]),
         notes: z.string().trim().max(600).default(""),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -794,7 +798,7 @@ export const appRouter = router({
         }
         const selection = (profile.selection ?? {}) as Record<string, any>;
         const record = {
-          id: "assessment_" + Date.now().toString(36),
+          id: "assessment_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 7),
           subjectId: input.subjectId,
           lessonId: input.lessonId ?? null,
           assessmentType: input.assessmentType,
@@ -811,7 +815,7 @@ export const appRouter = router({
         const latestAssessments = Array.isArray(latestSelection.learningAssessments) ? latestSelection.learningAssessments : [];
         await updateStudentProfileSelection(ctx.user.id, {
           ...latestSelection,
-          learningAssessments: [...latestAssessments, record].slice(-100),
+          learningAssessments: [...latestAssessments, record].slice(-40),
         });
         return { success: true, record };
       }),

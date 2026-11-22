@@ -44,11 +44,13 @@ export default function Study() {
     || (profile.data?.teacherSelections || {})[subjectId];
   const selectedTeacher = selectedTeacherId ? getSIETeacher(selectedTeacherId) : undefined;
   const [lastCompletedLessonId, setLastCompletedLessonId] = useState("");
+  const [teacherCourseFrontier, setTeacherCourseFrontier] = useState("");
   const [courseStatus, setCourseStatus] = useState<CourseStatus>("not_started");
   const [backlogCount, setBacklogCount] = useState(0);
   const [estimatedMinutes, setEstimatedMinutes] = useState(45);
   const [courseDifficulty, setCourseDifficulty] = useState<"unknown" | "easy" | "medium" | "hard">("unknown");
   const [courseNotes, setCourseNotes] = useState("");
+  const [learningObstacle, setLearningObstacle] = useState("");
   const [assessmentType, setAssessmentType] = useState<"self_check" | "quiz" | "homework" | "exam">("quiz");
   const [assessmentScore, setAssessmentScore] = useState("");
   const [assessmentCorrect, setAssessmentCorrect] = useState("");
@@ -77,12 +79,14 @@ export default function Study() {
 
   useEffect(() => {
     setLastCompletedLessonId(currentCourseProgress.lastCompletedLessonId || "");
+    setTeacherCourseFrontier(currentCourseProgress.teacherCourseFrontier || "");
     setCourseStatus(currentCourseProgress.status || "not_started");
     setBacklogCount(Number(profile.data?.backlog?.[subjectId] ?? profile.data?.backlog?.[getSIESubject(subjectId)?.nameAr || ""] ?? currentCourseProgress.backlogCount ?? 0));
     setEstimatedMinutes(Number(currentCourseProgress.estimatedMinutesPerLesson ?? 45));
     setCourseDifficulty(currentCourseProgress.difficulty || "unknown");
     setCourseNotes(currentCourseProgress.notes || "");
-  }, [subjectId, currentCourseProgress.updatedAt, profile.data?.backlog?.[subjectId]]);
+    setLearningObstacle(profile.data?.obstacle || "");
+  }, [subjectId, currentCourseProgress.updatedAt, profile.data?.backlog?.[subjectId], profile.data?.obstacle]);
 
 
   const saveProgress = trpc.study.saveSubjectLessonProgress.useMutation({
@@ -118,11 +122,13 @@ export default function Study() {
       subjectId,
       teacherId: selectedTeacherId || null,
       lastCompletedLessonId: lastCompletedLessonId || null,
+      teacherCourseFrontier: teacherCourseFrontier.trim(),
       status: courseStatus,
       backlogCount: Math.max(0, Math.min(200, backlogCount)),
       estimatedMinutesPerLesson: Math.max(5, Math.min(480, estimatedMinutes)),
       difficulty: courseDifficulty,
       notes: courseNotes,
+      obstacle: learningObstacle,
     });
   };
 
@@ -209,7 +215,7 @@ export default function Study() {
           <div className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="text-sm font-semibold">
-                آخر درس أنهيته مع المدرس
+                آخر درس أنهيته في فهرس المنهج
                 <Select value={lastCompletedLessonId || "__NONE__"} onValueChange={value => setLastCompletedLessonId(value === "__NONE__" ? "" : value)} disabled={!lessons.length}>
                   <SelectTrigger className="mt-2 h-11 rounded-xl bg-background"><SelectValue placeholder="لم أحدد بعد" /></SelectTrigger>
                   <SelectContent>
@@ -217,6 +223,10 @@ export default function Study() {
                     {lessons.map(lesson => <SelectItem key={lesson.nodeId} value={lesson.nodeId}>{lesson.unitTitle} · {lesson.title}</SelectItem>)}
                   </SelectContent>
                 </Select>
+              </label>
+              <label className="text-sm font-semibold">
+                آخر محاضرة/عنصر شاهدته في كورس المدرس
+                <Input value={teacherCourseFrontier} onChange={event => setTeacherCourseFrontier(event.target.value)} placeholder="مثال: المحاضرة 12 – مراجعة الوحدة الأولى" maxLength={120} className="mt-2 h-11 rounded-xl bg-background" />
               </label>
               <label className="text-sm font-semibold">
                 وضعك الحالي مع المادة
@@ -257,8 +267,12 @@ export default function Study() {
                 <Input value={courseNotes} onChange={event => setCourseNotes(event.target.value)} placeholder="مثال: المحاضرتان الأخيرتان لم أراجعهما" maxLength={600} className="mt-2 h-11 rounded-xl bg-background" />
               </label>
             </div>
+            <label className="block text-sm font-semibold">
+              العائق الرئيسي الذي يؤثر على مذاكرتك (اختياري)
+              <Textarea value={learningObstacle} onChange={event => setLearningObstacle(event.target.value)} placeholder="مثال: صعوبة البدء، تشتت، وقت قليل، أو تراكم كبير" maxLength={600} className="mt-2 min-h-20 rounded-xl bg-background leading-7" />
+            </label>
             <div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-muted/25 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-xs leading-6 text-muted-foreground">هذه بيانات يقرّ بها الطالب، وليست مزامنة تلقائية من منصة المدرس. يمكنك تعديلها كلما تقدمت.</p>
+              <p className="text-xs leading-6 text-muted-foreground">هذه بيانات يقرّ بها الطالب وليست مزامنة تلقائية. موضع الدرس من فهرس المنهج، ورقم المحاضرة من كورس المدرس حقل مستقل؛ حدّثهما كلما تقدمت.</p>
               <Button type="button" onClick={submitCourseProgress} disabled={saveCourseProgress.isPending || !subjectId} className="pressable shrink-0 rounded-xl bg-primary">
                 {saveCourseProgress.isPending ? "جارٍ حفظ التقدم..." : "حفظ حالة المادة"}
               </Button>
