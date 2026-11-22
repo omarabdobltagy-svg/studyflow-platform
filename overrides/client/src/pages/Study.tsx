@@ -41,6 +41,7 @@ export default function Study() {
   const currentBranch = branches.find(branch => branch.branchId === branchId) ?? branches[0];
   const branchChoices = currentBranch?.choices ?? [];
   const currentBranchId = currentBranch?.branchId ?? "";
+  const currentBranchPointLabel = currentBranch?.branchType === "official_section" ? "موضوع" : "درس";
   const selection = (profile.data?.selection || {}) as Record<string, unknown>;
   const progressMap = (selection.subjectLessonProgress || {}) as Record<string, Record<string, LessonProgress>>;
   const currentProgress = progressMap[subjectId] && progressMap[subjectId][lessonId];
@@ -487,7 +488,7 @@ export default function Study() {
             <div className="mt-3 rounded-xl border border-border/60 bg-background/75 p-3">
               <p className="text-[11px] text-muted-foreground">حالة المقارنة</p>
               <p className="mt-1 text-sm font-semibold">{currentGap.status === "calculated" ? (currentGap.gapCount! > 0 ? "الطالب متأخر عن المرجع" : currentGap.aheadCount! > 0 ? "الطالب متقدم على المرجع" : "الطالب مواكب للمرجع") : currentGap.status === "student_position_missing" ? "موضع الطالب غير محدد" : "لا يوجد موضع مرجعي معروف"}</p>
-              {currentGap.aheadCount !== null && currentGap.aheadCount > 0 && <p className="mt-1 text-[11px] text-muted-foreground">تقدم بمقدار {currentGap.aheadCount} درسًا عن المرجع.</p>}
+              {currentGap.aheadCount !== null && currentGap.aheadCount > 0 && <p className="mt-1 text-[11px] text-muted-foreground">تقدم بمقدار {currentGap.aheadCount} {currentBranchPointLabel} عن المرجع.</p>}
             </div>
             <div className="mt-3 rounded-xl border border-border/60 bg-background/75 p-3">
               <p className="text-[11px] text-muted-foreground">متوسط آخر التقييمات المحفوظة</p>
@@ -522,8 +523,9 @@ export default function Study() {
                   || (gap?.referenceFrontierId === "__NOT_STARTED__" ? "لم يبدأ بعد" : "غير معروف");
                 const referenceSourceLabel = gap?.referenceSource === "teacher"
                   ? "المدرس" : gap?.referenceSource === "school" ? "المدرسة" : "لا يوجد مرجع";
+                const branchPointLabel = branch.branchType === "official_section" ? "موضوع" : "درس";
                 const gapLabel = gap?.gapCount === null || gap?.gapCount === undefined
-                  ? "غير محسوبة" : `${gap.gapCount} درس`;
+                  ? "غير محسوبة" : `${gap.gapCount} ${branchPointLabel}`;
                 const isSelected = branch.branchId === currentBranchId;
                 return (
                   <button
@@ -534,7 +536,7 @@ export default function Study() {
                   >
                     <div className="flex items-start justify-between gap-3">
                       <h4 className="text-sm font-semibold leading-6">{branch.branchTitle}</h4>
-                      <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground">{branch.choices.length} دروس</span>
+                      <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground">{branch.choices.length} {branchPointLabel === "موضوع" ? "موضوعات" : "دروس"}</span>
                     </div>
                     <p className="mt-3 text-xs text-muted-foreground">موضع الطالب: <span className="font-medium text-foreground">{studentLabel}</span></p>
                     <p className="mt-1 text-xs text-muted-foreground">موضع {referenceSourceLabel}: <span className="font-medium text-foreground">{referenceLabel}</span></p>
