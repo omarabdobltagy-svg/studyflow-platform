@@ -73,13 +73,13 @@ type PageMarker = { start: number; end: number; pageNumber: number; pageTotal: n
 function findPageMarkers(content: string): PageMarker[] {
   const normalized = normalizeExtractedDocument(content);
   const markers: PageMarker[] = [];
-  const lines = normalized.split(/\\r?\\n/);
+  const lines = normalized.split(/\r?\n/);
   let offset = 0;
 
   for (const line of lines) {
     const compact = line.replace(/[^A-Z0-9]/gi, "").toUpperCase();
     if (compact.startsWith("PARSEDTEXTOFPAGE")) {
-      const numbers = line.match(/\\d+/g) ?? [];
+      const numbers = line.match(/\d+/g) ?? [];
       if (numbers.length >= 2) {
         markers.push({
           start: offset,
@@ -98,9 +98,9 @@ function findPageMarkers(content: string): PageMarker[] {
   const candidates = /<([^<>]{1,200})>/g;
   for (const match of normalized.matchAll(candidates)) {
     const inner = (match[1] ?? "")
-      .replace(/[\\p{C}\\p{Z}\\s]/gu, "")
+      .replace(/[\p{C}\p{Z}\s]/gu, "")
       .toUpperCase();
-    const parsed = /^PARSEDTEXTOFPAGE:(\\d+)\\/(\\d+)$/.exec(inner);
+    const parsed = /^PARSEDTEXTOFPAGE:(\d+)\/(\d+)$/.exec(inner);
     if (!parsed) continue;
     markers.push({
       start: match.index ?? 0,
