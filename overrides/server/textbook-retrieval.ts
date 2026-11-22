@@ -197,7 +197,7 @@ function toPassages(page: TextbookPage): string[] {
     }
     if (chunk) passages.push(chunk);
   }
-  return passages.filter(passage => passage.length >= 70);
+  return passages.filter(passage => passage.length >= 40);
 }
 
 export function rankTextbookPassages(
