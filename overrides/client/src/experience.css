@@ -1175,3 +1175,69 @@ body{background:#281332;color:var(--sf-ink)}
 .dark .sf-analytics-empty{border-color:#5a4864;background:#302638}
 .dark .sf-analytics-empty h3{color:#f1e9f4}
 .dark .sf-analytics-disclaimer{border-color:#65583a;background:#403820;color:#f0dfaa}
+
+
+/* Account, settings and the multi-step academic profile wizard */
+.sf-settings-hero{position:relative;min-height:215px!important;padding:clamp(24px,3vw,39px)!important;border-radius:26px!important}
+.sf-settings-hero:after{content:"";position:absolute;right:56%;top:-150px;width:320px;height:320px;border:1px solid rgb(255 255 255 / 14%);border-radius:50%;box-shadow:0 0 0 20px rgb(255 255 255 / 2%),0 0 0 43px rgb(255 255 255 / 1.5%);pointer-events:none}
+.sf-settings-hero>div,.sf-settings-hero>span{position:relative;z-index:1}
+.sf-settings-hero h2{max-width:650px;font-size:clamp(27px,3vw,39px)!important;letter-spacing:-.045em}
+.sf-settings-hero p:last-child{max-width:550px;font-size:11px!important;line-height:1.9}
+.sf-settings-card{padding:22px!important;border:1px solid #e8e1ea!important;border-radius:21px!important;background:#fff!important;box-shadow:0 16px 38px -35px rgb(45 24 55 / 43%)}
+.sf-settings-card h3{color:#3b3043;font-size:13px;font-weight:900}
+.sf-settings-card p{font-size:9px;line-height:1.85}
+.sf-settings-card .bg-muted\\/55{border:1px solid #ece6ee;background:#faf8fb!important}
+.sf-settings-card .my-4{background:#eee8f0}
+.sf-settings-card button{border-radius:12px}
+.sf-theme-choice{display:grid;min-height:128px;align-content:center;gap:7px;justify-items:start;padding:15px;border:1px solid #e6ddeb;border-radius:16px;background:#faf8fc;color:#4a3756;text-align:right;transition:border-color 160ms ease,background 160ms ease}
+.sf-theme-choice span{font-size:13px;font-weight:850}.sf-theme-choice small{color:#897c91;font-size:9px}
+.sf-theme-choice.is-selected{border-color:#9166b7;background:#f0e7f7;box-shadow:0 0 0 3px rgb(125 81 163 / 9%);color:#4e286f}
+.sf-settings-card .rounded-xl.border{border-color:#e9e1ec;background:#f8f5f9}
+.sf-settings-card .rounded-xl.border p{color:#857a8b}
+.sf-onboarding-hero{position:relative;overflow:hidden;min-height:220px;padding:clamp(25px,3.4vw,42px)!important;border:1px solid rgb(255 255 255 / 16%);border-radius:27px!important;background:radial-gradient(ellipse at 0 0,rgba(208,174,228,.19),transparent 27rem),linear-gradient(112deg,#2b1738,#61417b 57%,#342141)!important;box-shadow:0 25px 60px -46px rgb(39 17 52 / 85%)}
+.sf-onboarding-hero:after{content:"";position:absolute;right:50%;top:-170px;width:360px;height:360px;border:1px solid rgb(255 255 255 / 12%);border-radius:50%;box-shadow:0 0 0 23px rgb(255 255 255 / 2%),0 0 0 48px rgb(255 255 255 / 1.5%);pointer-events:none}
+.sf-onboarding-hero .relative{position:relative;z-index:1}
+.sf-onboarding-hero h1{color:#fff;font-size:clamp(27px,3vw,39px);font-weight:900;letter-spacing:-.04em;line-height:1.3}
+.sf-onboarding-hero p:not(.eyebrow){color:rgb(255 255 255 / 70%);font-size:10px;line-height:1.9}
+.sf-onboarding-hero .eyebrow{color:#dbc5eb;font-size:8px;font-weight:900;letter-spacing:.13em}
+.sf-onboarding-hero .rounded-full{border-color:rgb(255 255 255 / 21%);background:rgb(255 255 255 / 8%);color:#fff}
+.sf-onboarding-hero [role=progressbar]{height:7px;border-radius:99px;background:rgb(255 255 255 / 17%)}
+.sf-onboarding-hero [role=progressbar]>div{border-radius:99px;background:#e4c86f}
+.sf-onboarding-hero .flex.justify-between.gap-2 span{font-size:8px;line-height:1.6}
+.sf-onboarding-card{overflow:hidden;border:1px solid #e7e0e9!important;border-radius:22px!important;background:#fff!important;box-shadow:0 18px 44px -39px rgb(45 24 55 / 46%)}
+.sf-onboarding-step-heading{border-color:#eee8f0!important;background:linear-gradient(110deg,#f4eef7,#fff)!important;padding:20px 24px!important}
+.sf-onboarding-step-heading .eyebrow{color:#a18aaa;font-size:8px;font-weight:900;letter-spacing:.12em}
+.sf-onboarding-step-heading h2{color:#382d40;font-size:19px;font-weight:950}
+.sf-onboarding-card>.min-h-\\[380px\\]{min-height:390px;padding:25px!important}
+.sf-onboarding-card label{color:#53465d;font-size:10px;font-weight:850}
+.sf-onboarding-card input:not([type=checkbox]):not([type=radio]),.sf-onboarding-card textarea{min-height:44px;border:1px solid #e6dfea!important;border-radius:12px!important;background:#fbfafc!important;font-size:10px!important}
+.sf-onboarding-card .border-primary\\/15.bg-secondary\\/30{border-color:#e6d9ed!important;border-radius:15px;background:#f7f2f9!important}
+.sf-onboarding-card .border-primary\\/15.bg-secondary\\/30 p{font-size:9px;line-height:1.9}
+.sf-onboarding-card button{border-radius:13px}
+.sf-onboarding-card .rounded-2xl.border{border-color:#e7dfea;background:#fbfafc;transition:border-color 150ms ease,background 150ms ease,transform 150ms ease}
+.sf-onboarding-card .rounded-2xl.border:hover{transform:translateY(-2px);border-color:#cdb8db;background:#f7f2fa}
+.sf-onboarding-card .rounded-2xl.border[class*=border-primary]{border-color:#9b77b4;background:#f1eaf6}
+.sf-onboarding-card .rounded-2xl.border h3{color:#3d3246;font-size:12px;font-weight:900}
+.sf-onboarding-card .rounded-2xl.border p{color:#8b808f;font-size:9px;line-height:1.8}
+.sf-onboarding-card .rounded-2xl.border .rounded-full{border-color:#e7dfea;background:#fff}
+.sf-onboarding-card .border-t{border-color:#eee8f0}
+.sf-onboarding-card .text-muted-foreground{font-size:10px;line-height:1.85}
+.sf-onboarding-card .mt-8.flex.items-center.justify-between{padding-top:17px;border-top:1px solid #eee8f0}
+.sf-profile-hero{overflow:hidden;border-color:#e4d8eb!important;border-radius:25px!important;background:radial-gradient(ellipse at 0 0,rgba(204,177,220,.22),transparent 25rem),linear-gradient(118deg,#f1eaf6,#fff 70%)!important;box-shadow:0 20px 46px -40px rgb(52 27 65 / 35%)}
+.sf-profile-hero h2{color:#382b40;font-size:clamp(26px,3vw,38px);font-weight:950}
+.sf-profile-hero .eyebrow{color:#987ba8;font-size:8px;font-weight:900;letter-spacing:.12em}
+.sf-profile-hero p{color:#817586;font-size:10px;line-height:1.9}
+.sf-profile-section{overflow:hidden;border:1px solid #e8e1ea!important;border-radius:20px!important;background:#fff!important;box-shadow:0 15px 38px -34px rgb(46 25 56 / 42%)}
+.sf-profile-section>div:first-child{border-color:#eee8f0;background:#faf8fb}
+.sf-profile-section h3{color:#3b3043;font-size:13px;font-weight:900}
+.sf-profile-section h4{color:#493b50;font-size:10px;font-weight:850}
+.sf-profile-section .rounded-2xl.border{border-color:#e8e1ea;background:#fcfbfc}
+.sf-profile-section .rounded-xl.border{border-color:#e9e2ec;background:#fff}
+@media(max-width:680px){.sf-settings-hero{min-height:165px!important;padding:20px!important;border-radius:21px!important}.sf-settings-hero h2{font-size:25px!important}.sf-settings-hero p:last-child{font-size:9px!important}.sf-settings-emblem{width:55px;height:55px;border-radius:17px}.sf-settings-card{padding:16px!important;border-radius:18px!important}.sf-onboarding-hero{min-height:195px;padding:21px 17px!important;border-radius:22px!important}.sf-onboarding-hero h1{font-size:26px}.sf-onboarding-hero .flex.justify-between.gap-2 span{font-size:6.5px}.sf-onboarding-step-heading{padding:16px!important}.sf-onboarding-step-heading h2{font-size:16px}.sf-onboarding-card>.min-h-\\[380px\\]{min-height:350px;padding:16px!important}.sf-profile-hero{padding:20px!important;border-radius:21px!important}.sf-profile-section{border-radius:17px!important}}
+.dark .sf-settings-card,.dark .sf-onboarding-card,.dark .sf-profile-section{border-color:#493c51!important;background:#2d2533!important;color:#eee6f2}
+.dark .sf-settings-card h3,.dark .sf-onboarding-step-heading h2,.dark .sf-onboarding-card .rounded-2xl.border h3,.dark .sf-profile-section h3,.dark .sf-profile-section h4{color:#f0e8f4}
+.dark .sf-settings-card .bg-muted\\/55,.dark .sf-onboarding-step-heading,.dark .sf-onboarding-card .rounded-2xl.border,.dark .sf-profile-section>div:first-child,.dark .sf-profile-section .rounded-2xl.border{border-color:#4b3e53!important;background:#352b3b!important}
+.dark .sf-onboarding-card input:not([type=checkbox]):not([type=radio]),.dark .sf-onboarding-card textarea{border-color:#4b3e53!important;background:#352b3b!important;color:#f3edf5!important}
+.dark .sf-onboarding-card .border-primary\\/15.bg-secondary\\/30{border-color:#5a4666!important;background:#40334a!important}
+.dark .sf-profile-hero{border-color:#594665!important;background:linear-gradient(118deg,#3b2d46,#2d2533 70%)!important}
+.dark .sf-profile-hero h2{color:#f3eaf6}
