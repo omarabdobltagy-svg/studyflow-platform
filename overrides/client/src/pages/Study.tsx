@@ -25,6 +25,7 @@ type LessonProgress = { completedSteps?: StepId[]; difficulty?: "unknown" | "eas
 export default function Study() {
   const utils = trpc.useUtils();
   const profile = trpc.studentProfile.get.useQuery();
+  const learning = trpc.learning.get.useQuery();
   const activeExternalSession = trpc.learning.activeExternalSession.useQuery();
   const [sessionNow, setSessionNow] = useState(Date.now());
   const [markSessionLessonCompleted, setMarkSessionLessonCompleted] = useState(false);
@@ -49,6 +50,7 @@ export default function Study() {
   const currentCourseProgress = courseProgressMap[subjectId] || {};
   const branchProgressMap = (currentCourseProgress.branches || {}) as Record<string, Record<string, any>>;
   const currentBranchProgress = currentBranchId ? branchProgressMap[currentBranchId] || {} : {};
+  const branchGapMap = ((learning.data as any)?.gapByBranch?.[subjectId] || {}) as Record<string, any>;
   const assessmentHistory = Array.isArray(selection.learningAssessments) ? selection.learningAssessments as Array<any> : [];
   const subjectAssessments = assessmentHistory.filter(item => item.subjectId === subjectId).slice(-5).reverse();
   const selectedTeacherId = ((selection.teacherChoices || {}) as Record<string, string>)[subjectId]
@@ -155,7 +157,7 @@ export default function Study() {
 
   const saveCourseProgress = trpc.learning.updateCourseProgress.useMutation({
     onSuccess: async () => {
-      await utils.studentProfile.get.invalidate();
+      await Promise.all([utils.studentProfile.get.invalidate(), utils.learning.get.invalidate()]);
       toast.success("تم تحديث التراكم والتقدم الدراسي.");
     },
     onError: error => toast.error(error.message),
@@ -172,7 +174,7 @@ export default function Study() {
   const finishExternalSession = trpc.learning.finishExternalSession.useMutation({
     onSuccess: async result => {
       await utils.learning.activeExternalSession.invalidate();
-      await utils.studentProfile.get.invalidate();
+      await Promise.all([utils.studentProfile.get.invalidate(), utils.learning.get.invalidate()]);
       const minutes = Math.floor(result.durationSeconds / 60);
       toast.success(result.lessonMarkedCompleted
         ? `انتهت الجلسة: ${minutes} دقيقة، وتم تحديث موضعك في المنهج.`
@@ -497,6 +499,55 @@ export default function Study() {
             </div>
           </aside>
         </div>
+
+        <section className="border-t border-border/70 p-5 sm:p-6">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">BRANCH OVERVIEW</p>
+              <h3 className="mt-1 font-bold">ملخص التقدم في كل فروع المادة</h3>
+              <p className="mt-1 text-xs text-muted-foreground">كل وحدة أو فصل أو قسم يُقارن بمرجعه داخل حدوده فقط. اضغط على أي فرع لتحديث مواضعه.</p>
+            </div>
+            <span className="rounded-full border border-border bg-background px-3 py-1 text-[11px] text-muted-foreground">{branches.length} فروع مستقلة</span>
+          </div>
+          {learning.isLoading ? (
+            <p className="rounded-xl border border-border/70 bg-background/70 p-4 text-sm text-muted-foreground">جارٍ تحميل مؤشرات الفروع...</p>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {branches.map(branch => {
+                const gap = branchGapMap[branch.branchId];
+                const saved = branchProgressMap[branch.branchId] || {};
+                const studentLabel = gap?.studentFrontierTitle
+                  || (saved.lastCompletedLessonId === "__NOT_STARTED__" ? "لم يبدأ بعد" : "غير محدد");
+                const referenceLabel = gap?.referenceFrontierTitle
+                  || (saved.teacherTeachingFrontierId === "__NOT_STARTED__" || saved.schoolClassFrontierId === "__NOT_STARTED__" ? "لم يبدأ بعد" : "غير معروف");
+                const referenceSourceLabel = gap?.referenceSource === "teacher"
+                  ? "المدرس" : gap?.referenceSource === "school" ? "المدرسة" : "لا يوجد مرجع";
+                const gapLabel = gap?.gapCount === null || gap?.gapCount === undefined
+                  ? "غير محسوبة" : `${gap.gapCount} درس`;
+                const isSelected = branch.branchId === currentBranchId;
+                return (
+                  <button
+                    key={branch.branchId}
+                    type="button"
+                    onClick={() => setBranchId(branch.branchId)}
+                    className={`rounded-xl border p-4 text-start transition-colors ${isSelected ? "border-primary/50 bg-primary/5" : "border-border/70 bg-background/70 hover:bg-muted/50"}`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <h4 className="text-sm font-semibold leading-6">{branch.branchTitle}</h4>
+                      <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground">{branch.choices.length} دروس</span>
+                    </div>
+                    <p className="mt-3 text-xs text-muted-foreground">موضع الطالب: <span className="font-medium text-foreground">{studentLabel}</span></p>
+                    <p className="mt-1 text-xs text-muted-foreground">موضع {referenceSourceLabel}: <span className="font-medium text-foreground">{referenceLabel}</span></p>
+                    <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/60 pt-3">
+                      <span className="text-[11px] text-muted-foreground">فجوة هذا الفرع</span>
+                      <span className="text-sm font-bold tabular-nums text-primary">{gapLabel}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </section>
 
         <div className="border-t border-border/70 bg-muted/15 p-5 sm:p-6">
           <div className="mb-4 flex items-center justify-between gap-3">
