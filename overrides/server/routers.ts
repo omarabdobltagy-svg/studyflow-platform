@@ -896,21 +896,6 @@ export const appRouter = router({
           updatedAt: now,
         };
         const existingSubjectRecord = courseProgress[input.subjectId] ?? {};
-        const record = branch ? {
-          ...existingSubjectRecord,
-          teacherId: evidenceRecord.teacherId,
-          status: input.status,
-          teacherCourseFrontier: input.teacherCourseFrontier,
-          estimatedMinutesPerLesson: input.estimatedMinutesPerLesson,
-          difficulty: input.difficulty,
-          notes: input.notes,
-          obstacle: input.obstacle,
-          branches: {
-            ...(existingSubjectRecord.branches ?? {}),
-            [branch.branchId]: evidenceRecord,
-          },
-          updatedAt: now,
-        } : evidenceRecord;
         await updateStudentLearningBaseline(ctx.user.id, {
           // A single branch gap must never masquerade as a whole-subject backlog.
           backlog: branch ? {} : learningGap.gapCount === null ? {} : { [input.subjectId]: learningGap.gapCount },
@@ -920,6 +905,22 @@ export const appRouter = router({
         const latestProfile = await getStudentProfile(ctx.user.id);
         const latestSelection = (latestProfile?.selection ?? selection) as Record<string, any>;
         const latestCourseProgress = (latestSelection.learningCourseProgress ?? {}) as Record<string, any>;
+        const latestSubjectRecord = latestCourseProgress[input.subjectId] ?? existingSubjectRecord;
+        const record = branch ? {
+          ...latestSubjectRecord,
+          teacherId: evidenceRecord.teacherId,
+          status: input.status,
+          teacherCourseFrontier: input.teacherCourseFrontier,
+          estimatedMinutesPerLesson: input.estimatedMinutesPerLesson,
+          difficulty: input.difficulty,
+          notes: input.notes,
+          obstacle: input.obstacle,
+          branches: {
+            ...(latestSubjectRecord.branches ?? {}),
+            [branch.branchId]: evidenceRecord,
+          },
+          updatedAt: now,
+        } : evidenceRecord;
         await updateStudentProfileSelection(ctx.user.id, {
           ...latestSelection,
           learningCourseProgress: { ...latestCourseProgress, [input.subjectId]: record },
