@@ -8,6 +8,7 @@ import superjson from "superjson";
 import App from "./App";
 import "./index.css";
 import "./experience.css";
+import "./experience-dark.css";
 
 // Analytics is optional. Do not emit a broken /umami request when no endpoint is configured.
 const analyticsEndpoint = import.meta.env.VITE_ANALYTICS_ENDPOINT?.trim();
@@ -15,7 +16,7 @@ const analyticsWebsiteId = import.meta.env.VITE_ANALYTICS_WEBSITE_ID?.trim();
 if (analyticsEndpoint && analyticsWebsiteId) {
   const analyticsScript = document.createElement("script");
   analyticsScript.defer = true;
-  analyticsScript.src = `${analyticsEndpoint.replace(/\/+$/, "")}/umami`;
+  analyticsScript.src = `${analyticsEndpoint.replace(/\\/+$/, "")}/umami`;
   analyticsScript.dataset.websiteId = analyticsWebsiteId;
   document.head.appendChild(analyticsScript);
 }
