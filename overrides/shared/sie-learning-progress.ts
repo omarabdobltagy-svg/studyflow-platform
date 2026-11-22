@@ -35,7 +35,7 @@ export function calculateLearningGap(
   input: LearningGapInput
 ): LearningGapResult {
   const positionOf = (frontierId?: string | null): number | null => {
-    if (!frontierId || UNKNOWN_VALUES.has(frontierId)) return null;
+    if (choices.length === 0 || !frontierId || UNKNOWN_VALUES.has(frontierId)) return null;
     if (frontierId === NOT_STARTED) return 0;
     const index = choices.findIndex(choice => choice.nodeId === frontierId);
     return index < 0 ? null : index + 1;
