@@ -140,7 +140,7 @@ export default function Study() {
     saveCourseProgress.mutate({
       subjectId,
       teacherId: selectedTeacherId || null,
-      lastCompletedLessonId: lastCompletedLessonId || null,
+      lastCompletedLessonId: !lastCompletedLessonId || lastCompletedLessonId === "__UNKNOWN__" ? null : lastCompletedLessonId,
       teacherTeachingFrontierId,
       schoolClassFrontierId,
       teacherCourseFrontier: teacherCourseFrontier.trim(),
