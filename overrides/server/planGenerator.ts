@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getSIECheckpointBranches, getSIECheckpointChoices, getSIESubject, getSIETeacher } from "@shared/sie-catalog";
+import { getSIECheckpointBranches, getSIESubject, getSIETeacher } from "@shared/sie-catalog";
 import { calculateLearningGap } from "@shared/sie-learning-progress";
 import { invokeLLM } from "./_core/llm";
 import { getStudentProfile, saveAiPlan } from "./db";
@@ -60,7 +60,6 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
     const state = teacherStates[subjectId] || {};
     const reported = courseProgress[subjectId] || {};
     const branchRecords = (reported.branches || {}) as Record<string, Record<string, any>>;
-    const catalog = getSIECheckpointChoices(subjectId);
     const branches = getSIECheckpointBranches(subjectId);
     const studentLegacyFrontier = reported.lastCompletedLessonId || frontiers[subjectId] || state.studentAttendedFrontier || null;
     const subjectLessonRecords = lessonProgress[subjectId] || {};
