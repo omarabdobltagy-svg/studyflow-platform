@@ -68,6 +68,28 @@ function normalizeExtractedDocument(value: string): string {
     .replace(/[\u00A0\u202F]/g, " ");
 }
 
+type PageMarker = { start: number; end: number; pageNumber: number; pageTotal: number };
+
+function findPageMarkers(content: string): PageMarker[] {
+  const markers: PageMarker[] = [];
+  const candidates = /<([^<>]{1,200})>/g;
+  for (const match of content.matchAll(candidates)) {
+    const inner = (match[1] ?? "")
+      .normalize("NFKC")
+      .replace(/[\p{C}\p{Z}\s]/gu, "")
+      .toUpperCase();
+    const parsed = /^PARSEDTEXTOFPAGE:(\d+)\/(\d+)$/.exec(inner);
+    if (!parsed) continue;
+    markers.push({
+      start: match.index ?? 0,
+      end: (match.index ?? 0) + match[0].length,
+      pageNumber: Number(parsed[1]),
+      pageTotal: Number(parsed[2]),
+    });
+  }
+  return markers;
+}
+
 function normalizeArabic(value: string): string {
   return value
     .normalize("NFKC")
@@ -104,18 +126,17 @@ export function splitTextbookPages(
   content: string,
 ): TextbookPage[] {
   const normalizedContent = normalizeExtractedDocument(content);
-  const marker = /<\s*PARSED\s+TEXT\s+OF\s+PAGE:\s*(\d+)\s*\/\s*(\d+)\s*>/gi;
-  const matches = [...normalizedContent.matchAll(marker)];
-  if (!matches.length) return [];
-  return matches.map((match, index) => {
-    const start = (match.index ?? 0) + match[0].length;
-    const end = index + 1 < matches.length ? (matches[index + 1].index ?? normalizedContent.length) : normalizedContent.length;
+  const markers = findPageMarkers(normalizedContent);
+  if (!markers.length) return [];
+  return markers.map((marker, index) => {
+    const start = marker.end;
+    const end = index + 1 < markers.length ? markers[index + 1].start : normalizedContent.length;
     return {
       subjectId,
       bookTitle,
       sourceFile,
       coverage,
-      pdfPage: Number(match[1]),
+      pdfPage: marker.pageNumber,
       text: normalizedContent.slice(start, end).trim(),
     };
   }).filter(page => page.text.length >= 40);
@@ -137,7 +158,7 @@ export function inspectTextbookIndex(subjectId: string): {
       file,
       exists: true,
       bytes: Buffer.byteLength(content, "utf8"),
-      markerCount: [...normalizedContent.matchAll(/<\s*PARSED\s+TEXT\s+OF\s+PAGE:\s*\d+\s*\/\s*\d+\s*>/gi)].length,
+      markerCount: findPageMarkers(content).length,\s*PARSED\s+TEXT\s+OF\s+PAGE:\s*\d+\s*\/\s*\d+\s*>/gi)].length,
       markerTextCount: normalizedContent.split("PARSED TEXT OF PAGE").length - 1,
       markerWordCount: normalizedContent.split(/PARSED|TEXT|OF|PAGE/i).length - 1,
       prefix: JSON.stringify(normalizedContent.slice(0, 140)),
