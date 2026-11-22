@@ -16,6 +16,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import Assistant from "./pages/Assistant";
 import Analytics from "./pages/Analytics";
+import Settings from "./pages/Settings";
 
 function Router() {
   return (
@@ -33,7 +34,8 @@ function Router() {
       <Route path={"/assistant"} component={Assistant} />
       <Route path={"/analytics"} component={Analytics} />
       <Route path={"/onboarding"} component={Onboarding} />
-      <Route path={"/settings"} component={() => <Onboarding editMode />} />
+      <Route path={"/settings/academic"} component={() => <Onboarding editMode />} />
+      <Route path={"/settings"} component={Settings} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>

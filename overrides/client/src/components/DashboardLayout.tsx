@@ -199,6 +199,14 @@ export default function DashboardLayout({ title, description, children, action }
     setMobileNavOpen(false);
   };
 
+  const pageKey = (location.split("?")[0].split("/")[1] || "home").replace(/[^a-z0-9-]/gi, "");
+  const mobileDockItems = [
+    { label: "اليوم", path: "/", icon: LayoutDashboard },
+    { label: "المهام", path: "/tasks", icon: CheckSquare2 },
+    { label: "المذاكرة", path: "/study", icon: BookOpenText },
+    { label: "المخطط", path: "/planner", icon: BrainCircuit },
+  ];
+
   const renderNavigation = (mobile = false) => (
     <nav className={cn("sf-nav-list", mobile && "sf-nav-list-mobile")} aria-label="التنقل الرئيسي">
       {navigation.map(group => (
@@ -243,8 +251,8 @@ export default function DashboardLayout({ title, description, children, action }
   );
 
   return (
-    <div className="sf-app-shell">
-      <div className="sf-app-frame">
+    <div className="sf-app-shell sf-shell-v3">
+      <div className="sf-app-frame" data-page={pageKey}>
         <aside className="sf-sidebar" aria-label="القائمة الرئيسية">
           <button onClick={() => navigate("/")} className="sf-brand" aria-label="العودة إلى لوحة اليوم">
             <span className="sf-brand-mark"><BrandMark className="size-5" /></span>
@@ -292,14 +300,38 @@ export default function DashboardLayout({ title, description, children, action }
             </div>
           </header>
 
-          <main className="sf-main">
+          <main className={`sf-main sf-main-${pageKey}`}>
+            <div className={`sf-page sf-page-${pageKey}`} data-page={pageKey}>
             {studentProfile.isError && (
               <QueryErrorNotice onRetry={() => void studentProfile.refetch()} label="تعذّر التحقق من ملفك الدراسي. بياناتك لم تُحذف؛ أعد المحاولة." />
             )}
             {children}
+            </div>
           </main>
         </div>
       </div>
+
+      <nav className="sf-mobile-dock" aria-label="التنقل السريع">
+        {mobileDockItems.map(item => {
+          const active = item.path === "/" ? location === "/" : location.startsWith(item.path);
+          return (
+            <button
+              key={item.path}
+              type="button"
+              onClick={() => navigate(item.path)}
+              aria-current={active ? "page" : undefined}
+              className={cn("sf-mobile-dock-item", active && "is-active")}
+            >
+              <item.icon className="size-[18px]" />
+              <span>{item.label}</span>
+            </button>
+          );
+        })}
+        <button type="button" className="sf-mobile-dock-item" onClick={() => setMobileNavOpen(true)} aria-label="عرض باقي الصفحات">
+          <Menu className="size-[18px]" />
+          <span>المزيد</span>
+        </button>
+      </nav>
 
       <Sheet open={isMobileNavOpen} onOpenChange={setMobileNavOpen}>
         <SheetContent side="right" className="sf-mobile-sheet w-[min(88vw,340px)] border-l-0 p-0 text-sidebar-foreground">
