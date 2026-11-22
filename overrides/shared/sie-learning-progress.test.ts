@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateLearningGap } from "./sie-learning-progress";
+import { calculateLearningGap, calculateLearningGapsByBranch } from "./sie-learning-progress";
 
 const curriculum = [
   { nodeId: "L1", title: "Lesson 1" },
@@ -80,5 +80,51 @@ describe("calculateLearningGap", () => {
     expect(result.referenceSource).toBe("unavailable");
     expect(result.gapCount).toBeNull();
     expect(result.status).toBe("reference_missing");
+  });
+});
+
+
+describe("calculateLearningGapsByBranch", () => {
+  const branches = [
+    { branchId: "unit-a", choices: [{ nodeId: "A1", title: "A1" }, { nodeId: "A2", title: "A2" }] },
+    { branchId: "unit-b", choices: [{ nodeId: "B1", title: "B1" }, { nodeId: "B2", title: "B2" }] },
+  ];
+
+  it("calculates each branch against its own teacher or school frontier", () => {
+    const result = calculateLearningGapsByBranch(branches, {
+      "unit-a": {
+        teacherTeachingFrontierId: "A2",
+        schoolClassFrontierId: "A1",
+        studentFrontierId: "A1",
+      },
+      "unit-b": {
+        teacherTeachingFrontierId: "__UNKNOWN__",
+        schoolClassFrontierId: "B2",
+        studentFrontierId: "B1",
+      },
+    });
+    expect(result["unit-a"].referenceSource).toBe("teacher");
+    expect(result["unit-a"].gapCount).toBe(1);
+    expect(result["unit-b"].referenceSource).toBe("school");
+    expect(result["unit-b"].gapCount).toBe(1);
+  });
+
+  it("does not compare checkpoints across parallel branches", () => {
+    const result = calculateLearningGapsByBranch(branches, {
+      "unit-a": {
+        teacherTeachingFrontierId: "B2",
+        studentFrontierId: "A1",
+      },
+    });
+    expect(result["unit-a"].referenceSource).toBe("unavailable");
+    expect(result["unit-a"].gapCount).toBeNull();
+    expect(result["unit-b"].gapCount).toBeNull();
+  });
+
+  it("preserves unknown branches rather than treating them as caught up", () => {
+    const result = calculateLearningGapsByBranch(branches, {});
+    expect(result["unit-a"].status).toBe("reference_missing");
+    expect(result["unit-a"].gapCount).toBeNull();
+    expect(result["unit-b"].status).toBe("reference_missing");
   });
 });
