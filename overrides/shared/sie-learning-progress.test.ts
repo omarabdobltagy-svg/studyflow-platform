@@ -70,4 +70,15 @@ describe("calculateLearningGap", () => {
     expect(result.gapCount).toBeNull();
     expect(result.status).toBe("student_position_missing");
   });
+
+  it("does not claim a zero gap when the subject curriculum is not loaded", () => {
+    const result = calculateLearningGap([], {
+      teacherTeachingFrontierId: "__NOT_STARTED__",
+      schoolClassFrontierId: "__NOT_STARTED__",
+      studentFrontierId: "__NOT_STARTED__",
+    });
+    expect(result.referenceSource).toBe("unavailable");
+    expect(result.gapCount).toBeNull();
+    expect(result.status).toBe("reference_missing");
+  });
 });
