@@ -823,9 +823,7 @@ export const appRouter = router({
         };
         await updateStudentLearningBaseline(ctx.user.id, {
           backlog: learningGap.gapCount === null ? {} : { [input.subjectId]: learningGap.gapCount },
-          removeBacklogKeys: learningGap.gapCount === null
-            ? [input.subjectId, getSIESubject(input.subjectId)?.nameAr ?? ""].filter(Boolean)
-            : [],
+          removeBacklogKeys: [input.subjectId, getSIESubject(input.subjectId)?.nameAr ?? ""].filter(Boolean),
           obstacle: input.obstacle,
         });
         const latestProfile = await getStudentProfile(ctx.user.id);
