@@ -39,7 +39,7 @@ export default function Goals() {
   const averageProgress = goalsQuery.isSuccess && tasksQuery.isSuccess && active.length
     ? Math.round(active.reduce((sum, goal) => sum + goalProgress(goal, stagesFor(goal.id), allTasks).progress, 0) / active.length)
     : goalsQuery.isSuccess && tasksQuery.isSuccess ? 0 : null;
-  const totalTaskCount = goalsQuery.isSuccess && tasksQuery.isSuccess ? allTasks.length : null;
+  const totalTaskCount = goalsQuery.isSuccess && tasksQuery.isSuccess ? allTasks.filter(task => task.goalId !== null && allGoals.some(goal => goal.id === task.goalId)).length : null;
   const highProgressGoals = goalsQuery.isSuccess && tasksQuery.isSuccess
     ? active.filter(goal => goalProgress(goal, stagesFor(goal.id), allTasks).progress >= 75).length : null;
   return (
@@ -57,7 +57,7 @@ export default function Goals() {
           <p>اربط كل هدف بمراحل ومهام فعلية. التقدم هنا يتغير مع إنجازك المسجل، وليس بنسبة تقديرية تكتبها بنفسك.</p>
           <div className="sf-goals-hero-actions">
             <Button onClick={() => setFormOpen(true)} className="rounded-xl bg-white text-[#3b214c] hover:bg-[#f2eaf7]"><Plus /> إنشاء هدف</Button>
-            <span><ListTree /> {goalsQuery.isLoading ? "—" : active.length} أهداف تعمل عليها</span>
+            <span><ListTree /> {goalsQuery.isLoading || goalsQuery.isError ? "—" : active.length} أهداف تعمل عليها</span>
           </div>
         </div>
         <div className="sf-goals-hero-panel">
