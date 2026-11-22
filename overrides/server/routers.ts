@@ -60,7 +60,7 @@ import {
 } from "./db";
 import { getSessionCookieOptions } from "./_core/cookies";
 import type { TrpcContext } from "./_core/context";
-import { hashStudentPassword, isValidStudentUsername, normalizeStudentUsername, verifyStudentPassword } from "./local-auth";
+import { hashStudentPassword, normalizeStudentUsername, verifyStudentPassword } from "./local-auth";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { generatePersonalPlan } from "./planGenerator";
