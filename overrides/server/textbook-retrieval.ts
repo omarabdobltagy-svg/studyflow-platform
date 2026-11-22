@@ -61,6 +61,13 @@ const ARABIC_STOP_WORDS = new Set([
   "why", "into", "are", "was", "were", "you", "your", "have", "has", "had",
 ]);
 
+function normalizeExtractedDocument(value: string): string {
+  return value
+    .normalize("NFKC")
+    .replace(/\\p{Cf}/gu, "")
+    .replace(/[\\u00A0\\u202F]/g, " ");
+}
+
 function normalizeArabic(value: string): string {
   return value
     .normalize("NFKC")
@@ -96,19 +103,20 @@ export function splitTextbookPages(
   coverage: string,
   content: string,
 ): TextbookPage[] {
-  const marker = /<PARSED TEXT OF PAGE:\s*(\d+)\s*\/\s*(\d+)>/g;
-  const matches = [...content.matchAll(marker)];
+  const normalizedContent = normalizeExtractedDocument(content);
+  const marker = /<\\s*PARSED\\s+TEXT\\s+OF\\s+PAGE:\\s*(\\d+)\\s*\\/\\s*(\\d+)\\s*>/gi;
+  const matches = [...normalizedContent.matchAll(marker)];
   if (!matches.length) return [];
   return matches.map((match, index) => {
     const start = (match.index ?? 0) + match[0].length;
-    const end = index + 1 < matches.length ? (matches[index + 1].index ?? content.length) : content.length;
+    const end = index + 1 < matches.length ? (matches[index + 1].index ?? normalizedContent.length) : normalizedContent.length;
     return {
       subjectId,
       bookTitle,
       sourceFile,
       coverage,
       pdfPage: Number(match[1]),
-      text: content.slice(start, end).trim(),
+      text: normalizedContent.slice(start, end).trim(),
     };
   }).filter(page => page.text.length >= 40);
 }
@@ -124,13 +132,14 @@ export function inspectTextbookIndex(subjectId: string): {
   const files = source.files.map(file => {
     const fullPath = join(ROOT, file);
     const content = readFileSync(fullPath, "utf8");
+    const normalizedContent = normalizeExtractedDocument(content);
     return {
       file,
       exists: true,
       bytes: Buffer.byteLength(content, "utf8"),
-      markerCount: [...content.matchAll(/<PARSED TEXT OF PAGE:\s*\d+\s*\/\s*\d+>/g)].length,
-      markerTextCount: content.split("PARSED TEXT OF PAGE").length - 1,
-      prefix: JSON.stringify(content.slice(0, 140)),
+      markerCount: [...normalizedContent.matchAll(/<\\s*PARSED\\s+TEXT\\s+OF\\s+PAGE:\\s*\\d+\\s*\\/\\s*\\d+\\s*>/gi)].length,
+      markerTextCount: normalizedContent.split("PARSED TEXT OF PAGE").length - 1,
+      prefix: JSON.stringify(normalizedContent.slice(0, 140)),
     };
   });
   const pages = loadPages(subjectId);
