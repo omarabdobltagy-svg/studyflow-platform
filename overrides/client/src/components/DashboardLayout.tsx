@@ -50,11 +50,21 @@ export default function DashboardLayout({ title, description, children, action }
   const trpcUtils = trpc.useUtils();
   const [loginUsername, setLoginUsername] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const [authFormError, setAuthFormError] = useState("");
+  const onAuthenticationSuccess = (authenticatedUser: NonNullable<typeof trpcUtils.auth.me.getData>) => {
+    trpcUtils.auth.me.setData(undefined, authenticatedUser);
+    void trpcUtils.invalidate();
+    setLoginPassword("");
+    setConfirmPassword("");
+    setAuthFormError("");
+  };
   const loginMutation = trpc.auth.login.useMutation({
-    onSuccess: (authenticatedUser) => {
-      trpcUtils.auth.me.setData(undefined, authenticatedUser);
-      void trpcUtils.invalidate();
-    },
+    onSuccess: onAuthenticationSuccess,
+  });
+  const registerMutation = trpc.auth.register.useMutation({
+    onSuccess: onAuthenticationSuccess,
   });
   const [location, setLocation] = useLocation();
   const [isMobileNavOpen, setMobileNavOpen] = useState(false);
@@ -96,12 +106,32 @@ export default function DashboardLayout({ title, description, children, action }
       <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-xl items-center justify-center">
         <div className="app-card w-full overflow-hidden p-7 text-center sm:p-10">
           <div className="mx-auto mb-7 flex size-16 items-center justify-center rounded-3xl bg-primary text-primary-foreground"><BrandMark className="size-7" /></div>
-          <p className="eyebrow mb-3">مسار التعلّم</p><h1 className="text-3xl font-bold tracking-tight sm:text-4xl">مساحتك المركّزة لكل يوم</h1>
-          <p className="mx-auto mt-4 max-w-md leading-8 text-muted-foreground">ادخل بيانات المساحة لفتح لوحة الدراسة ومتابعة بياناتك.</p>
+          <p className="eyebrow mb-3">مسار التعلّم</p>
+          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+            {authMode === "login" ? "مساحتك المركّزة لكل يوم" : "أنشئ حساب الطالب"}
+          </h1>
+          <p className="mx-auto mt-4 max-w-md leading-8 text-muted-foreground">
+            {authMode === "login"
+              ? "سجّل الدخول للرجوع إلى تقدمك ومسارك الدراسي."
+              : "أنشئ حسابًا مستقلًا يحفظ تقدمك وبياناتك بعيدًا عن حسابات الطلاب الآخرين."}
+          </p>
           <form
             onSubmit={(event) => {
               event.preventDefault();
-              loginMutation.mutate({ username: loginUsername, password: loginPassword });
+              setAuthFormError("");
+              if (authMode === "register") {
+                if (loginPassword !== confirmPassword) {
+                  setAuthFormError("كلمتا المرور غير متطابقتين.");
+                  return;
+                }
+                if (loginPassword.length < 10) {
+                  setAuthFormError("كلمة المرور يجب أن تكون 10 أحرف على الأقل.");
+                  return;
+                }
+                registerMutation.mutate({ username: loginUsername, password: loginPassword });
+              } else {
+                loginMutation.mutate({ username: loginUsername, password: loginPassword });
+              }
             }}
             className="mx-auto mt-8 max-w-sm space-y-4 text-right"
           >
@@ -112,11 +142,18 @@ export default function DashboardLayout({ title, description, children, action }
                 value={loginUsername}
                 onChange={(event) => setLoginUsername(event.target.value)}
                 autoComplete="username"
-                placeholder="اسم المستخدم"
+                placeholder={authMode === "register" ? "مثال: omar.student" : "اسم المستخدم"}
+                minLength={authMode === "register" ? 4 : 1}
+                maxLength={32}
                 required
                 dir="ltr"
                 className="text-left"
               />
+              {authMode === "register" && (
+                <p className="text-[11px] leading-5 text-muted-foreground">
+                  استخدم 4 إلى 32 حرفًا إنجليزيًا أو رقمًا، ويمكن استخدام النقطة والشرطة والشرطة السفلية.
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="studyflow-password">كلمة المرور</Label>
@@ -125,20 +162,70 @@ export default function DashboardLayout({ title, description, children, action }
                 type="password"
                 value={loginPassword}
                 onChange={(event) => setLoginPassword(event.target.value)}
-                autoComplete="current-password"
+                autoComplete={authMode === "register" ? "new-password" : "current-password"}
                 placeholder="كلمة المرور"
+                minLength={authMode === "register" ? 10 : 1}
+                maxLength={128}
                 required
               />
+              {authMode === "register" && (
+                <p className="text-[11px] leading-5 text-muted-foreground">
+                  10 أحرف على الأقل. تُحفظ كلمة المرور مشفّرة تجزئيًا، ولا تُخزّن كنص مقروء.
+                </p>
+              )}
             </div>
-            {loginMutation.error && (
+            {authMode === "register" && (
+              <div className="space-y-2">
+                <Label htmlFor="studyflow-confirm-password">تأكيد كلمة المرور</Label>
+                <Input
+                  id="studyflow-confirm-password"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  autoComplete="new-password"
+                  placeholder="أعد كتابة كلمة المرور"
+                  minLength={10}
+                  maxLength={128}
+                  required
+                />
+              </div>
+            )}
+            {(authFormError || (authMode === "register" ? registerMutation.error?.message : loginMutation.error?.message)) && (
               <p role="alert" className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                {loginMutation.error.message}
+                {authFormError || (authMode === "register" ? registerMutation.error?.message : loginMutation.error?.message)}
               </p>
             )}
-            <Button type="submit" disabled={loginMutation.isPending} size="lg" className="pressable mt-2 w-full rounded-2xl bg-primary px-7 font-semibold">
-              {loginMutation.isPending ? "جارٍ تسجيل الدخول..." : "دخول إلى المساحة"}
+            <Button
+              type="submit"
+              disabled={loginMutation.isPending || registerMutation.isPending}
+              size="lg"
+              className="pressable mt-2 w-full rounded-2xl bg-primary px-7 font-semibold"
+            >
+              {loginMutation.isPending || registerMutation.isPending
+                ? "جارٍ التحقق..."
+                : authMode === "register" ? "إنشاء حساب الطالب" : "دخول إلى المساحة"}
               <ChevronLeft className="size-4" />
             </Button>
+            <div className="border-t border-border/70 pt-4 text-center">
+              <button
+                type="button"
+                className="text-sm font-semibold text-primary underline-offset-4 hover:underline"
+                onClick={() => {
+                  setAuthMode(current => current === "login" ? "register" : "login");
+                  setAuthFormError("");
+                  setConfirmPassword("");
+                  loginMutation.reset();
+                  registerMutation.reset();
+                }}
+              >
+                {authMode === "login" ? "ليس لديك حساب؟ أنشئ حساب طالب" : "لديك حساب بالفعل؟ سجّل الدخول"}
+              </button>
+              {authMode === "register" && (
+                <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+                  بعد إنشاء الحساب ستنتقل لإعداد ملفك الدراسي واختيار المواد والمدرسين.
+                </p>
+              )}
+            </div>
           </form>
         </div>
       </div>
