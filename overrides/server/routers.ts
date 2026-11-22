@@ -1014,10 +1014,18 @@ export const appRouter = router({
         const subjectRecord = courseProgress[active.subjectId] ?? {};
         const branchRecords = (subjectRecord.branches ?? {}) as Record<string, Record<string, any>>;
         const oldBranchRecord = branchRecords[active.branchId] ?? {};
+        const activeBranch = getSIECheckpointBranches(active.subjectId).find(item => item.branchId === active.branchId);
+        const previousFrontierIndex = activeBranch?.choices.findIndex(item => item.nodeId === oldBranchRecord.lastCompletedLessonId) ?? -1;
+        const finishedLessonIndex = activeBranch?.choices.findIndex(item => item.nodeId === active.lessonId) ?? -1;
+        // Revising an earlier lesson must not move the student's completion frontier backwards.
+        const nextFrontierId = finishedLessonIndex >= previousFrontierIndex && finishedLessonIndex >= 0
+          ? active.lessonId
+          : oldBranchRecord.lastCompletedLessonId ?? active.lessonId;
         const nextBranchRecord = input.markLessonCompleted ? {
           ...oldBranchRecord,
           subjectId: active.subjectId,
-          lastCompletedLessonId: active.lessonId,
+          lastCompletedLessonId: nextFrontierId,
+          lastStudiedLessonId: active.lessonId,
           evidenceSource: "student_confirmed_after_external_session",
           confidence: "student_confirmed",
           lastCompletedAt: finishedAt.toISOString(),
