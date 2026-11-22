@@ -25,6 +25,9 @@ type LessonProgress = { completedSteps?: StepId[]; difficulty?: "unknown" | "eas
 export default function Study() {
   const utils = trpc.useUtils();
   const profile = trpc.studentProfile.get.useQuery();
+  const activeExternalSession = trpc.learning.activeExternalSession.useQuery();
+  const [sessionNow, setSessionNow] = useState(Date.now());
+  const [markSessionLessonCompleted, setMarkSessionLessonCompleted] = useState(false);
   const [subjectId, setSubjectId] = useState("");
   const [branchId, setBranchId] = useState("");
   const [lessonId, setLessonId] = useState("");
@@ -155,6 +158,28 @@ export default function Study() {
     },
     onError: error => toast.error(error.message),
   });
+  const startExternalSession = trpc.learning.startExternalSession.useMutation({
+    onSuccess: async () => {
+      setMarkSessionLessonCompleted(false);
+      await utils.learning.activeExternalSession.invalidate();
+      await utils.studentProfile.get.invalidate();
+      toast.success("بدأت جلسة المذاكرة الخارجية. يمكنك الانتقال إلى تطبيق المدرس أو ملف PDF.");
+    },
+    onError: error => toast.error(error.message),
+  });
+  const finishExternalSession = trpc.learning.finishExternalSession.useMutation({
+    onSuccess: async result => {
+      await utils.learning.activeExternalSession.invalidate();
+      await utils.studentProfile.get.invalidate();
+      const minutes = Math.floor(result.durationSeconds / 60);
+      toast.success(result.lessonMarkedCompleted
+        ? `انتهت الجلسة: ${minutes} دقيقة، وتم تحديث موضعك في المنهج.`
+        : `انتهت الجلسة: ${minutes} دقيقة. لم يتم تغيير موضع المنهج.`);
+      if (result.requiresTimeReview) toast.warning("الجلسة تجاوزت 12 ساعة؛ تم تسجيل الحد الأعلى فقط.");
+    },
+    onError: error => toast.error(error.message),
+  });
+
   const saveAssessment = trpc.learning.addAssessment.useMutation({
     onSuccess: async () => {
       await utils.studentProfile.get.invalidate();
@@ -182,6 +207,27 @@ export default function Study() {
       difficulty: courseDifficulty,
       notes: courseNotes,
       obstacle: learningObstacle,
+    });
+  };
+
+  const beginExternalStudy = () => {
+    if (!subjectId || !currentBranchId || !lessonId) {
+      toast.error("اختر المادة والفرع والدرس أولًا.");
+      return;
+    }
+    startExternalSession.mutate({
+      subjectId,
+      branchId: currentBranchId,
+      lessonId,
+    });
+  };
+
+  const endExternalStudy = () => {
+    const session = activeExternalSession.data;
+    if (!session?.sessionId) return;
+    finishExternalSession.mutate({
+      sessionId: session.sessionId,
+      markLessonCompleted: markSessionLessonCompleted,
     });
   };
 
@@ -231,6 +277,33 @@ export default function Study() {
   const doneCount = completedSteps.length;
   const completion = Math.round((doneCount / steps.length) * 100);
   const selectedLesson = lessons.find(item => item.nodeId === lessonId);
+  const externalSession = activeExternalSession.data;
+  const externalSessionElapsed = externalSession?.startedAt
+    ? Math.max(0, Math.floor((sessionNow - Date.parse(externalSession.startedAt)) / 1_000))
+    : 0;
+  const formatSessionDuration = (totalSeconds: number) => {
+    const hours = Math.floor(totalSeconds / 3_600);
+    const minutes = Math.floor((totalSeconds % 3_600) / 60);
+    const seconds = totalSeconds % 60;
+    return [hours, minutes, seconds].map((value, index) =>
+      index === 0 && value === 0 ? null : String(value).padStart(2, "0")
+    ).filter(Boolean).join(":") || "00:00";
+  };
+  const externalSessionSubjectName = externalSession ? getSIESubject(externalSession.subjectId)?.nameAr || externalSession.subjectId : "";
+  const externalSessionLessonTitle = externalSession
+    ? getSIECheckpointChoices(externalSession.subjectId).find(item => item.nodeId === externalSession.lessonId)?.title || "درس غير معروف"
+    : "";
+
+  useEffect(() => {
+    if (!externalSession?.startedAt) {
+      setSessionNow(Date.now());
+      return;
+    }
+    const update = () => setSessionNow(Date.now());
+    update();
+    const interval = window.setInterval(update, 1_000);
+    return () => window.clearInterval(interval);
+  }, [externalSession?.sessionId, externalSession?.startedAt]);
 
   return (
     <DashboardLayout title="المذاكرة وذكاء التقدم" description="تابع تقدمك وتراكمك ونتائجك، ثم استخدم SQ3R لتحويل كل درس إلى خطوات تعلم قابلة للقياس.">
@@ -244,6 +317,44 @@ export default function Study() {
         </div>
         {subjectId && !lessons.length && <p className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-sm leading-6 text-muted-foreground">فهرس هذه المادة غير محمّل في النسخة الحالية؛ لذلك لن أعرض دروسًا مخمّنة. ستظهر هنا تلقائيًا عندما يُضاف فهرس المنهج المعتمد.</p>}
         {!subjects.length && !profile.isLoading && <p className="mt-4 rounded-xl bg-muted/50 p-3 text-sm text-muted-foreground">لم تُضف مواد إلى ملفك الدراسي بعد. أضف المواد من الملف الشخصي أولًا.</p>}
+      </section>
+      <section className="app-card mb-5 p-5 sm:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">CROSS-APP STUDY SESSION</p>
+            <h2 className="mt-1 font-bold">جلسة مذاكرة خارج SIE</h2>
+            {externalSession ? (
+              <>
+                <p className="mt-1 text-sm text-muted-foreground">{externalSessionSubjectName} · {externalSessionLessonTitle}</p>
+                <p className="mt-2 text-xs leading-6 text-muted-foreground">الجلسة محفوظة على الخادم وتستمر عند انتقالك إلى منصة المدرس أو قارئ PDF. ارجع إلى SIE واضغط إنهاء عند الانتهاء.</p>
+              </>
+            ) : (
+              <p className="mt-1 text-xs leading-6 text-muted-foreground">ابدأ المؤقت قبل فتح منصة المدرس أو ملف PDF. عند رجوعك، أوقفه وسجّل ما إذا كنت أنهيت الدرس.</p>
+            )}
+          </div>
+          {externalSession ? (
+            <div className="flex shrink-0 flex-col items-center gap-2 rounded-2xl border border-primary/20 bg-primary/5 px-5 py-3">
+              <p className="text-[10px] font-semibold text-muted-foreground">الوقت المسجل</p>
+              <p className="text-3xl font-bold tabular-nums text-primary">{formatSessionDuration(externalSessionElapsed)}</p>
+              <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">جلسة نشطة</span>
+            </div>
+          ) : (
+            <Button type="button" onClick={beginExternalStudy} disabled={startExternalSession.isPending || activeExternalSession.isLoading || !subjectId || !currentBranchId || !lessonId} className="shrink-0 rounded-xl bg-primary">
+              {startExternalSession.isPending ? "جارٍ بدء الجلسة..." : "ابدأ جلسة خارج SIE"}
+            </Button>
+          )}
+        </div>
+        {externalSession && (
+          <div className="mt-4 flex flex-col gap-3 rounded-xl border border-border/70 bg-muted/25 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <label className="flex items-start gap-2 text-sm leading-6">
+              <input type="checkbox" checked={markSessionLessonCompleted} onChange={event => setMarkSessionLessonCompleted(event.target.checked)} className="mt-1 size-4 accent-primary" />
+              <span>أنهيت دراسة هذا الدرس؛ حدّث موضعي في فرع المنهج عند إنهاء الجلسة.</span>
+            </label>
+            <Button type="button" variant="outline" onClick={endExternalStudy} disabled={finishExternalSession.isPending} className="shrink-0 rounded-xl">
+              {finishExternalSession.isPending ? "جارٍ إنهاء الجلسة..." : "إنهاء الجلسة وحفظ الوقت"}
+            </Button>
+          </div>
+        )}
       </section>
       <motion.section
         className="learning-progress-panel app-card mb-6 overflow-hidden"
