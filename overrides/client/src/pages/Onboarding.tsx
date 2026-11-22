@@ -7,9 +7,9 @@ import {
   SIE_CATALOG_META,
   SIE_SYSTEMS,
   getSIEElectiveGroups,
+  getSIECheckpointBranches,
   getSIECheckpointChoices,
   getSIECheckpointChoicesForTeacher,
-  getSIEPublicSegments,
   getSIETeacher,
   getSIESubject,
   getSIESubjectsForTrack,
@@ -28,7 +28,6 @@ import {
   GraduationCap,
   Loader2,
   Pencil,
-  Save,
   ShieldCheck,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -81,13 +80,6 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
   const profile = trpc.studentProfile.get.useQuery(undefined, { enabled: Boolean(auth.data) });
   const utils = trpc.useUtils();
   const [isEditingProfile, setIsEditingProfile] = useState(!editMode);
-  const updateTeacherProgress = trpc.studentProfile.updateTeacherProgress.useMutation({
-    onSuccess: async () => {
-      await utils.studentProfile.get.invalidate();
-      toast.success("تم تحديث موضعك الدراسي مع المدرس.");
-    },
-    onError: error => toast.error(error.message || "تعذر تحديث موضعك الدراسي."),
-  });
   const complete = trpc.studentProfile.complete.useMutation({
     onSuccess: async () => {
       await Promise.all([utils.auth.me.invalidate(), utils.studentProfile.get.invalidate()]);
@@ -259,9 +251,8 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
       ) : editMode && !isEditingProfile ? (
         <StudentProfileOverview
           profile={profile.data as any}
-          updatePending={updateTeacherProgress.isPending}
           onEdit={() => { setIsEditingProfile(true); setStep(0); }}
-          onUpdateProgress={(subjectId, checkpoint) => updateTeacherProgress.mutate({ subjectId, checkpoint })}
+          onOpenStudy={() => setLocation("/study")}
         />
       ) : (
         <div className="mx-auto max-w-4xl">
@@ -548,7 +539,6 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                       ...allChoices.filter(choice => !initialChoices.some(initial => initial.nodeId === choice.nodeId)).slice(0, extraCount),
                     ];
                     const hasMoreChoices = visibleChoices.length < allChoices.length;
-                    const publicSegments = getSIEPublicSegments(teacherId);
                     const selected = form.checkpointSelections[subject.subjectId] ?? "";
                     return (
                       <section key={subject.subjectId} className="rounded-2xl border border-border p-4 sm:p-5">
@@ -558,44 +548,6 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                             إيه آخر موضوع خلصته فعلًا مع المدرس ده؟ اختر أقرب عنوان تعرفه. مش هنفترض إن آخر فيديو منشور هو آخر حاجة درستها.
                           </p>
                         </div>
-                        {teacher?.conflictOptions && teacher.conflictOptions.length > 0 && (
-                          <div className="mb-4 rounded-xl border border-amber-500/25 bg-amber-500/5 p-3">
-                            <p className="text-xs font-semibold">فيه تعارض في مصادر الكورس؛ مش هنختار رقم نيابة عنك.</p>
-                            {teacher.conflictOptions.map(option => (
-                              <p key={option.sourceLabel} className="mt-2 text-xs leading-6 text-muted-foreground">
-                                {option.label} · {option.sourceLabel} · {option.sourceDate}
-                              </p>
-                            ))}
-                            <p className="mt-2 text-xs text-muted-foreground">لو مش متأكد، اختار «مش متأكد» أو «تخطي دلوقتي».</p>
-                          </div>
-                        )}
-                        {(teacher?.latestPublicCheckpoint || teacher?.paidCourseCatalogFrontier) && (
-                          <div className="mb-4 grid gap-3 md:grid-cols-2">
-                            <div className="rounded-2xl border border-border/70 bg-card/70 p-4">
-                              <p className="text-xs font-semibold text-muted-foreground">آخر محتوى عام مثبت للمدرس</p>
-                              <p className="mt-2 text-sm leading-6">{teacher?.latestPublicCheckpoint || "لا توجد نقطة محتوى عامة محددة في المصادر الحالية."}</p>
-                              <p className="mt-2 text-[11px] text-muted-foreground">هذا يثبت ما نُشر علنًا فقط، وليس ترتيب الكورس المدفوع.</p>
-                            </div>
-                            <div className="rounded-2xl border border-border/70 bg-card/70 p-4">
-                              <p className="text-xs font-semibold text-muted-foreground">فهرس الكورس المدفوع</p>
-                              <p className="mt-2 text-sm leading-6">{teacher?.paidCourseCatalogFrontier?.courseTitle || "لا يوجد فهرس مدفوع موثق."}</p>
-                              <p className="mt-2 text-[11px] text-muted-foreground">{teacher?.paidCourseCatalogFrontier?.note || "لن نخمن آخر عنصر مدفوع من فيديو عام أو اسم الباقة."}</p>
-                            </div>
-                          </div>
-                        )}
-                        {publicSegments.length > 0 && (
-                          <div className="mb-4 rounded-xl bg-muted/25 p-3">
-                            <p className="text-xs font-semibold">مقاطع عامة تم التحقق منها — ليست ترتيبًا للكورس المدفوع</p>
-                            {publicSegments.slice(0, 5).map((segment, index) => (
-                              <p key={segment.title + index} className="mt-1 text-xs leading-6 text-muted-foreground">
-                                {(segment.timestamp ? segment.timestamp + " · " : "") + segment.title}
-                              </p>
-                            ))}
-                            {publicSegments.length > 5 && (
-                              <p className="mt-1 text-[11px] text-muted-foreground">وتوجد مقاطع إضافية في المصدر.</p>
-                            )}
-                          </div>
-                        )}
                         {visibleChoices.length > 0 ? (
                           <div className="grid gap-2 sm:grid-cols-2">
                             {visibleChoices.map(choice => (
@@ -683,44 +635,22 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
 function StudentProfileOverview({
   profile,
   onEdit,
-  onUpdateProgress,
-  updatePending,
+  onOpenStudy,
 }: {
   profile: any;
   onEdit: () => void;
-  onUpdateProgress: (subjectId: string, checkpoint: string) => void;
-  updatePending: boolean;
+  onOpenStudy: () => void;
 }) {
   const selection = (profile?.selection ?? {}) as Record<string, any>;
   const teacherChoices = (selection.teacherChoices ?? {}) as Record<string, string>;
-  const frontiers = (selection.teacherFrontiers ?? {}) as Record<string, string>;
-  const progressState = (selection.teacherProgressState ?? {}) as Record<string, Record<string, any>>;
   const subjectIds = Array.isArray(selection.subjectIds) && selection.subjectIds.length
     ? selection.subjectIds as string[]
     : Object.keys(teacherChoices);
-  const [drafts, setDrafts] = useState<Record<string, string>>(() =>
-    Object.fromEntries(subjectIds.map(subjectId => [
-      subjectId,
-      frontiers[subjectId] ?? progressState[subjectId]?.studentAttendedFrontier ?? "__UNKNOWN__",
-    ]))
-  );
-
-  useEffect(() => {
-    setDrafts(Object.fromEntries(subjectIds.map(subjectId => [
-      subjectId,
-      frontiers[subjectId] ?? progressState[subjectId]?.studentAttendedFrontier ?? "__UNKNOWN__",
-    ])));
-  }, [profile?.updatedAt, selection.teacherFrontiers, selection.teacherProgressState]);
-
   const system = SIE_SYSTEMS.find(item => item.systemId === selection.systemId);
   const track = selection.trackId ? getSIETrack(selection.trackId) : undefined;
   const subjectNames = subjectIds.map(id => getSIESubject(id)?.nameAr ?? id);
-  const reportLabel = (subjectId: string, value: string) => {
-    if (value === "__NOT_STARTED__") return "لم أبدأ مع المدرس بعد";
-    if (value === "__UNKNOWN__") return "لم أحدد موضعي بعد";
-    if (value === "__DEFERRED__") return "تحديد الموضع مؤجل";
-    return getSIECheckpointChoices(subjectId).find(choice => choice.nodeId === value)?.title ?? "موضع غير محدد في الفهرس الحالي";
-  };
+  const learning = trpc.learning.get.useQuery(undefined, { staleTime: 30_000 });
+  const gapBySubject = ((learning.data as any)?.gapByBranch ?? {}) as Record<string, Record<string, any>>;
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 enter">
@@ -746,50 +676,68 @@ function StudentProfileOverview({
 
       <section className="app-card overflow-hidden">
         <div className="border-b border-border/70 p-5 sm:p-6">
-          <p className="eyebrow">متابعة التعلّم</p>
-          <h3 className="mt-1 text-lg font-bold">المدرسون وموضعك الدراسي</h3>
-          <p className="mt-2 text-sm leading-7 text-muted-foreground">تقدر تحدّث آخر موضوع وصلت له مع كل مدرس من هنا. التقرير ده يعبّر عن اللي بتبلّغنا به، ومش بنعتبره دليل مشاهدة تلقائي.</p>
+          <p className="eyebrow">المدرسون</p>
+          <h3 className="mt-1 text-lg font-bold">المدرس المختار لكل مادة</h3>
+          <p className="mt-2 text-sm leading-7 text-muted-foreground">هنا تظهر أسماء المدرسين المرتبطين بموادك فقط، من غير تفاصيل محتوى عام أو بيانات تسويقية عن الكورسات.</p>
         </div>
-        <div className="divide-y divide-border/70">
+        <div className="grid gap-3 p-5 sm:grid-cols-2 sm:p-6">
           {subjectIds.map(subjectId => {
             const subject = getSIESubject(subjectId);
             const teacherId = teacherChoices[subjectId];
             const teacher = teacherId && teacherId !== "__SKIP__" ? getSIETeacher(teacherId) : undefined;
-            const current = drafts[subjectId] ?? frontiers[subjectId] ?? "__UNKNOWN__";
-            const choices = getSIECheckpointChoices(subjectId);
-            const publicFrontier = teacher?.latestPublicCheckpoint;
             return (
-              <article key={subjectId} className="space-y-4 p-5 sm:p-6">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-bold">{subject?.nameAr ?? subjectId}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">{teacher?.nameAr ?? "لم يتم اختيار مدرس بعد"}</p>
-                  </div>
-                  <span className="rounded-full bg-secondary px-3 py-1 text-xs font-semibold">{reportLabel(subjectId, current)}</span>
+              <div key={subjectId} className="flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-background/60 p-4">
+                <span className="text-sm font-semibold">{subject?.nameAr ?? subjectId}</span>
+                <span className="text-sm text-muted-foreground">{teacher?.nameAr ?? "لم يتم اختيار مدرس"}</span>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="app-card overflow-hidden">
+        <div className="flex flex-col gap-3 border-b border-border/70 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <div>
+            <p className="eyebrow">قياس التقدم</p>
+            <h3 className="mt-1 text-lg font-bold">التراكم المحسوب حسب فروع المنهج</h3>
+            <p className="mt-2 text-sm leading-7 text-muted-foreground">الفجوة تُحسب داخل كل وحدة أو فرع مستقل: تقدم المدرس أولًا، ثم تقدم الفصل في المدرسة عند عدم توفر موضع المدرس. لا نجمع الفروع المختلفة في رقم إجمالي مضلل. البيانات تعتمد على مواضع التقدم التي تسجلها، وليست قراءة تلقائية من منصات المدرسين.</p>
+          </div>
+          <Button onClick={onOpenStudy} className="pressable shrink-0 rounded-xl bg-primary"><BookOpen className="size-4" />إدارة التقدم</Button>
+        </div>
+        <div className="space-y-4 p-5 sm:p-6">
+          {learning.isLoading ? (
+            <p className="text-sm text-muted-foreground">جارٍ تحميل بيانات التقدم...</p>
+          ) : learning.error ? (
+            <p className="text-sm text-destructive">تعذر تحميل قياس التراكم. افتح صفحة المذاكرة والتقدم وأعد المحاولة.</p>
+          ) : subjectIds.map(subjectId => {
+            const subject = getSIESubject(subjectId);
+            const branches = getSIECheckpointBranches(subjectId);
+            const subjectGaps = gapBySubject[subjectId] ?? {};
+            return (
+              <div key={subjectId} className="rounded-xl border border-border/70 p-4">
+                <h4 className="text-sm font-bold">{subject?.nameAr ?? subjectId}</h4>
+                <div className="mt-3 space-y-2">
+                  {branches.length ? branches.map(branch => {
+                    const gap = subjectGaps[branch.branchId];
+                    const reference = gap?.referenceSource === "teacher" ? "المدرس"
+                      : gap?.referenceSource === "school" ? "المدرسة" : "لا يوجد مرجع";
+                    const result = gap?.status === "calculated"
+                      ? (gap.gapCount > 0 ? `متأخر بـ ${gap.gapCount} درس`
+                        : gap.aheadCount > 0 ? `متقدم بـ ${gap.aheadCount} درس` : "مواكب للمرجع")
+                      : gap?.status === "student_position_missing"
+                        ? "موضعك الدراسي غير محدد"
+                        : "موضع المدرس والمدرسة غير مكتمل";
+                    return (
+                      <div key={branch.branchId} className="flex flex-col gap-1 rounded-lg bg-muted/30 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+                        <span className="text-sm">{branch.branchTitle}</span>
+                        <span className="text-xs font-semibold text-muted-foreground">{result} · المرجع: {reference}</span>
+                      </div>
+                    );
+                  }) : (
+                    <p className="text-xs text-muted-foreground">لا توجد فروع منهج متاحة لهذه المادة بعد.</p>
+                  )}
                 </div>
-                {teacher ? (
-                  <div className="grid gap-3 rounded-xl bg-secondary/35 p-4 sm:grid-cols-2">
-                    <div><p className="text-xs font-semibold text-muted-foreground">آخر محتوى عام موثق</p><p className="mt-1 text-sm font-medium">{publicFrontier || "لا توجد نقطة عامة موثقة في الفهرس الحالي"}</p><p className="mt-1 text-[11px] text-muted-foreground">{teacher.latestCheckpointDate ? `تاريخ التحديث: ${teacher.latestCheckpointDate}` : "لا يوجد تاريخ نشر موثق"}</p></div>
-                    <div><p className="text-xs font-semibold text-muted-foreground">فهرس الكورس المدفوع</p><p className="mt-1 text-sm font-medium">{teacher.paidCourseCatalogFrontier?.courseTitle || "غير متاح للتأكيد"}</p><p className="mt-1 text-[11px] text-muted-foreground">لن نستنتج موضعك من فيديوهات عامة أو إعلان باقة.</p></div>
-                  </div>
-                ) : <p className="rounded-xl bg-muted/35 p-4 text-sm text-muted-foreground">اختر مدرسًا من تعديل الملف الدراسي لربط المادة به.</p>}
-                {teacher && choices.length > 0 && (
-                  <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
-                    <label className="block">
-                      <span className="mb-2 block text-xs font-semibold">آخر موضوع أنجزته مع المدرس</span>
-                      <select value={current} onChange={event => setDrafts(value => ({ ...value, [subjectId]: event.target.value }))} className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm">
-                        <option value="__NOT_STARTED__">لسه ما بدأتش مع المدرس ده</option>
-                        <option value="__UNKNOWN__">مش متأكد</option>
-                        <option value="__DEFERRED__">تخطي دلوقتي</option>
-                        {choices.map(choice => <option key={choice.nodeId} value={choice.nodeId}>{choice.unitTitle} — {choice.title}</option>)}
-                      </select>
-                    </label>
-                    <Button type="button" disabled={updatePending || current === (frontiers[subjectId] ?? progressState[subjectId]?.studentAttendedFrontier ?? "__UNKNOWN__")} onClick={() => onUpdateProgress(subjectId, current)} className="pressable h-11 rounded-xl bg-primary">
-                      {updatePending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}حفظ التقدم
-                    </Button>
-                  </div>
-                )}
-              </article>
+              </div>
             );
           })}
         </div>
