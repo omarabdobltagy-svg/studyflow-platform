@@ -189,7 +189,7 @@ function BookLibrary() {
             : booksQuery.isError ? null
             : visibleBooks.length ? visibleBooks.map((book, index) => (
               <button key={book.id} type="button" onClick={() => setLocation("/books/" + book.id)} className={cn("sf-library-book-card", "tone-" + (index % 4 + 1))}>
-                <div className={cn("sf-library-book-cover", coverClass[book.coverColor as keyof typeof coverClass] || coverClass.charcoal)}>
+                <div className={cn("sf-library-book-cover bg-gradient-to-br", coverClass[book.coverColor as keyof typeof coverClass] || coverClass.charcoal)}>
                   <span className="sf-library-cover-index">{String(index + 1).padStart(2, "0")}</span>
                   <span className="sf-library-cover-glyph"><BookOpenText /></span>
                   <span className="sf-library-cover-status">{book.status === "completed" ? "مكتمل" : book.status === "reading" ? "قيد القراءة" : "في الانتظار"}</span>
