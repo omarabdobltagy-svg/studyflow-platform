@@ -488,7 +488,6 @@ export const appRouter = router({
           return subjectName + ":\\n" + (branchSummary || "فهرس الفروع غير محمّل");
         }).join("\\n");
         const learningCourseProgress = (selection.learningCourseProgress ?? {}) as Record<string, Record<string, any>>;
-        const learningAssessments = Array.isArray(selection.learningAssessments) ? selection.learningAssessments as Array<Record<string, any>> : [];
         const learningEvidenceContext = (profile?.subjects || []).map(subjectId => {
           const record = learningCourseProgress[subjectId] ?? {};
           const branchRecords = (record.branches ?? {}) as Record<string, Record<string, any>>;
@@ -534,16 +533,11 @@ export const appRouter = router({
               + " | الفجوة " + (gap.gapCount === null ? "غير محسوبة" : gap.gapCount + " درسًا")
               + " | التقدم عن المرجع " + (gap.aheadCount ?? "غير محسوب");
           }).join("\\n");
-          const subjectAssessments = learningAssessments.filter(item => item.subjectId === subjectId).slice(-4);
-          const scores = subjectAssessments.map(item => String(item.scorePercent) + "%");
-          const weakConcepts = [...new Set(subjectAssessments.flatMap(item => Array.isArray(item.weakConcepts) ? item.weakConcepts : []))].slice(0, 8);
           return [
             getSIESubject(subjectId)?.nameAr ?? subjectId,
             "تقدم مستقل لكل فرع رسمي (لا تقارن أو تجمع الفروع):\\n" + (branchContext || "الفهرس غير متاح"),
             "آخر محاضرة شاهدها الطالب على منصة المدرس (للتوثيق فقط): " + (record.teacherCourseFrontier || "غير محددة"),
             "حالة متابعة الطالب: " + (record.status || "غير محددة"),
-            "نتائج آخر التقييمات: " + (scores.join("، ") || "لا توجد"),
-            "نقاط الضعف المسجلة: " + (weakConcepts.join("، ") || "لا توجد"),
           ].join(" | ");
         }).join("\\n");
         const studentQuestion = input.messages
@@ -829,7 +823,6 @@ export const appRouter = router({
         gapBySubject,
         gapByBranch,
         activeExternalSession: selection.learningExternalSession ?? null,
-        assessments: Array.isArray(selection.learningAssessments) ? selection.learningAssessments.slice(-40) : [],
         sq3rProgress: selection.subjectLessonProgress ?? {},
         memoryUpdatedAt: selection.assistantMemoryUpdatedAt ?? null,
       };
@@ -1080,52 +1073,7 @@ export const appRouter = router({
           lessonMarkedCompleted: input.markLessonCompleted,
         };
       }),
-    addAssessment: protectedProcedure
-      .input(z.object({
-        subjectId: z.string().trim().min(1).max(80),
-        lessonId: z.string().trim().min(1).max(120).nullable().optional(),
-        assessmentType: z.enum(["self_check", "quiz", "homework", "exam"]),
-        scorePercent: z.number().min(0).max(100),
-        correctAnswers: z.number().int().min(0).max(500).nullable().optional(),
-        totalQuestions: z.number().int().min(1).max(500).nullable().optional(),
-        weakConcepts: z.array(z.string().trim().min(1).max(100)).max(6).default([]),
-        notes: z.string().trim().max(600).default(""),
-      }))
-      .mutation(async ({ ctx, input }) => {
-        const profile = await getStudentProfile(ctx.user.id);
-        if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "أكمل ملفك الدراسي أولًا." });
-        if (!profile.subjects.includes(input.subjectId)) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "هذه المادة ليست ضمن ملفك الدراسي." });
-        }
-        if (input.lessonId && !getSIECheckpointChoices(input.subjectId).some(lesson => lesson.nodeId === input.lessonId)) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "الدرس المحدد غير موجود في فهرس المادة." });
-        }
-        if (input.correctAnswers != null && input.totalQuestions != null && input.correctAnswers > input.totalQuestions) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "عدد الإجابات الصحيحة لا يمكن أن يتجاوز عدد الأسئلة." });
-        }
-        const selection = (profile.selection ?? {}) as Record<string, any>;
-        const record = {
-          id: "assessment_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 7),
-          subjectId: input.subjectId,
-          lessonId: input.lessonId ?? null,
-          assessmentType: input.assessmentType,
-          scorePercent: Math.round(input.scorePercent * 10) / 10,
-          correctAnswers: input.correctAnswers ?? null,
-          totalQuestions: input.totalQuestions ?? null,
-          weakConcepts: input.weakConcepts,
-          notes: input.notes,
-          evidenceSource: "student_self_report",
-          createdAt: new Date().toISOString(),
-        };
-        const latestProfile = await getStudentProfile(ctx.user.id);
-        const latestSelection = (latestProfile?.selection ?? selection) as Record<string, any>;
-        const latestAssessments = Array.isArray(latestSelection.learningAssessments) ? latestSelection.learningAssessments : [];
-        await updateStudentProfileSelection(ctx.user.id, {
-          ...latestSelection,
-          learningAssessments: [...latestAssessments, record].slice(-40),
-        });
-        return { success: true, record };
-      }),
+
   }),
 
   study: router({

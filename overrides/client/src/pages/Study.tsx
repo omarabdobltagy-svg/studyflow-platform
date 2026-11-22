@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { getSIECheckpointBranches, getSIECheckpointChoices, getSIESubject, getSIETeacher } from "@shared/sie-catalog";
 import { calculateLearningGap } from "@shared/sie-learning-progress";
-import { Activity, BookOpenText, Check, CircleHelp, Eye, Gauge, Mic2, RefreshCcw, Sparkles, TrendingUp } from "lucide-react";
+import { Activity, BookOpenText, Check, CircleHelp, Eye, Gauge, Mic2, RefreshCcw, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
@@ -52,8 +52,6 @@ export default function Study() {
   const branchProgressMap = (currentCourseProgress.branches || {}) as Record<string, Record<string, any>>;
   const currentBranchProgress = currentBranchId ? branchProgressMap[currentBranchId] || {} : {};
   const branchGapMap = ((learning.data as any)?.gapByBranch?.[subjectId] || {}) as Record<string, any>;
-  const assessmentHistory = Array.isArray(selection.learningAssessments) ? selection.learningAssessments as Array<any> : [];
-  const subjectAssessments = assessmentHistory.filter(item => item.subjectId === subjectId).slice(-5).reverse();
   const selectedTeacherId = ((selection.teacherChoices || {}) as Record<string, string>)[subjectId]
     || (profile.data?.teacherSelections || {})[subjectId];
   const selectedTeacher = selectedTeacherId ? getSIETeacher(selectedTeacherId) : undefined;
@@ -66,12 +64,6 @@ export default function Study() {
   const [courseDifficulty, setCourseDifficulty] = useState<"unknown" | "easy" | "medium" | "hard">("unknown");
   const [courseNotes, setCourseNotes] = useState("");
   const [learningObstacle, setLearningObstacle] = useState("");
-  const [assessmentType, setAssessmentType] = useState<"self_check" | "quiz" | "homework" | "exam">("quiz");
-  const [assessmentScore, setAssessmentScore] = useState("");
-  const [assessmentCorrect, setAssessmentCorrect] = useState("");
-  const [assessmentTotal, setAssessmentTotal] = useState("");
-  const [weakConcepts, setWeakConcepts] = useState("");
-  const [assessmentNotes, setAssessmentNotes] = useState("");
 
   const currentGap = calculateLearningGap(branchChoices, {
     studentFrontierId: lastCompletedLessonId || null,
@@ -185,18 +177,6 @@ export default function Study() {
     onError: error => toast.error(error.message),
   });
 
-  const saveAssessment = trpc.learning.addAssessment.useMutation({
-    onSuccess: async () => {
-      await utils.studentProfile.get.invalidate();
-      setAssessmentCorrect("");
-      setAssessmentTotal("");
-      setWeakConcepts("");
-      setAssessmentNotes("");
-      toast.success("تم حفظ نتيجة التقييم ونقاط التحسين.");
-    },
-    onError: error => toast.error(error.message),
-  });
-
   const submitCourseProgress = () => {
     if (!subjectId) return;
     saveCourseProgress.mutate({
@@ -233,29 +213,6 @@ export default function Study() {
     finishExternalSession.mutate({
       sessionId: session.sessionId,
       markLessonCompleted: markSessionLessonCompleted,
-    });
-  };
-
-  const submitAssessment = () => {
-    if (!subjectId || !assessmentScore.trim() || !Number.isFinite(Number(assessmentScore))) {
-      toast.error("أدخل نتيجة تقييم صحيحة.");
-      return;
-    }
-    const correct = assessmentCorrect.trim() ? Number(assessmentCorrect) : null;
-    const total = assessmentTotal.trim() ? Number(assessmentTotal) : null;
-    if ((correct === null) !== (total === null) || (correct !== null && total !== null && (correct > total || correct < 0 || total < 1))) {
-      toast.error("راجع عدد الإجابات الصحيحة وإجمالي الأسئلة.");
-      return;
-    }
-    saveAssessment.mutate({
-      subjectId,
-      lessonId: lessonId || null,
-      assessmentType,
-      scorePercent: Math.max(0, Math.min(100, Number(assessmentScore))),
-      correctAnswers: correct,
-      totalQuestions: total,
-      weakConcepts: weakConcepts.split(/[،,\n]/).map(item => item.trim()).filter(Boolean).slice(0, 10),
-      notes: assessmentNotes,
     });
   };
 
@@ -311,7 +268,7 @@ export default function Study() {
   }, [externalSession?.sessionId, externalSession?.startedAt]);
 
   return (
-    <DashboardLayout title="المذاكرة وذكاء التقدم" description="تابع تقدمك وتراكمك ونتائجك، ثم استخدم SQ3R لتحويل كل درس إلى خطوات تعلم قابلة للقياس.">
+    <DashboardLayout title="المذاكرة وذكاء التقدم" description="تابع تقدمك وتراكمك، ثم استخدم SQ3R لتحويل كل درس إلى خطوات تعلم قابلة للقياس.">
       {profile.isError && <div className="rounded-2xl border border-destructive/20 bg-destructive/5 p-4 text-sm">تعذّر تحميل ملفك الدراسي. <button className="font-bold underline" onClick={() => void profile.refetch()}>إعادة المحاولة</button></div>}
       <section className="app-card mb-5 p-5 sm:p-6">
         <div className="mb-4 flex items-center gap-3"><span className="flex size-10 items-center justify-center rounded-xl bg-secondary text-primary"><BookOpenText className="size-5" /></span><div><h2 className="font-bold">حدد موضع مذاكرتك</h2><p className="text-xs text-muted-foreground">المواد المضافة إلى ملفك فقط</p></div></div>
@@ -480,23 +437,15 @@ export default function Study() {
                 <p className="mt-1 text-2xl font-bold tabular-nums text-primary">{currentGap.gapCount === null ? "—" : currentGap.gapCount}</p>
                 <p className="mt-1 text-[10px] text-muted-foreground">{currentBranch?.branchTitle || "الفرع غير محدد"} · {currentGap.referenceSource === "teacher" ? "المرجع: المدرس" : currentGap.referenceSource === "school" ? "المرجع: المدرسة" : "لا يوجد مرجع داخل هذا الفرع"}</p>
               </div>
-              <div className="rounded-xl border border-border/60 bg-background/75 p-3">
-                <p className="text-[11px] text-muted-foreground">التقييمات المسجلة</p>
-                <p className="mt-1 text-2xl font-bold tabular-nums">{subjectAssessments.length}</p>
-              </div>
             </div>
             <div className="mt-3 rounded-xl border border-border/60 bg-background/75 p-3">
               <p className="text-[11px] text-muted-foreground">حالة المقارنة</p>
               <p className="mt-1 text-sm font-semibold">{currentGap.status === "calculated" ? (currentGap.gapCount! > 0 ? "الطالب متأخر عن المرجع" : currentGap.aheadCount! > 0 ? "الطالب متقدم على المرجع" : "الطالب مواكب للمرجع") : currentGap.status === "student_position_missing" ? "موضع الطالب غير محدد" : "لا يوجد موضع مرجعي معروف"}</p>
               {currentGap.aheadCount !== null && currentGap.aheadCount > 0 && <p className="mt-1 text-[11px] text-muted-foreground">تقدم بمقدار {currentGap.aheadCount} {currentBranchPointLabel} عن المرجع.</p>}
             </div>
-            <div className="mt-3 rounded-xl border border-border/60 bg-background/75 p-3">
-              <p className="text-[11px] text-muted-foreground">متوسط آخر التقييمات المحفوظة</p>
-              <p className="mt-1 text-xl font-bold tabular-nums">{subjectAssessments.length ? Math.round(subjectAssessments.reduce((sum, item) => sum + Number(item.scorePercent || 0), 0) / subjectAssessments.length) + "%" : "—"}</p>
-            </div>
             <div className="mt-3 flex items-start gap-2 text-xs leading-6 text-muted-foreground">
               <Gauge className="mt-1 size-4 shrink-0 text-primary" />
-              <p>المخطط سيوازن التراكم مع صعوبة الدروس ونتائجك بدل اعتبار عدد المحاضرات مقياسًا وحيدًا.</p>
+              <p>المخطط سيوازن التراكم مع صعوبة الدروس ودرجة تقدمك في كل فرع بدل اعتبار عدد المحاضرات مقياسًا وحيدًا.</p>
             </div>
           </aside>
         </div>
@@ -551,56 +500,6 @@ export default function Study() {
           )}
         </section>
 
-        <div className="border-t border-border/70 bg-muted/15 p-5 sm:p-6">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">PERFORMANCE SIGNALS</p><h3 className="mt-1 font-bold">سجّل نتيجة اختبار أو واجب</h3></div>
-            <span className="flex size-10 items-center justify-center rounded-xl bg-secondary text-primary"><TrendingUp className="size-5" /></span>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <label className="text-xs font-semibold text-muted-foreground">نوع التقييم
-              <Select value={assessmentType} onValueChange={value => setAssessmentType(value as typeof assessmentType)}>
-                <SelectTrigger className="mt-2 h-10 rounded-xl bg-background text-foreground"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="self_check">اختبار ذاتي</SelectItem>
-                  <SelectItem value="quiz">كويز</SelectItem>
-                  <SelectItem value="homework">واجب</SelectItem>
-                  <SelectItem value="exam">امتحان</SelectItem>
-                </SelectContent>
-              </Select>
-            </label>
-            <label className="text-xs font-semibold text-muted-foreground">الدرجة من 100
-              <Input type="number" min={0} max={100} step="0.5" value={assessmentScore} onChange={event => setAssessmentScore(event.target.value)} placeholder="مثال: 78" className="mt-2 h-10 rounded-xl bg-background text-foreground" />
-            </label>
-            <label className="text-xs font-semibold text-muted-foreground">إجابات صحيحة (اختياري)
-              <Input type="number" min={0} max={500} value={assessmentCorrect} onChange={event => setAssessmentCorrect(event.target.value)} placeholder="مثال: 8" className="mt-2 h-10 rounded-xl bg-background text-foreground" />
-            </label>
-            <label className="text-xs font-semibold text-muted-foreground">إجمالي الأسئلة (اختياري)
-              <Input type="number" min={1} max={500} value={assessmentTotal} onChange={event => setAssessmentTotal(event.target.value)} placeholder="مثال: 10" className="mt-2 h-10 rounded-xl bg-background text-foreground" />
-            </label>
-          </div>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <label className="text-xs font-semibold text-muted-foreground">مفاهيم أو نقاط أخطأت فيها
-              <Textarea value={weakConcepts} onChange={event => setWeakConcepts(event.target.value)} placeholder="افصل بين النقاط بفاصلة أو سطر جديد" className="mt-2 min-h-20 rounded-xl bg-background text-foreground" maxLength={900} />
-            </label>
-            <label className="text-xs font-semibold text-muted-foreground">ملاحظة عن سبب النتيجة
-              <Textarea value={assessmentNotes} onChange={event => setAssessmentNotes(event.target.value)} placeholder="مثال: فهمت القاعدة لكن أخطأت في التطبيق" className="mt-2 min-h-20 rounded-xl bg-background text-foreground" maxLength={600} />
-            </label>
-          </div>
-          <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-[11px] leading-5 text-muted-foreground">اختر الدرس من أعلى الصفحة لربط النتيجة به. استخدم الدرجة الفعلية ولا تقدّر نتيجة غير معروفة.</p>
-            <Button type="button" onClick={submitAssessment} disabled={saveAssessment.isPending || !subjectId} className="pressable rounded-xl bg-primary">
-              {saveAssessment.isPending ? "جارٍ حفظ النتيجة..." : "حفظ نتيجة التقييم"}
-            </Button>
-          </div>
-          {subjectAssessments.length > 0 && <div className="mt-5 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-            {subjectAssessments.slice(0, 3).map(item => (
-              <div key={item.id} className="rounded-xl border border-border/70 bg-background/80 p-3">
-                <div className="flex items-center justify-between gap-2"><span className="text-xs font-semibold">{({ self_check: "اختبار ذاتي", quiz: "كويز", homework: "واجب", exam: "امتحان" } as Record<string, string>)[item.assessmentType] || "تقييم"}</span><span className="text-lg font-bold tabular-nums text-primary">{item.scorePercent}%</span></div>
-                {Array.isArray(item.weakConcepts) && item.weakConcepts.length > 0 && <p className="mt-2 text-[11px] leading-5 text-muted-foreground">يحتاج تقوية: {item.weakConcepts.join("، ")}</p>}
-              </div>
-            ))}
-          </div>}
-        </div>
       </motion.section>
 
       {lessonId && selectedLesson ? (
