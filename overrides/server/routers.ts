@@ -486,37 +486,60 @@ export const appRouter = router({
         const learningAssessments = Array.isArray(selection.learningAssessments) ? selection.learningAssessments as Array<Record<string, any>> : [];
         const learningEvidenceContext = (profile?.subjects || []).map(subjectId => {
           const record = learningCourseProgress[subjectId] ?? {};
-          const subjectChoices = getSIECheckpointChoices(subjectId);
+          const branchRecords = (record.branches ?? {}) as Record<string, Record<string, any>>;
           const legacyTeacherState = teacherProgressState[subjectId] ?? {};
           const legacyStudentFrontier = teacherFrontiers[subjectId] || legacyTeacherState.studentAttendedFrontier || null;
-          const studentFrontierId = record.lastCompletedLessonId || legacyStudentFrontier;
-          const learningGap = calculateLearningGap(subjectChoices, {
-            studentFrontierId,
-            teacherTeachingFrontierId: record.teacherTeachingFrontierId,
-            schoolClassFrontierId: record.schoolClassFrontierId,
-          });
-          const referenceName = learningGap.referenceSource === "teacher" ? "المدرس"
-            : learningGap.referenceSource === "school" ? "المدرسة" : "غير متاح";
-          const referenceTitle = subjectChoices.find(item => item.nodeId === learningGap.referenceFrontierId)?.title
-            || (learningGap.referenceFrontierId === "__NOT_STARTED__" ? "لم يبدأ بعد" : "غير محدد");
-          const studentTitle = subjectChoices.find(item => item.nodeId === studentFrontierId)?.title
-            || (studentFrontierId === "__NOT_STARTED__" ? "لم يبدأ بعد" : "غير محدد");
+          const subjectLessonRecords = (selection.subjectLessonProgress ?? {})[subjectId] ?? {};
+          const branches = getSIECheckpointBranches(subjectId);
+          const branchContext = branches.map(branch => {
+            const saved = branchRecords[branch.branchId] ?? {};
+            const belongsToBranch = (value: unknown) =>
+              typeof value === "string" &&
+              (value === "__UNKNOWN__" || value === "__NOT_STARTED__" ||
+                branch.choices.some(choice => choice.nodeId === value));
+            const latestSq3rCompleted = [...branch.choices].reverse().find(choice => {
+              const steps = subjectLessonRecords[choice.nodeId]?.completedSteps;
+              return Array.isArray(steps) && steps.length === 5;
+            })?.nodeId;
+            const studentFrontierId = Object.prototype.hasOwnProperty.call(saved, "lastCompletedLessonId")
+              ? saved.lastCompletedLessonId
+              : belongsToBranch(record.lastCompletedLessonId)
+                ? record.lastCompletedLessonId
+                : belongsToBranch(legacyStudentFrontier) ? legacyStudentFrontier : latestSq3rCompleted ?? "__UNKNOWN__";
+            const teacherFrontierId = Object.prototype.hasOwnProperty.call(saved, "teacherTeachingFrontierId")
+              ? saved.teacherTeachingFrontierId
+              : belongsToBranch(record.teacherTeachingFrontierId) ? record.teacherTeachingFrontierId : "__UNKNOWN__";
+            const schoolFrontierId = Object.prototype.hasOwnProperty.call(saved, "schoolClassFrontierId")
+              ? saved.schoolClassFrontierId
+              : belongsToBranch(record.schoolClassFrontierId) ? record.schoolClassFrontierId : "__UNKNOWN__";
+            const gap = calculateLearningGap(branch.choices, {
+              studentFrontierId,
+              teacherTeachingFrontierId: teacherFrontierId,
+              schoolClassFrontierId: schoolFrontierId,
+            });
+            const referenceName = gap.referenceSource === "teacher" ? "المدرس"
+              : gap.referenceSource === "school" ? "المدرسة" : "غير متاح";
+            const referenceTitle = branch.choices.find(item => item.nodeId === gap.referenceFrontierId)?.title
+              || (gap.referenceFrontierId === "__NOT_STARTED__" ? "لم يبدأ بعد" : "غير محدد");
+            const studentTitle = branch.choices.find(item => item.nodeId === studentFrontierId)?.title
+              || (studentFrontierId === "__NOT_STARTED__" ? "لم يبدأ بعد" : "غير محدد");
+            return branch.branchTitle + ": الطالب " + studentTitle
+              + " | المرجع " + referenceName + " — " + referenceTitle
+              + " | الفجوة " + (gap.gapCount === null ? "غير محسوبة" : gap.gapCount + " درسًا")
+              + " | التقدم عن المرجع " + (gap.aheadCount ?? "غير محسوب");
+          }).join("\\n");
           const subjectAssessments = learningAssessments.filter(item => item.subjectId === subjectId).slice(-4);
           const scores = subjectAssessments.map(item => String(item.scorePercent) + "%");
           const weakConcepts = [...new Set(subjectAssessments.flatMap(item => Array.isArray(item.weakConcepts) ? item.weakConcepts : []))].slice(0, 8);
           return [
             getSIESubject(subjectId)?.nameAr ?? subjectId,
-            "موضع التدريس المرجعي: " + referenceName + " — " + referenceTitle,
-            "موضع الطالب: " + studentTitle,
-            "الفجوة المحسوبة من ترتيب المنهج: " + (learningGap.gapCount === null ? "غير محسوبة؛ لا يوجد مرجع أو موضع طالب كافٍ" : learningGap.gapCount + " درسًا"),
-            "عدد الدروس التي تقدم بها الطالب عن المرجع: " + (learningGap.aheadCount ?? "غير محسوب"),
-            "موضع الفصل في المدرسة المبلغ عنه: " + (record.schoolClassFrontierId === "__NOT_STARTED__" ? "لم يبدأ الفصل بعد" : subjectChoices.find(item => item.nodeId === record.schoolClassFrontierId)?.title || "غير محدد"),
-            "آخر محاضرة شاهدها الطالب في منصة المدرس (للتوثيق فقط): " + (record.teacherCourseFrontier || "غير محددة"),
+            "تقدم مستقل لكل فرع رسمي (لا تقارن أو تجمع الفروع):\\n" + (branchContext || "الفهرس غير متاح"),
+            "آخر محاضرة شاهدها الطالب على منصة المدرس (للتوثيق فقط): " + (record.teacherCourseFrontier || "غير محددة"),
             "حالة متابعة الطالب: " + (record.status || "غير محددة"),
             "نتائج آخر التقييمات: " + (scores.join("، ") || "لا توجد"),
             "نقاط الضعف المسجلة: " + (weakConcepts.join("، ") || "لا توجد"),
           ].join(" | ");
-        }).join("\n");
+        }).join("\\n");
         const appContext = [
           `المهام غير المكتملة: ${taskRows.filter(task => task.status !== "done").slice(0, 12).map(task => `- ${task.title} (${task.category}, ${task.priority}, ${dateLabel(task.dueAt)})`).join("\n") || "لا توجد مهام غير مكتملة مسجلة."}`,
           `الأهداف النشطة: ${goalRows.filter(goal => goal.status === "active").slice(0, 8).map(goal => `- ${goal.title} (${goal.progress}%، ${goal.completedTaskCount}/${goal.taskCount})`).join("\n") || "لا توجد أهداف نشطة."}`,
