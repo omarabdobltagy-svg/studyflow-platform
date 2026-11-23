@@ -19,7 +19,32 @@ const planSchema = z.object({
   habits: z.array(z.object({ title: z.string().min(2).max(120), cue: z.string().min(2).max(160) })).min(1).max(4),
   reviewQuestion: z.string().min(5).max(250),
 });
+
 export type GeneratedPlan = z.infer<typeof planSchema>;
+
+function plannerProviderError(error: unknown): Error {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/AI_API_KEY is not configured|API key is required/i.test(message)) {
+    return new Error("خدمة المخطط الذكي غير مهيأة بمفتاح مزوّد الذكاء الاصطناعي. راجع إعداد AI_API_KEY في بيئة التشغيل.");
+  }
+  const status = Number(message.match(/LLM invoke failed:\\s*(\\d{3})/i)?.[1] ?? 0);
+  if (status === 401 || status === 403) {
+    return new Error("مزود الذكاء الاصطناعي رفض بيانات اعتماد الخدمة. راجع المفتاح وصلاحياته.");
+  }
+  if (status === 402) {
+    return new Error("مزود الذكاء الاصطناعي رفض الطلب بسبب الرصيد أو الفوترة.");
+  }
+  if (status === 429) {
+    return new Error("وصل مزود الذكاء الاصطناعي إلى حد الطلبات مؤقتًا. حاول بعد قليل.");
+  }
+  if (status >= 500) {
+    return new Error("خدمة الذكاء الاصطناعي تواجه عطلًا مؤقتًا. حاول مرة أخرى بعد قليل.");
+  }
+  if (/timeout|timed out|network|fetch failed|ECONN/i.test(message)) {
+    return new Error("تعذر الاتصال بخدمة الذكاء الاصطناعي. تحقق من الاتصال وحاول مرة أخرى.");
+  }
+  return new Error("تعذر توليد الخطة الذكية. لم يتم حفظ خطة ناقصة؛ حاول بصياغة أبسط أو أعد المحاولة.");
+}
 
 function contentAsText(content: any): string {
   return typeof content === "string" ? content : Array.isArray(content)
@@ -179,18 +204,25 @@ export async function generatePersonalPlan(
   const user = "طلب الطالب أو قيوده الجديدة:\n" + prompt + "\n\nبيانات الملف الدراسي الحالية:\n" + context;
   let response;
   try {
-    response = await invokeLLM({
-      maxTokens: 2500,
-      response_format: { type: "json_object" },
-      messages: [{ role: "system", content: system }, { role: "user", content: user }],
-    });
+    try {
+      response = await invokeLLM({
+        maxTokens: 2500,
+        response_format: { type: "json_object" },
+        messages: [{ role: "system", content: system }, { role: "user", content: user }],
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      // A provider that does not support JSON mode gets one compatible retry.
+      // Deterministic 4xx responses are returned immediately by fetchWithBackoff.
+      if (!/response_format|json_object|structured output|unsupported|not support/i.test(message)) throw error;
+      response = await invokeLLM({
+        maxTokens: 2500,
+        messages: [{ role: "system", content: system + "\nاكتب JSON صحيحًا فقط دون Markdown." }, { role: "user", content: user }],
+      });
+    }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (!/response_format|json_object|structured output|unsupported|not support/i.test(message)) throw error;
-    response = await invokeLLM({
-      maxTokens: 2500,
-      messages: [{ role: "system", content: system + "\nاكتب JSON صحيحًا فقط دون Markdown." }, { role: "user", content: user }],
-    });
+    console.error("[StudyFlow planner] Provider request failed:", error instanceof Error ? error.message : String(error));
+    throw plannerProviderError(error);
   }
   const result = response.choices[0] && response.choices[0].message ? response.choices[0].message.content : "";
   const text = contentAsText(result);
