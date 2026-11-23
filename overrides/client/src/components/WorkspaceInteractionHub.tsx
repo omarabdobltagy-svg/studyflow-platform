@@ -6,7 +6,8 @@ import {
   Plus, RotateCcw, Search, Settings2, Sparkles, Timer, WandSparkles, X,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 
@@ -46,6 +47,7 @@ export default function WorkspaceInteractionHub() {
   const [timerMode, setTimerMode] = useState<"focus" | "break">("focus");
   const [remaining, setRemaining] = useState(FOCUS_SECONDS);
   const [endAt, setEndAt] = useState<number | null>(null);
+  const [quickMenuPosition, setQuickMenuPosition] = useState<{ left: number; bottom: number; width: number; maxHeight: number } | null>(null);
   const completedEndAt = useRef<number | null>(null);
   const hubRef = useRef<HTMLDivElement | null>(null);
   const launcherRef = useRef<HTMLButtonElement | null>(null);
@@ -79,6 +81,36 @@ export default function WorkspaceInteractionHub() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [quickOpen, user]);
+
+  // Anchor the popover to the real trigger's viewport position, including mobile layouts.
+  useLayoutEffect(() => {
+    if (!quickOpen) {
+      setQuickMenuPosition(null);
+      return;
+    }
+    const updatePosition = () => {
+      const trigger = launcherRef.current;
+      if (!trigger) return;
+      const rect = trigger.getBoundingClientRect();
+      const compact = window.innerWidth <= 1120;
+      const width = Math.min(compact ? 310 : 330, window.innerWidth - (compact ? 24 : 28));
+      const left = Math.max(14, Math.min(window.innerWidth - width - 14, rect.left));
+      const maxHeight = Math.max(180, Math.min(430, rect.top - 24));
+      setQuickMenuPosition({
+        left,
+        bottom: Math.max(14, window.innerHeight - rect.top + 12),
+        width,
+        maxHeight,
+      });
+    };
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("orientationchange", updatePosition);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("orientationchange", updatePosition);
+    };
+  }, [quickOpen]);
 
   // Close the tools panel on an outside tap; touches and mouse clicks share Pointer Events.
   useEffect(() => {
@@ -134,12 +166,19 @@ export default function WorkspaceInteractionHub() {
   };
 
   if (!user) return null;
-  return (
+  return createPortal(
     <>
       <div ref={hubRef} className="sf-hub-root" dir="rtl">
         <AnimatePresence>
           {quickOpen && (
             <motion.section id="sf-hub-quick-menu" className="sf-hub-quick-menu" role="region" aria-label="الإجراءات السريعة"
+              style={quickMenuPosition ? {
+                position: "fixed",
+                left: quickMenuPosition.left,
+                bottom: quickMenuPosition.bottom,
+                width: quickMenuPosition.width,
+                maxHeight: quickMenuPosition.maxHeight,
+              } : undefined}
               initial={reduceMotion ? false : { opacity: 0, y: 16, scale: 0.94 }} animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={reduceMotion ? undefined : { opacity: 0, y: 10, scale: 0.96 }} transition={{ type: "spring", stiffness: 340, damping: 26 }}>
               <div className="sf-hub-menu-heading"><span><Sparkles size={15} /> اختصارات مساحتك</span><small>انتقل مباشرة</small></div>
@@ -250,6 +289,7 @@ export default function WorkspaceInteractionHub() {
           </motion.div>
         )}
       </AnimatePresence>
-    </>
+    </>,
+    document.body
   );
 }
