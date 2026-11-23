@@ -47,7 +47,7 @@ function DashboardPreview() {
           <div className="sfp-case-greeting"><div><small>مساحة الدراسة / STUDYFLOW</small><b>خطتك، بصورة أوضح.</b><span>ملخص مرئي لمساحة الطالب</span></div><span className="sfp-case-avatar">S</span></div>
           <div className="sfp-case-kpis"><div><small>إنجاز المهام</small><b>72%</b><i /></div><div><small>مهام مفتوحة</small><b>08</b><i /></div><div><small>أهداف نشطة</small><b>03</b><i /></div></div>
           <div className="sfp-case-panels">
-            <div className="sfp-case-chart"><div><b>إيقاع الأسبوع</b><small>نظرة على نشاطك</small></div><div className="sfp-case-chart-bars">{[38,56,44,76,51,88,66].map((n,i)=><i key={i} style={{height:\`\${n}%\`}} />)}</div><div className="sfp-case-chart-labels"><span>س</span><span>ح</span><span>ن</span><span>ث</span><span>ر</span><span>خ</span><span>ج</span></div></div>
+            <div className="sfp-case-chart"><div><b>إيقاع الأسبوع</b><small>نظرة على نشاطك</small></div><div className="sfp-case-chart-bars">{[38,56,44,76,51,88,66].map((n,i)=><i key={i} style={{height: String(n) + "%"}} />)}</div><div className="sfp-case-chart-labels"><span>س</span><span>ح</span><span>ن</span><span>ث</span><span>ر</span><span>خ</span><span>ج</span></div></div>
             <div className="sfp-case-tasks"><b>الخطوة التالية</b><span><i /><em>مراجعة الدرس</em><small>25 دقيقة</small></span><span><i /><em>حل تدريبات</em><small>35 دقيقة</small></span><span><i /><em>تحديث الخطة</em><small>10 دقائق</small></span></div>
           </div>
         </div>
