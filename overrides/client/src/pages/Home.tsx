@@ -157,7 +157,7 @@ function WorkspaceFolder({
           <span className="sf-folder-count">{count}</span>
           <motion.span
             className="sf-folder-action"
-            animate={{ rotate: isOpen ? 45 : 0, backgroundColor: isOpen ? "#426a70" : "rgba(255,255,255,.09)" }}
+            animate={{ rotate: isOpen ? 45 : 0, backgroundColor: isOpen ? "#5265d9" : "rgba(255,255,255,.09)" }}
             transition={{ type: "spring", stiffness: 260, damping: 19 }}
           >
             {isOpen ? <X size={16} /> : <ArrowUpLeft size={16} />}
@@ -197,7 +197,7 @@ function DataRow({ children, onClick, trailing }: { children: ReactNode; onClick
       type="button"
       className="sf-data-row"
       onClick={onClick}
-      whileHover={{ x: -3, backgroundColor: "rgba(66,106,112,.075)" }}
+      whileHover={{ x: -3, backgroundColor: "rgba(82,101,217,.075)" }}
       whileTap={{ scale: 0.99 }}
       transition={{ duration: 0.2 }}
     >
