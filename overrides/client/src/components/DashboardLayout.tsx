@@ -23,7 +23,7 @@ type NavigationGroup = {
 
 const navigation: NavigationGroup[] = [
   { label: "مساحة اليوم", items: [
-    { label: "لوحة اليوم", path: "/", icon: LayoutDashboard },
+    { label: "لوحة اليوم", path: "/workspace", icon: LayoutDashboard },
     { label: "المهام", path: "/tasks", icon: CheckSquare2 },
     { label: "روتيني", path: "/routines", icon: Sparkles },
     { label: "التقويم", path: "/calendar", icon: CalendarDays },
@@ -167,7 +167,7 @@ export default function DashboardLayout({ title, description, children, action }
   );
 
   const initial = user.name?.trim().charAt(0) || "م";
-  const isActive = (path: string) => path === "/" ? location === "/" : location.startsWith(path);
+  const isActive = (path: string) => path === "/workspace" ? location === "/workspace" : location.startsWith(path);
   const navigate = (path: string) => {
     setLocation(path);
     setMobileNavOpen(false);
@@ -175,7 +175,7 @@ export default function DashboardLayout({ title, description, children, action }
 
   const pageKey = (location.split("?")[0].split("/")[1] || "home").replace(/[^a-z0-9-]/gi, "");
   const mobileDockItems = [
-    { label: "اليوم", path: "/", icon: LayoutDashboard },
+    { label: "اليوم", path: "/workspace", icon: LayoutDashboard },
     { label: "المهام", path: "/tasks", icon: CheckSquare2 },
     { label: "المذاكرة", path: "/study", icon: BookOpenText },
     { label: "المخطط", path: "/planner", icon: BrainCircuit },
@@ -228,7 +228,7 @@ export default function DashboardLayout({ title, description, children, action }
     <div className="sf-app-shell sf-shell-v3">
       <div className="sf-app-frame" data-page={pageKey}>
         <aside className="sf-sidebar" aria-label="القائمة الرئيسية">
-          <button onClick={() => navigate("/")} className="sf-brand" aria-label="العودة إلى لوحة اليوم">
+          <button onClick={() => navigate("/workspace")} className="sf-brand" aria-label="العودة إلى لوحة اليوم">
             <span className="sf-brand-mark"><BrandMark className="size-5" /></span>
             <span className="sf-brand-copy"><b>StudyFlow</b><small>STUDENT WORKSPACE</small></span>
           </button>
@@ -287,7 +287,7 @@ export default function DashboardLayout({ title, description, children, action }
 
       <nav className="sf-mobile-dock" aria-label="التنقل السريع">
         {mobileDockItems.map(item => {
-          const active = item.path === "/" ? location === "/" : location.startsWith(item.path);
+          const active = item.path === "/workspace" ? location === "/workspace" : location.startsWith(item.path);
           return (
             <button
               key={item.path}
