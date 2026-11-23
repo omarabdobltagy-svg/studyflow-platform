@@ -27,7 +27,7 @@ function plannerProviderError(error: unknown): Error {
   if (/AI_API_KEY is not configured|API key is required/i.test(message)) {
     return new Error("خدمة المخطط الذكي غير مهيأة بمفتاح مزوّد الذكاء الاصطناعي. راجع إعداد AI_API_KEY في بيئة التشغيل.");
   }
-  const status = Number(message.match(/LLM invoke failed:\\s*(\\d{3})/i)?.[1] ?? 0);
+  const status = Number(message.match(/LLM invoke failed:\s*(\d{3})/i)?.[1] ?? 0);
   if (status === 401 || status === 403) {
     return new Error("مزود الذكاء الاصطناعي رفض بيانات اعتماد الخدمة. راجع المفتاح وصلاحياته.");
   }
