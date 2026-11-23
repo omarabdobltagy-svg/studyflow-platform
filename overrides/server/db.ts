@@ -124,6 +124,25 @@ export function analyticsPeriodForDate(date: Date, now = new Date(), timeZone = 
   return analyticsPeriodsForDate(date, now, timeZone)[0] ?? null;
 }
 
+export type CalendarDisplayItem = {
+  id: string;
+  title: string;
+  type: "event" | "study" | "goal" | "task";
+  startAt: Date;
+  endAt: Date | null;
+  allDay: boolean;
+  color: string;
+  source: "event" | "task" | "routine";
+  completed?: boolean;
+  priority?: "low" | "medium" | "high";
+  routineId?: number;
+  routinePeriod?: "morning" | "evening" | "custom";
+  routineDate?: string;
+  completedCount?: number;
+  itemCount?: number;
+  routineItems?: Array<{ id: number; title: string; durationMinutes: number; completed: boolean }>;
+};
+
 type CalendarEventRow = {
   id: number;
   title: string;
@@ -142,7 +161,7 @@ type ScheduledTaskRow = {
   status: "todo" | "done";
 };
 
-export function mergeCalendarItems(events: CalendarEventRow[], scheduledTasks: ScheduledTaskRow[]) {
+export function mergeCalendarItems(events: CalendarEventRow[], scheduledTasks: ScheduledTaskRow[]): CalendarDisplayItem[] {
   const calendarItems = [
     ...events.map(event => ({
       id: `event-${event.id}`,
@@ -969,8 +988,8 @@ export async function createRoutine(
       sortOrder: index,
     })));
   }
-}
   return routineId;
+}
 
 
 export async function toggleRoutineItem(userId: number, itemId: number, done: boolean, timeZone = "UTC") {
@@ -1061,7 +1080,7 @@ export async function listCalendarEvents(userId: number, timeZone = "Africa/Cair
   // The current routine model represents daily morning/evening/custom routines,
   // but it has no weekday or clock-time fields. Keep them as all-day daily
   // commitments until the student explicitly configures a time.
-  const routineItems: Array<Record<string, unknown>> = [];
+  const routineItems: CalendarDisplayItem[] = [];
   const todayKey = getDateKeyInTimezone(new Date(), timeZone);
   const [year, month, day] = todayKey.split("-").map(Number);
   const cursor = new Date(Date.UTC(year, month - 1, day, 12));
