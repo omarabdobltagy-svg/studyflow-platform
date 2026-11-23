@@ -35,6 +35,8 @@ import {
   getLibraryAttachmentForDownload,
   getStudyAnalytics,
   getStudentProfile,
+  listRecentStudentActivityEvents,
+  recordStudentActivityEvent,
   startStudySession,
   finishStudySession,
   getActiveStudySession,
@@ -100,6 +102,21 @@ function getLoginAttemptBucket(ip: string, now: number) {
     loginAttempts.set(ip, bucket);
   }
   return bucket;
+}
+
+async function logStudentActivity(
+  userId: number,
+  eventType: string,
+  entityType: string,
+  entityId: string | number | null,
+  summary: string,
+  metadata: Record<string, unknown> = {},
+) {
+  try {
+    await recordStudentActivityEvent({ userId, eventType, entityType, entityId, summary, metadata });
+  } catch (error) {
+    console.error("[StudyFlow activity] Could not record event:", error instanceof Error ? error.message : String(error));
+  }
 }
 
 const dateInput = z.coerce.date().nullable().optional();
@@ -470,6 +487,59 @@ export const appRouter = router({
   }),
 
   teachers: router({
+    recommendReviews: protectedProcedure
+      .input(z.object({
+        subjectId: z.string().trim().min(1).max(80),
+        branchId: z.string().trim().min(1).max(120),
+        teacherId: z.string().trim().max(80).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const profile = await getStudentProfile(ctx.user.id);
+        if (!profile || !profile.subjects.includes(input.subjectId)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "اختر مادة موجودة في ملفك الدراسي." });
+        }
+        const subject = getSIESubject(input.subjectId);
+        const branch = getSIECheckpointBranches(input.subjectId).find(item => item.branchId === input.branchId);
+        if (!subject || !branch) throw new TRPCError({ code: "BAD_REQUEST", message: "فرع المنهج غير موجود في الفهرس الحالي." });
+        const selection = (profile.selection ?? {}) as Record<string, any>;
+        const teacherId = input.teacherId || selection.teacherChoices?.[input.subjectId] || profile.teacherSelections?.[input.subjectId];
+        const teacher = teacherId ? getSIETeacher(teacherId) : undefined;
+        if (teacher && !teacher.subjectIds.includes(input.subjectId)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "المدرس المحدد لا يرتبط بهذه المادة." });
+        }
+        const query = [teacher?.nameAr, subject.nameAr, branch.branchTitle, "مراجعة", "البكالوريا المصرية", SIE_CATALOG_META.academicYear].filter(Boolean).join(" ");
+        const result = await callDataApi("Youtube/search", { query: { gl: "EG", hl: "ar", q: query } }) as {
+          items?: Array<Record<string, unknown>>;
+          videos?: Array<Record<string, unknown>>;
+        };
+        const rawItems = Array.isArray(result?.items) ? result.items : Array.isArray(result?.videos) ? result.videos : [];
+        const items = rawItems.flatMap(item => {
+          const title = String(item.title ?? item.videoTitle ?? item.name ?? "").trim();
+          const channelTitle = String(item.channelTitle ?? item.channel_name ?? item.channel ?? "").trim();
+          const url = String(item.url ?? item.link ?? item.videoUrl ?? "").trim();
+          if (!title || !/^https:\/\/(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)/i.test(url)) return [];
+          const haystack = (title + " " + channelTitle).toLocaleLowerCase();
+          const teacherMatch = teacher ? haystack.includes(teacher.nameAr.toLocaleLowerCase()) : false;
+          const branchMatch = haystack.includes(branch.branchTitle.toLocaleLowerCase());
+          const subjectMatch = haystack.includes(subject.nameAr.toLocaleLowerCase());
+          const matchedSignals = Number(teacherMatch) + Number(branchMatch) + Number(subjectMatch);
+          return [{
+            title, channelTitle: channelTitle || "قناة غير محددة", url,
+            publishedAt: String(item.publishedAt ?? item.published_at ?? ""),
+            description: String(item.description ?? item.snippet ?? "").slice(0, 500),
+            matchedSignals,
+            relevance: matchedSignals >= 2 ? "مرتبط بدرجة جيدة بعنوان البحث" : matchedSignals === 1 ? "تطابق جزئي؛ راجع محتوى الفيديو" : "تحتاج لمراجعة يدوية قبل الاعتماد",
+          }];
+        }).sort((a,b) => b.matchedSignals - a.matchedSignals).slice(0, 8);
+        await logStudentActivity(ctx.user.id, "learning.review_search", "curriculum_branch", input.branchId, "تم البحث عن مراجعات للفرع الدراسي", {
+          subjectId: input.subjectId, teacherId: teacherId ?? null, resultCount: items.length,
+        });
+        return {
+          query, subject: subject.nameAr, branch: branch.branchTitle, teacher: teacher?.nameAr ?? null,
+          source: "YouTube", items,
+          note: "هذه نتائج بحث وليست اعتمادًا رسميًا لمحتوى المدرس أو ترتيبًا مضمونًا للمراجعة. افتح الفيديو وتأكد من مطابقته للمنهج والفرع.",
+        };
+      }),
     research: protectedProcedure
       .input(z.object({ subject: z.string().trim().min(2).max(80), track: z.string().trim().min(1).max(100) }))
       .mutation(async ({ input }) => {
@@ -501,13 +571,14 @@ export const appRouter = router({
         memory: z.string().max(5_000).default(""),
       }))
       .mutation(async ({ ctx, input }) => {
-        const [profile, taskRows, goalRows, bookRows, routineRows, calendarRows] = await Promise.all([
+        const [profile, taskRows, goalRows, bookRows, routineRows, calendarRows, recentActivity] = await Promise.all([
           getStudentProfile(ctx.user.id),
           listTasks(ctx.user.id),
           listGoals(ctx.user.id),
           listBooks(ctx.user.id),
           listRoutines(ctx.user.id, "Africa/Cairo"),
-          listCalendarEvents(ctx.user.id),
+          listCalendarEvents(ctx.user.id, "Africa/Cairo"),
+          listRecentStudentActivityEvents(ctx.user.id, 30),
         ]);
         const selection = (profile?.selection ?? {}) as Record<string, unknown>;
         const personalMemory = buildStudentMemory(String(selection.assistantMemory ?? ""), input.memory, input.messages);
@@ -635,7 +706,10 @@ export const appRouter = router({
           `مقتطفات مسترجعة من نصوص الكتب الرسمية (لا تستخدم إلا ما يطابق السؤال، واذكر رقم الصفحة):\n${textbookEvidenceContext || "لم يتم استرجاع مقتطف مطابق من نص كتاب متاح."}`,
           `التقدم المبلغ عنه ونتائج التقييمات:\n${learningEvidenceContext || "لا توجد تحديثات تقدم محفوظة حتى الآن."}`,
         ].join("\n\n");
-        const context = `${profileContext}\n\nحالة التطبيق الحالية (قد تتغير بعد تحديث الصفحة):\n${appContext}`;
+        const activityContext = recentActivity.map(event =>
+          "- " + event.summary + " [" + event.eventType + ", " + new Date(event.createdAt).toLocaleString("ar-EG", { timeZone: "Africa/Cairo" }) + "]"
+        ).join("\\n");
+        const context = `${profileContext}\\n\\nحالة التطبيق الحالية (قد تتغير بعد تحديث الصفحة):\\n${appContext}\\n\\nسجل أنشطة الطالب الحديث: ${activityContext || "لا توجد أحداث مسجلة بعد."}`;
         let response;
         try {
           response = await invokeLLM({
@@ -692,13 +766,27 @@ export const appRouter = router({
         goalId: z.number().int().positive().nullable().optional(),
         bookId: z.number().int().positive().nullable().optional(),
       }))
-      .mutation(({ ctx, input }) => createTask(ctx.user.id, input)),
+      .mutation(async ({ ctx, input }) => {
+        const result = await createTask(ctx.user.id, input);
+        await logStudentActivity(ctx.user.id, "task.created", "task", null, "أُضيفت مهمة جديدة", {
+          title: input.title, category: input.category ?? "عام", priority: input.priority ?? "medium", dueAt: input.dueAt?.toISOString() ?? null,
+        });
+        return result;
+      }),
     toggle: protectedProcedure
       .input(z.object({ id: z.number().int().positive(), done: z.boolean() }))
-      .mutation(({ ctx, input }) => toggleTask(ctx.user.id, input.id, input.done)),
+      .mutation(async ({ ctx, input }) => {
+        const result = await toggleTask(ctx.user.id, input.id, input.done);
+        if (result) await logStudentActivity(ctx.user.id, input.done ? "task.completed" : "task.reopened", "task", input.id, input.done ? "اكتملت مهمة" : "أُعيد فتح مهمة");
+        return result;
+      }),
     undo: protectedProcedure
       .input(z.object({ changeId: z.number().int().positive() }))
-      .mutation(({ ctx, input }) => undoTaskChange(ctx.user.id, input.changeId)),
+      .mutation(async ({ ctx, input }) => {
+        const result = await undoTaskChange(ctx.user.id, input.changeId);
+        await logStudentActivity(ctx.user.id, "task.change_undone", "task_change", input.changeId, "تم التراجع عن تغيير في مهمة");
+        return result;
+      }),
     update: protectedProcedure
       .input(z.object({
         id: z.number().int().positive(),
@@ -710,10 +798,20 @@ export const appRouter = router({
         goalId: z.number().int().positive().nullable().optional(),
         bookId: z.number().int().positive().nullable().optional(),
       }))
-      .mutation(({ ctx, input }) => updateTask(ctx.user.id, input.id, input)),
+      .mutation(async ({ ctx, input }) => {
+        const result = await updateTask(ctx.user.id, input.id, input);
+        await logStudentActivity(ctx.user.id, "task.updated", "task", input.id, "تم تعديل مهمة", {
+          title: input.title, category: input.category, priority: input.priority, dueAt: input.dueAt?.toISOString() ?? null,
+        });
+        return result;
+      }),
     delete: protectedProcedure
       .input(z.object({ id: z.number().int().positive() }))
-      .mutation(({ ctx, input }) => deleteTask(ctx.user.id, input.id)),
+      .mutation(async ({ ctx, input }) => {
+        const result = await deleteTask(ctx.user.id, input.id);
+        await logStudentActivity(ctx.user.id, "task.deleted", "task", input.id, "حُذفت مهمة");
+        return result;
+      }),
   }),
 
   goals: router({
@@ -1015,6 +1113,13 @@ export const appRouter = router({
           ...latestSelection,
           learningCourseProgress: { ...latestCourseProgress, [input.subjectId]: record },
         });
+        await logStudentActivity(ctx.user.id, "learning.frontier_updated", "curriculum_branch", branch?.branchId ?? input.subjectId, "تم تحديث موضع الطالب ومرجع التدريس", {
+          subjectId: input.subjectId, branchId: branch?.branchId ?? null,
+          studentFrontierId: input.lastCompletedLessonId ?? "__UNKNOWN__",
+          teacherFrontierId: teacherFrontierId ?? "__UNKNOWN__",
+          schoolFrontierId: schoolFrontierId ?? "__UNKNOWN__",
+          gapCount: learningGap.gapCount,
+        });
         return { success: true, record, learningGap, branchId: branch?.branchId ?? null };
       }),
     activeExternalSession: protectedProcedure.query(async ({ ctx }) => {
@@ -1061,6 +1166,9 @@ export const appRouter = router({
         await updateStudentProfileSelection(ctx.user.id, {
           ...latestSelection,
           learningExternalSession: session,
+        });
+        await logStudentActivity(ctx.user.id, "study.external_session_started", "curriculum_lesson", input.lessonId, "بدأت جلسة مذاكرة خارجية", {
+          subjectId: input.subjectId, branchId: input.branchId, sessionId: session.sessionId,
         });
         return session;
       }),
@@ -1143,6 +1251,10 @@ export const appRouter = router({
           learningExternalSessions: [...history, completedSession].slice(-100),
           learningCourseProgress: nextCourseProgress,
         });
+        await logStudentActivity(ctx.user.id, "study.external_session_finished", "curriculum_lesson", active.lessonId, "انتهت جلسة مذاكرة خارجية", {
+          subjectId: active.subjectId, branchId: active.branchId, durationSeconds: completedSession.durationSeconds,
+          lessonMarkedCompleted: input.markLessonCompleted,
+        });
         return {
           success: true,
           session: completedSession,
@@ -1187,6 +1299,9 @@ export const appRouter = router({
           ...selection,
           subjectLessonProgress: { ...progress, [input.subjectId]: subjectProgress },
         });
+        await logStudentActivity(ctx.user.id, "study.lesson_progress_updated", "curriculum_lesson", input.lessonId, "تم تحديث تقدم درس", {
+          subjectId: input.subjectId, completedStepCount: record.completedSteps.length, difficulty: record.difficulty,
+        });
         return { success: true, progress: record, lessonTitle: lesson.title };
       }),
     activeSession: protectedProcedure.query(({ ctx }) => getActiveStudySession(ctx.user.id)),
@@ -1221,10 +1336,18 @@ export const appRouter = router({
         accent: z.string().trim().min(1).max(20).optional(),
         items: z.array(z.object({ title: z.string().trim().min(1).max(180), durationMinutes: z.number().int().min(1).max(300).optional() })).max(20),
       }))
-      .mutation(({ ctx, input }) => createRoutine(ctx.user.id, input)),
+      .mutation(async ({ ctx, input }) => {
+        const result = await createRoutine(ctx.user.id, input);
+        await logStudentActivity(ctx.user.id, "routine.created", "routine", result ?? null, "أُنشئ روتين جديد", { name: input.name, period: input.period, itemCount: input.items.length });
+        return result;
+      }),
     toggleItem: protectedProcedure
       .input(z.object({ id: z.number().int().positive(), done: z.boolean(), timeZone: timeZoneInput.optional() }))
-      .mutation(({ ctx, input }) => toggleRoutineItem(ctx.user.id, input.id, input.done, input.timeZone ?? "UTC")),
+      .mutation(async ({ ctx, input }) => {
+        const result = await toggleRoutineItem(ctx.user.id, input.id, input.done, input.timeZone ?? "UTC");
+        await logStudentActivity(ctx.user.id, input.done ? "routine.step_completed" : "routine.step_reopened", "routine_item", input.id, input.done ? "اكتملت خطوة من الروتين" : "أُعيد فتح خطوة من الروتين");
+        return result;
+      }),
     update: protectedProcedure
       .input(z.object({
         id: z.number().int().positive(),
@@ -1237,14 +1360,24 @@ export const appRouter = router({
           durationMinutes: z.number().int().min(1).max(300),
         })).max(20).optional(),
       }))
-      .mutation(({ ctx, input }) => updateRoutine(ctx.user.id, input.id, input)),
+      .mutation(async ({ ctx, input }) => {
+        const result = await updateRoutine(ctx.user.id, input.id, input);
+        await logStudentActivity(ctx.user.id, "routine.updated", "routine", input.id, "تم تعديل روتين", { name: input.name, period: input.period, active: input.isActive });
+        return result;
+      }),
     delete: protectedProcedure
       .input(z.object({ id: z.number().int().positive() }))
-      .mutation(({ ctx, input }) => deleteRoutine(ctx.user.id, input.id)),
+      .mutation(async ({ ctx, input }) => {
+        const result = await deleteRoutine(ctx.user.id, input.id);
+        await logStudentActivity(ctx.user.id, "routine.deleted", "routine", input.id, "حُذف روتين");
+        return result;
+      }),
   }),
 
   calendar: router({
-    list: protectedProcedure.query(({ ctx }) => listCalendarEvents(ctx.user.id)),
+    list: protectedProcedure
+      .input(z.object({ timeZone: timeZoneInput }).optional())
+      .query(({ ctx, input }) => listCalendarEvents(ctx.user.id, input?.timeZone ?? "Africa/Cairo")),
     create: protectedProcedure
       .input(z.object({
         title: z.string().trim().min(1).max(180),
@@ -1254,13 +1387,25 @@ export const appRouter = router({
         allDay: z.boolean().optional(),
         color: z.string().trim().min(1).max(20).optional(),
       }))
-      .mutation(({ ctx, input }) => createCalendarEvent(ctx.user.id, input)),
+      .mutation(async ({ ctx, input }) => {
+        const result = await createCalendarEvent(ctx.user.id, input);
+        await logStudentActivity(ctx.user.id, "calendar.event_created", "calendar_event", null, "أُضيف موعد إلى التقويم", { title: input.title, startAt: input.startAt.toISOString() });
+        return result;
+      }),
     update: protectedProcedure
       .input(z.object({ id: z.number().int().positive(), title: z.string().trim().min(1).max(180), type: z.enum(["event", "study", "goal"]), startAt: z.coerce.date(), endAt: dateInput, allDay: z.boolean(), color: z.string().trim().min(1).max(20) }))
-      .mutation(({ ctx, input }) => updateCalendarEvent(ctx.user.id, input.id, input)),
+      .mutation(async ({ ctx, input }) => {
+        const result = await updateCalendarEvent(ctx.user.id, input.id, input);
+        await logStudentActivity(ctx.user.id, "calendar.event_updated", "calendar_event", input.id, "تم تعديل موعد في التقويم", { title: input.title, startAt: input.startAt.toISOString() });
+        return result;
+      }),
     delete: protectedProcedure
       .input(z.object({ id: z.number().int().positive() }))
-      .mutation(({ ctx, input }) => deleteCalendarEvent(ctx.user.id, input.id)),
+      .mutation(async ({ ctx, input }) => {
+        const result = await deleteCalendarEvent(ctx.user.id, input.id);
+        await logStudentActivity(ctx.user.id, "calendar.event_deleted", "calendar_event", input.id, "حُذف موعد من التقويم");
+        return result;
+      }),
   }),
 
   reminders: router({
@@ -1381,12 +1526,14 @@ export const appRouter = router({
         dailyMinutes: z.number().int().min(20).max(600).default(120),
         startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       }))
-      .mutation(({ ctx, input }) => generatePersonalPlan(
-        ctx.user.id,
-        input.prompt,
-        input.includeStudentProfile,
-        { dailyMinutes: input.dailyMinutes, startDate: input.startDate }
-      )),
+      .mutation(async ({ ctx, input }) => {
+        const result = await generatePersonalPlan(
+          ctx.user.id, input.prompt, input.includeStudentProfile,
+          { dailyMinutes: input.dailyMinutes, startDate: input.startDate }
+        );
+        await logStudentActivity(ctx.user.id, "plan.generated", "ai_plan", null, "ولّد المخطط الذكي خطة جديدة", { title: result.title, stepCount: result.steps.length });
+        return result;
+      }),
     approve: protectedProcedure
       .input(z.object({
         plan: z.object({
@@ -1404,12 +1551,27 @@ export const appRouter = router({
           startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
           dailyMinutes: z.number().int().min(20).max(600),
         }).optional(),
+        routine: z.object({
+          name: z.string().trim().min(1).max(120),
+          period: z.enum(["morning", "evening", "custom"]),
+          accent: z.string().trim().min(1).max(20).optional(),
+          items: z.array(z.object({
+            title: z.string().trim().min(1).max(180),
+            durationMinutes: z.number().int().min(1).max(300),
+          })).min(1).max(20),
+        }).optional(),
       }))
-      .mutation(({ ctx, input }) => approvePlanAsGoalTree(ctx.user.id, {
-        title: input.plan.title,
-        summary: input.plan.summary,
-        steps: input.plan.steps.map((step, index) => ({ ...step, day: index + 1 })),
-      }, input.schedule)),
+      .mutation(async ({ ctx, input }) => {
+        const result = await approvePlanAsGoalTree(ctx.user.id, {
+          title: input.plan.title,
+          summary: input.plan.summary,
+          steps: input.plan.steps.map((step, index) => ({ ...step, day: index + 1 })),
+        }, input.schedule, input.routine);
+        await logStudentActivity(ctx.user.id, "plan.approved", "ai_plan", null, "تم اعتماد خطة وتحويلها إلى مهام", {
+          title: input.plan.title, taskCount: result.taskCount, routineCreated: Boolean(result.routineId),
+        });
+        return result;
+      }),
   }),
 });
 
