@@ -166,6 +166,10 @@ export default function Study() {
     },
     onError: error => toast.error(error.message),
   });
+
+  const reviewRecommendations = trpc.teachers.recommendReviews.useMutation({
+    onError: error => toast.error(error.message || "تعذّر البحث عن مراجعات لهذا الفرع."),
+  });
   const finishExternalSession = trpc.learning.finishExternalSession.useMutation({
     onSuccess: async result => {
       await utils.learning.activeExternalSession.invalidate();
@@ -565,6 +569,49 @@ export default function Study() {
           <p className="mt-2 max-w-md text-sm leading-7 text-muted-foreground">لن تحتاج إلى اختيار كتاب. بعد تحديد الدرس ستظهر خطوات المسح والتساؤل والقراءة والتسميع والمراجعة.</p>
         </section>
       )}
+
+      <section className="app-card mt-6 p-5 sm:p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">REVIEW DISCOVERY</p>
+            <h2 className="mt-1 font-bold">مراجعات مقترحة لهذا الفرع</h2>
+            <p className="mt-1 text-xs leading-6 text-muted-foreground">يبحث عن مراجعات على YouTube بالاستناد إلى المادة والفرع والمدرس المختار. راجع محتوى الفيديو قبل الاعتماد عليه.</p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={reviewRecommendations.isPending || !subjectId || !currentBranchId}
+            onClick={() => reviewRecommendations.mutate({ subjectId, branchId: currentBranchId, teacherId: selectedTeacherId || undefined })}
+            className="shrink-0 rounded-xl"
+          >
+            {reviewRecommendations.isPending ? "جارٍ البحث..." : "ابحث عن مراجعات"}
+          </Button>
+        </div>
+        {reviewRecommendations.isError && <p role="alert" className="mt-3 rounded-xl bg-destructive/5 p-3 text-sm text-destructive">تعذّر تحميل النتائج. يمكنك المحاولة مرة أخرى.</p>}
+        {reviewRecommendations.data && (
+          <div className="mt-4 space-y-3">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <span>المادة: {reviewRecommendations.data.subject}</span>
+              <span>·</span>
+              <span>الفرع: {reviewRecommendations.data.branch}</span>
+              {reviewRecommendations.data.teacher && <><span>·</span><span>المدرس: {reviewRecommendations.data.teacher}</span></>}
+            </div>
+            {reviewRecommendations.data.items.length ? reviewRecommendations.data.items.map((item, index) => (
+              <article key={item.url + index} className="rounded-xl border border-border/70 bg-muted/15 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <a href={item.url} target="_blank" rel="noopener noreferrer" className="font-semibold leading-6 text-primary underline-offset-4 hover:underline">{item.title}</a>
+                    <p className="mt-1 text-xs text-muted-foreground">{item.channelTitle}{item.publishedAt ? " · " + item.publishedAt : ""}</p>
+                  </div>
+                  <span className="shrink-0 rounded-lg bg-secondary px-2 py-1 text-[10px] font-medium text-muted-foreground">{item.relevance}</span>
+                </div>
+                {item.description && <p className="mt-2 line-clamp-3 text-xs leading-6 text-muted-foreground">{item.description}</p>}
+              </article>
+            )) : <p className="rounded-xl bg-muted/30 p-4 text-sm text-muted-foreground">لم يُعثر على نتائج مطابقة كافية لهذا البحث. جرّب البحث مرة أخرى لاحقًا.</p>}
+            <p className="text-[11px] leading-5 text-muted-foreground">{reviewRecommendations.data.note}</p>
+          </div>
+        )}
+      </section>
     </DashboardLayout>
   );
 }
