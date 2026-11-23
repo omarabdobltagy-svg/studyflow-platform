@@ -114,7 +114,7 @@
  .sf-home-hero-art{inset:-17px 0 22px;min-height:280px}
  .sf-hero-three-scene{min-height:280px}
  .sf-home-orb-caption{top:12px;right:6px;font-size:6px}
- .sf-home-next-card{left:50%;bottom:0;width:min(92%,350px);transform:translateX(-50%)}
+ .sf-home-next-card{left:0;right:0;bottom:0;width:auto;transform:none!important}
  .sf-home-hero-bottom{display:none}
  .sf-shell-v3 .sf-main .sf-home-learning-focus{align-items:stretch;flex-direction:column;gap:15px;margin:25px 0 32px!important;padding:19px!important}
  .sf-home-learning-focus-copy{align-items:flex-start;gap:12px}
@@ -133,7 +133,7 @@
  .sf-home-hero-visual{min-height:270px;margin-inline:-4px}
  .sf-home-hero-art{inset:-13px -9px 22px}
  .sf-hero-three-scene{min-height:260px}
- .sf-home-next-card{width:94%;padding:14px 15px!important}
+ .sf-home-next-card{left:0;right:0;width:auto;padding:14px 15px!important;transform:none!important}
  .sf-home-next-body h3{font-size:13px}
  .sf-shell-v3 .sf-main .sf-home-learning-focus{margin-top:21px!important}
  .sf-shell-v3 .sf-page.sf-page-books > section.sf-library-overview{grid-template-columns:minmax(0,1fr) 96px;gap:5px;padding:18px 14px;min-height:190px}
