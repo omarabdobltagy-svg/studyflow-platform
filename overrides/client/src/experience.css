@@ -579,3 +579,8 @@ body { background: #261437; }
     padding: 22px 18px;
   }
 }
+
+@media (max-width: 640px) {
+  /* This rotated ornament expands the story's scroll area beyond the viewport. */
+  .sf-login-story::after { display: none; }
+}
