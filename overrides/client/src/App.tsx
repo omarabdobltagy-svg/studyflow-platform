@@ -17,15 +17,11 @@ import Home from "./pages/Home";
 import Assistant from "./pages/Assistant";
 import Analytics from "./pages/Analytics";
 import Settings from "./pages/Settings";
-import PortfolioHome from "./pages/PortfolioHome";
-import StudyFlowCaseStudy from "./pages/StudyFlowCaseStudy";
 
 function Router() {
   return (
     <Switch>
-      <Route path={"/"} component={PortfolioHome} />
-      <Route path={"/workspace"} component={Home} />
-      <Route path={"/projects/studyflow"} component={StudyFlowCaseStudy} />
+      <Route path={"/"} component={Home} />
       <Route path={"/tasks"} component={Tasks} />
       <Route path={"/goals"} component={Goals} />
       <Route path={"/books/:id"} component={Books} />
