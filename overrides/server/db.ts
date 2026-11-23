@@ -13,6 +13,7 @@ import {
   routineCompletions,
   routineItems,
   routines,
+  studentActivityEvents,
   studentProfiles,
   studySessions,
   taskChangeLogs,
@@ -138,6 +139,7 @@ type ScheduledTaskRow = {
   title: string;
   dueAt: Date | null;
   priority: "low" | "medium" | "high";
+  status: "todo" | "done";
 };
 
 export function mergeCalendarItems(events: CalendarEventRow[], scheduledTasks: ScheduledTaskRow[]) {
@@ -161,6 +163,8 @@ export function mergeCalendarItems(events: CalendarEventRow[], scheduledTasks: S
       allDay: true,
       color: task.priority === "high" ? "rose" : task.priority === "medium" ? "amber" : "sky",
       source: "task" as const,
+      completed: task.status === "done",
+      priority: task.priority,
     })),
   ];
   return calendarItems.sort((first, second) => first.startAt.getTime() - second.startAt.getTime());
@@ -574,7 +578,8 @@ export function schedulePlanStepDates(startDate: string, steps: Array<{ minutes:
 export async function approvePlanAsGoalTree(
   userId: number,
   plan: { title: string; summary: string; steps: ApprovedPlanStep[] },
-  schedule?: { startDate: string; dailyMinutes: number }
+  schedule?: { startDate: string; dailyMinutes: number },
+  routine?: { name: string; period: "morning" | "evening" | "custom"; accent?: string; items: Array<{ title: string; durationMinutes: number }> }
 ) {
   const db = await requireDb();
   const steps = normalizeApprovedPlanSteps(plan.steps);
@@ -621,7 +626,26 @@ export async function approvePlanAsGoalTree(
       });
     }
 
-    return { parentGoalId, stageCount: steps.length, taskCount: steps.length };
+    let routineId: number | null = null;
+    if (routine && routine.items.length > 0) {
+      const routineInsert = await tx.insert(routines).values({
+        userId,
+        name: routine.name.trim(),
+        period: routine.period,
+        accent: routine.accent ?? "amber",
+        isActive: true,
+      });
+      routineId = Number(routineInsert[0].insertId);
+      await tx.insert(routineItems).values(routine.items.map((item, index) => ({
+        routineId: routineId!,
+        title: item.title.trim(),
+        durationMinutes: item.durationMinutes,
+        sortOrder: index,
+        isActive: true,
+      })));
+    }
+
+    return { parentGoalId, stageCount: steps.length, taskCount: steps.length, routineId };
   });
 }
 
@@ -946,6 +970,8 @@ export async function createRoutine(
     })));
   }
 }
+  return routineId;
+
 
 export async function toggleRoutineItem(userId: number, itemId: number, done: boolean, timeZone = "UTC") {
   const db = await requireDb();
@@ -1018,13 +1044,66 @@ export async function deleteRoutine(userId: number, routineId: number) {
   if (result[0].affectedRows === 0) throw new Error("الروتين غير موجود أو لا تملك حذفه.");
 }
 
-export async function listCalendarEvents(userId: number) {
+export async function listCalendarEvents(userId: number, timeZone = "Africa/Cairo") {
   const db = await requireDb();
-  const [events, scheduledTasks] = await Promise.all([
+  const [events, scheduledTasks, routineRows] = await Promise.all([
     db.select().from(calendarEvents).where(eq(calendarEvents.userId, userId)),
-    db.select().from(tasks).where(and(eq(tasks.userId, userId), eq(tasks.status, "todo"))),
+    db.select().from(tasks).where(eq(tasks.userId, userId)),
+    listRoutines(userId, timeZone),
   ]);
-  return mergeCalendarItems(events, scheduledTasks);
+
+  const calendarItems = mergeCalendarItems(events, scheduledTasks);
+  const activeRoutines = routineRows
+    .filter(routine => routine.isActive)
+    .map(routine => ({ ...routine, items: routine.items.filter(item => item.isActive) }))
+    .filter(routine => routine.items.length > 0);
+
+  // The current routine model represents daily morning/evening/custom routines,
+  // but it has no weekday or clock-time fields. Keep them as all-day daily
+  // commitments until the student explicitly configures a time.
+  const routineItems: Array<Record<string, unknown>> = [];
+  const todayKey = getDateKeyInTimezone(new Date(), timeZone);
+  const [year, month, day] = todayKey.split("-").map(Number);
+  const cursor = new Date(Date.UTC(year, month - 1, day, 12));
+
+  for (let dayOffset = 0; dayOffset < 90; dayOffset += 1) {
+    const date = new Date(cursor);
+    date.setUTCDate(cursor.getUTCDate() + dayOffset);
+    const dateKey = getDateKeyInTimezone(date, timeZone);
+    const startAt = new Date(`${dateKey}T12:00:00.000Z`);
+
+    for (const routine of activeRoutines) {
+      const completedCount = dayOffset === 0
+        ? routine.items.filter(item => item.completedToday).length
+        : 0;
+      routineItems.push({
+        id: `routine-${routine.id}-${dateKey}`,
+        title: routine.name,
+        type: "study",
+        startAt,
+        endAt: null,
+        allDay: true,
+        color: routine.period === "morning" ? "amber" : routine.period === "evening" ? "rose" : "stone",
+        source: "routine",
+        routineId: routine.id,
+        routinePeriod: routine.period,
+        routineDate: dateKey,
+        completed: routine.items.length > 0 && completedCount === routine.items.length,
+        completedCount,
+        itemCount: routine.items.length,
+        routineItems: routine.items.map(item => ({
+          id: item.id,
+          title: item.title,
+          durationMinutes: item.durationMinutes,
+          completed: dayOffset === 0 ? item.completedToday : false,
+        })),
+      });
+    }
+  }
+
+  return [...calendarItems, ...routineItems].sort((first, second) =>
+    new Date(first.startAt as Date).getTime() - new Date(second.startAt as Date).getTime()
+  );
 }
 
 export async function createCalendarEvent(
@@ -1063,6 +1142,49 @@ export async function saveAiPlan(userId: number, data: { prompt: string; title: 
 export async function listAiPlans(userId: number) {
   const db = await requireDb();
   return db.select().from(aiPlans).where(eq(aiPlans.userId, userId)).orderBy(desc(aiPlans.createdAt)).limit(12);
+}
+
+export async function recordStudentActivityEvent(input: {
+  userId: number;
+  eventType: string;
+  entityType: string;
+  entityId?: string | number | null;
+  summary: string;
+  metadata?: Record<string, unknown>;
+}) {
+  const db = await requireDb();
+  const metadataJson = JSON.stringify(input.metadata ?? {});
+  const safeMetadata = metadataJson.length <= 8_000 ? metadataJson : "{}";
+  const result = await db.insert(studentActivityEvents).values({
+    userId: input.userId,
+    eventType: input.eventType.slice(0, 80),
+    entityType: input.entityType.slice(0, 60),
+    entityId: input.entityId == null ? null : String(input.entityId).slice(0, 100),
+    summary: input.summary.slice(0, 500),
+    metadataJson: safeMetadata,
+  });
+  return Number(result[0].insertId);
+}
+
+export async function listRecentStudentActivityEvents(userId: number, limit = 30) {
+  const db = await requireDb();
+  const rows = await db.select()
+    .from(studentActivityEvents)
+    .where(eq(studentActivityEvents.userId, userId))
+    .orderBy(desc(studentActivityEvents.createdAt), desc(studentActivityEvents.id))
+    .limit(Math.max(1, Math.min(100, Math.trunc(limit))));
+  return rows.reverse().map(row => ({
+    id: row.id,
+    eventType: row.eventType,
+    entityType: row.entityType,
+    entityId: row.entityId,
+    summary: row.summary,
+    metadata: (() => {
+      try { return JSON.parse(row.metadataJson || "{}") as Record<string, unknown>; }
+      catch { return {}; }
+    })(),
+    createdAt: row.createdAt,
+  }));
 }
 
 export async function getDashboard(userId: number, timeZone = "UTC") {
