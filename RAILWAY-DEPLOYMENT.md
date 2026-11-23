@@ -22,7 +22,7 @@ StudyFlow uses separate username/password accounts and signed HttpOnly session c
 
 - `APP_SESSION_SECRET` is required to sign 30-day sessions.
 - `APP_LOGIN_USERNAME` and `APP_LOGIN_PASSWORD` are used only once by the preview migration script to preserve the former owner account; they are not shared credentials for newly registered users.
-- The users table has nullable `username` and `passwordHash` columns plus a unique username index. The additive migration is idempotent and uses a persistent migration marker so deleting the former owner account cannot silently recreate it.
+- The users table has nullable `username` and `passwordHash` columns plus a unique username index. The additive migration source lives at `overrides/scripts/migrate-local-auth.mjs` (the Docker overlay places it at `/app/scripts/migrate-local-auth.mjs`); it is idempotent and uses a persistent migration marker so deleting the former owner account cannot silently recreate it.
 
 The migration preserves the existing owner row and its user ID. Account deletion verifies the current password, requires an explicit confirmation phrase, removes S3-backed attachments, and cascades the account's database records. The legacy Forge storage API does not expose object deletion in this application.
 
