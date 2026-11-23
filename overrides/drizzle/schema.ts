@@ -344,6 +344,24 @@ export const reminderNotifications = mysqlTable(
   table => [index("reminder_notifications_user_read_idx").on(table.userId, table.readAt)]
 );
 
+export const studentActivityEvents = mysqlTable(
+  "studentActivityEvents",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+    eventType: varchar("eventType", { length: 80 }).notNull(),
+    entityType: varchar("entityType", { length: 60 }).notNull(),
+    entityId: varchar("entityId", { length: 100 }),
+    summary: varchar("summary", { length: 500 }).notNull(),
+    metadataJson: text("metadataJson").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => [
+    index("student_activity_user_created_idx").on(table.userId, table.createdAt),
+    index("student_activity_entity_idx").on(table.entityType, table.entityId),
+  ]
+);
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type StudentProfile = typeof studentProfiles.$inferSelect;
