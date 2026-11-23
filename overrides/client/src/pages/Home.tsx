@@ -243,8 +243,8 @@ export default function Home() {
             <Button type="button" onClick={() => setLocation("/tasks")} className="sf-home-next-button">
               {data?.tasks[0] ? "افتح المهمة" : "إدارة المهام"} <ArrowLeft size={15} />
             </Button>
-          </mot
-          </motion.div>ion.aside>
+          </motion.aside>
+          </motion.div>
           <div className="sf-home-hero-bottom"><span>اسحب لاكتشاف مساحتك</span><i /></div>
         </section>
 
