@@ -1,3 +1,5 @@
+import { useRef, useState, type ReactNode } from "react";
+import { AnimatePresence, motion, useMotionValue, useReducedMotion, useScroll, useSpring, useTransform } from "framer-motion";
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
 import QueryErrorNotice from "@/components/QueryErrorNotice";
@@ -7,120 +9,401 @@ import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import {
-  ArrowLeft,
-  BookOpenText,
-  CalendarDays,
-  Check,
-  CheckCircle2,
-  ChevronLeft,
-  Circle,
-  Clock3,
-  Goal,
-  ListChecks,
-  Plus,
-  Sparkles,
+  ArrowLeft, ArrowUpLeft, BookOpenText, CalendarDays, Check, CheckCircle2,
+  ChevronLeft, Circle, Clock3, Compass, Goal, LibraryBig, ListChecks, Plus,
+  Sparkles, Target, WandSparkles, X,
 } from "lucide-react";
 import { useLocation } from "wouter";
 
-const priorityStyle = { high: "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-200", medium: "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-200", low: "bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-200" };
+const priorityStyle = {
+  high: "sf-priority-high",
+  medium: "sf-priority-medium",
+  low: "sf-priority-low",
+};
 const priorityLabel = { high: "عالية", medium: "متوسطة", low: "مرنة" };
 
 function arabicDate(date = new Date()) {
   return new Intl.DateTimeFormat("ar-EG", { weekday: "long", day: "numeric", month: "long" }).format(date);
 }
-
-function shortDate(date: Date) {
+function shortDate(date: Date | string) {
   return new Intl.DateTimeFormat("ar-EG", { day: "numeric", month: "short" }).format(new Date(date));
+}
+
+const revealGroup = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.075, delayChildren: 0.08 } },
+};
+const revealItem = {
+  hidden: { opacity: 0, y: 18, filter: "blur(5px)" },
+  show: { opacity: 1, y: 0, filter: "blur(0px)", transition: { type: "spring", stiffness: 170, damping: 19 } },
+};
+
+function StudyOrb({ progress, y }: { progress: number | null; y: any }) {
+  const reduceMotion = useReducedMotion();
+  const pointerX = useMotionValue(0);
+  const pointerY = useMotionValue(0);
+  const smoothX = useSpring(pointerX, { stiffness: 95, damping: 18, mass: 0.7 });
+  const smoothY = useSpring(pointerY, { stiffness: 95, damping: 18, mass: 0.7 });
+  const rotateY = useTransform(smoothX, [-1, 1], [-12, 12]);
+  const rotateX = useTransform(smoothY, [-1, 1], [10, -10]);
+
+  return (
+    <motion.div
+      className="sf-orb-stage"
+      style={{ y }}
+      onPointerMove={(event) => {
+        if (reduceMotion || event.pointerType !== "mouse") return;
+        const rect = event.currentTarget.getBoundingClientRect();
+        pointerX.set(((event.clientX - rect.left) / rect.width - 0.5) * 2);
+        pointerY.set(((event.clientY - rect.top) / rect.height - 0.5) * 2);
+      }}
+      onPointerLeave={() => { pointerX.set(0); pointerY.set(0); }}
+      aria-label="عنصر بصري تفاعلي يرمز إلى StudyFlow"
+    >
+      <div className="sf-orb-halo" />
+      <motion.div
+        className="sf-orb-orbit sf-orb-orbit-a"
+        animate={reduceMotion ? undefined : { rotate: 360 }}
+        transition={{ duration: 34, repeat: Infinity, ease: "linear" }}
+      />
+      <motion.div
+        className="sf-orb-orbit sf-orb-orbit-b"
+        animate={reduceMotion ? undefined : { rotate: -360 }}
+        transition={{ duration: 46, repeat: Infinity, ease: "linear" }}
+      />
+      <motion.div
+        className="sf-orb-object"
+        style={{ rotateX, rotateY }}
+        animate={reduceMotion ? undefined : { y: [0, -9, 0], rotateZ: [-2, 1.5, -2] }}
+        transition={{ duration: 7.5, repeat: Infinity, ease: "easeInOut" }}
+      >
+        <div className="sf-orb-inner-ring" />
+        <span>sf</span>
+        <small>STUDY / FLOW</small>
+        <i className="sf-orb-glint" />
+      </motion.div>
+      <motion.div className="sf-orb-chip sf-orb-chip-plan" animate={reduceMotion ? undefined : { y: [0, -6, 0] }} transition={{ duration: 5.2, repeat: Infinity, ease: "easeInOut" }}>
+        <Target size={13} /><span>PLAN</span>
+      </motion.div>
+      <motion.div className="sf-orb-chip sf-orb-chip-learn" animate={reduceMotion ? undefined : { y: [0, 7, 0] }} transition={{ duration: 6.4, repeat: Infinity, ease: "easeInOut" }}>
+        <BookOpenText size={13} /><span>LEARN</span>
+      </motion.div>
+      <div className="sf-orb-status"><span /> {progress === null ? "جاري قراءة تقدمك" : "إنجاز اليوم " + progress + "%"}</div>
+    </motion.div>
+  );
+}
+
+function WorkspaceFolder({
+  id,
+  title,
+  eyebrow,
+  subtitle,
+  count,
+  icon,
+  isOpen,
+  onToggle,
+  children,
+}: {
+  id: string;
+  title: string;
+  eyebrow: string;
+  subtitle: string;
+  count: string;
+  icon: ReactNode;
+  isOpen: boolean;
+  onToggle: (id: string) => void;
+  children: ReactNode;
+}) {
+  const reduceMotion = useReducedMotion();
+
+  return (
+    <motion.section
+      layout
+      className={cn("sf-folder", isOpen && "is-open")}
+      transition={{ layout: { type: "spring", stiffness: 180, damping: 23 } }}
+    >
+      <motion.button
+        type="button"
+        className="sf-folder-trigger"
+        onClick={() => onToggle(id)}
+        aria-expanded={isOpen}
+        whileHover={reduceMotion ? undefined : { y: -4, rotateX: 1.5 }}
+        whileTap={reduceMotion ? undefined : { scale: 0.985 }}
+        transition={{ type: "spring", stiffness: 280, damping: 19 }}
+      >
+        <div className="sf-folder-art" aria-hidden="true">
+          <motion.div className="sf-folder-paper sf-folder-paper-back"
+            animate={isOpen ? { y: -18, rotate: -8, x: -6 } : { y: 0, rotate: -2, x: 0 }}
+            transition={{ type: "spring", stiffness: 180, damping: 17 }}
+          />
+          <motion.div className="sf-folder-paper sf-folder-paper-front"
+            animate={isOpen ? { y: -25, rotate: 7, x: 7 } : { y: 0, rotate: 2, x: 0 }}
+            transition={{ type: "spring", stiffness: 190, damping: 17, delay: isOpen ? 0.045 : 0 }}
+          />
+          <motion.div className="sf-folder-back" animate={isOpen ? { rotate: -2, y: -5 } : { rotate: 0, y: 0 }} transition={{ type: "spring", stiffness: 190, damping: 18 }} />
+          <motion.div className="sf-folder-front" animate={isOpen ? { rotateX: -9, y: 9, skewX: -1 } : { rotateX: 0, y: 0, skewX: 0 }} transition={{ type: "spring", stiffness: 175, damping: 17 }}>
+            <span className="sf-folder-emblem">{icon}</span>
+            <span className="sf-folder-index">{id.toUpperCase()} / SF</span>
+          </motion.div>
+          <motion.span className="sf-folder-spark" animate={isOpen ? { opacity: 1, scale: 1, y: -6 } : { opacity: 0, scale: 0.5, y: 7 }} transition={{ duration: 0.35 }} />
+        </div>
+        <div className="sf-folder-copy">
+          <span className="sf-folder-eyebrow">{eyebrow}</span>
+          <strong>{title}</strong>
+          <span className="sf-folder-subtitle">{subtitle}</span>
+        </div>
+        <div className="sf-folder-meta">
+          <span className="sf-folder-count">{count}</span>
+          <motion.span
+            className="sf-folder-action"
+            animate={{ rotate: isOpen ? 45 : 0, backgroundColor: isOpen ? "#426a70" : "rgba(255,255,255,.09)" }}
+            transition={{ type: "spring", stiffness: 260, damping: 19 }}
+          >
+            {isOpen ? <X size={16} /> : <ArrowUpLeft size={16} />}
+          </motion.span>
+        </div>
+        <span className="sf-folder-hint">{isOpen ? "إغلاق المجلد" : "اضغط لفتح المجلد"}</span>
+      </motion.button>
+
+      <AnimatePresence initial={false}>
+        {isOpen && (
+          <motion.div
+            className="sf-folder-reveal"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ height: { duration: reduceMotion ? 0.01 : 0.72, ease: [0.2, 0.8, 0.2, 1] }, opacity: { duration: 0.28 } }}
+          >
+            <motion.div
+              className="sf-folder-content"
+              variants={revealGroup}
+              initial="hidden"
+              animate="show"
+              exit="hidden"
+            >
+              {children}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.section>
+  );
+}
+
+function DataRow({ children, onClick, trailing }: { children: ReactNode; onClick?: () => void; trailing?: ReactNode }) {
+  return (
+    <motion.button
+      type="button"
+      className="sf-data-row"
+      onClick={onClick}
+      whileHover={{ x: -3, backgroundColor: "rgba(66,106,112,.075)" }}
+      whileTap={{ scale: 0.99 }}
+      transition={{ duration: 0.2 }}
+    >
+      <span className="sf-data-row-main">{children}</span>
+      {trailing && <span className="sf-data-row-trailing">{trailing}</span>}
+      <ArrowLeft className="sf-data-row-arrow" size={15} />
+    </motion.button>
+  );
 }
 
 export default function Home() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
   const utils = trpc.useUtils();
+  const heroRef = useRef<HTMLElement>(null);
+  const reduceMotion = useReducedMotion();
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
   const summary = trpc.dashboard.summary.useQuery({ timeZone });
   const toggleTask = trpc.tasks.toggle.useMutation({ onSuccess: () => void utils.dashboard.summary.invalidate() });
   const toggleRoutine = trpc.routines.toggleItem.useMutation({ onSuccess: () => void utils.dashboard.summary.invalidate() });
+  const [openFolder, setOpenFolder] = useState<string | null>(null);
   const data = summary.data;
   const completedRate = data ? (data.taskStats.total ? Math.round((data.taskStats.completed / data.taskStats.total) * 100) : 0) : null;
   const routineRate = data ? (data.routineStats.total ? Math.round((data.routineStats.completed / data.routineStats.total) * 100) : 0) : null;
 
+  const { scrollYProgress } = useScroll({ target: heroRef, offset: ["start start", "end start"] });
+  const orbY = useTransform(scrollYProgress, [0, 1], [0, 72]);
+  const orbScale = useTransform(scrollYProgress, [0, 1], [1, 0.9]);
+  const smoothOrbY = useSpring(orbY, { stiffness: 80, damping: 22 });
+
+  const toggleFolder = (id: string) => {
+    setOpenFolder(current => current === id ? null : id);
+  };
+
   return (
     <DashboardLayout
-      title="لوحة اليوم"
-      description="رتّب يومك من مهمة صغيرة إلى هدف بعيد، ثم اترك الإيقاع الهادئ يرافقك خطوة بخطوة."
-      action={<Button onClick={() => setLocation("/planner")} className="pressable hidden rounded-2xl bg-primary px-4 sm:flex"><Sparkles className="size-4" />أنشئ خطة</Button>}
+      title="مساحة اليوم"
+      description="مساحة هادئة تجمع خطتك وموادك وخطوتك القادمة."
+      action={<Button onClick={() => setLocation("/planner")} className="sf-top-action"><Sparkles className="size-4" />المخطط الذكي<ArrowUpLeft className="size-4" /></Button>}
     >
       {summary.isError && <QueryErrorNotice onRetry={() => void summary.refetch()} label="تعذّر تحميل ملخص يومك. لن نعرض أرقامًا صفرية قد توحي بأن بياناتك فارغة." />}
+
       {!summary.isError && <>
-      <section className="sf-welcome-hero sf-home-stage enter relative mb-6 overflow-hidden rounded-[1.6rem] px-5 py-6 text-primary-foreground sm:px-8 sm:py-8">
-        <div className="relative flex flex-col justify-between gap-7 md:flex-row md:items-end">
-          <div className="sf-home-intro"><p className="sf-home-date">{arabicDate()}</p><p className="sf-home-eyebrow">YOUR DAY, IN FOCUS</p><h2>أهلًا {user?.name?.split(" ")[0] || "بك"}، ابدأ بالأهم.</h2><p className="sf-home-description">مش مطلوب تخلّص كل حاجة مرة واحدة. اختار الخطوة الأهم، وخلّي تقدمك يقود باقي اليوم.</p><div className="sf-home-actions"><Button type="button" onClick={() => setLocation("/tasks")} variant="secondary" className="rounded-xl bg-white text-[#38214d] hover:bg-[#f0e6f8]">افتح مهامي<ChevronLeft className="size-4" /></Button><Button type="button" onClick={() => setLocation("/planner")} variant="outline" className="rounded-xl border-white/25 bg-white/8 text-white hover:bg-white/15">راجع خطتي</Button></div></div>
-          <div className="sf-home-progress">
-          <div className="sf-home-ring" role="progressbar" aria-label="نسبة إنجاز المهام" aria-valuemin={0} aria-valuemax={100} aria-valuenow={completedRate ?? 0} style={{ background: `conic-gradient(#f1d89b ${completedRate ?? 0}%, rgb(255 255 255 / 17%) 0)` }}>
-            <div className="sf-home-ring-center"><strong>{completedRate === null ? "—" : `${completedRate}%`}</strong><span>إنجاز المهام</span></div>
+        <section ref={heroRef} className="sf-home-hero">
+          <div className="sf-home-hero-grain" />
+          <motion.div className="sf-home-hero-copy" variants={revealGroup} initial="hidden" animate="show">
+            <motion.p className="sf-home-date" variants={revealItem}>{arabicDate()}</motion.p>
+            <motion.p className="sf-home-eyebrow" variants={revealItem}><span /> STUDYFLOW / YOUR SPACE</motion.p>
+            <motion.h2 variants={revealItem}>أهلًا {user?.name?.split(" ")[0] || "بك"}، <em>خلي الصورة أوضح.</em></motion.h2>
+            <motion.p className="sf-home-description" variants={revealItem}>مش لازم تمسك كل الخيوط مرة واحدة. افتح اللي محتاجه، شوف التفاصيل، وخلي خطوتك الجاية واضحة.</motion.p>
+            <motion.div className="sf-home-hero-actions" variants={revealItem}>
+              <Button type="button" onClick={() => setLocation("/tasks")} className="sf-hero-primary">افتح مهامي <ArrowLeft size={16} /></Button>
+              <Button type="button" onClick={() => setLocation("/planner")} variant="outline" className="sf-hero-secondary">رتّب يومك <Sparkles size={15} /></Button>
+            </motion.div>
+            <motion.div className="sf-home-hero-foot" variants={revealItem}>
+              <span><i /> مساحتك الدراسية</span>
+              <span className="sf-hero-divider" />
+              <span>01 <small>/ OVERVIEW</small></span>
+            </motion.div>
+          </motion.div>
+
+          <motion.div className="sf-home-hero-art" style={{ scale: orbScale }}>
+            <StudyOrb progress={completedRate} y={smoothOrbY} />
+          </motion.div>
+          <div className="sf-home-hero-bottom"><span>اسحب لاكتشاف مساحتك</span><i /></div>
+        </section>
+
+        <motion.section
+          className="sf-metric-strip"
+          variants={revealGroup}
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: false, amount: 0.2 }}
+        >
+          <motion.article className="sf-metric" variants={revealItem} whileHover={{ y: -5, rotateX: 2 }}>
+            <span className="sf-metric-icon"><ListChecks size={18} /></span>
+            <div><small>مهام مفتوحة</small><strong>{data ? data.taskStats.remaining : "—"}</strong><span>{data ? "خطوة بانتظارك" : "جار تحميل بياناتك"}</span></div>
+          </motion.article>
+          <motion.article className="sf-metric" variants={revealItem} whileHover={{ y: -5, rotateX: 2 }}>
+            <span className="sf-metric-icon"><Clock3 size={18} /></span>
+            <div><small>التزام الروتين</small><strong>{routineRate === null ? "—" : routineRate + "%"}</strong><span>{data ? data.routineStats.completed + " من " + data.routineStats.total + " عادة" : "جار تحميل بياناتك"}</span></div>
+          </motion.article>
+          <motion.article className="sf-metric" variants={revealItem} whileHover={{ y: -5, rotateX: 2 }}>
+            <span className="sf-metric-icon"><Goal size={18} /></span>
+            <div><small>أهداف نشطة</small><strong>{data ? data.goalStats.active : "—"}</strong><span>وجهتك في هذا الفصل</span></div>
+          </motion.article>
+          <motion.article className="sf-metric" variants={revealItem} whileHover={{ y: -5, rotateX: 2 }}>
+            <span className="sf-metric-icon"><BookOpenText size={18} /></span>
+            <div><small>كتب في المسار</small><strong>{data ? data.bookStats.total : "—"}</strong><span>تعلم على مهل</span></div>
+          </motion.article>
+        </motion.section>
+
+        <section className="sf-folders-section">
+          <div className="sf-section-heading">
+            <div><p>YOUR STUDY SPACE</p><h2>افتح المجلد. <em>شوف اللي جواه.</em></h2></div>
+            <span>كل مساحة تبدأ مغلقة، وتفتح وقت ما تحتاجها.</span>
           </div>
-          <div className="sf-home-progress-copy"><span>مكتمل حتى الآن</span><strong>{data ? data.taskStats.completed : "—"} <small>من {data ? data.taskStats.total : "—"} مهام</small></strong><p>كل مهمة تُنجزها تقرّبك من نهاية يوم أخف.</p></div>
-        </div>
-        </div>
-      </section>
 
-      <section className="sf-kpi-grid sf-home-metrics mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="المهام المفتوحة" value={data ? data.taskStats.remaining : "—"} sublabel={data ? "خطوة بانتظارك" : "جار تحميل البيانات"} icon={<ListChecks className="size-5" />} tone="violet" />
-        <StatCard label="التزام الروتين" value={routineRate === null ? "—" : `${routineRate}%`} sublabel={data ? `${data.routineStats.completed} من ${data.routineStats.total} عادة` : "جار تحميل البيانات"} icon={<Clock3 className="size-5" />} tone="amber" />
-        <StatCard label="أهداف نشطة" value={data ? data.goalStats.active : "—"} sublabel="وجهتك في هذا الفصل" icon={<Goal className="size-5" />} tone="emerald" />
-        <StatCard label="كتب في المسار" value={data ? data.bookStats.total : "—"} sublabel="تعلم على مهل" icon={<BookOpenText className="size-5" />} tone="sky" />
-      </section>
-
-      <section className="sf-home-grid sf-home-workspace grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(340px,.75fr)]">
-        <div className="sf-home-column space-y-6">
-          <div className="app-card sf-home-panel sf-home-task-panel overflow-hidden">
-            <CardHeader icon={<ListChecks className="size-5" />} title="مهامك القادمة" subtitle="اختر المهمة التالية لتبقى في تدفقك." action={<Button variant="ghost" size="sm" onClick={() => setLocation("/tasks")} className="gap-1 rounded-xl text-primary hover:bg-secondary">كل المهام<ChevronLeft className="size-4" /></Button>} />
-            <div className="divide-y divide-border/65 px-5 pb-2 sm:px-6">
-              {summary.isLoading ? <LoadingRows count={4} /> : data?.tasks.length ? data.tasks.map(task => (
-                <div key={task.id} className="flex items-center gap-3 py-4">
-                  <button onClick={() => toggleTask.mutate({ id: task.id, done: true })} disabled={toggleTask.isPending} className="pressable flex size-6 shrink-0 items-center justify-center rounded-full border-2 border-primary/35 text-primary hover:bg-primary hover:text-primary-foreground" aria-label={`إكمال ${task.title}`}><Check className="size-3.5" /></button>
-                  <div className="min-w-0 flex-1"><p className="truncate font-semibold">{task.title}</p><div className="mt-1.5 flex flex-wrap gap-2 text-xs text-muted-foreground"><span>{task.category}</span>{task.dueAt && <span className="inline-flex items-center gap-1"><CalendarDays className="size-3" />{shortDate(task.dueAt)}</span>}</div></div>
-                  <Badge className={cn("rounded-lg border-0 px-2 py-1 text-[11px] font-medium", priorityStyle[task.priority])}>{priorityLabel[task.priority]}</Badge>
-                </div>
+          <div className="sf-folder-grid">
+            <WorkspaceFolder
+              id="01"
+              title="مهام اليوم"
+              eyebrow="YOUR NEXT STEPS"
+              subtitle="الخطوات القادمة وما يستحق تركيزك."
+              count={data ? String(data.taskStats.remaining).padStart(2, "0") + " مهمة" : "—"}
+              icon={<ListChecks size={21} />}
+              isOpen={openFolder === "tasks"}
+              onToggle={() => toggleFolder("tasks")}
+            >
+              {summary.isLoading ? <LoadingRows count={3} /> : data?.tasks.length ? data.tasks.slice(0, 5).map(task => (
+                <motion.div className="sf-folder-task" variants={revealItem} key={task.id}>
+                  <button className="sf-task-check" onClick={() => toggleTask.mutate({ id: task.id, done: true })} disabled={toggleTask.isPending} aria-label={"إكمال " + task.title}><Check size={14} /></button>
+                  <div className="sf-task-copy"><strong>{task.title}</strong><span>{task.category}{task.dueAt ? " · " + shortDate(task.dueAt) : ""}</span></div>
+                  <Badge className={cn("sf-priority", priorityStyle[task.priority])}>{priorityLabel[task.priority]}</Badge>
+                </motion.div>
               )) : <EmptyBlock label="لا توجد مهام مفتوحة الآن. أضف خطوتك التالية لتبدأ." action="أضف مهمة" onClick={() => setLocation("/tasks")} />}
-            </div>
+              <div className="sf-folder-footer"><span>{data ? data.taskStats.completed + " مهمة مكتملة" : "ملخص المهام"}</span><Button variant="ghost" onClick={() => setLocation("/tasks")}>كل المهام <ArrowLeft size={14} /></Button></div>
+            </WorkspaceFolder>
+
+            <WorkspaceFolder
+              id="02"
+              title="مكتبة التعلّم"
+              eyebrow="YOUR LEARNING LIBRARY"
+              subtitle="كتبك الحالية والفصول التي تعمل عليها."
+              count={data ? String(data.bookStats.total).padStart(2, "0") + " كتاب" : "—"}
+              icon={<LibraryBig size={21} />}
+              isOpen={openFolder === "books"}
+              onToggle={() => toggleFolder("books")}
+            >
+              {summary.isLoading ? <LoadingRows count={3} /> : data?.books.length ? data.books.slice(0, 4).map(book => (
+                <motion.div className="sf-folder-book" variants={revealItem} key={book.id}>
+                  <button className={cn("sf-book-cover", "tone-" + book.coverColor)} onClick={() => setLocation("/books/" + book.id)} aria-label={"فتح " + book.title}><BookOpenText size={19} /></button>
+                  <div className="sf-book-copy"><strong>{book.title}</strong><span>{book.subject}{book.author ? " · " + book.author : ""}</span><Progress value={book.progress} className="sf-book-progress" /></div>
+                  <b className="sf-book-rate">{book.progress}%</b>
+                </motion.div>
+              )) : <EmptyBlock label="أضف أول كتاب، ثم قسّمه إلى فصول لتتابع رحلتك." action="أضف كتابًا" onClick={() => setLocation("/books")} />}
+              <div className="sf-folder-footer"><span>مساحة معرفة مرتبة</span><Button variant="ghost" onClick={() => setLocation("/books")}>افتح المكتبة <ArrowLeft size={14} /></Button></div>
+            </WorkspaceFolder>
+
+            <WorkspaceFolder
+              id="03"
+              title="الأهداف"
+              eyebrow="KEEP THE DIRECTION"
+              subtitle="وجهتك وما قطعته في الطريق."
+              count={data ? String(data.goalStats.active).padStart(2, "0") + " هدف" : "—"}
+              icon={<Target size={21} />}
+              isOpen={openFolder === "goals"}
+              onToggle={() => toggleFolder("goals")}
+            >
+              {summary.isLoading ? <LoadingRows count={3} /> : data?.goals.length ? data.goals.slice(0, 4).map(goal => (
+                <motion.div className="sf-folder-goal" variants={revealItem} key={goal.id}>
+                  <div className="sf-goal-marker"><Target size={16} /></div>
+                  <div className="sf-goal-copy"><strong>{goal.title}</strong><span>{goal.completedTaskCount} من {goal.taskCount} مهام مكتملة</span><Progress value={goal.progress} className="sf-goal-progress" /></div>
+                  <b>{goal.progress}%</b>
+                </motion.div>
+              )) : <EmptyBlock label="ابدأ بهدف واضح، ثم اربطه بمهام صغيرة." action="أنشئ هدفًا" onClick={() => setLocation("/goals")} />}
+              <div className="sf-folder-footer"><span>الوجهة قبل السرعة</span><Button variant="ghost" onClick={() => setLocation("/goals")}>كل الأهداف <ArrowLeft size={14} /></Button></div>
+            </WorkspaceFolder>
+
+            <WorkspaceFolder
+              id="04"
+              title="إيقاع اليوم"
+              eyebrow="SMALL ROUTINES, STEADY FLOW"
+              subtitle="عادات صغيرة تصنع استمرارية أكبر."
+              count={data ? String(data.routineStats.total).padStart(2, "0") + " عادة" : "—"}
+              icon={<Clock3 size={21} />}
+              isOpen={openFolder === "routine"}
+              onToggle={() => toggleFolder("routine")}
+            >
+              {summary.isLoading ? <LoadingRows count={3} /> : data?.routines.some(routine => routine.isActive && routine.items.some(item => item.isActive)) ? data.routines.filter(routine => routine.isActive).map(routine => (
+                <div className="sf-routine-group" key={routine.id}>
+                  <div className="sf-routine-heading"><strong>{routine.name}</strong><span>{routine.period === "morning" ? "صباحًا" : routine.period === "evening" ? "مساءً" : "مخصص"}</span></div>
+                  {routine.items.filter(item => item.isActive).slice(0, 5).map(item => (
+                    <motion.button variants={revealItem} key={item.id} className="sf-routine-row" onClick={() => toggleRoutine.mutate({ id: item.id, done: !item.completedToday, timeZone })}>
+                      <span className={cn("sf-routine-check", item.completedToday && "is-done")}>{item.completedToday && <Check size={12} />}</span>
+                      <span>{item.title}</span><small>{item.durationMinutes} د</small>
+                    </motion.button>
+                  ))}
+                </div>
+              )) : <EmptyBlock label="صمّم روتينًا بسيطًا يساند يومك." action="أنشئ روتينًا" onClick={() => setLocation("/routines")} />}
+              <div className="sf-folder-footer"><span>الاستمرارية أهم من الكمال</span><Button variant="ghost" onClick={() => setLocation("/routines")}>إدارة الروتين <ArrowLeft size={14} /></Button></div>
+            </WorkspaceFolder>
           </div>
+        </section>
 
-          <div className="app-card sf-home-panel sf-home-library-panel overflow-hidden">
-            <CardHeader icon={<BookOpenText className="size-5" />} title="رحلة التعلّم" subtitle="كتبك الحالية ونِسب التقدّم فيها." action={<Button variant="ghost" size="sm" onClick={() => setLocation("/books")} className="gap-1 rounded-xl text-primary hover:bg-secondary">المكتبة<ChevronLeft className="size-4" /></Button>} />
-            <div className="grid gap-3 px-5 pb-5 sm:grid-cols-2 sm:px-6">
-              {summary.isLoading ? <LoadingBookCards /> : data?.books.length ? data.books.map(book => <button key={book.id} onClick={() => setLocation(`/books/${book.id}`)} className="pressable group rounded-2xl border border-border/65 bg-muted/28 p-4 text-right hover:border-primary/25 hover:bg-secondary/35"><div className="mb-5 flex items-start justify-between gap-3"><span className={cn("flex h-12 w-10 shrink-0 items-center justify-center rounded-xl text-white shadow-sm", book.coverColor === "emerald" ? "bg-emerald-600" : book.coverColor === "amber" ? "bg-amber-600" : book.coverColor === "sky" ? "bg-sky-600" : "bg-violet-600")}><BookOpenText className="size-5" /></span><span className="num rounded-lg bg-background px-2 py-1 text-xs text-muted-foreground">{book.progress}%</span></div><p className="line-clamp-1 font-bold">{book.title}</p><p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{book.subject}{book.author ? ` · ${book.author}` : ""}</p><Progress value={book.progress} className="mt-4 h-1.5 bg-border" /></button>) : <EmptyBlock label="أضف أول كتاب، ثم قسّمه إلى فصول لتتابع رحلتك." action="أضف كتابًا" onClick={() => setLocation("/books")} />}
-            </div>
+        <motion.section
+          className="sf-ai-bridge"
+          initial={{ opacity: 0, y: 28 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: false, amount: 0.2 }}
+          transition={{ type: "spring", stiffness: 105, damping: 20 }}
+        >
+          <div className="sf-ai-symbol"><WandSparkles size={24} /></div>
+          <div className="sf-ai-copy"><span>STUDYFLOW INTELLIGENCE</span><h2>مش عارف تبدأ منين؟ <em>خلّي الصورة تكتمل.</em></h2><p>المخطط الذكي يساعدك تحوّل المطلوب إلى خطوات واقعية، والمساعد موجود لما تحتاج تسأل أو تراجع قرار.</p></div>
+          <div className="sf-ai-actions">
+            <Button onClick={() => setLocation("/planner")} className="sf-ai-primary">افتح المخطط <ArrowUpLeft size={15} /></Button>
+            <Button onClick={() => setLocation("/assistant")} variant="outline" className="sf-ai-secondary">اسأل المساعد <Sparkles size={15} /></Button>
           </div>
-        </div>
-
-        <div className="sf-home-column space-y-6">
-          <div className="app-card sf-home-panel sf-home-goal-panel overflow-hidden"><CardHeader icon={<Goal className="size-5" />} title="أهداف قريبة" subtitle="حافظ على الوجهة حاضرة." action={<Button variant="ghost" size="sm" onClick={() => setLocation("/goals")} className="gap-1 rounded-xl text-primary hover:bg-secondary">عرض<ChevronLeft className="size-4" /></Button>} /><div className="space-y-3 px-5 pb-5">{summary.isLoading ? <LoadingRows count={3} /> : data?.goals.length ? data.goals.map(goal => <button key={goal.id} onClick={() => setLocation("/goals")} className="pressable w-full rounded-2xl bg-muted/40 p-4 text-right hover:bg-secondary/55"><div className="mb-3 flex items-center justify-between gap-3"><p className="truncate font-semibold">{goal.title}</p><span className="num text-sm font-medium text-primary">{goal.progress}%</span></div><Progress value={goal.progress} className="h-1.5 bg-background" /><p className="mt-2 text-xs text-muted-foreground">{goal.completedTaskCount} من {goal.taskCount} مهام مكتملة</p></button>) : <EmptyBlock label="ابدأ بهدف واضح، ثم اربطه بمهام صغيرة." action="أنشئ هدفًا" onClick={() => setLocation("/goals")} />}</div></div>
-
-          <div className="app-card sf-home-panel sf-home-routine-panel overflow-hidden"><CardHeader icon={<SunMediumIcon />} title="إيقاع اليوم" subtitle="روتينك الصغير يصنع ثباتك." action={<Button variant="ghost" size="sm" onClick={() => setLocation("/routines")} className="gap-1 rounded-xl text-primary hover:bg-secondary">تعديل<ChevronLeft className="size-4" /></Button>} /><div className="px-5 pb-5">{summary.isLoading ? <LoadingRows count={3} /> : data?.routines.some(routine => routine.isActive && routine.items.some(item => item.isActive)) ? <div className="space-y-4">{data.routines.filter(routine => routine.isActive).map(routine => <div key={routine.id}><div className="mb-2 flex items-center justify-between"><p className="text-sm font-semibold">{routine.name}</p><span className="text-xs text-muted-foreground">{routine.period === "morning" ? "صباحًا" : routine.period === "evening" ? "مساءً" : "مخصص"}</span></div><div className="space-y-2">{routine.items.filter(item => item.isActive).slice(0, 4).map(item => <button key={item.id} onClick={() => toggleRoutine.mutate({ id: item.id, done: !item.completedToday, timeZone })} className="pressable flex w-full items-center gap-3 rounded-xl px-2 py-1.5 text-right hover:bg-muted/70"><span className={cn("flex size-5 shrink-0 items-center justify-center rounded-md border", item.completedToday ? "border-emerald-500 bg-emerald-500 text-white" : "border-border bg-background")}>{item.completedToday && <Check className="size-3" />}</span><span className={cn("flex-1 text-sm", item.completedToday && "text-muted-foreground line-through")}>{item.title}</span><span className="num text-[11px] text-muted-foreground">{item.durationMinutes} د</span></button>)}</div></div>)}</div> : <EmptyBlock label="صمّم روتينًا بسيطًا يساند يومك." action="أنشئ روتينًا" onClick={() => setLocation("/routines")} />}</div></div>
-
-          <div className="rounded-[1.35rem] border border-primary/10 bg-gradient-to-br from-secondary/85 to-card p-5 shadow-[0_16px_40px_-30px_rgba(45,37,92,.55)]"><div className="flex gap-4"><span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground"><Sparkles className="size-5" /></span><div><p className="font-bold">لست متأكدًا من البداية؟</p><p className="mt-1 text-sm leading-6 text-muted-foreground">اكتب ما تريد إنجازه، وسيحوّله المخطط الذكي إلى خطوات واقعية.</p><Button onClick={() => setLocation("/planner")} variant="link" className="mt-2 h-auto gap-1 px-0 text-primary">ابدأ التخطيط<ArrowLeft className="size-4" /></Button></div></div></div>
-        </div>
-      </section>
+        </motion.section>
       </>}
     </DashboardLayout>
   );
 }
 
-function StatCard({ label, value, sublabel, icon, tone }: { label: string; value: string | number; sublabel: string; icon: React.ReactNode; tone: "violet" | "amber" | "emerald" | "sky" }) {
-  const toneClass = { violet: "bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-200", amber: "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-200", emerald: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-200", sky: "bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-200" }[tone];
-  return <div className="app-card sf-stat-card pressable p-4 sm:p-5"><div className="flex items-start justify-between"><span className={cn("flex size-10 items-center justify-center rounded-2xl", toneClass)}>{icon}</span><span className="num text-2xl font-medium tracking-tight">{value}</span></div><p className="mt-5 text-sm font-semibold">{label}</p><p className="mt-1 text-xs text-muted-foreground">{sublabel}</p></div>;
-}
-
-function CardHeader({ icon, title, subtitle, action }: { icon: React.ReactNode; title: string; subtitle: string; action?: React.ReactNode }) {
-  return <div className="sf-card-header flex items-start justify-between gap-3 px-5 pb-4 pt-5 sm:px-6"><div className="flex gap-3"><span className="mt-0.5 flex size-9 items-center justify-center rounded-xl bg-secondary text-primary">{icon}</span><div><h2 className="font-bold">{title}</h2><p className="mt-1 text-xs text-muted-foreground">{subtitle}</p></div></div>{action}</div>;
-}
-
 function EmptyBlock({ label, action, onClick }: { label: string; action: string; onClick: () => void }) {
-  return <div className="flex min-h-32 flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted/25 px-5 py-5 text-center"><Circle className="mb-2 size-5 text-muted-foreground/60" /><p className="max-w-xs text-sm leading-6 text-muted-foreground">{label}</p><Button variant="link" onClick={onClick} className="mt-1 h-auto gap-1 text-primary"><Plus className="size-3.5" />{action}</Button></div>;
+  return <div className="sf-empty-block"><Circle size={19} /><p>{label}</p><Button variant="link" onClick={onClick}><Plus size={14} />{action}</Button></div>;
 }
-
-function LoadingRows({ count }: { count: number }) { return <>{Array.from({ length: count }).map((_, i) => <div key={i} className="flex items-center gap-3 py-4"><span className="size-6 animate-pulse rounded-full bg-muted" /><div className="flex-1 space-y-2"><div className="h-3.5 w-3/5 animate-pulse rounded bg-muted" /><div className="h-2.5 w-1/4 animate-pulse rounded bg-muted" /></div></div>)}</>; }
-function LoadingBookCards() { return <>{[0, 1].map(i => <div key={i} className="h-44 animate-pulse rounded-2xl bg-muted" />)}</>; }
-function SunMediumIcon() { return <Clock3 className="size-5" />; }
+function LoadingRows({ count }: { count: number }) {
+  return <div className="sf-folder-loading">{Array.from({ length: count }).map((_, i) => <div key={i}><span /><i /><i /></div>)}</div>;
+}
