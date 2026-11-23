@@ -6,7 +6,7 @@ import {
   Plus, RotateCcw, Search, Settings2, Sparkles, Timer, WandSparkles, X,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 
@@ -62,9 +62,15 @@ export default function WorkspaceInteractionHub() {
     if (!user) return;
     const onKeyDown = (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
-      if ((event.metaKey || event.ctrlKey) && key === "k") { event.preventDefault(); openPalette(); }
-      else if ((event.metaKey || event.ctrlKey) && event.shiftKey && key === "f") { event.preventDefault(); openFocus(); }
-      else if (event.key === "Escape") closeAll();
+      if ((event.metaKey || event.ctrlKey) && key === "k") {
+        event.preventDefault();
+        setQuickOpen(false); setFocusOpen(false); setPaletteOpen(true); setQuery(""); setActiveIndex(0);
+      } else if ((event.metaKey || event.ctrlKey) && event.shiftKey && key === "f") {
+        event.preventDefault();
+        setQuickOpen(false); setPaletteOpen(false); setFocusOpen(true);
+      } else if (event.key === "Escape") {
+        setQuickOpen(false); setPaletteOpen(false); setFocusOpen(false);
+      }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -104,7 +110,7 @@ export default function WorkspaceInteractionHub() {
     setTimerMode(mode); setEndAt(null); setRemaining(mode === "focus" ? FOCUS_SECONDS : BREAK_SECONDS);
   };
   const chooseCommand = (item: HubCommand) => navigate(item.path);
-  const handlePaletteKeys = (event: React.KeyboardEvent<HTMLInputElement>) => {
+  const handlePaletteKeys = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "ArrowDown") { event.preventDefault(); setActiveIndex(index => Math.min(filteredCommands.length - 1, index + 1)); }
     else if (event.key === "ArrowUp") { event.preventDefault(); setActiveIndex(index => Math.max(0, index - 1)); }
     else if (event.key === "Enter" && filteredCommands[activeIndex]) { event.preventDefault(); chooseCommand(filteredCommands[activeIndex]); }

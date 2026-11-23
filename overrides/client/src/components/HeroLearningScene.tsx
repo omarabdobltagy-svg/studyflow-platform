@@ -13,6 +13,7 @@ export default function HeroLearningScene() {
     let frame = 0;
     let disposed = false;
     let visible = true;
+    let pageVisible = !document.hidden;
     const pointerTarget = new THREE.Vector2(0, 0);
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const scene = new THREE.Scene();
@@ -126,37 +127,48 @@ export default function HeroLearningScene() {
       const onPointerLeave = () => pointerTarget.set(0, 0);
       canvas.addEventListener("pointermove", onPointerMove);
       canvas.addEventListener("pointerleave", onPointerLeave);
-      const visibilityObserver=new IntersectionObserver(entries=>{visible=entries.some(e=>e.isIntersecting);},{threshold:.04});
-      visibilityObserver.observe(host);
-      const onVisibility=()=>{visible=!document.hidden;};
-      document.addEventListener("visibilitychange",onVisibility);
-
       const render=(time:number)=>{
-        if(disposed||!renderer)return;
-        if(visible&&!document.hidden){
-          if(!reducedMotion){
-            const seconds=time*.001;
-            core.rotation.y += (Math.sin(seconds*.26)*.24 + pointerTarget.x*.19 - core.rotation.y)*.055;
-            core.rotation.x += (Math.cos(seconds*.2)*.13 + pointerTarget.y*.16 - core.rotation.x)*.055;
-            crystalWire.rotation.y += .0011;
-            crystalWire.rotation.x -= .0007;
-            dust.rotation.y += .00022;
-            dust.rotation.x = Math.sin(seconds*.13)*.08;
-            core.rotation.z=Math.sin(seconds*.16)*.06;
-            core.position.y=Math.sin(seconds*.48)*.055;
-            rings.forEach(ring=>{
-              ring.rotation.z+=ring.userData.speed*.002;
-              ring.rotation.x+=ring.userData.speed*.0007;
-            });
-            satellites.rotation.y-=.00065;
-            satellites.rotation.z+=.0003;
-            stage.rotation.y += (Math.sin(seconds*.12)*.1 + pointerTarget.x*.055 - stage.rotation.y)*.04;
-          }
-          renderer.render(scene,camera);
+        frame=0;
+        if(disposed||!renderer||!visible||!pageVisible)return;
+        if(!reducedMotion){
+          const seconds=time*.001;
+          core.rotation.y += (Math.sin(seconds*.26)*.24 + pointerTarget.x*.19 - core.rotation.y)*.055;
+          core.rotation.x += (Math.cos(seconds*.2)*.13 + pointerTarget.y*.16 - core.rotation.x)*.055;
+          crystalWire.rotation.y += .0011;
+          crystalWire.rotation.x -= .0007;
+          dust.rotation.y += .00022;
+          dust.rotation.x = Math.sin(seconds*.13)*.08;
+          core.rotation.z=Math.sin(seconds*.16)*.06;
+          core.position.y=Math.sin(seconds*.48)*.055;
+          rings.forEach(ring=>{
+            ring.rotation.z+=ring.userData.speed*.002;
+            ring.rotation.x+=ring.userData.speed*.0007;
+          });
+          satellites.rotation.y-=.00065;
+          satellites.rotation.z+=.0003;
+          stage.rotation.y += (Math.sin(seconds*.12)*.1 + pointerTarget.x*.055 - stage.rotation.y)*.04;
         }
-        frame=window.requestAnimationFrame(render);
+        renderer.render(scene,camera);
+        if(!reducedMotion && visible && pageVisible && !disposed) frame=window.requestAnimationFrame(render);
       };
-      frame=window.requestAnimationFrame(render);
+      const stopRender=()=>{
+        if(frame){window.cancelAnimationFrame(frame);frame=0;}
+      };
+      const startRender=()=>{
+        if(!disposed && visible && pageVisible && frame===0) frame=window.requestAnimationFrame(render);
+      };
+      const visibilityObserver=new IntersectionObserver(entries=>{
+        visible=entries.some(e=>e.isIntersecting);
+        if(visible) startRender(); else stopRender();
+      },{threshold:.04});
+      visibilityObserver.observe(host);
+      const onVisibility=()=>{
+        pageVisible=!document.hidden;
+        if(pageVisible) startRender(); else stopRender();
+      };
+      document.addEventListener("visibilitychange",onVisibility);
+      if(reducedMotion) renderer.render(scene,camera);
+      else startRender();
       return ()=>{
         disposed=true; window.cancelAnimationFrame(frame);
         resizeObserver.disconnect(); visibilityObserver.disconnect();
