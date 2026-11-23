@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode } from "react";
-import { AnimatePresence, motion, useMotionValue, useReducedMotion, useScroll, useSpring, useTransform } from "framer-motion";
+import { AnimatePresence, motion, useMotionValue, useReducedMotion, useScroll, useSpring, useTransform, type MotionValue } from "framer-motion";
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
 import QueryErrorNotice from "@/components/QueryErrorNotice";
@@ -38,7 +38,7 @@ const revealItem = {
   show: { opacity: 1, y: 0, filter: "blur(0px)", transition: { type: "spring", stiffness: 170, damping: 19 } },
 };
 
-function StudyOrb({ progress, y }: { progress: number | null; y: any }) {
+function StudyOrb({ progress, y }: { progress: number | null; y: MotionValue<number> }) {
   const reduceMotion = useReducedMotion();
   const pointerX = useMotionValue(0);
   const pointerY = useMotionValue(0);
@@ -120,6 +120,7 @@ function WorkspaceFolder({
     <motion.section
       layout
       className={cn("sf-folder", isOpen && "is-open")}
+      data-folder={id}
       transition={{ layout: { type: "spring", stiffness: 180, damping: 23 } }}
     >
       <motion.button
@@ -211,7 +212,7 @@ export default function Home() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
   const utils = trpc.useUtils();
-  const heroRef = useRef<HTMLElement>(null);
+  const heroRef = useRef<HTMLElement | null>(null);
   const reduceMotion = useReducedMotion();
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
   const summary = trpc.dashboard.summary.useQuery({ timeZone });
