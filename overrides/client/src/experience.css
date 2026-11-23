@@ -554,3 +554,15 @@ body { background:var(--background)!important; color:var(--foreground); }
 @media (prefers-reduced-motion:reduce) {
  .sf-shell-v3 *, .sf-shell-v3 *::before, .sf-shell-v3 *::after { scroll-behavior:auto!important; animation-duration:.01ms!important; transition-duration:.01ms!important; }
 }
+
+/* V4 internal-access identity, matching the workspace shell. */
+.sf-login-brand-v4 { display:flex; align-items:center; gap:11px; margin-bottom:32px; }
+.sf-login-brand-mark-v4 { display:grid; place-items:center; width:42px; height:42px; border-radius:11px; color:#213d41; background:#dce9e7; }
+.sf-login-brand-v4 b { display:block; color:var(--foreground); font-size:17px; font-weight:760; letter-spacing:-.03em; }
+.sf-login-brand-v4 small { display:block; margin-top:1px; color:var(--muted-foreground); font-size:10px; }
+.sf-login-frame-v4 .sf-login-form-heading h2 { margin-top:3px; }
+.sf-login-frame-v4 .sf-login-form-card { padding:34px; }
+@media (max-width:640px) {
+  .sf-login-brand-v4 { margin-bottom:25px; }
+  .sf-login-frame-v4 .sf-login-form-card { padding:25px 19px; }
+}
