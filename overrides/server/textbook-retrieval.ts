@@ -281,7 +281,7 @@ export function retrieveTextbookEvidence(
       const results = rankTextbookPassages(loadPages(subjectId), query, Math.max(1, Math.ceil(limit / Math.max(1, subjectIds.length))));
       passages.push(...results);
       if (subjectId === "PROG_AI_G2_BAC") {
-        coverageNotes.push("البرمجة والذكاء الاصطناعي: نص الجزء الثاني فقط متاح للاسترجاع حاليًا؛ الجزء الأول غير موجود ضمن ملفات المصدر الحالية.");
+        coverageNotes.push("البرمجة والذكاء الاصطناعي: نص الجزء الثاني (الفصول 5–7) متاح للاسترجاع. الجزء الأول (الفصول 1–4) له فهرس وصفحات مرجعية مسجلة في programming-part1-manifest.json، لكن نص صفحاته وصوره لم تُضم بعد إلى فهرس الاسترجاع؛ لا تنسب إجابة إلى محتواه قبل إتاحة صفحته للمساعد.");
       }
       if (subjectId === "ARB_G2_BAC") {
         coverageNotes.push("اللغة العربية: نص الجزء الأول متاح للاسترجاع؛ لا تفترض أن الأجزاء الأخرى مفهرسة.");
