@@ -566,3 +566,30 @@ body { background:var(--background)!important; color:var(--foreground); }
   .sf-login-brand-v4 { margin-bottom:25px; }
   .sf-login-frame-v4 .sf-login-form-card { padding:25px 19px; }
 }
+
+/* Remove remaining decorative gradients inherited by older page components. */
+.sf-shell-v3 .sf-main .onboarding-orb,
+.sf-shell-v3 .sf-main .blur-2xl,
+.sf-shell-v3 .sf-main [aria-hidden="true"].absolute.rounded-full { display:none!important; }
+.sf-shell-v3 .sf-page-books section:nth-of-type(3) > button > div:first-child {
+  background:#30484c!important;
+}
+.sf-shell-v3 .sf-page-books section:nth-of-type(3) > button > div:first-child svg { color:#d6e5e2; }
+.sf-shell-v3 .sf-page-assistant > section:first-child,
+.sf-shell-v3 .sf-page-assistant .sf-chat-layout { border-color:var(--border); }
+.sf-shell-v3 .sf-page-assistant > section:first-child > div:first-child {
+  background:var(--card)!important;
+}
+.sf-shell-v3 .sf-page-assistant > section:first-child > div:last-child > aside,
+.sf-shell-v3 .sf-page-assistant > section:first-child > div:last-child > div:last-child {
+  border-color:var(--border);
+  background:var(--background);
+  box-shadow:none;
+}
+.sf-shell-v3 .sf-page-routines .routine-step-card,
+.sf-shell-v3 .sf-page-goals .goal-card,
+.sf-shell-v3 .sf-page-tasks .app-card { border-radius:13px; }
+.sf-shell-v3 .sf-main .app-card .text-emerald-700,
+.sf-shell-v3 .sf-main .app-card .text-emerald-800 { color:#3e7768; }
+.dark .sf-shell-v3 .sf-main .app-card .text-emerald-700,
+.dark .sf-shell-v3 .sf-main .app-card .text-emerald-800 { color:#9ac7b8; }
