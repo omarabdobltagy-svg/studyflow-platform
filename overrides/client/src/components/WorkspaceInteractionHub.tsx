@@ -47,6 +47,8 @@ export default function WorkspaceInteractionHub() {
   const [remaining, setRemaining] = useState(FOCUS_SECONDS);
   const [endAt, setEndAt] = useState<number | null>(null);
   const completedEndAt = useRef<number | null>(null);
+  const hubRef = useRef<HTMLDivElement | null>(null);
+  const launcherRef = useRef<HTMLButtonElement | null>(null);
   const filteredCommands = useMemo(() => {
     const term = query.trim().toLocaleLowerCase("ar");
     if (!term) return commands;
@@ -69,12 +71,27 @@ export default function WorkspaceInteractionHub() {
         event.preventDefault();
         setQuickOpen(false); setPaletteOpen(false); setFocusOpen(true);
       } else if (event.key === "Escape") {
+        const restoreToolsFocus = quickOpen;
         setQuickOpen(false); setPaletteOpen(false); setFocusOpen(false);
+        if (restoreToolsFocus) window.requestAnimationFrame(() => launcherRef.current?.focus());
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [user]);
+  }, [quickOpen, user]);
+
+  // Close the tools panel on an outside tap; touches and mouse clicks share Pointer Events.
+  useEffect(() => {
+    if (!quickOpen) return;
+    const onOutsidePointer = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && hubRef.current && !hubRef.current.contains(target)) {
+        setQuickOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", onOutsidePointer);
+    return () => document.removeEventListener("pointerdown", onOutsidePointer);
+  }, [quickOpen]);
 
   useEffect(() => {
     if (endAt === null) return;
@@ -119,10 +136,10 @@ export default function WorkspaceInteractionHub() {
   if (!user) return null;
   return (
     <>
-      <div className="sf-hub-root" dir="rtl">
+      <div ref={hubRef} className="sf-hub-root" dir="rtl">
         <AnimatePresence>
           {quickOpen && (
-            <motion.section className="sf-hub-quick-menu" aria-label="الإجراءات السريعة"
+            <motion.section id="sf-hub-quick-menu" className="sf-hub-quick-menu" role="region" aria-label="الإجراءات السريعة"
               initial={reduceMotion ? false : { opacity: 0, y: 16, scale: 0.94 }} animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={reduceMotion ? undefined : { opacity: 0, y: 10, scale: 0.96 }} transition={{ type: "spring", stiffness: 340, damping: 26 }}>
               <div className="sf-hub-menu-heading"><span><Sparkles size={15} /> اختصارات مساحتك</span><small>انتقل مباشرة</small></div>
@@ -153,8 +170,9 @@ export default function WorkspaceInteractionHub() {
             title="جلسة تركيز — Ctrl Shift F" whileHover={reduceMotion ? undefined : { y: -3, scale: 1.04 }} whileTap={reduceMotion ? undefined : { scale: 0.94 }}>
             <Timer size={18} /><span>{isRunning ? formatTime(remaining) : "تركيز"}</span>{isRunning && <i aria-label="المؤقت يعمل" />}
           </motion.button>
-          <motion.button type="button" className="sf-hub-launcher" onClick={() => setQuickOpen(value => !value)}
-            aria-expanded={quickOpen} aria-label={quickOpen ? "إغلاق الإجراءات السريعة" : "فتح الإجراءات السريعة"}
+          <motion.button ref={launcherRef} type="button" className="sf-hub-launcher" onClick={() => setQuickOpen(value => !value)}
+            aria-controls="sf-hub-quick-menu" aria-expanded={quickOpen} aria-pressed={quickOpen}
+            aria-label={quickOpen ? "إغلاق أدوات StudyFlow" : "فتح أدوات StudyFlow"}
             whileHover={reduceMotion ? undefined : { y: -4, rotate: -2 }} whileTap={reduceMotion ? undefined : { scale: 0.94 }}
             transition={{ type: "spring", stiffness: 360, damping: 20 }}>
             <motion.span animate={{ rotate: quickOpen ? 45 : 0 }} transition={{ type: "spring", stiffness: 300, damping: 18 }}>

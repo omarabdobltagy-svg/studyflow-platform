@@ -52,8 +52,9 @@ function App() {
         <TooltipProvider>
           <WouterRouter>
             <Toaster />
-            <WorkspaceInteractionHub />
             <Router />
+            {/* Keep the global tools layer above routed page surfaces. */}
+            <WorkspaceInteractionHub />
           </WouterRouter>
         </TooltipProvider>
       </ThemeProvider>
