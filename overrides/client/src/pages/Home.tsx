@@ -1,5 +1,5 @@
-import { useRef, useState, type ReactNode } from "react";
-import { AnimatePresence, motion, useMotionValue, useReducedMotion, useScroll, useSpring, useTransform, type MotionValue, type Variants } from "framer-motion";
+import { useState, type ReactNode } from "react";
+import { AnimatePresence, motion, useReducedMotion, type Variants } from "framer-motion";
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
 import QueryErrorNotice from "@/components/QueryErrorNotice";
@@ -37,61 +37,6 @@ const revealItem: Variants = {
   hidden: { opacity: 0, y: 18, filter: "blur(5px)" },
   show: { opacity: 1, y: 0, filter: "blur(0px)", transition: { type: "spring", stiffness: 170, damping: 19 } },
 };
-
-function StudyOrb({ progress, y }: { progress: number | null; y: MotionValue<number> }) {
-  const reduceMotion = useReducedMotion();
-  const pointerX = useMotionValue(0);
-  const pointerY = useMotionValue(0);
-  const smoothX = useSpring(pointerX, { stiffness: 95, damping: 18, mass: 0.7 });
-  const smoothY = useSpring(pointerY, { stiffness: 95, damping: 18, mass: 0.7 });
-  const rotateY = useTransform(smoothX, [-1, 1], [-12, 12]);
-  const rotateX = useTransform(smoothY, [-1, 1], [10, -10]);
-
-  return (
-    <motion.div
-      className="sf-orb-stage"
-      style={{ y }}
-      onPointerMove={(event) => {
-        if (reduceMotion || event.pointerType !== "mouse") return;
-        const rect = event.currentTarget.getBoundingClientRect();
-        pointerX.set(((event.clientX - rect.left) / rect.width - 0.5) * 2);
-        pointerY.set(((event.clientY - rect.top) / rect.height - 0.5) * 2);
-      }}
-      onPointerLeave={() => { pointerX.set(0); pointerY.set(0); }}
-      aria-label="عنصر بصري تفاعلي يرمز إلى StudyFlow"
-    >
-      <div className="sf-orb-halo" />
-      <motion.div
-        className="sf-orb-orbit sf-orb-orbit-a"
-        animate={reduceMotion ? undefined : { rotate: 360 }}
-        transition={{ duration: 34, repeat: Infinity, ease: "linear" }}
-      />
-      <motion.div
-        className="sf-orb-orbit sf-orb-orbit-b"
-        animate={reduceMotion ? undefined : { rotate: -360 }}
-        transition={{ duration: 46, repeat: Infinity, ease: "linear" }}
-      />
-      <motion.div
-        className="sf-orb-object"
-        style={{ rotateX, rotateY }}
-        animate={reduceMotion ? undefined : { y: [0, -9, 0], rotateZ: [-2, 1.5, -2] }}
-        transition={{ duration: 7.5, repeat: Infinity, ease: "easeInOut" }}
-      >
-        <div className="sf-orb-inner-ring" />
-        <span>sf</span>
-        <small>STUDY / FLOW</small>
-        <i className="sf-orb-glint" />
-      </motion.div>
-      <motion.div className="sf-orb-chip sf-orb-chip-plan" animate={reduceMotion ? undefined : { y: [0, -6, 0] }} transition={{ duration: 5.2, repeat: Infinity, ease: "easeInOut" }}>
-        <Target size={13} /><span>PLAN</span>
-      </motion.div>
-      <motion.div className="sf-orb-chip sf-orb-chip-learn" animate={reduceMotion ? undefined : { y: [0, 7, 0] }} transition={{ duration: 6.4, repeat: Infinity, ease: "easeInOut" }}>
-        <BookOpenText size={13} /><span>LEARN</span>
-      </motion.div>
-      <div className="sf-orb-status"><span /> {progress === null ? "جاري قراءة تقدمك" : "إنجاز اليوم " + progress + "%"}</div>
-    </motion.div>
-  );
-}
 
 function WorkspaceFolder({
   id,
@@ -144,7 +89,7 @@ function WorkspaceFolder({
           <motion.div className="sf-folder-back" animate={isOpen ? { rotate: -2, y: -5 } : { rotate: 0, y: 0 }} transition={{ type: "spring", stiffness: 190, damping: 18 }} />
           <motion.div className="sf-folder-front" animate={isOpen ? { rotateX: -9, y: 9, skewX: -1 } : { rotateX: 0, y: 0, skewX: 0 }} transition={{ type: "spring", stiffness: 175, damping: 17 }}>
             <span className="sf-folder-emblem">{icon}</span>
-            <span className="sf-folder-index">{id.toUpperCase()} / SF</span>
+            <span className="sf-folder-index">{id}</span>
           </motion.div>
           <motion.span className="sf-folder-spark" animate={isOpen ? { opacity: 1, scale: 1, y: -6 } : { opacity: 0, scale: 0.5, y: 7 }} transition={{ duration: 0.35 }} />
         </div>
@@ -157,7 +102,7 @@ function WorkspaceFolder({
           <span className="sf-folder-count">{count}</span>
           <motion.span
             className="sf-folder-action"
-            animate={{ rotate: isOpen ? 45 : 0, backgroundColor: isOpen ? "#5265d9" : "rgba(255,255,255,.09)" }}
+            animate={{ rotate: isOpen ? 45 : 0, backgroundColor: isOpen ? "#6F4E37" : "rgba(255,255,255,.09)" }}
             transition={{ type: "spring", stiffness: 260, damping: 19 }}
           >
             {isOpen ? <X size={16} /> : <ArrowUpLeft size={16} />}
@@ -197,7 +142,7 @@ function DataRow({ children, onClick, trailing }: { children: ReactNode; onClick
       type="button"
       className="sf-data-row"
       onClick={onClick}
-      whileHover={{ x: -3, backgroundColor: "rgba(82,101,217,.075)" }}
+      whileHover={{ x: -3, backgroundColor: "rgba(111,78,55,.075)" }}
       whileTap={{ scale: 0.99 }}
       transition={{ duration: 0.2 }}
     >
@@ -212,7 +157,6 @@ export default function Home() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
   const utils = trpc.useUtils();
-  const heroRef = useRef<HTMLElement | null>(null);
   const reduceMotion = useReducedMotion();
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
   const summary = trpc.dashboard.summary.useQuery({ timeZone });
@@ -220,13 +164,7 @@ export default function Home() {
   const toggleRoutine = trpc.routines.toggleItem.useMutation({ onSuccess: () => void utils.dashboard.summary.invalidate() });
   const [openFolder, setOpenFolder] = useState<string | null>(null);
   const data = summary.data;
-  const completedRate = data ? (data.taskStats.total ? Math.round((data.taskStats.completed / data.taskStats.total) * 100) : 0) : null;
   const routineRate = data ? (data.routineStats.total ? Math.round((data.routineStats.completed / data.routineStats.total) * 100) : 0) : null;
-
-  const { scrollYProgress } = useScroll({ target: heroRef, offset: ["start start", "end start"] });
-  const orbY = useTransform(scrollYProgress, [0, 1], [0, 72]);
-  const orbScale = useTransform(scrollYProgress, [0, 1], [1, 0.9]);
-  const smoothOrbY = useSpring(orbY, { stiffness: 80, damping: 22 });
 
   const toggleFolder = (id: string) => {
     setOpenFolder(current => current === id ? null : id);
@@ -241,7 +179,7 @@ export default function Home() {
       {summary.isError && <QueryErrorNotice onRetry={() => void summary.refetch()} label="تعذّر تحميل ملخص يومك. لن نعرض أرقامًا صفرية قد توحي بأن بياناتك فارغة." />}
 
       {!summary.isError && <>
-        <section ref={heroRef} className="sf-home-hero">
+        <section className="sf-home-hero">
           <div className="sf-home-hero-grain" />
           <motion.div className="sf-home-hero-copy" variants={revealGroup} initial="hidden" animate="show">
             <motion.p className="sf-home-date" variants={revealItem}>{arabicDate()}</motion.p>
@@ -259,9 +197,17 @@ export default function Home() {
             </motion.div>
           </motion.div>
 
-          <motion.div className="sf-home-hero-art" style={{ scale: orbScale }}>
-            <StudyOrb progress={completedRate} y={smoothOrbY} />
-          </motion.div>
+          <motion.aside className="sf-home-next-card" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.45 }} aria-label="الخطوة الدراسية التالية">
+            <div className="sf-home-next-head"><span>الخطوة التالية</span><span>YOUR NEXT STEP</span></div>
+            <div className="sf-home-next-body">
+              {summary.isLoading ? <><small>ملخص اليوم</small><h3>نراجع مهامك المسجلة</h3><p>سيظهر هنا أقرب إجراء من قائمة مهامك.</p></>
+                : data?.tasks[0] ? <><small>{data.tasks[0].category || "مهمة دراسية"}</small><h3>{data.tasks[0].title}</h3><p>{data.tasks[0].dueAt ? "موعدها " + shortDate(data.tasks[0].dueAt) : "لا يوجد موعد محدد — ابدأ بها عندما تكون مستعدًا."}</p></>
+                : <><small>مساحتك مفتوحة</small><h3>لا توجد مهمة معلّقة الآن.</h3><p>أضف الخطوة التالية التي تريد إنجازها، وستظهر هنا مباشرة.</p></>}
+            </div>
+            <Button type="button" onClick={() => setLocation("/tasks")} className="sf-home-next-button">
+              {data?.tasks[0] ? "افتح المهمة" : "إدارة المهام"} <ArrowLeft size={15} />
+            </Button>
+          </motion.aside>
           <div className="sf-home-hero-bottom"><span>اسحب لاكتشاف مساحتك</span><i /></div>
         </section>
 

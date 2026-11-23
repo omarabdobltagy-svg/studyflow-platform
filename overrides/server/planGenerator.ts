@@ -12,11 +12,11 @@ const planSchema = z.object({
   steps: z.array(z.object({
     day: z.string().min(1).max(30),
     title: z.string().min(2).max(120),
-    detail: z.string().min(5).max(350),
+    detail: z.string().min(5).max(260),
     minutes: z.number().int().min(5).max(480),
     category: z.string().min(2).max(60),
-  })).min(3).max(10),
-  habits: z.array(z.object({ title: z.string().min(2).max(120), cue: z.string().min(2).max(160) })).min(1).max(4),
+  })).min(3).max(6),
+  habits: z.array(z.object({ title: z.string().min(2).max(120), cue: z.string().min(2).max(160) })).min(1).max(2),
   reviewQuestion: z.string().min(5).max(250),
 });
 
@@ -32,7 +32,7 @@ function plannerProviderError(error: unknown): Error {
     return new Error("مزود الذكاء الاصطناعي رفض بيانات اعتماد الخدمة. راجع المفتاح وصلاحياته.");
   }
   if (status === 402) {
-    return new Error("مزود الذكاء الاصطناعي رفض الطلب بسبب الرصيد أو الفوترة.");
+    return new Error("رصيد OpenRouter الحالي لا يكفي لتكلفة هذا الطلب. خفّضنا حجم الخطة وأعدنا المحاولة بطلب أقل تكلفة؛ إذا استمر الخطأ فستحتاج إضافة رصيد إلى حساب المزوّد.");
   }
   if (status === 429) {
     return new Error("وصل مزود الذكاء الاصطناعي إلى حد الطلبات مؤقتًا. حاول بعد قليل.");
@@ -181,12 +181,12 @@ export async function generatePersonalPlan(
   const dailyMinutes = Math.max(20, Math.min(600, Math.trunc(constraints.dailyMinutes ?? 120)));
   const profile = includeStudentProfile ? await getStudentProfile(userId) : null;
   const textbookRetrieval = profile
-    ? retrieveTextbookEvidence(profile.subjects || [], prompt, 4)
+    ? retrieveTextbookEvidence(profile.subjects || [], prompt, 2)
     : { passages: [], coverageNotes: [] };
-  const textbookContext = formatTextbookEvidence(textbookRetrieval);
-  const context = profile
+  const textbookContext = formatTextbookEvidence(textbookRetrieval).slice(0, 1_700);
+  const context = (profile
     ? buildLearningContext(profile) + "\n\nمصادر نصية من الكتب الرسمية مرتبطة بطلب الخطة:\n" + (textbookContext || "لم يتم استرجاع مقتطف مطابق من كتاب متاح.")
-    : "لم يطلب المستخدم تخصيص الخطة بالملف الدراسي.";
+    : "لم يطلب المستخدم تخصيص الخطة بالملف الدراسي.").slice(0, 3_600);
   const system = [
     "أنت محرك التخطيط الدراسي داخل StudyFlow، ولست مساعد دردشة عام.",
     "حلّل فجوة المنهج المحسوبة تلقائيًا لكل فرع مستقل داخل المادة، وموضع الطالب وموضع التدريس المرجعي داخل الفرع نفسه، وتقدم SQ3R ونتائج التقييم وصعوبة الدروس؛ ثم ابنِ خطة عملية متوازنة.",
@@ -198,27 +198,40 @@ export async function generatePersonalPlan(
     constraints.startDate ? "تاريخ بداية التنفيذ: " + constraints.startDate + "." : "تاريخ البداية يحدده الطالب عند اعتماد الخطة.",
     "احترم سعة اليوم المحددة من الطالب. لا تتجاوزها، ووزع الخطة واقعيًا مع هامش تعويض. إذا نقصت البيانات فاختر بداية تدريجية واذكر الافتراض في الملخص.",
     "لا تعتبر غياب السجل دليلًا على الإنجاز، ولا توبّخ الطالب.",
-    "أخرج كائن JSON فقط بالعربية وبالحقول: title, summary, durationLabel, steps (3-10 عناصر فيها day,title,detail,minutes,category), habits (1-4 عناصر فيها title,cue), reviewQuestion.",
+    "أخرج JSON صحيحًا فقط بالعربية: title, summary, durationLabel, steps (3-6 خطوات فيها day,title,detail,minutes,category), habits (1-2 فيها title,cue), reviewQuestion. اجعل التفاصيل موجزة ومحددة.",
     "كل خطوة يجب أن تحدد المادة والوحدة/الفرع والدرس وطريقة مذاكرته، لا عنوانًا عامًا.",
   ].join("\n");
-  const user = "طلب الطالب أو قيوده الجديدة:\n" + prompt + "\n\nبيانات الملف الدراسي الحالية:\n" + context;
+  const user = "طلب الطالب أو قيوده الجديدة:\n" + prompt.slice(0, 1_200) + "\n\nبيانات الملف الدراسي الحالية:\n" + context;
   let response;
+  const invokeCompact = async (maxTokens: number, compact = false, jsonMode = true) => invokeLLM({
+    maxTokens,
+    ...(jsonMode ? { response_format: { type: "json_object" as const } } : {}),
+    messages: [
+      { role: "system", content: compact ? system.slice(0, 2_900) + "\nأخرج JSON موجزًا فقط." : system },
+      { role: "user", content: compact ? user.slice(0, 4_000) : user },
+    ],
+  });
   try {
     try {
-      response = await invokeLLM({
-        maxTokens: 2500,
-        response_format: { type: "json_object" },
-        messages: [{ role: "system", content: system }, { role: "user", content: user }],
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      // A provider that does not support JSON mode gets one compatible retry.
-      // Deterministic 4xx responses are returned immediately by fetchWithBackoff.
-      if (!/response_format|json_object|structured output|unsupported|not support/i.test(message)) throw error;
-      response = await invokeLLM({
-        maxTokens: 2500,
-        messages: [{ role: "system", content: system + "\nاكتب JSON صحيحًا فقط دون Markdown." }, { role: "user", content: user }],
-      });
+      response = await invokeCompact(1_400);
+    } catch (firstError) {
+      const firstMessage = firstError instanceof Error ? firstError.message : String(firstError);
+      const status = Number(firstMessage.match(/LLM invoke failed:\s*(\d{3})/i)?.[1] ?? 0);
+      const unsupportedJson = /response_format|json_object|structured output|unsupported|not support/i.test(firstMessage);
+      const creditLimited = status === 402 || /insufficient_quota|openrouter_credits|more credits/i.test(firstMessage);
+      if (creditLimited) {
+        try {
+          response = await invokeCompact(850, true, true);
+        } catch (retryError) {
+          const retryMessage = retryError instanceof Error ? retryError.message : String(retryError);
+          if (!/response_format|json_object|structured output|unsupported|not support/i.test(retryMessage)) throw retryError;
+          response = await invokeCompact(850, true, false);
+        }
+      } else if (unsupportedJson) {
+        response = await invokeCompact(1_400, false, false);
+      } else {
+        throw firstError;
+      }
     }
   } catch (error) {
     console.error("[StudyFlow planner] Provider request failed:", error instanceof Error ? error.message : String(error));

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { randomUUID, timingSafeEqual } from "node:crypto";
+import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
 import { SignJWT } from "jose";
 import { TRPCError } from "@trpc/server";
 import { COOKIE_NAME } from "@shared/const";
@@ -23,7 +23,11 @@ import {
   deleteRoutine,
   deleteTask,
   deleteCalendarEvent,
-  ensureLocalAuthUser,
+  createLocalAuthUser,
+  deleteLocalAuthUser,
+  getUserByOpenId,
+  getUserByUsername,
+  touchUserLastSignedIn,
   getBookDetail,
   getDashboard,
   getLibraryAttachmentForDownload,
@@ -74,10 +78,32 @@ const LOCAL_SESSION_AUDIENCE = "studyflow-app";
 const LOCAL_SESSION_MS = 30 * 24 * 60 * 60 * 1000;
 const loginAttempts = new Map<string, { count: number; resetAt: number }>();
 
-function secureStringEqual(candidate: string, expected: string) {
-  const left = Buffer.from(candidate, "utf8");
-  const right = Buffer.from(expected, "utf8");
-  return left.length === right.length && timingSafeEqual(left, right);
+function hashLocalPassword(password: string) {
+  const salt = randomBytes(16).toString("hex");
+  const derived = scryptSync(password, salt, 64).toString("hex");
+  return `scrypt${salt}${derived}`;
+}
+
+function verifyLocalPassword(password: string, stored: string | null | undefined) {
+  if (!stored) return false;
+  const [algorithm, salt, expectedHex] = stored.split("$");
+  if (algorithm !== "scrypt" || !salt || !expectedHex || !/^[a-f0-9]{128}$/i.test(expectedHex)) return false;
+  const candidate = scryptSync(password, salt, 64);
+  const expected = Buffer.from(expectedHex, "hex");
+  return candidate.length === expected.length && timingSafeEqual(candidate, expected);
+}
+
+function toPublicAuthUser(user: NonNullable<Awaited<ReturnType<typeof getUserByUsername>>>) {
+  return {
+    id: user.id,
+    name: user.name,
+    username: user.username,
+    email: user.email,
+    phone: user.phone,
+    role: user.role,
+    createdAt: user.createdAt,
+    lastSignedIn: user.lastSignedIn,
+  };
 }
 
 function getLoginAttemptBucket(ip: string, now: number) {
@@ -129,64 +155,97 @@ export const appRouter = router({
   auth: router({
     login: publicProcedure
       .input(z.object({
-        username: z.string().trim().min(1).max(80),
+        username: z.string().trim().min(3).max(32).regex(/^[A-Za-z0-9._-]+$/),
         password: z.string().min(1).max(160),
       }))
       .mutation(async ({ ctx, input }) => {
-        const expectedUsername = process.env.APP_LOGIN_USERNAME?.trim();
-        const expectedPassword = process.env.APP_LOGIN_PASSWORD;
         const sessionSecret = process.env.APP_SESSION_SECRET;
-        if (!expectedUsername || !expectedPassword || !sessionSecret) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "تسجيل الدخول غير مُهيأ على الخادم." });
-        }
-
+        if (!sessionSecret) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "تسجيل الدخول غير مُهيأ على الخادم." });
         const ip = ctx.req.ip || ctx.req.socket.remoteAddress || "unknown";
         const bucket = getLoginAttemptBucket(ip, Date.now());
-        if (bucket.count >= 5) {
-          throw new TRPCError({ code: "FORBIDDEN", message: "محاولات كثيرة. انتظر 15 دقيقة ثم حاول مرة أخرى." });
-        }
-
-        const validUsername = secureStringEqual(input.username, expectedUsername);
-        const validPassword = secureStringEqual(input.password, expectedPassword);
-        if (!validUsername || !validPassword) {
+        if (bucket.count >= 5) throw new TRPCError({ code: "FORBIDDEN", message: "محاولات كثيرة. انتظر 15 دقيقة ثم حاول مرة أخرى." });
+        const user = await getUserByUsername(input.username.toLowerCase());
+        if (!user || !verifyLocalPassword(input.password, user.passwordHash)) {
           bucket.count += 1;
           throw new TRPCError({ code: "UNAUTHORIZED", message: "اسم المستخدم أو كلمة المرور غير صحيحة." });
         }
         loginAttempts.delete(ip);
-
-        let user;
-        try {
-          user = await ensureLocalAuthUser(expectedUsername);
-        } catch (error) {
-          if (error instanceof Error && error.message === "MULTIPLE_EXISTING_USERS") {
-            throw new TRPCError({
-              code: "CONFLICT",
-              message: "وجدنا أكثر من حساب محفوظ. لم ندمج الحسابات أو ننقل البيانات تلقائيًا.",
-            });
-          }
-          console.error("[Local Auth] Could not prepare the local user", error);
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "تعذّر تجهيز حسابك. لم يتم حذف أي بيانات." });
-        }
-
+        await touchUserLastSignedIn(user.id);
         const token = await new SignJWT({})
           .setProtectedHeader({ alg: "HS256" })
-          .setSubject(LOCAL_AUTH_OPEN_ID)
+          .setSubject(user.openId)
           .setIssuer(LOCAL_SESSION_ISSUER)
           .setAudience(LOCAL_SESSION_AUDIENCE)
           .setIssuedAt()
           .setExpirationTime("30d")
           .sign(new TextEncoder().encode(sessionSecret));
-
-        ctx.res.cookie(COOKIE_NAME, token, {
-          ...getSessionCookieOptions(ctx.req),
-          maxAge: LOCAL_SESSION_MS,
-        });
-        return user;
+        ctx.res.cookie(COOKIE_NAME, token, { ...getSessionCookieOptions(ctx.req), maxAge: LOCAL_SESSION_MS });
+        return toPublicAuthUser(user);
       }),
-    me: publicProcedure.query(opts => opts.ctx.user ?? null),
+
+    register: publicProcedure
+      .input(z.object({
+        name: z.string().trim().min(2).max(80),
+        username: z.string().trim().min(3).max(32).regex(/^[A-Za-z0-9._-]+$/, "اسم المستخدم يقبل الحروف الإنجليزية والأرقام والنقطة والشرطة فقط."),
+        password: z.string().min(10).max(160),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const sessionSecret = process.env.APP_SESSION_SECRET;
+        if (!sessionSecret) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "إنشاء الحساب غير مُهيأ على الخادم." });
+        const ip = ctx.req.ip || ctx.req.socket.remoteAddress || "unknown";
+        const bucket = getLoginAttemptBucket(ip, Date.now());
+        if (bucket.count >= 5) throw new TRPCError({ code: "FORBIDDEN", message: "وصلت إلى عدد محاولات التسجيل المسموح. حاول بعد 15 دقيقة." });
+        const username = input.username.trim().toLowerCase();
+        if (await getUserByUsername(username)) {
+          bucket.count += 1;
+          throw new TRPCError({ code: "CONFLICT", message: "اسم المستخدم مستخدم بالفعل. اختر اسمًا آخر." });
+        }
+        let user;
+        try {
+          user = await createLocalAuthUser({ username, name: input.name, passwordHash: hashLocalPassword(input.password) });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          if (/ER_DUP_ENTRY|duplicate/i.test(message)) throw new TRPCError({ code: "CONFLICT", message: "اسم المستخدم مستخدم بالفعل. اختر اسمًا آخر." });
+          throw error;
+        }
+        loginAttempts.delete(ip);
+        const token = await new SignJWT({})
+          .setProtectedHeader({ alg: "HS256" })
+          .setSubject(user.openId)
+          .setIssuer(LOCAL_SESSION_ISSUER)
+          .setAudience(LOCAL_SESSION_AUDIENCE)
+          .setIssuedAt()
+          .setExpirationTime("30d")
+          .sign(new TextEncoder().encode(sessionSecret));
+        ctx.res.cookie(COOKIE_NAME, token, { ...getSessionCookieOptions(ctx.req), maxAge: LOCAL_SESSION_MS });
+        return toPublicAuthUser(user);
+      }),
+
+    me: publicProcedure.query(({ ctx }) => ctx.user ? toPublicAuthUser(ctx.user) : null),
+
+    deleteAccount: protectedProcedure
+      .input(z.object({
+        password: z.string().min(1).max(160),
+        confirmation: z.literal("حذف حسابي"),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const user = await getUserByOpenId(ctx.user.openId);
+        if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "الحساب غير موجود." });
+        if (!verifyLocalPassword(input.password, user.passwordHash)) {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "كلمة المرور غير صحيحة؛ لم يتم حذف أي بيانات." });
+        }
+        try {
+          await deleteLocalAuthUser(user.id);
+        } catch (error) {
+          console.error("[Local Auth] Account deletion failed", error);
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "تعذّر إكمال حذف الحساب. لم يتم حذف سجل الحساب؛ أعد المحاولة." });
+        }
+        ctx.res.clearCookie(COOKIE_NAME, getSessionCookieOptions(ctx.req));
+        return { success: true } as const;
+      }),
+
     logout: publicProcedure.mutation(({ ctx }) => {
-      const cookieOptions = getSessionCookieOptions(ctx.req);
-      ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
+      ctx.res.clearCookie(COOKIE_NAME, getSessionCookieOptions(ctx.req));
       return { success: true } as const;
     }),
   }),

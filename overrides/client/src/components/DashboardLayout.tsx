@@ -57,7 +57,17 @@ export default function DashboardLayout({ title, description, children, action }
   const trpcUtils = trpc.useUtils();
   const [loginUsername, setLoginUsername] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
+  const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const [registerName, setRegisterName] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [authFormError, setAuthFormError] = useState("");
   const loginMutation = trpc.auth.login.useMutation({
+    onSuccess: (authenticatedUser) => {
+      trpcUtils.auth.me.setData(undefined, authenticatedUser);
+      void trpcUtils.invalidate();
+    },
+  });
+  const registerMutation = trpc.auth.register.useMutation({
     onSuccess: (authenticatedUser) => {
       trpcUtils.auth.me.setData(undefined, authenticatedUser);
       void trpcUtils.invalidate();
@@ -105,62 +115,49 @@ export default function DashboardLayout({ title, description, children, action }
               <span><b>StudyFlow</b><small>مساحة التعلّم</small></span>
             </div>
             <div className="sf-login-form-heading">
-              <p className="sf-auth-eyebrow">الدخول إلى مساحة العمل</p>
-              <h2>أهلًا بعودتك</h2>
-              <p>استخدم بيانات الدخول المعتمدة للوصول إلى مساحة StudyFlow.</p>
+              <p className="sf-auth-eyebrow">{authMode === "register" ? "إنشاء حساب جديد" : "الدخول إلى مساحة العمل"}</p>
+              <h2>{authMode === "register" ? "ابدأ مساحتك الدراسية" : "أهلًا بعودتك"}</h2>
+              <p>{authMode === "register" ? "أنشئ حسابًا مستقلًا لحفظ خطتك وبياناتك وتقدمك." : "سجّل الدخول للوصول إلى مساحتك الدراسية وبياناتك المحفوظة."}</p>
             </div>
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                loginMutation.mutate({ username: loginUsername, password: loginPassword });
-              }}
-              className="sf-login-form"
-            >
+            <div className="sf-auth-mode-tabs" role="tablist" aria-label="نوع الدخول">
+              <button type="button" role="tab" aria-selected={authMode === "login"} aria-pressed={authMode === "login"} onClick={() => { setAuthMode("login"); setAuthFormError(""); }}>تسجيل الدخول</button>
+              <button type="button" role="tab" aria-selected={authMode === "register"} aria-pressed={authMode === "register"} onClick={() => { setAuthMode("register"); setAuthFormError(""); }}>إنشاء حساب</button>
+            </div>
+            <form onSubmit={(event) => {
+              event.preventDefault(); setAuthFormError("");
+              if (authMode === "register") {
+                if (loginPassword.length < 10) { setAuthFormError("كلمة المرور يجب ألا تقل عن 10 أحرف."); return; }
+                if (loginPassword !== confirmPassword) { setAuthFormError("كلمتا المرور غير متطابقتين."); return; }
+                registerMutation.mutate({ name: registerName, username: loginUsername, password: loginPassword }); return;
+              }
+              loginMutation.mutate({ username: loginUsername, password: loginPassword });
+            }} className="sf-login-form">
+              {authMode === "register" && <div className="space-y-2">
+                <Label htmlFor="studyflow-register-name">الاسم الظاهر</Label>
+                <Input id="studyflow-register-name" value={registerName} onChange={event => setRegisterName(event.target.value)} autoComplete="name" placeholder="اكتب اسمك" required maxLength={80} className="sf-auth-input" />
+              </div>}
               <div className="space-y-2">
                 <Label htmlFor="studyflow-username">اسم المستخدم</Label>
-                <Input
-                  id="studyflow-username"
-                  value={loginUsername}
-                  onChange={(event) => setLoginUsername(event.target.value)}
-                  autoComplete="username"
-                  placeholder="اكتب اسم المستخدم"
-                  required
-                  dir="ltr"
-                  className="sf-auth-input text-left"
-                />
+                <Input id="studyflow-username" value={loginUsername} onChange={event => setLoginUsername(event.target.value)} autoComplete="username" placeholder="مثال: omar_2026" required minLength={3} maxLength={32} pattern="[A-Za-z0-9._-]{3,32}" title="استخدم أحرفًا إنجليزية أو أرقامًا أو نقطة أو شرطة سفلية." dir="ltr" className="sf-auth-input text-left" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="studyflow-password">كلمة المرور</Label>
-                <Input
-                  id="studyflow-password"
-                  type="password"
-                  value={loginPassword}
-                  onChange={(event) => setLoginPassword(event.target.value)}
-                  autoComplete="current-password"
-                  placeholder="اكتب كلمة المرور"
-                  required
-                  className="sf-auth-input"
-                />
+                <Input id="studyflow-password" type="password" value={loginPassword} onChange={event => setLoginPassword(event.target.value)} autoComplete={authMode === "register" ? "new-password" : "current-password"} placeholder={authMode === "register" ? "10 أحرف على الأقل" : "اكتب كلمة المرور"} required minLength={authMode === "register" ? 10 : 1} className="sf-auth-input" />
               </div>
-              {loginMutation.error && (
-                <p role="alert" className="sf-auth-error-message">
-                  {loginMutation.error.message}
-                </p>
-              )}
-              <Button
-                type="submit"
-                disabled={loginMutation.isPending}
-                size="lg"
-                className="sf-auth-submit pressable w-full rounded-2xl font-bold"
-              >
-                {loginMutation.isPending ? "جارٍ تسجيل الدخول..." : "دخول"}
+              {authMode === "register" && <div className="space-y-2">
+                <Label htmlFor="studyflow-confirm-password">تأكيد كلمة المرور</Label>
+                <Input id="studyflow-confirm-password" type="password" value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} autoComplete="new-password" placeholder="أعد كتابة كلمة المرور" required minLength={10} className="sf-auth-input" />
+              </div>}
+              {(authFormError || (authMode === "register" ? registerMutation.error?.message : loginMutation.error?.message)) && <p role="alert" className="sf-auth-error-message">{authFormError || (authMode === "register" ? registerMutation.error?.message : loginMutation.error?.message)}</p>}
+              <Button type="submit" disabled={loginMutation.isPending || registerMutation.isPending} size="lg" className="sf-auth-submit pressable w-full rounded-2xl font-bold">
+                {registerMutation.isPending ? "جارٍ إنشاء الحساب..." : loginMutation.isPending ? "جارٍ تسجيل الدخول..." : authMode === "register" ? "إنشاء حساب" : "دخول"}
                 <ChevronLeft className="size-4" />
               </Button>
             </form>
-            <div className="sf-login-security">
-              <span className="sf-security-mark"><span /></span>
-              <p>دخول خاص إلى مساحة العمل الحالية.</p>
-            </div>
+            <button type="button" className="sf-auth-mode-switch" onClick={() => { setAuthMode(authMode === "login" ? "register" : "login"); setAuthFormError(""); }}>
+              {authMode === "login" ? "ليس لديك حساب؟ أنشئ حسابًا جديدًا" : "لديك حساب بالفعل؟ سجّل الدخول"}
+            </button>
+            <div className="sf-login-security"><span className="sf-security-mark"><span /></span><p>بيانات حسابك وملفك الدراسي محفوظة بشكل مستقل.</p></div>
           </div>
         </section>
       </div>

@@ -19,11 +19,15 @@ export const users = mysqlTable("users", {
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
   phone: varchar("phone", { length: 20 }),
+  username: varchar("username", { length: 80 }),
+  passwordHash: varchar("passwordHash", { length: 255 }),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
-});
+}, table => [
+  uniqueIndex("users_username_unique").on(table.username),
+]);
 
 export const studentProfiles = mysqlTable(
   "studentProfiles",

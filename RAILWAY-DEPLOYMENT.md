@@ -16,17 +16,15 @@ Database migrations are schema changes, not a server-startup task. Apply them se
 Keep the MySQL service and its persistent volume intact when deploying the application.
 
 
-## Local StudyFlow sign-in
+## Local StudyFlow accounts
 
-The app uses its own same-origin login form and a signed HttpOnly session cookie. It does not require the Manus OAuth portal.
+StudyFlow uses separate username/password accounts and signed HttpOnly session cookies. Passwords are stored as salted scrypt hashes and are never returned to the browser.
 
-Set these variables on the **StudyFlow app** service:
+- `APP_SESSION_SECRET` is required to sign 30-day sessions.
+- `APP_LOGIN_USERNAME` and `APP_LOGIN_PASSWORD` are used only once by the preview migration script to preserve the former owner account; they are not shared credentials for newly registered users.
+- The users table has nullable `username` and `passwordHash` columns plus a unique username index. The additive migration is idempotent and uses a persistent migration marker so deleting the former owner account cannot silently recreate it.
 
-- `APP_LOGIN_USERNAME`: the local username.
-- `APP_LOGIN_PASSWORD`: the local password; keep it server-side.
-- `APP_SESSION_SECRET`: a long random secret used to sign 30-day sessions.
-
-Do not place any of these values in a `VITE_` variable or in the repository. No database schema migration is required for local sign-in. The local account adopts the only existing user row when one exists, preserving its user ID and linked study data; if multiple existing user rows are found, the login flow refuses to guess which one owns the data.
+The migration preserves the existing owner row and its user ID. Account deletion verifies the current password, requires an explicit confirmation phrase, removes S3-backed attachments, and cascades the account's database records. The legacy Forge storage API does not expose object deletion in this application.
 
 
 ## AI provider

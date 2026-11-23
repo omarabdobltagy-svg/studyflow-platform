@@ -5,7 +5,6 @@ import type { User } from "../../drizzle/schema";
 import { COOKIE_NAME } from "@shared/const";
 import { getUserByOpenId } from "../db";
 
-const LOCAL_AUTH_OPEN_ID = "studyflow-local-owner";
 const LOCAL_SESSION_ISSUER = "studyflow-local";
 const LOCAL_SESSION_AUDIENCE = "studyflow-app";
 
@@ -30,8 +29,8 @@ export async function createContext(
           new TextEncoder().encode(sessionSecret),
           { issuer: LOCAL_SESSION_ISSUER, audience: LOCAL_SESSION_AUDIENCE }
         );
-        if (payload.sub === LOCAL_AUTH_OPEN_ID) {
-          user = (await getUserByOpenId(LOCAL_AUTH_OPEN_ID)) ?? null;
+        if (typeof payload.sub === "string" && payload.sub.length > 0) {
+          user = (await getUserByOpenId(payload.sub)) ?? null;
         }
       }
     } catch {
