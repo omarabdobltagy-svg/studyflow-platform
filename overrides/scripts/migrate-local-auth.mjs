@@ -39,12 +39,9 @@ try {
     console.log("[local-auth] Added unique username index");
   }
 
-  await connection.query(`
-    CREATE TABLE IF NOT EXISTS `studyflow_migrations` (
-      `id` VARCHAR(100) NOT NULL PRIMARY KEY,
-      `completedAt` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-  `);
+  await connection.query(
+    "CREATE TABLE IF NOT EXISTS studyflow_migrations (id VARCHAR(100) NOT NULL PRIMARY KEY, completedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+  );
 
   const [markers] = await connection.query(
     "SELECT id FROM `studyflow_migrations` WHERE id = ? LIMIT 1",
