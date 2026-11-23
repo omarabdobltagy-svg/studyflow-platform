@@ -296,8 +296,8 @@ const computeBackoffDelay = (
   return Math.min(Math.max(jittered, retryAfterMs ?? 0), RETRY_MAX_DELAY_MS);
 };
 
-// Retries non-2xx responses and network errors with exponential backoff, then
-// returns the final Response so callers keep their existing error handling.
+// Retries transient provider responses and network errors with exponential backoff.
+// Deterministic 4xx responses return immediately for caller-side fallback/error handling.
 const isRetryableStatus = (status: number) =>
   status === 408 || status === 425 || status === 429 || status >= 500;
 
