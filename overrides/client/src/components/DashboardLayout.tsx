@@ -282,9 +282,6 @@ export default function DashboardLayout({ title, description, children, action }
                 {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
               </Button>
               <span className="sf-topbar-avatar" aria-label={user.name || "ملف الطالب"}>{initial}</span>
-              <Button variant="outline" size="icon" className="sf-mobile-menu pressable" onClick={() => setMobileNavOpen(true)} aria-label="فتح التنقل">
-                <Menu className="size-5" />
-              </Button>
             </div>
           </header>
 
@@ -315,21 +312,17 @@ export default function DashboardLayout({ title, description, children, action }
             </button>
           );
         })}
-        <button type="button" className="sf-mobile-dock-item" onClick={() => setMobileNavOpen(true)} aria-label="عرض باقي الصفحات">
+        <button type="button" className="sf-mobile-dock-item" onClick={() => setMobileNavOpen(true)} aria-label="عرض كل الأقسام">
           <Menu className="size-[18px]" />
-          <span>المزيد</span>
+          <span>الأقسام</span>
         </button>
       </nav>
 
       <Sheet open={isMobileNavOpen} onOpenChange={setMobileNavOpen}>
-        <SheetContent side="right" className="sf-mobile-sheet w-[min(88vw,340px)] border-l-0 p-0 text-sidebar-foreground">
+        <SheetContent side="bottom" className="sf-mobile-sheet rounded-t-3xl border-x-0 border-b-0 p-0 text-sidebar-foreground">
           <SheetHeader className="sf-mobile-sheet-header">
-            <div className="sf-brand">
-              <span className="sf-brand-mark"><BrandMark className="size-5" /></span>
-              <span className="sf-brand-copy"><b>StudyFlow</b><small>STUDENT WORKSPACE</small></span>
-            </div>
-            <SheetTitle className="sr-only">التنقل الرئيسي</SheetTitle>
-            <SheetDescription className="sr-only">اختر الصفحة التي تريد فتحها.</SheetDescription>
+            <SheetTitle>كل أقسام StudyFlow</SheetTitle>
+            <SheetDescription>اختر المساحة التي تريد الانتقال إليها.</SheetDescription>
           </SheetHeader>
           <div className="sf-mobile-sheet-body">
             {renderNavigation(true)}
