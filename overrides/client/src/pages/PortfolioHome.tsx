@@ -49,7 +49,7 @@ function PortfolioHeader() {
 
       <nav className="sfp-nav" aria-label="التنقل الرئيسي">
         {navigation.map(({ label, id, icon: Icon }) => (
-          <a key={id} className="sfp-nav-item" href={\`#\${id}\`} aria-label={label}>
+          <a key={id} className="sfp-nav-item" href={"#" + id} aria-label={label}>
             <span className="sfp-nav-icon"><Icon size={18} strokeWidth={1.7} /></span>
             <span className="sfp-nav-tooltip">{label}</span>
           </a>
@@ -67,7 +67,7 @@ function PortfolioHeader() {
 
       {menuOpen && (
         <nav className="sfp-mobile-menu" aria-label="قائمة الهاتف">
-          {navigation.map(item => <a key={item.id} href={\`#\${item.id}\`} onClick={() => setMenuOpen(false)}>{item.label}<ArrowUpLeft size={15} /></a>)}
+          {navigation.map(item => <a key={item.id} href={"#" + item.id} onClick={() => setMenuOpen(false)}>{item.label}<ArrowUpLeft size={15} /></a>)}
           <button onClick={() => setLocation("/workspace")}>افتح مساحة الطالب<ArrowUpLeft size={15} /></button>
         </nav>
       )}
@@ -85,7 +85,7 @@ function FolderCard({ kind, title, subtitle, open, onToggle, children }: {
 }) {
   const Icon = open ? FolderOpen : Folder;
   return (
-    <section className={\`sfp-folder-card sfp-folder-\${kind} \${open ? "is-open" : ""}\`}>
+    <section className={"sfp-folder-card sfp-folder-" + kind + (open ? " is-open" : "")}>
       <button className="sfp-folder-trigger" onClick={onToggle} aria-expanded={open}>
         <div className="sfp-folder-art" aria-hidden="true">
           <div className="sfp-folder-tab" />
@@ -121,7 +121,7 @@ function ProductMiniPreview() {
           <div className="sfp-mini-heading"><small>مساحة التعلّم</small><b>خطتك، بصورة أوضح.</b></div>
           <div className="sfp-mini-stats"><span><i /> <b>التقدم</b><strong>72%</strong></span><span><i /> <b>المهام</b><strong>08</strong></span><span><i /> <b>الأهداف</b><strong>03</strong></span></div>
           <div className="sfp-mini-lower">
-            <div className="sfp-mini-chart"><b>إيقاع الأسبوع</b><div>{[34, 58, 43, 76, 51, 88, 64].map((height, i) => <i key={i} style={{ height: \`\${height}%\` }} />)}</div></div>
+            <div className="sfp-mini-chart"><b>إيقاع الأسبوع</b><div>{[34, 58, 43, 76, 51, 88, 64].map((height, i) => <i key={i} style={{ height: String(height) + "%" }} />)}</div></div>
             <div className="sfp-mini-tasks"><b>الخطوة التالية</b><span /><span /><span /></div>
           </div>
         </div>
