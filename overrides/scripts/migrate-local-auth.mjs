@@ -21,7 +21,7 @@ try {
   }
 
   const [columns] = await connection.query(
-    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME IN ('username', 'passwordHash')"
+    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME IN ('username', 'passwordHash', 'sessionVersion')"
   );
   const present = new Set(columns.map(row => row.COLUMN_NAME));
   if (!present.has("username")) {
@@ -31,6 +31,10 @@ try {
   if (!present.has("passwordHash")) {
     await connection.query("ALTER TABLE `users` ADD COLUMN `passwordHash` VARCHAR(255) NULL");
     console.log("[local-auth] Added users.passwordHash");
+  }
+  if (!present.has("sessionVersion")) {
+    await connection.query("ALTER TABLE `users` ADD COLUMN `sessionVersion` INT NOT NULL DEFAULT 0");
+    console.log("[local-auth] Added users.sessionVersion");
   }
 
   const [indexes] = await connection.query("SHOW INDEX FROM `users` WHERE Key_name = ?", ["users_username_unique"]);

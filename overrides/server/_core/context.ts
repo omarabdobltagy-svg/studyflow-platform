@@ -30,7 +30,10 @@ export async function createContext(
           { issuer: LOCAL_SESSION_ISSUER, audience: LOCAL_SESSION_AUDIENCE }
         );
         if (typeof payload.sub === "string" && payload.sub.length > 0) {
-          user = (await getUserByOpenId(payload.sub)) ?? null;
+          const candidate = (await getUserByOpenId(payload.sub)) ?? null;
+          const tokenVersion = typeof payload.ver === "number" ? payload.ver : 0;
+          const storedVersion = candidate?.sessionVersion ?? 0;
+          if (candidate && tokenVersion === storedVersion) user = candidate;
         }
       }
     } catch {

@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
+import { randomUUID } from "node:crypto";
+import { hashLocalPassword, verifyLocalPassword } from "./_core/localPassword";
 import { SignJWT } from "jose";
 import { TRPCError } from "@trpc/server";
 import { COOKIE_NAME } from "@shared/const";
@@ -25,6 +26,7 @@ import {
   deleteCalendarEvent,
   createLocalAuthUser,
   deleteLocalAuthUser,
+  changeLocalAuthPassword,
   getUserByOpenId,
   getUserByUsername,
   touchUserLastSignedIn,
@@ -77,21 +79,6 @@ const LOCAL_SESSION_ISSUER = "studyflow-local";
 const LOCAL_SESSION_AUDIENCE = "studyflow-app";
 const LOCAL_SESSION_MS = 30 * 24 * 60 * 60 * 1000;
 const loginAttempts = new Map<string, { count: number; resetAt: number }>();
-
-function hashLocalPassword(password: string) {
-  const salt = randomBytes(16).toString("hex");
-  const derived = scryptSync(password, salt, 64).toString("hex");
-  return `scrypt${salt}${derived}`;
-}
-
-function verifyLocalPassword(password: string, stored: string | null | undefined) {
-  if (!stored) return false;
-  const [algorithm, salt, expectedHex] = stored.split("$");
-  if (algorithm !== "scrypt" || !salt || !expectedHex || !/^[a-f0-9]{128}$/i.test(expectedHex)) return false;
-  const candidate = scryptSync(password, salt, 64);
-  const expected = Buffer.from(expectedHex, "hex");
-  return candidate.length === expected.length && timingSafeEqual(candidate, expected);
-}
 
 function toPublicAuthUser(user: NonNullable<Awaited<ReturnType<typeof getUserByUsername>>>) {
   return {
@@ -171,7 +158,7 @@ export const appRouter = router({
         }
         loginAttempts.delete(ip);
         await touchUserLastSignedIn(user.id);
-        const token = await new SignJWT({})
+        const token = await new SignJWT({ ver: user.sessionVersion ?? 0 })
           .setProtectedHeader({ alg: "HS256" })
           .setSubject(user.openId)
           .setIssuer(LOCAL_SESSION_ISSUER)
@@ -209,7 +196,7 @@ export const appRouter = router({
           throw error;
         }
         loginAttempts.delete(ip);
-        const token = await new SignJWT({})
+        const token = await new SignJWT({ ver: user.sessionVersion ?? 0 })
           .setProtectedHeader({ alg: "HS256" })
           .setSubject(user.openId)
           .setIssuer(LOCAL_SESSION_ISSUER)
@@ -241,6 +228,36 @@ export const appRouter = router({
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "تعذّر إكمال حذف الحساب. لم يتم حذف سجل الحساب؛ أعد المحاولة." });
         }
         ctx.res.clearCookie(COOKIE_NAME, { ...getSessionCookieOptions(ctx.req), maxAge: -1 });
+        return { success: true } as const;
+      }),
+
+    changePassword: protectedProcedure
+      .input(z.object({
+        currentPassword: z.string().min(1).max(160),
+        newPassword: z.string().min(10).max(160),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const user = await getUserByOpenId(ctx.user.openId);
+        if (!user) throw new TRPCError({ code: "NOT_FOUND", message: "الحساب غير موجود." });
+        if (!verifyLocalPassword(input.currentPassword, user.passwordHash)) {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "كلمة المرور الحالية غير صحيحة." });
+        }
+        if (verifyLocalPassword(input.newPassword, user.passwordHash)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "كلمة المرور الجديدة يجب أن تختلف عن الحالية." });
+        }
+        const sessionSecret = process.env.APP_SESSION_SECRET;
+        if (!sessionSecret) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "تعذّر تحديث الجلسة الآمنة." });
+
+        const updatedUser = await changeLocalAuthPassword(user.id, hashLocalPassword(input.newPassword));
+        const token = await new SignJWT({ ver: updatedUser.sessionVersion ?? 0 })
+          .setProtectedHeader({ alg: "HS256" })
+          .setSubject(updatedUser.openId)
+          .setIssuer(LOCAL_SESSION_ISSUER)
+          .setAudience(LOCAL_SESSION_AUDIENCE)
+          .setIssuedAt()
+          .setExpirationTime("30d")
+          .sign(new TextEncoder().encode(sessionSecret));
+        ctx.res.cookie(COOKIE_NAME, token, { ...getSessionCookieOptions(ctx.req), maxAge: LOCAL_SESSION_MS });
         return { success: true } as const;
       }),
 

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { storageDelete } from "./storage";
 import { drizzle } from "drizzle-orm/mysql2";
@@ -222,6 +222,18 @@ export async function createLocalAuthUser(input: { username: string; name: strin
 export async function touchUserLastSignedIn(userId: number) {
   const db = await requireDb();
   await db.update(users).set({ lastSignedIn: new Date() }).where(eq(users.id, userId));
+}
+
+export async function changeLocalAuthPassword(userId: number, passwordHash: string) {
+  const db = await requireDb();
+  await db.update(users).set({
+    passwordHash,
+    sessionVersion: sql`${users.sessionVersion} + 1`,
+    lastSignedIn: new Date(),
+  }).where(eq(users.id, userId));
+  const result = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  if (!result[0]) throw new Error("ACCOUNT_NOT_FOUND");
+  return result[0];
 }
 
 export async function deleteLocalAuthUser(userId: number) {
