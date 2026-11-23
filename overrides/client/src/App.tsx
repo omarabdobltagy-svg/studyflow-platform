@@ -1,4 +1,5 @@
 import { Toaster } from "@/components/ui/sonner";
+import WorkspaceInteractionHub from "@/components/WorkspaceInteractionHub";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Books from "@/pages/Books";
 import Calendar from "@/pages/Calendar";
@@ -50,6 +51,7 @@ function App() {
       <ThemeProvider defaultTheme="light" switchable>
         <TooltipProvider>
           <Toaster />
+          <WorkspaceInteractionHub />
           <Router />
         </TooltipProvider>
       </ThemeProvider>

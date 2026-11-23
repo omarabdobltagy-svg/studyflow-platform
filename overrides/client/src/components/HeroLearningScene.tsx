@@ -13,6 +13,7 @@ export default function HeroLearningScene() {
     let frame = 0;
     let disposed = false;
     let visible = true;
+    const pointerTarget = new THREE.Vector2(0, 0);
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 40);
@@ -29,7 +30,7 @@ export default function HeroLearningScene() {
       renderer.outputColorSpace = THREE.SRGBColorSpace;
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.toneMappingExposure = 1.05;
-      renderer.domElement.style.cssText = "display:block;width:100%;height:100%;pointer-events:none";
+      renderer.domElement.style.cssText = "display:block;width:100%;height:100%;pointer-events:auto;touch-action:pan-y;cursor:crosshair";
       renderer.domElement.setAttribute("aria-hidden","true");
       host.replaceChildren(renderer.domElement);
 
@@ -55,6 +56,23 @@ export default function HeroLearningScene() {
           emissive:0x21160f,emissiveIntensity:.25
         })
       ));
+      const crystalWire = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(1.16, 2),
+        new THREE.MeshBasicMaterial({ color:0xe7d9ca, wireframe:true, transparent:true, opacity:.16 })
+      );
+      core.add(crystalWire);
+      const dustPositions = new Float32Array(72 * 3);
+      for (let i = 0; i < 72; i++) {
+        const angle = i * 2.399963;
+        const radius = 1.9 + (i % 7) * .085;
+        dustPositions[i * 3] = Math.cos(angle) * radius;
+        dustPositions[i * 3 + 1] = Math.sin(angle * 1.31) * 1.35;
+        dustPositions[i * 3 + 2] = Math.sin(angle) * .75;
+      }
+      const dustGeometry = new THREE.BufferGeometry();
+      dustGeometry.setAttribute("position", new THREE.BufferAttribute(dustPositions, 3));
+      const dust = new THREE.Points(dustGeometry, new THREE.PointsMaterial({ color:0xe8d9ca, size:.022, transparent:true, opacity:.56, sizeAttenuation:true }));
+      stage.add(dust);
 
       const ringMaterials=[
         new THREE.MeshStandardMaterial({color:0xe1d2c4,metalness:.75,roughness:.24,transparent:true,opacity:.82}),
@@ -96,6 +114,18 @@ export default function HeroLearningScene() {
       };
       resize();
       const resizeObserver=new ResizeObserver(resize); resizeObserver.observe(host);
+      const canvas = renderer.domElement;
+      const onPointerMove = (event: PointerEvent) => {
+        if (reducedMotion || event.pointerType === "touch") return;
+        const rect = canvas.getBoundingClientRect();
+        pointerTarget.set(
+          ((event.clientX - rect.left) / Math.max(1, rect.width) - .5) * 2,
+          -((event.clientY - rect.top) / Math.max(1, rect.height) - .5) * 2
+        );
+      };
+      const onPointerLeave = () => pointerTarget.set(0, 0);
+      canvas.addEventListener("pointermove", onPointerMove);
+      canvas.addEventListener("pointerleave", onPointerLeave);
       const visibilityObserver=new IntersectionObserver(entries=>{visible=entries.some(e=>e.isIntersecting);},{threshold:.04});
       visibilityObserver.observe(host);
       const onVisibility=()=>{visible=!document.hidden;};
@@ -106,8 +136,12 @@ export default function HeroLearningScene() {
         if(visible&&!document.hidden){
           if(!reducedMotion){
             const seconds=time*.001;
-            core.rotation.y=Math.sin(seconds*.26)*.24;
-            core.rotation.x=Math.cos(seconds*.2)*.13;
+            core.rotation.y += (Math.sin(seconds*.26)*.24 + pointerTarget.x*.19 - core.rotation.y)*.055;
+            core.rotation.x += (Math.cos(seconds*.2)*.13 + pointerTarget.y*.16 - core.rotation.x)*.055;
+            crystalWire.rotation.y += .0011;
+            crystalWire.rotation.x -= .0007;
+            dust.rotation.y += .00022;
+            dust.rotation.x = Math.sin(seconds*.13)*.08;
             core.rotation.z=Math.sin(seconds*.16)*.06;
             core.position.y=Math.sin(seconds*.48)*.055;
             rings.forEach(ring=>{
@@ -116,7 +150,7 @@ export default function HeroLearningScene() {
             });
             satellites.rotation.y-=.00065;
             satellites.rotation.z+=.0003;
-            stage.rotation.y=Math.sin(seconds*.12)*.1;
+            stage.rotation.y += (Math.sin(seconds*.12)*.1 + pointerTarget.x*.055 - stage.rotation.y)*.04;
           }
           renderer.render(scene,camera);
         }
@@ -127,6 +161,8 @@ export default function HeroLearningScene() {
         disposed=true; window.cancelAnimationFrame(frame);
         resizeObserver.disconnect(); visibilityObserver.disconnect();
         document.removeEventListener("visibilitychange",onVisibility);
+        canvas.removeEventListener("pointermove", onPointerMove);
+        canvas.removeEventListener("pointerleave", onPointerLeave);
         scene.traverse(object=>{
           if(object.geometry)object.geometry.dispose();
           if(object.material){

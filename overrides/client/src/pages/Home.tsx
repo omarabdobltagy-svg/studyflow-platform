@@ -294,22 +294,22 @@ export default function Home() {
           whileInView="show"
           viewport={{ once: false, amount: 0.2 }}
         >
-          <motion.article className="sf-metric" variants={revealItem} whileHover={{ y: -5, rotateX: 2 }}>
+          <motion.button type="button" aria-label="فتح المهام" onClick={() => setLocation("/tasks")} className="sf-metric sf-metric-action" variants={revealItem} whileHover={{ y: -5, rotateX: 2 }} whileTap={{ scale: 0.985 }}>
             <span className="sf-metric-icon"><ListChecks size={18} /></span>
             <div><small>مهام مفتوحة</small><strong>{data ? data.taskStats.remaining : "—"}</strong><span>{data ? "خطوة بانتظارك" : "جار تحميل بياناتك"}</span></div>
-          </motion.article>
-          <motion.article className="sf-metric" variants={revealItem} whileHover={{ y: -5, rotateX: 2 }}>
+          </motion.button>
+          <motion.button type="button" aria-label="فتح الروتين" onClick={() => setLocation("/routines")} className="sf-metric sf-metric-action" variants={revealItem} whileHover={{ y: -5, rotateX: 2 }} whileTap={{ scale: 0.985 }}>
             <span className="sf-metric-icon"><Clock3 size={18} /></span>
             <div><small>التزام الروتين</small><strong>{routineRate === null ? "—" : routineRate + "%"}</strong><span>{data ? data.routineStats.completed + " من " + data.routineStats.total + " عادة" : "جار تحميل بياناتك"}</span></div>
-          </motion.article>
-          <motion.article className="sf-metric" variants={revealItem} whileHover={{ y: -5, rotateX: 2 }}>
+          </motion.button>
+          <motion.button type="button" aria-label="فتح الأهداف" onClick={() => setLocation("/goals")} className="sf-metric sf-metric-action" variants={revealItem} whileHover={{ y: -5, rotateX: 2 }} whileTap={{ scale: 0.985 }}>
             <span className="sf-metric-icon"><Goal size={18} /></span>
             <div><small>أهداف نشطة</small><strong>{data ? data.goalStats.active : "—"}</strong><span>وجهتك في هذا الفصل</span></div>
-          </motion.article>
-          <motion.article className="sf-metric" variants={revealItem} whileHover={{ y: -5, rotateX: 2 }}>
+          </motion.button>
+          <motion.button type="button" aria-label="فتح المكتبة" onClick={() => setLocation("/books")} className="sf-metric sf-metric-action" variants={revealItem} whileHover={{ y: -5, rotateX: 2 }} whileTap={{ scale: 0.985 }}>
             <span className="sf-metric-icon"><BookOpenText size={18} /></span>
             <div><small>كتب في المسار</small><strong>{data ? data.bookStats.total : "—"}</strong><span>تعلم على مهل</span></div>
-          </motion.article>
+          </motion.button>
         </motion.section>
 
         <section className="sf-folders-section">
