@@ -13,7 +13,8 @@ import {
   CheckSquare2, ChevronLeft, Goal, LayoutDashboard, LibraryBig, LogOut,
   Menu, Moon, Settings2, Sparkles, Sun,
 } from "lucide-react";
-import { ReactNode, useEffect, useState } from "react";
+import { motion } from "framer-motion";
+import { type ReactNode, useEffect, useState } from "react";
 import { useLocation } from "wouter";
 
 type NavigationGroup = {
@@ -23,7 +24,7 @@ type NavigationGroup = {
 
 const navigation: NavigationGroup[] = [
   { label: "مساحة اليوم", items: [
-    { label: "لوحة اليوم", path: "/workspace", icon: LayoutDashboard },
+    { label: "لوحة اليوم", path: "/", icon: LayoutDashboard },
     { label: "المهام", path: "/tasks", icon: CheckSquare2 },
     { label: "روتيني", path: "/routines", icon: Sparkles },
     { label: "التقويم", path: "/calendar", icon: CalendarDays },
@@ -167,7 +168,7 @@ export default function DashboardLayout({ title, description, children, action }
   );
 
   const initial = user.name?.trim().charAt(0) || "م";
-  const isActive = (path: string) => path === "/workspace" ? location === "/workspace" : location.startsWith(path);
+  const isActive = (path: string) => path === "/" ? location === "/" : location === path || location.startsWith(path + "/");
   const navigate = (path: string) => {
     setLocation(path);
     setMobileNavOpen(false);
@@ -175,7 +176,7 @@ export default function DashboardLayout({ title, description, children, action }
 
   const pageKey = (location.split("?")[0].split("/")[1] || "home").replace(/[^a-z0-9-]/gi, "");
   const mobileDockItems = [
-    { label: "اليوم", path: "/workspace", icon: LayoutDashboard },
+    { label: "اليوم", path: "/", icon: LayoutDashboard },
     { label: "المهام", path: "/tasks", icon: CheckSquare2 },
     { label: "المذاكرة", path: "/study", icon: BookOpenText },
     { label: "المخطط", path: "/planner", icon: BrainCircuit },
@@ -190,7 +191,7 @@ export default function DashboardLayout({ title, description, children, action }
             {group.items.map(item => {
               const active = isActive(item.path);
               return (
-                <button
+                <motion.button
                   key={item.path}
                   type="button"
                   onClick={() => navigate(item.path)}
@@ -198,11 +199,13 @@ export default function DashboardLayout({ title, description, children, action }
                   className={cn("sf-nav-item pressable", active && "is-active")}
                   aria-label={item.label}
                   title={item.label}
+                  whileHover={{ x: -3 }}
+                  whileTap={{ scale: 0.98 }}
                 >
                   <item.icon className="sf-nav-icon" />
                   <span>{item.label}</span>
-                  {active && <span className="sf-nav-indicator" />}
-                </button>
+                  {active && <motion.span layoutId="sf-sheet-active" className="sf-nav-indicator" />}
+                </motion.button>
               );
             })}
           </div>
@@ -227,36 +230,44 @@ export default function DashboardLayout({ title, description, children, action }
   return (
     <div className="sf-app-shell sf-shell-v3">
       <div className="sf-app-frame" data-page={pageKey}>
-        <aside className="sf-sidebar" aria-label="القائمة الرئيسية">
-          <button onClick={() => navigate("/workspace")} className="sf-brand" aria-label="العودة إلى لوحة اليوم">
-            <span className="sf-brand-mark"><BrandMark className="size-5" /></span>
-            <span className="sf-brand-copy"><b>StudyFlow</b><small>STUDENT WORKSPACE</small></span>
-          </button>
-
-          <div className="sf-sidebar-caption">مساحة التعلّم</div>
-          {renderNavigation()}
-
-          <div className="sf-sidebar-bottom">
-            <div className="sf-sidebar-note">
-              <span className="sf-sidebar-note-icon"><Sparkles className="size-4" /></span>
-              <div><b>تقدمك يبدأ بخطوة</b><span>تابع ما عليك، واحتفل بما أنجزت.</span></div>
-            </div>
-            {account}
-          </div>
-        </aside>
-
         <div className="sf-app-main">
-          <header className="sf-topbar">
-            <div className="sf-topbar-title">
-              <Button variant="outline" size="icon" className="sf-mobile-menu pressable" onClick={() => setMobileNavOpen(true)} aria-label="فتح التنقل">
-                <Menu className="size-5" />
-              </Button>
+          <header className="sf-topbar sf-topbar-editorial">
+            <div className="sf-header-start">
+              <button onClick={() => navigate("/")} className="sf-brand" aria-label="العودة إلى لوحة اليوم">
+                <span className="sf-brand-mark"><BrandMark className="size-5" /></span>
+                <span className="sf-brand-copy"><b>StudyFlow</b><small>STUDENT WORKSPACE</small></span>
+              </button>
+              <span className="sf-header-divider" />
               <div className="sf-heading-copy">
                 <p className="sf-topbar-kicker">مساحة الدراسة <span>/</span> STUDYFLOW</p>
                 <h1>{title}</h1>
                 <p className="sf-page-description">{description}</p>
               </div>
             </div>
+
+            <nav className="sf-desktop-dock" aria-label="التنقل السريع">
+              {navigation.flatMap(group => group.items.map(item => ({ ...item, group: group.label }))).map(item => {
+                const active = isActive(item.path);
+                return (
+                  <motion.button
+                    key={item.path}
+                    type="button"
+                    className={cn("sf-dock-item", active && "is-active")}
+                    onClick={() => navigate(item.path)}
+                    aria-label={item.label}
+                    aria-current={active ? "page" : undefined}
+                    whileHover={{ y: -5, scale: 1.05 }}
+                    whileTap={{ scale: 0.92 }}
+                    transition={{ type: "spring", stiffness: 340, damping: 18 }}
+                  >
+                    <span className="sf-dock-icon"><item.icon size={18} strokeWidth={1.8} /></span>
+                    <span className="sf-dock-tooltip"><b>{item.label}</b><small>{item.group}</small></span>
+                    {active && <motion.i layoutId="sf-active-dock" className="sf-dock-active" transition={{ type: "spring", stiffness: 380, damping: 28 }} />}
+                  </motion.button>
+                );
+              })}
+            </nav>
+
             <div className="sf-topbar-actions">
               {action ? <div className="dashboard-header-actions">{action}</div> : null}
               <Button
@@ -271,15 +282,18 @@ export default function DashboardLayout({ title, description, children, action }
                 {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
               </Button>
               <span className="sf-topbar-avatar" aria-label={user.name || "ملف الطالب"}>{initial}</span>
+              <Button variant="outline" size="icon" className="sf-mobile-menu pressable" onClick={() => setMobileNavOpen(true)} aria-label="فتح التنقل">
+                <Menu className="size-5" />
+              </Button>
             </div>
           </header>
 
-          <main className={`sf-main sf-main-${pageKey}`}>
-            <div className={`sf-page sf-page-${pageKey}`} data-page={pageKey}>
-            {studentProfile.isError && (
-              <QueryErrorNotice onRetry={() => void studentProfile.refetch()} label="تعذّر التحقق من ملفك الدراسي. بياناتك لم تُحذف؛ أعد المحاولة." />
-            )}
-            {children}
+          <main className={"sf-main sf-main-" + pageKey}>
+            <div className={"sf-page sf-page-" + pageKey} data-page={pageKey}>
+              {studentProfile.isError && (
+                <QueryErrorNotice onRetry={() => void studentProfile.refetch()} label="تعذّر التحقق من ملفك الدراسي. بياناتك لم تُحذف؛ أعد المحاولة." />
+              )}
+              {children}
             </div>
           </main>
         </div>
@@ -287,7 +301,7 @@ export default function DashboardLayout({ title, description, children, action }
 
       <nav className="sf-mobile-dock" aria-label="التنقل السريع">
         {mobileDockItems.map(item => {
-          const active = item.path === "/workspace" ? location === "/workspace" : location.startsWith(item.path);
+          const active = isActive(item.path);
           return (
             <button
               key={item.path}
