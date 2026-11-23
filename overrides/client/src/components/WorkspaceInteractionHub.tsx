@@ -6,7 +6,7 @@ import {
   Plus, RotateCcw, Search, Settings2, Sparkles, Timer, WandSparkles, X,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 
@@ -110,7 +110,7 @@ export default function WorkspaceInteractionHub() {
     setTimerMode(mode); setEndAt(null); setRemaining(mode === "focus" ? FOCUS_SECONDS : BREAK_SECONDS);
   };
   const chooseCommand = (item: HubCommand) => navigate(item.path);
-  const handlePaletteKeys = (event: KeyboardEvent<HTMLInputElement>) => {
+  const handlePaletteKeys = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (event.key === "ArrowDown") { event.preventDefault(); setActiveIndex(index => Math.min(filteredCommands.length - 1, index + 1)); }
     else if (event.key === "ArrowUp") { event.preventDefault(); setActiveIndex(index => Math.max(0, index - 1)); }
     else if (event.key === "Enter" && filteredCommands[activeIndex]) { event.preventDefault(); chooseCommand(filteredCommands[activeIndex]); }

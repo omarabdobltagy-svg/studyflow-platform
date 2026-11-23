@@ -11,7 +11,7 @@ import Reminders from "@/pages/Reminders";
 import Routines from "@/pages/Routines";
 import Study from "@/pages/Study";
 import Tasks from "@/pages/Tasks";
-import { Route, Switch } from "wouter";
+import { Route, Switch, Router as WouterRouter } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
@@ -50,9 +50,11 @@ function App() {
     <ErrorBoundary>
       <ThemeProvider defaultTheme="light" switchable>
         <TooltipProvider>
-          <Toaster />
-          <WorkspaceInteractionHub />
-          <Router />
+          <WouterRouter>
+            <Toaster />
+            <WorkspaceInteractionHub />
+            <Router />
+          </WouterRouter>
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>
