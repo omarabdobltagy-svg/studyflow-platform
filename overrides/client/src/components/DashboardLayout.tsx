@@ -96,42 +96,17 @@ export default function DashboardLayout({ title, description, children, action }
 
   if (!user) return (
     <div className="sf-login-screen">
-      <div className="sf-login-frame">
-        <section className="sf-login-story">
-          <div className="sf-login-brand">
-            <span className="sf-login-brand-mark"><BrandMark className="size-6" /></span>
-            <span><b>StudyFlow</b><small>LEARNING, WITH CLARITY</small></span>
-          </div>
-
-          <div className="sf-login-copy">
-            <p className="sf-login-eyebrow">YOUR LEARNING SPACE</p>
-            <h1>كل يوم أوضح.
-              <span>وكل خطوة لها أثر.</span>
-            </h1>
-            <p className="sf-login-description">
-              خطتك، مهامك، تقدمك، وموادك الدراسية في مساحة واحدة. نظرة واضحة على ما أنجزته، وما يستحق تركيزك بعد ذلك.
-            </p>
-            <div className="sf-login-pill-list">
-              <span><CheckSquare2 /> متابعة المهام</span>
-              <span><BookOpenText /> تنظيم التعلّم</span>
-              <span><BarChart3 /> قياس التقدم</span>
-            </div>
-          </div>
-
-          <div className="sf-login-story-footer">
-            <span className="sf-login-footer-line" />
-            <span>STUDYFLOW · BUILT AROUND YOUR PROGRESS</span>
-          </div>
-          <div className="sf-login-shape sf-login-shape-one" aria-hidden="true" />
-          <div className="sf-login-shape sf-login-shape-two" aria-hidden="true" />
-        </section>
-
+      <div className="sf-login-frame sf-login-frame-v4">
         <section className="sf-login-form-side">
           <div className="sf-login-form-card">
+            <div className="sf-login-brand-v4">
+              <span className="sf-login-brand-mark-v4"><BrandMark className="size-5" /></span>
+              <span><b>StudyFlow</b><small>مساحة التعلّم</small></span>
+            </div>
             <div className="sf-login-form-heading">
-              <p className="sf-auth-eyebrow">مساحتك في انتظارك</p>
+              <p className="sf-auth-eyebrow">الدخول إلى مساحة العمل</p>
               <h2>أهلًا بعودتك</h2>
-              <p>سجّل الدخول للعودة إلى خطتك ومتابعة يومك من حيث توقفت.</p>
+              <p>استخدم بيانات الدخول المعتمدة للوصول إلى مساحة StudyFlow.</p>
             </div>
             <form
               onSubmit={(event) => {
@@ -177,16 +152,15 @@ export default function DashboardLayout({ title, description, children, action }
                 size="lg"
                 className="sf-auth-submit pressable w-full rounded-2xl font-bold"
               >
-                {loginMutation.isPending ? "جارٍ تسجيل الدخول..." : "ادخل إلى مساحتك"}
+                {loginMutation.isPending ? "جارٍ تسجيل الدخول..." : "دخول"}
                 <ChevronLeft className="size-4" />
               </Button>
             </form>
             <div className="sf-login-security">
               <span className="sf-security-mark"><span /></span>
-              <p>جلسة خاصة لمتابعة بياناتك الدراسية.</p>
+              <p>دخول خاص إلى مساحة العمل الحالية.</p>
             </div>
           </div>
-          <p className="sf-login-legal">STUDYFLOW · YOUR PROGRESS, IN ONE PLACE</p>
         </section>
       </div>
     </div>
