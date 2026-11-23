@@ -593,3 +593,15 @@ body { background:var(--background)!important; color:var(--foreground); }
 .sf-shell-v3 .sf-main .app-card .text-emerald-800 { color:#3e7768; }
 .dark .sf-shell-v3 .sf-main .app-card .text-emerald-700,
 .dark .sf-shell-v3 .sf-main .app-card .text-emerald-800 { color:#9ac7b8; }
+
+/* The public fixed-account screen is outside .sf-shell-v3, so override its legacy CTA separately. */
+.sf-login-screen .sf-login-form-card button.bg-primary,
+.sf-login-screen .sf-login-form-card .sf-auth-submit {
+  color:var(--primary-foreground)!important;
+  background:var(--primary)!important;
+  background-image:none!important;
+  border:0!important;
+  box-shadow:none!important;
+}
+.sf-login-screen .sf-login-form-card button.bg-primary:hover,
+.sf-login-screen .sf-login-form-card .sf-auth-submit:hover { filter:brightness(.96); }
