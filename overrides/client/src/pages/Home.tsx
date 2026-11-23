@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { AnimatePresence, motion, useReducedMotion, type Variants } from "framer-motion";
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
+import HeroLearningScene from "@/components/HeroLearningScene";
 import QueryErrorNotice from "@/components/QueryErrorNotice";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -222,6 +223,16 @@ export default function Home() {
             </motion.div>
           </motion.div>
 
+          <motion.div
+            className="sf-home-hero-visual"
+            initial={reduceMotion ? false : { opacity: 0, scale: 0.96, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ delay: 0.18, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <div className="sf-home-hero-art" aria-hidden="true">
+              <HeroLearningScene />
+              <span className="sf-home-orb-caption">STUDYFLOW INTELLIGENCE / LIVE LEARNING MODEL</span>
+            </div>
           <motion.aside className="sf-home-next-card" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.45 }} aria-label="الخطوة الدراسية التالية">
             <div className="sf-home-next-head"><span>الخطوة التالية</span><span>YOUR NEXT STEP</span></div>
             <div className="sf-home-next-body">
@@ -232,7 +243,8 @@ export default function Home() {
             <Button type="button" onClick={() => setLocation("/tasks")} className="sf-home-next-button">
               {data?.tasks[0] ? "افتح المهمة" : "إدارة المهام"} <ArrowLeft size={15} />
             </Button>
-          </motion.aside>
+          </mot
+          </motion.div>ion.aside>
           <div className="sf-home-hero-bottom"><span>اسحب لاكتشاف مساحتك</span><i /></div>
         </section>
 
