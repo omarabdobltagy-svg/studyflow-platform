@@ -59,7 +59,7 @@
 .sf-dock-item.is-active .sf-dock-icon{border-color:#c9b7a6!important;background:linear-gradient(145deg,#e8ded5,#d7c8ba)!important;color:#493728!important;box-shadow:0 5px 13px -10px rgba(42,29,18,.5),inset 0 1px rgba(255,255,255,.8)!important}
 
 /* Library: a dark editorial feature, with live counts instead of a blank white shelf. */
-.sf-shell-v3 .sf-page-books .sf-library-overview{position:relative;display:grid;grid-template-columns:minmax(0,1fr) minmax(200px,.58fr);align-items:center;gap:28px;min-height:226px;margin:0 0 24px;padding:28px clamp(22px,3vw,38px);overflow:hidden;border:1px solid rgba(241,229,216,.14);border-radius:26px;color:#f4efe9;background:radial-gradient(ellipse at 82% 12%,rgba(195,159,125,.2),transparent 31%),linear-gradient(118deg,#211c18 0%,#3d3026 61%,#674a32 120%);box-shadow:0 24px 54px -40px rgba(38,26,17,.7),inset 0 1px rgba(255,255,255,.11)}
+.sf-shell-v3 .sf-page.sf-page-books > section.sf-library-overview{position:relative;display:grid;grid-template-columns:minmax(0,1fr) minmax(200px,.58fr);align-items:center;gap:28px;min-height:226px;margin:0 0 24px;padding:28px clamp(22px,3vw,38px);overflow:hidden;border:1px solid rgba(241,229,216,.14);border-radius:26px;color:#f4efe9;background:radial-gradient(ellipse at 82% 12%,rgba(195,159,125,.2),transparent 31%),linear-gradient(118deg,#211c18 0%,#3d3026 61%,#674a32 120%);box-shadow:0 24px 54px -40px rgba(38,26,17,.7),inset 0 1px rgba(255,255,255,.11)}
 .sf-library-overview::after{content:"";position:absolute;width:330px;height:330px;left:-190px;bottom:-245px;border:1px solid rgba(240,229,218,.11);border-radius:50%;box-shadow:0 0 0 22px rgba(255,255,255,.018),0 0 0 48px rgba(255,255,255,.012);pointer-events:none}
 .sf-library-overview-copy{position:relative;z-index:2;max-width:670px}
 .sf-library-overview-kicker{margin:0 0 8px;color:#d2b89f;font:600 8px "DM Mono",monospace;letter-spacing:.16em}
@@ -102,7 +102,7 @@
 .dark .sf-home-learning-focus-copy p{color:#d0c2b5!important}
 .dark .sf-home-learning-focus-copy small{color:#ddbd9e}
 .dark .sf-home-learning-focus-mark{border-color:#70573f;background:linear-gradient(145deg,#8b6849,#4e3928)}
-.dark .sf-shell-v3 .sf-page-books .sf-library-overview{border-color:rgba(244,232,219,.14)}
+.dark .sf-shell-v3 .sf-page.sf-page-books > section.sf-library-overview{border-color:rgba(244,232,219,.14)}
 .dark .sf-shell-v3 .sf-page-books>section:first-of-type{border-color:#594a3d!important;background:linear-gradient(125deg,#302820,#3c3027 72%)!important}
 .dark .sf-shell-v3 .sf-page-books>section:last-of-type>button.app-card{border-color:#4b4036!important;background:#2e2822!important;color:#f1ebe5!important}
 .dark .sf-shell-v3 .sf-page-books>section:last-of-type>button.app-card>div:last-child p{color:#b9aca0!important}
@@ -120,7 +120,7 @@
  .sf-home-learning-focus-mark{width:42px;height:42px;border-radius:13px}
  .sf-home-learning-focus-copy h3{font-size:16px}
  .sf-home-learning-focus-button{align-self:flex-start}
- .sf-shell-v3 .sf-page-books .sf-library-overview{grid-template-columns:minmax(0,1fr) 130px;gap:12px;min-height:205px;padding:21px 18px}
+ .sf-shell-v3 .sf-page.sf-page-books > section.sf-library-overview{grid-template-columns:minmax(0,1fr) 130px;gap:12px;min-height:205px;padding:21px 18px}
  .sf-library-art{min-height:135px;gap:5px;transform:scale(.88);transform-origin:center}
  .sf-library-spine{width:27px}
  .sf-library-spine-one{height:90px}.sf-library-spine-two{height:116px}.sf-library-spine-three{height:102px}.sf-library-spine-four{height:80px}
@@ -135,7 +135,7 @@
  .sf-home-next-card{width:94%;padding:14px 15px!important}
  .sf-home-next-body h3{font-size:13px}
  .sf-shell-v3 .sf-main .sf-home-learning-focus{margin-top:21px!important}
- .sf-shell-v3 .sf-page-books .sf-library-overview{grid-template-columns:minmax(0,1fr) 96px;gap:5px;padding:18px 14px;min-height:190px}
+ .sf-shell-v3 .sf-page.sf-page-books > section.sf-library-overview{grid-template-columns:minmax(0,1fr) 96px;gap:5px;padding:18px 14px;min-height:190px}
  .sf-library-art{transform:scale(.7);transform-origin:center right;margin-inline:-20px}
  .sf-library-overview-copy h2{font-size:22px}
  .sf-library-overview-copy>p:not(.sf-library-overview-kicker){font-size:9px}
