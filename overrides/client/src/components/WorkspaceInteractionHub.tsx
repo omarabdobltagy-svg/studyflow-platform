@@ -2,7 +2,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   ArrowLeft, BarChart3, BookOpenText, BrainCircuit, CalendarDays, CheckSquare2,
-  Clock3, Command, Goal, LayoutDashboard, LibraryBig, ListTodo, Pause, Play,
+  Clock3, Command, Goal, LayoutDashboard, LibraryBig, ListTodo, Moon, Pause, Play,
   Plus, RotateCcw, Search, Settings2, Sparkles, Timer, WandSparkles, X,
   type LucideIcon,
 } from "lucide-react";
