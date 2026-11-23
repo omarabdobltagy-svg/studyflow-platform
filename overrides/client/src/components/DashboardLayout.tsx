@@ -75,7 +75,7 @@ export default function DashboardLayout({ title, description, children, action }
   }, [location, setLocation, studentProfile.data, studentProfile.isSuccess, user]);
 
   if (loading) return (
-    <div className="sf-auth-screen">
+    <div className="sf-auth-screen sf-shell-v3">
       <div className="sf-auth-frame sf-auth-loading" role="status" aria-live="polite">
         <div className="sf-auth-logo"><BrandMark className="size-7" /></div>
         <p className="sf-auth-eyebrow">STUDYFLOW / YOUR SPACE</p>
@@ -96,7 +96,7 @@ export default function DashboardLayout({ title, description, children, action }
   );
 
   if (!user) return (
-    <div className="sf-login-screen">
+    <div className="sf-login-screen sf-shell-v3">
       <div className="sf-login-frame sf-login-frame-v4">
         <section className="sf-login-form-side">
           <div className="sf-login-form-card">
