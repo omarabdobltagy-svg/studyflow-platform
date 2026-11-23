@@ -111,12 +111,16 @@ export default function CurriculumMap() {
   })), [branchViews]);
 
   const knownGaps = branchViews.filter(branch => branch.gap?.status === "calculated" && branch.gap.gapCount !== null);
-  const totalGap = knownGaps.reduce((sum, branch) => sum + (branch.gap?.gapCount ?? 0), 0);
-  const knownReferences = branchViews.filter(branch => branch.gap?.referenceSource !== "unavailable").length;
+  const branchesWithGap = knownGaps.filter(branch => (branch.gap?.gapCount ?? 0) > 0).length;
+  const knownReferences = branchViews.filter(branch => Boolean(branch.gap && branch.gap.referenceSource !== "unavailable")).length;
   const trackedPositions = branchViews.filter(branch => branch.gap?.studentPosition !== null && branch.gap?.studentPosition !== undefined).length;
   const priorityBranch = knownGaps
     .filter(branch => (branch.gap?.gapCount ?? 0) > 0)
-    .sort((a, b) => (b.gap?.gapCount ?? 0) - (a.gap?.gapCount ?? 0))[0] ?? null;
+    .sort((a, b) => {
+      const ratioA = (a.gap?.referencePosition ?? 0) > 0 ? (a.gap?.gapCount ?? 0) / (a.gap?.referencePosition ?? 1) : 0;
+      const ratioB = (b.gap?.referencePosition ?? 0) > 0 ? (b.gap?.gapCount ?? 0) / (b.gap?.referencePosition ?? 1) : 0;
+      return ratioB - ratioA;
+    })[0] ?? null;
 
   const teacherId = (selection.teacherChoices as Record<string, string> | undefined)?.[subjectId]
     ?? profile.data?.teacherSelections?.[subjectId];
@@ -205,7 +209,7 @@ export default function CurriculumMap() {
 
       <section className="grid gap-4 md:grid-cols-3 mb-5">
         <article className="sf-map-metric"><span><Target className="size-4" />الفجوات المحسوبة</span><b>{learning.isLoading ? "—" : knownGaps.length}</b><small>من أصل {branches.length} فروع</small></article>
-        <article className="sf-map-metric"><span><Gauge className="size-4" />نقاط التراكم المرجعية</span><b>{learning.isLoading ? "—" : totalGap}</b><small>في الفروع التي اكتملت بياناتها فقط</small></article>
+        <article className="sf-map-metric"><span><Gauge className="size-4" />نقاط التراكم المرجعية</span><b>{learning.isLoading ? "—" : branchesWithGap}</b><small>فروع لديها فجوة مرجعية مؤكدة</small></article>
         <article className="sf-map-metric"><span><BookOpenCheck className="size-4" />مراجع معروفة</span><b>{learning.isLoading ? "—" : knownReferences}</b><small>مدرس أو تقدم فصل مسجل</small></article>
       </section>
 
@@ -213,7 +217,7 @@ export default function CurriculumMap() {
         <section className="sf-map-priority mb-5">
           <div className="sf-map-priority-copy">
             <p className="sf-map-eyebrow">PRIORITY BRANCH</p>
-            <h3>أعلى فجوة معروفة الآن</h3>
+            <h3>أعلى فجوة نسبية معروفة</h3>
             <p>{priorityBranch.branchTitle} · {gapLabel(priorityBranch.gap, priorityBranch.pointLabel)}</p>
             {priorityBranch.nextLesson && <small>الخطوة التالية حسب تقدمك المسجل: {priorityBranch.nextLesson.title}</small>}
           </div>
@@ -254,7 +258,7 @@ export default function CurriculumMap() {
                   </div>
                   <div className="sf-map-branch-details">
                     <p>آخر نقطة لك: <b>{gap?.studentFrontierTitle || (gap?.studentPosition === 0 ? "لم تبدأ بعد" : "غير محدد")}</b></p>
-                    <p>مرجع التدريس: <b>{gap?.referenceFrontierTitle || "غير متاح"}</b><small>{gap?.referenceSource === "teacher" ? "المدرس" : gap?.referenceSource === "school" ? "الفصل" : "لا يوجد مرجع موثق"}</small></p>
+                    <p>مرجع التدريس: <b>{gap?.referenceFrontierTitle || (gap?.referencePosition === 0 ? "لم يبدأ بعد" : "غير متاح")}</b><small>{gap?.referenceSource === "teacher" ? "المدرس" : gap?.referenceSource === "school" ? "الفصل" : "لا يوجد مرجع موثق"}</small></p>
                     <p>مدة النقطة المتوقعة: <b>{branch.minutesPerLesson === null ? "غير محددة" : branch.minutesPerLesson + " دقيقة"}</b></p>
                   </div>
                   <div className="sf-map-branch-actions">

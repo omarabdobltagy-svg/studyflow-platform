@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { AnimatePresence, motion, useReducedMotion, type Variants } from "framer-motion";
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
+import { getSIECheckpointBranches, getSIESubject } from "@shared/sie-catalog";
 import {
   ArrowLeft, ArrowUpLeft, BookOpenText, CalendarDays, Check, CheckCircle2,
   ChevronLeft, Circle, Clock3, Compass, Goal, LibraryBig, ListChecks, Plus,
@@ -160,11 +161,35 @@ export default function Home() {
   const reduceMotion = useReducedMotion();
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
   const summary = trpc.dashboard.summary.useQuery({ timeZone });
+  const learning = trpc.learning.get.useQuery();
   const toggleTask = trpc.tasks.toggle.useMutation({ onSuccess: () => void utils.dashboard.summary.invalidate() });
   const toggleRoutine = trpc.routines.toggleItem.useMutation({ onSuccess: () => void utils.dashboard.summary.invalidate() });
   const [openFolder, setOpenFolder] = useState<string | null>(null);
   const data = summary.data;
   const routineRate = data ? (data.routineStats.total ? Math.round((data.routineStats.completed / data.routineStats.total) * 100) : 0) : null;
+  const learningPriority = useMemo(() => {
+    const gapsBySubject = ((learning.data as any)?.gapByBranch ?? {}) as Record<string, Record<string, any>>;
+    const candidates = Object.entries(gapsBySubject).flatMap(([currentSubjectId, subjectGaps]) =>
+      getSIECheckpointBranches(currentSubjectId).flatMap(branch => {
+        const gap = subjectGaps[branch.branchId];
+        if (gap?.status !== "calculated" || gap.gapCount === null || gap.gapCount <= 0 || gap.referencePosition === null) return [];
+        const nextIndex = gap.studentPosition;
+        const nextLesson = typeof nextIndex === "number" ? branch.choices[nextIndex] : undefined;
+        const ratio = gap.referencePosition > 0 ? gap.gapCount / gap.referencePosition : 0;
+        return [{
+          subjectId: currentSubjectId,
+          subjectName: getSIESubject(currentSubjectId)?.nameAr || currentSubjectId,
+          branchId: branch.branchId,
+          branchTitle: branch.branchTitle,
+          pointLabel: branch.branchType === "official_section" ? "موضوع" : "درس",
+          gapCount: gap.gapCount as number,
+          ratio,
+          nextLesson: nextLesson ? { nodeId: nextLesson.nodeId, title: nextLesson.title } : null,
+        }];
+      })
+    );
+    return candidates.sort((a, b) => b.ratio - a.ratio)[0] ?? null;
+  }, [learning.data]);
 
   const toggleFolder = (id: string) => {
     setOpenFolder(current => current === id ? null : id);
@@ -210,6 +235,45 @@ export default function Home() {
           </motion.aside>
           <div className="sf-home-hero-bottom"><span>اسحب لاكتشاف مساحتك</span><i /></div>
         </section>
+
+        <motion.section
+          className="sf-home-learning-focus"
+          initial={reduceMotion ? false : { opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.32, duration: 0.42 }}
+        >
+          <div className="sf-home-learning-focus-copy">
+            <span className="sf-home-learning-focus-mark"><BookOpenText size={18} /></span>
+            <div>
+              <p className="sf-home-learning-focus-kicker">SIE / LEARNING PRIORITY</p>
+              <h3>{learning.isLoading ? "نراجع مواضع المنهج..." : learningPriority ? "أولوية المذاكرة التالية" : "خريطة تقدمك الدراسي"}</h3>
+              <p>
+                {learning.isLoading
+                  ? "جارٍ تحميل موضعك ومرجع التدريس."
+                  : learning.isError
+                    ? "تعذّر تحميل بيانات التقدم؛ لن نخمن فجوة أو درسًا غير مسجل."
+                    : learningPriority
+                      ? learningPriority.subjectName + " · " + learningPriority.branchTitle + " · فجوة " + learningPriority.gapCount + " " + learningPriority.pointLabel
+                      : "حدّد موضعك ومرجع التدريس لكل فرع ليختار النظام الخطوة التالية بدقة."}
+              </p>
+              {learningPriority?.nextLesson && <small>الخطوة التالية: {learningPriority.nextLesson.title}</small>}
+            </div>
+          </div>
+          <Button
+            type="button"
+            onClick={() => {
+              if (learningPriority?.nextLesson) {
+                const params = new URLSearchParams({ subject: learningPriority.subjectId, branch: learningPriority.branchId, lesson: learningPriority.nextLesson.nodeId });
+                setLocation("/study?" + params.toString());
+              } else {
+                setLocation("/learning-map");
+              }
+            }}
+            className="sf-home-learning-focus-button"
+          >
+            {learningPriority?.nextLesson ? "ابدأ الدرس التالي" : "افتح خريطة المنهج"} <ArrowLeft size={15} />
+          </Button>
+        </motion.section>
 
         <motion.section
           className="sf-metric-strip"
