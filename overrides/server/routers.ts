@@ -240,12 +240,12 @@ export const appRouter = router({
           console.error("[Local Auth] Account deletion failed", error);
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "تعذّر إكمال حذف الحساب. لم يتم حذف سجل الحساب؛ أعد المحاولة." });
         }
-        ctx.res.clearCookie(COOKIE_NAME, getSessionCookieOptions(ctx.req));
+        ctx.res.clearCookie(COOKIE_NAME, { ...getSessionCookieOptions(ctx.req), maxAge: -1 });
         return { success: true } as const;
       }),
 
     logout: publicProcedure.mutation(({ ctx }) => {
-      ctx.res.clearCookie(COOKIE_NAME, getSessionCookieOptions(ctx.req));
+      ctx.res.clearCookie(COOKIE_NAME, { ...getSessionCookieOptions(ctx.req), maxAge: -1 });
       return { success: true } as const;
     }),
   }),
