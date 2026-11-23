@@ -64,6 +64,7 @@
 .sf-library-overview-copy{position:relative;z-index:2;max-width:670px}
 .sf-library-overview-kicker{margin:0 0 8px;color:#d2b89f;font:600 8px "DM Mono",monospace;letter-spacing:.16em}
 .sf-library-overview-copy h2{margin:0;color:#fff8f1;font-size:clamp(24px,2.8vw,34px);font-weight:850;letter-spacing:-.04em}
+.sf-shell-v3 .sf-main .sf-library-overview-copy h2{color:#fff8f1!important}
 .sf-library-overview-copy>p:not(.sf-library-overview-kicker){max-width:620px;margin-top:9px;color:rgba(244,237,230,.72);font-size:11px;line-height:1.9}
 .sf-library-overview-stats{display:flex;flex-wrap:wrap;gap:10px;margin-top:19px}
 .sf-library-overview-stats>div{display:grid;min-width:116px;gap:3px;padding:9px 12px;border:1px solid rgba(246,236,226,.16);border-radius:12px;background:rgba(255,255,255,.065)}
