@@ -91,11 +91,18 @@ export default function WorkspaceInteractionHub() {
     const updatePosition = () => {
       const trigger = launcherRef.current;
       if (!trigger) return;
+
       const rect = trigger.getBoundingClientRect();
-      const compact = window.innerWidth <= 1120;
-      const width = Math.min(compact ? 310 : 330, window.innerWidth - (compact ? 24 : 28));
-      const left = Math.max(14, Math.min(window.innerWidth - width - 14, rect.left));
+      const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+      const compact = viewportWidth <= 1120;
+      const width = Math.min(compact ? 310 : 330, viewportWidth - (compact ? 24 : 28));
+
+      // The launcher is the left-most action in this RTL row. Align the popover's
+      // right edge with the trigger so the panel opens inward, not away from it.
+      const preferredLeft = rect.right - width;
+      const left = Math.max(14, Math.min(viewportWidth - width - 14, preferredLeft));
       const maxHeight = Math.max(180, Math.min(430, rect.top - 24));
+
       setQuickMenuPosition({
         left,
         bottom: Math.max(14, window.innerHeight - rect.top + 12),
@@ -103,12 +110,20 @@ export default function WorkspaceInteractionHub() {
         maxHeight,
       });
     };
+
+    const visualViewport = window.visualViewport;
     updatePosition();
     window.addEventListener("resize", updatePosition);
     window.addEventListener("orientationchange", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    visualViewport?.addEventListener("resize", updatePosition);
+    visualViewport?.addEventListener("scroll", updatePosition);
     return () => {
       window.removeEventListener("resize", updatePosition);
       window.removeEventListener("orientationchange", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+      visualViewport?.removeEventListener("resize", updatePosition);
+      visualViewport?.removeEventListener("scroll", updatePosition);
     };
   }, [quickOpen]);
 
@@ -178,6 +193,7 @@ export default function WorkspaceInteractionHub() {
                 bottom: quickMenuPosition.bottom,
                 width: quickMenuPosition.width,
                 maxHeight: quickMenuPosition.maxHeight,
+                transformOrigin: "bottom right",
               } : undefined}
               initial={reduceMotion ? false : { opacity: 0, y: 16, scale: 0.94 }} animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={reduceMotion ? undefined : { opacity: 0, y: 10, scale: 0.96 }} transition={{ type: "spring", stiffness: 340, damping: 26 }}>
