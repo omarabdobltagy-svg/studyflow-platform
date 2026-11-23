@@ -407,6 +407,21 @@ body { background: #202823; color: var(--foreground); }
 .sf-shell-v3 .sf-nav-item.is-active { background:rgba(150,181,159,.16);border-color:rgba(181,211,189,.17); }
 .sf-shell-v3 .sf-nav-item.is-active .sf-nav-icon { color:#c2d7c5; }
 
+
+/* The protected sign-in wrapper carries both classes on the same node. */
+.sf-login-screen.sf-shell-v3 {
+  background:
+    radial-gradient(ellipse at 8% 0%,rgba(164,190,169,.15),transparent 35%),
+    radial-gradient(ellipse at 94% 95%,rgba(98,137,126,.14),transparent 31%),
+    linear-gradient(140deg,#1d2520,#2b3930) !important;
+}
+.sf-auth-screen.sf-shell-v3 {
+  background:
+    radial-gradient(ellipse at 8% 0%,rgba(164,190,169,.15),transparent 35%),
+    radial-gradient(ellipse at 94% 95%,rgba(98,137,126,.14),transparent 31%),
+    linear-gradient(140deg,#1d2520,#2b3930) !important;
+}
+
 /* Motion details */
 @keyframes sf-pulse { 0%,100%{opacity:.45}50%{opacity:.9} }
 @keyframes sf-orbit-breath { 0%,100%{transform:scale(1);opacity:.55}50%{transform:scale(1.04);opacity:.9} }
