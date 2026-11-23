@@ -16,6 +16,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import Assistant from "./pages/Assistant";
 import Analytics from "./pages/Analytics";
+import CurriculumMap from "./pages/CurriculumMap";
 import Settings from "./pages/Settings";
 
 function Router() {
@@ -27,6 +28,7 @@ function Router() {
       <Route path={"/books/:id"} component={Books} />
       <Route path={"/books"} component={Books} />
       <Route path={"/study"} component={Study} />
+      <Route path={"/learning-map"} component={CurriculumMap} />
       <Route path={"/routines"} component={Routines} />
       <Route path={"/calendar"} component={Calendar} />
       <Route path={"/planner"} component={Planner} />

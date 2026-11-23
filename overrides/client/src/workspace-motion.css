@@ -2,70 +2,30 @@
 
 /* StudyFlow / Graphite — Ice — Cobalt */
 :root {
-  --background: #f2eeea;
-  --foreground: #282420;
-  --card: #fdfcfc;
-  --card-foreground: #282420;
-  --popover: #fdfcfc;
-  --popover-foreground: #282420;
-  --primary: #b99272;
-  --primary-foreground: #f7f4f1;
-  --secondary: #eae7e5;
-  --secondary-foreground: #493e35;
-  --muted: #edeae8;
-  --muted-foreground: #767e75;
-  --accent: #e7e4e2;
-  --accent-foreground: #453b33;
-  --border: #e2deda;
-  --input: #dedad6;
-  --ring: #957f6d;
-  --sidebar: #282420;
-  --sidebar-foreground: #f3efeb;
-  --sidebar-primary: #beb1a7;
-  --sidebar-primary-foreground: #27231f;
-  --sidebar-accent: #463c33;
-  --sidebar-accent-foreground: #f3efeb;
-  --sidebar-border: rgba(255,255,255,.12);
-  --sidebar-ring: #b6a699;
-  --chart-1: #b99272;
-  --chart-2: #a28f80;
-  --chart-3: #b1a194;
-  --chart-4: #97887b;
-  --chart-5: #8e7967;
-  --sf-graphite: #282420;
-  --sf-graphite-deep: #1d1a17;
-  --sf-bone: #f2eeea;
-  --sf-mineral: #b99272;
-  --sf-sage: #bdafa4;
-  --sf-stone: #b7aea6;
+  --radius: .95rem;
+  --background:#F6F3EF; --foreground:#28231F; --card:#FFFEFC; --card-foreground:#28231F;
+  --popover:#FFFEFC; --popover-foreground:#28231F; --primary:#75523A; --primary-foreground:#FFFFFF;
+  --secondary:#EDE8E2; --secondary-foreground:#3B3129; --muted:#F0ECE7; --muted-foreground:#766C63;
+  --accent:#E4D9CF; --accent-foreground:#342A23; --destructive:#AE4C42; --destructive-foreground:#FFFFFF;
+  --border:#DED6CF; --input:#D7CEC5; --ring:#9A785F;
+  --sidebar:#211C18; --sidebar-foreground:#F4EFE9; --sidebar-primary:#C5AA92;
+  --sidebar-primary-foreground:#28231F; --sidebar-accent:#38312B; --sidebar-accent-foreground:#F4EFE9;
+  --sidebar-border:rgba(255,255,255,.10); --sidebar-ring:#BFA58E;
+  --chart-1:#75523A; --chart-2:#A88D78; --chart-3:#C8B9AC; --chart-4:#6A5D52; --chart-5:#D6CDC5;
+  --sf-shell:#211C18; --sf-shell-light:#3C3026; --sf-purple:#75523A; --sf-lilac:#E4D9CF;
+  --sf-mint:#EDE8E2; --sf-cyan:#D7CEC5; --sf-coral:#D9B6A9; --sf-gold:#D9C9B8;
 }
 .dark {
-  color-scheme: dark;
-  --background: #25211d;
-  --foreground: #f0edea;
-  --card: #312b27;
-  --card-foreground: #f0edea;
-  --popover: #312b27;
-  --popover-foreground: #f0edea;
-  --primary: #baab9f;
-  --primary-foreground: #221e1b;
-  --secondary: #39322d;
-  --secondary-foreground: #efece9;
-  --muted: #342e29;
-  --muted-foreground: #b3aaa3;
-  --accent: #483e35;
-  --accent-foreground: #f1edea;
-  --border: #4b3f36;
-  --input: #504339;
-  --ring: #b8a99c;
-  --sidebar: #1e1a17;
-  --sidebar-foreground: #f0edea;
-  --sidebar-primary: #bfb2a8;
-  --sidebar-primary-foreground: #221e1b;
-  --sidebar-accent: #3a332e;
-  --sidebar-accent-foreground: #f0edea;
-  --sidebar-border: rgba(255,255,255,.10);
-  --sidebar-ring: #b8a99c;
+  color-scheme:dark;
+  --background:#1D1A17; --foreground:#F4EFE9; --card:#28231F; --card-foreground:#F4EFE9;
+  --popover:#2D2722; --popover-foreground:#F4EFE9; --primary:#C5AA92; --primary-foreground:#241F1A;
+  --secondary:#3A322B; --secondary-foreground:#F4EFE9; --muted:#312B26; --muted-foreground:#B8ADA3;
+  --accent:#514438; --accent-foreground:#F4EFE9; --destructive:#C36B60; --destructive-foreground:#FFFFFF;
+  --border:#494038; --input:#56483B; --ring:#BFA58E;
+  --sidebar:#171411; --sidebar-foreground:#F4EFE9; --sidebar-primary:#C5AA92;
+  --sidebar-primary-foreground:#241F1A; --sidebar-accent:#38312B; --sidebar-accent-foreground:#F4EFE9;
+  --sidebar-border:rgba(255,255,255,.10); --sidebar-ring:#BFA58E;
+  --chart-1:#C5AA92; --chart-2:#A88D78; --chart-3:#86786D; --chart-4:#D6CDC5; --chart-5:#6F5B4B;
 }
 html { scroll-behavior: smooth; }
 body { background: #282420; color: var(--foreground); }

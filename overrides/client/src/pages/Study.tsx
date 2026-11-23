@@ -1,7 +1,6 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import ThreeAmbientScene from "@/components/ThreeAmbientScene";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
@@ -29,9 +28,10 @@ export default function Study() {
   const activeExternalSession = trpc.learning.activeExternalSession.useQuery();
   const [sessionNow, setSessionNow] = useState(Date.now());
   const [markSessionLessonCompleted, setMarkSessionLessonCompleted] = useState(false);
-  const [subjectId, setSubjectId] = useState("");
-  const [branchId, setBranchId] = useState("");
-  const [lessonId, setLessonId] = useState("");
+  const initialStudyParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+  const [subjectId, setSubjectId] = useState(initialStudyParams?.get("subject") || "");
+  const [branchId, setBranchId] = useState(initialStudyParams?.get("branch") || "");
+  const [lessonId, setLessonId] = useState(initialStudyParams?.get("lesson") || "");
   const [completedSteps, setCompletedSteps] = useState<StepId[]>([]);
   const [difficulty, setDifficulty] = useState<"unknown" | "easy" | "medium" | "hard">("unknown");
   const [notes, setNotes] = useState("");
@@ -328,7 +328,6 @@ export default function Study() {
         transition={{ duration: 0.48, ease: [0.22, 1, 0.36, 1] }}
       >
         <div className="sf-learning-hero relative overflow-hidden rounded-t-2xl px-5 py-6 text-white sm:px-7">
-          <div className="pointer-events-none absolute -left-4 -top-5 h-48 w-64 opacity-80 sm:h-56 sm:w-72"><ThreeAmbientScene /></div>
           <div className="relative z-10 max-w-[70%] sm:max-w-[74%]">
             <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--sf-gold-light)]">LEARNING INTELLIGENCE</p>
             <h2 className="mt-2 text-xl font-bold sm:text-2xl">حالة تعلّمك الفعلية</h2>

@@ -43,81 +43,31 @@
 }
 
 :root {
-  --radius: 1rem;
-  --background: #f7f4fb;
-  --foreground: #251d2e;
-  --card: #ffffff;
-  --card-foreground: #251d2e;
-  --popover: #ffffff;
-  --popover-foreground: #251d2e;
-  --primary: #6d32c5;
-  --primary-foreground: #ffffff;
-  --secondary: #eee7f7;
-  --secondary-foreground: #4d2b70;
-  --muted: #f0ebf5;
-  --muted-foreground: #786d83;
-  --accent: #e9def8;
-  --accent-foreground: #4a2574;
-  --destructive: #c64d5d;
-  --destructive-foreground: #ffffff;
-  --border: #e6deed;
-  --input: #ded4e8;
-  --ring: #9b67d5;
-  --sidebar: #241333;
-  --sidebar-foreground: #f6f0fc;
-  --sidebar-primary: #c59aff;
-  --sidebar-primary-foreground: #2a1542;
-  --sidebar-accent: #3b2254;
-  --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: rgb(255 255 255 / 10%);
-  --sidebar-ring: #bd8aff;
-  --chart-1: #7440cf;
-  --chart-2: #16a8bc;
-  --chart-3: #8fbf4a;
-  --chart-4: #dd8a43;
-  --chart-5: #d95b9c;
-  --sf-shell: #2a143f;
-  --sf-shell-light: #422060;
-  --sf-purple: #7040c9;
-  --sf-lilac: #cba7f6;
-  --sf-mint: #c8e4c2;
-  --sf-cyan: #a6e0e4;
-  --sf-coral: #f4c4b8;
-  --sf-gold: #f0d18c;
+  --radius: .95rem;
+  --background:#F6F3EF; --foreground:#28231F; --card:#FFFEFC; --card-foreground:#28231F;
+  --popover:#FFFEFC; --popover-foreground:#28231F; --primary:#75523A; --primary-foreground:#FFFFFF;
+  --secondary:#EDE8E2; --secondary-foreground:#3B3129; --muted:#F0ECE7; --muted-foreground:#766C63;
+  --accent:#E4D9CF; --accent-foreground:#342A23; --destructive:#AE4C42; --destructive-foreground:#FFFFFF;
+  --border:#DED6CF; --input:#D7CEC5; --ring:#9A785F;
+  --sidebar:#211C18; --sidebar-foreground:#F4EFE9; --sidebar-primary:#C5AA92;
+  --sidebar-primary-foreground:#28231F; --sidebar-accent:#38312B; --sidebar-accent-foreground:#F4EFE9;
+  --sidebar-border:rgba(255,255,255,.10); --sidebar-ring:#BFA58E;
+  --chart-1:#75523A; --chart-2:#A88D78; --chart-3:#C8B9AC; --chart-4:#6A5D52; --chart-5:#D6CDC5;
+  --sf-shell:#211C18; --sf-shell-light:#3C3026; --sf-purple:#75523A; --sf-lilac:#E4D9CF;
+  --sf-mint:#EDE8E2; --sf-cyan:#D7CEC5; --sf-coral:#D9B6A9; --sf-gold:#D9C9B8;
 }
 
 .dark {
-  color-scheme: dark;
-  --background: #17121f;
-  --foreground: #f2edf8;
-  --card: #211a2c;
-  --card-foreground: #f2edf8;
-  --popover: #241c31;
-  --popover-foreground: #f2edf8;
-  --primary: #bb92f2;
-  --primary-foreground: #28153e;
-  --secondary: #30253d;
-  --secondary-foreground: #f2edf8;
-  --muted: #292132;
-  --muted-foreground: #b0a4bc;
-  --accent: #38294a;
-  --accent-foreground: #f5edff;
-  --border: #3a3045;
-  --input: #45394f;
-  --ring: #c49bf4;
-  --sidebar: #171020;
-  --sidebar-foreground: #f3ebfb;
-  --sidebar-primary: #c8a3f5;
-  --sidebar-primary-foreground: #28153e;
-  --sidebar-accent: #30213f;
-  --sidebar-accent-foreground: #fff;
-  --sidebar-border: rgb(255 255 255 / 9%);
-  --sidebar-ring: #c49bf4;
-  --chart-1: #bc93f0;
-  --chart-2: #5ac8d3;
-  --chart-3: #afd56b;
-  --chart-4: #e9ae69;
-  --chart-5: #e58ab9;
+  color-scheme:dark;
+  --background:#1D1A17; --foreground:#F4EFE9; --card:#28231F; --card-foreground:#F4EFE9;
+  --popover:#2D2722; --popover-foreground:#F4EFE9; --primary:#C5AA92; --primary-foreground:#241F1A;
+  --secondary:#3A322B; --secondary-foreground:#F4EFE9; --muted:#312B26; --muted-foreground:#B8ADA3;
+  --accent:#514438; --accent-foreground:#F4EFE9; --destructive:#C36B60; --destructive-foreground:#FFFFFF;
+  --border:#494038; --input:#56483B; --ring:#BFA58E;
+  --sidebar:#171411; --sidebar-foreground:#F4EFE9; --sidebar-primary:#C5AA92;
+  --sidebar-primary-foreground:#241F1A; --sidebar-accent:#38312B; --sidebar-accent-foreground:#F4EFE9;
+  --sidebar-border:rgba(255,255,255,.10); --sidebar-ring:#BFA58E;
+  --chart-1:#C5AA92; --chart-2:#A88D78; --chart-3:#86786D; --chart-4:#D6CDC5; --chart-5:#6F5B4B;
 }
 
 @layer base {
@@ -136,7 +86,7 @@
   }
   button:not(:disabled), [role="button"]:not([aria-disabled="true"]), [type="button"]:not(:disabled), [type="submit"]:not(:disabled), a[href], select:not(:disabled), input[type="checkbox"]:not(:disabled), input[type="radio"]:not(:disabled) { @apply cursor-pointer; }
   :where(button, a, input, textarea, select, [role="button"], [tabindex]):focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
-  ::selection { background: rgb(191 145 242 / 38%); color: var(--foreground); }
+  ::selection { background: rgba(117,82,58,.20); color: var(--foreground); }
   h1,h2,h3,h4,h5,h6 { letter-spacing: -.025em; }
 }
 
@@ -153,7 +103,7 @@
   .num { direction: ltr; font-family: "DM Mono", ui-monospace, monospace; }
   .pressable { transition: transform 160ms cubic-bezier(.2,.75,.25,1), box-shadow 180ms ease, background-color 180ms ease, border-color 180ms ease; }
   .pressable:active { transform: scale(.975); }
-  .soft-grid { background-image: linear-gradient(rgb(100 73 130 / 4%) 1px, transparent 1px), linear-gradient(90deg, rgb(100 73 130 / 4%) 1px, transparent 1px); background-size: 30px 30px; }
+  .soft-grid { background-image: linear-gradient(rgba(117,82,58,.045) 1px, transparent 1px), linear-gradient(90deg, rgb(100 73 130 / 4%) 1px, transparent 1px); background-size: 30px 30px; }
   @media (min-width: 640px) { .container { padding-inline: 1.5rem; } }
   @media (min-width: 1024px) { .container { padding-inline: 2rem; max-width: 1480px; } }
 }

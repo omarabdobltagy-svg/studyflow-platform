@@ -1,15 +1,8 @@
 /* StudyFlow Experience System — editorial identity + data-rich workspace */
 :root {
-  --sf-ink: #24152f;
-  --sf-plum: #2d1643;
-  --sf-purple: #6d3aa4;
-  --sf-violet: #9368c5;
-  --sf-lilac: #e8dcf4;
-  --sf-paper: #fbf9fc;
-  --sf-mint: #dcefe4;
-  --sf-yellow: #f7edc9;
-  --sf-blue: #e0eaf5;
-  --sf-rose: #f4e1e5;
+  --sf-ink:#28231F; --sf-plum:#211C18; --sf-purple:#75523A; --sf-violet:#A88D78;
+  --sf-lilac:#E4D9CF; --sf-paper:#F6F3EF; --sf-mint:#EDE8E2; --sf-yellow:#D9C9B8;
+  --sf-blue:#E2DDD7; --sf-rose:#F0E5DE;
 }
 html { scroll-padding-top: 1rem; }
 body { background: #261437; }
@@ -274,19 +267,19 @@ body { background: #261437; }
 
 
 /* Page art direction: a shared design language with distinct, task-appropriate accents. */
-.sf-shell-v3 .sf-app-frame[data-page="home"] { --sf-page-accent: #70409a; --sf-top-a: #2d173f; --sf-top-b: #624080; --sf-top-c: #3b2754; }
-.sf-shell-v3 .sf-app-frame[data-page="tasks"] { --sf-page-accent: #a76a2b; --sf-top-a: #332719; --sf-top-b: #76502e; --sf-top-c: #49321f; }
-.sf-shell-v3 .sf-app-frame[data-page="goals"] { --sf-page-accent: #3c8668; --sf-top-a: #1d3a32; --sf-top-b: #39775f; --sf-top-c: #25483a; }
-.sf-shell-v3 .sf-app-frame[data-page="books"] { --sf-page-accent: #4777a6; --sf-top-a: #203249; --sf-top-b: #456c91; --sf-top-c: #2a4564; }
-.sf-shell-v3 .sf-app-frame[data-page="study"] { --sf-page-accent: #7051a2; --sf-top-a: #2e2043; --sf-top-b: #624b86; --sf-top-c: #3a2d55; }
-.sf-shell-v3 .sf-app-frame[data-page="planner"] { --sf-page-accent: #8756b2; --sf-top-a: #321b47; --sf-top-b: #765096; --sf-top-c: #402852; }
-.sf-shell-v3 .sf-app-frame[data-page="routines"] { --sf-page-accent: #a57b39; --sf-top-a: #352b1d; --sf-top-b: #806338; --sf-top-c: #4b3a25; }
-.sf-shell-v3 .sf-app-frame[data-page="calendar"] { --sf-page-accent: #358c91; --sf-top-a: #1d373e; --sf-top-b: #3d7c81; --sf-top-c: #274d53; }
-.sf-shell-v3 .sf-app-frame[data-page="reminders"] { --sf-page-accent: #aa6272; --sf-top-a: #3b2634; --sf-top-b: #895368; --sf-top-c: #4b3041; }
-.sf-shell-v3 .sf-app-frame[data-page="assistant"] { --sf-page-accent: #895eb6; --sf-top-a: #2c193f; --sf-top-b: #654383; --sf-top-c: #3b2652; }
-.sf-shell-v3 .sf-app-frame[data-page="analytics"] { --sf-page-accent: #467f9e; --sf-top-a: #203242; --sf-top-b: #456d85; --sf-top-c: #293e54; }
-.sf-shell-v3 .sf-app-frame[data-page="settings"] { --sf-page-accent: #8055a4; --sf-top-a: #2d173f; --sf-top-b: #61417b; --sf-top-c: #3b2754; }
-.sf-shell-v3 .sf-app-frame[data-page="onboarding"] { --sf-page-accent: #7650a3; --sf-top-a: #2e1942; --sf-top-b: #604080; --sf-top-c: #3b2754; }
+.sf-shell-v3 .sf-app-frame[data-page="home"] { --sf-page-accent:var(--primary); --sf-top-a:#28231F; --sf-top-b:#4B3729; --sf-top-c:#75523A; }
+.sf-shell-v3 .sf-app-frame[data-page="tasks"] { --sf-page-accent:var(--primary); --sf-top-a:#28231F; --sf-top-b:#4B3729; --sf-top-c:#75523A; }
+.sf-shell-v3 .sf-app-frame[data-page="goals"] { --sf-page-accent:var(--primary); --sf-top-a:#28231F; --sf-top-b:#4B3729; --sf-top-c:#75523A; }
+.sf-shell-v3 .sf-app-frame[data-page="books"] { --sf-page-accent:var(--primary); --sf-top-a:#28231F; --sf-top-b:#4B3729; --sf-top-c:#75523A; }
+.sf-shell-v3 .sf-app-frame[data-page="study"] { --sf-page-accent:var(--primary); --sf-top-a:#28231F; --sf-top-b:#4B3729; --sf-top-c:#75523A; }
+.sf-shell-v3 .sf-app-frame[data-page="planner"] { --sf-page-accent:var(--primary); --sf-top-a:#28231F; --sf-top-b:#4B3729; --sf-top-c:#75523A; }
+.sf-shell-v3 .sf-app-frame[data-page="routines"] { --sf-page-accent:var(--primary); --sf-top-a:#28231F; --sf-top-b:#4B3729; --sf-top-c:#75523A; }
+.sf-shell-v3 .sf-app-frame[data-page="calendar"] { --sf-page-accent:var(--primary); --sf-top-a:#28231F; --sf-top-b:#4B3729; --sf-top-c:#75523A; }
+.sf-shell-v3 .sf-app-frame[data-page="reminders"] { --sf-page-accent:var(--primary); --sf-top-a:#28231F; --sf-top-b:#4B3729; --sf-top-c:#75523A; }
+.sf-shell-v3 .sf-app-frame[data-page="assistant"] { --sf-page-accent:var(--primary); --sf-top-a:#28231F; --sf-top-b:#4B3729; --sf-top-c:#75523A; }
+.sf-shell-v3 .sf-app-frame[data-page="analytics"] { --sf-page-accent:var(--primary); --sf-top-a:#28231F; --sf-top-b:#4B3729; --sf-top-c:#75523A; }
+.sf-shell-v3 .sf-app-frame[data-page="settings"] { --sf-page-accent:var(--primary); --sf-top-a:#28231F; --sf-top-b:#4B3729; --sf-top-c:#75523A; }
+.sf-shell-v3 .sf-app-frame[data-page="onboarding"] { --sf-page-accent:var(--primary); --sf-top-a:#28231F; --sf-top-b:#4B3729; --sf-top-c:#75523A; }
 .sf-shell-v3 .sf-app-frame[data-page="settings"] .sf-topbar,
 .sf-shell-v3 .sf-app-frame[data-page="onboarding"] .sf-topbar,
 .sf-shell-v3 .sf-app-frame[data-page="home"] .sf-topbar,
@@ -482,7 +475,7 @@ body { background:var(--background)!important; color:var(--foreground); }
 .sf-shell-v3 .sf-kpi-grid > .sf-stat-card > p:last-of-type { color:var(--muted-foreground)!important; }
 .sf-shell-v3 .sf-home-task-panel,.sf-shell-v3 .sf-home-library-panel,.sf-shell-v3 .sf-home-goal-panel,.sf-shell-v3 .sf-home-routine-panel { border-top:1px solid var(--border)!important; }
 .sf-shell-v3 .sf-card-header { padding:17px 19px; border-bottom:1px solid var(--border); }
-.sf-shell-v3 .sf-app-frame[data-page] { --sf-page-accent:var(--primary); --sf-top-a:#24363a; --sf-top-b:#24363a; --sf-top-c:#24363a; }
+.sf-shell-v3 .sf-app-frame[data-page] { --sf-page-accent:var(--primary); --sf-top-a:#28231F; --sf-top-b:#4B3729; --sf-top-c:#75523A; }
 .sf-shell-v3 .sf-app-frame[data-page] .sf-topbar { background:var(--card)!important; }
 .sf-shell-v3 .sf-page .text-primary { color:var(--primary)!important; }
 .sf-shell-v3 .sf-page .bg-primary { color:var(--primary-foreground)!important; background:var(--primary)!important; }

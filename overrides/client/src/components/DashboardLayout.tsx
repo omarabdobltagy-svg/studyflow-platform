@@ -13,7 +13,7 @@ import {
   CheckSquare2, ChevronLeft, Goal, LayoutDashboard, LibraryBig, LogOut,
   Menu, Moon, Settings2, Sparkles, Sun,
 } from "lucide-react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { type ReactNode, useEffect, useState } from "react";
 import { useLocation } from "wouter";
 
@@ -32,6 +32,7 @@ const navigation: NavigationGroup[] = [
   { label: "التعلّم", items: [
     { label: "المكتبة", path: "/books", icon: LibraryBig },
     { label: "المذاكرة والتقدم", path: "/study", icon: BookOpenText },
+    { label: "خريطة المنهج", path: "/learning-map", icon: BrainCircuit },
     { label: "المساعد الذكي", path: "/assistant", icon: BrainCircuit },
   ] },
   { label: "التخطيط", items: [
@@ -77,6 +78,7 @@ export default function DashboardLayout({ title, description, children, action }
   const [isMobileNavOpen, setMobileNavOpen] = useState(false);
   const studentProfile = trpc.studentProfile.get.useQuery(undefined, { enabled: Boolean(user) });
   const { theme, toggleTheme } = useTheme();
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
     if (user && studentProfile.isSuccess && studentProfile.data == null && location !== "/onboarding") {
@@ -165,7 +167,8 @@ export default function DashboardLayout({ title, description, children, action }
   );
 
   const initial = user.name?.trim().charAt(0) || "م";
-  const isActive = (path: string) => path === "/" ? location === "/" : location === path || location.startsWith(path + "/");
+  const currentPath = location.split("?")[0];
+  const isActive = (path: string) => path === "/" ? currentPath === "/" : currentPath === path || currentPath.startsWith(path + "/");
   const navigate = (path: string) => {
     setLocation(path);
     setMobileNavOpen(false);
@@ -176,7 +179,7 @@ export default function DashboardLayout({ title, description, children, action }
     { label: "اليوم", path: "/", icon: LayoutDashboard },
     { label: "المهام", path: "/tasks", icon: CheckSquare2 },
     { label: "المذاكرة", path: "/study", icon: BookOpenText },
-    { label: "المخطط", path: "/planner", icon: BrainCircuit },
+    { label: "الخريطة", path: "/learning-map", icon: BrainCircuit },
   ];
 
   const renderNavigation = (mobile = false) => (
@@ -228,7 +231,12 @@ export default function DashboardLayout({ title, description, children, action }
     <div className="sf-app-shell sf-shell-v3">
       <div className="sf-app-frame" data-page={pageKey}>
         <div className="sf-app-main">
-          <header className="sf-topbar sf-topbar-editorial">
+          <motion.header
+            className="sf-topbar sf-topbar-editorial"
+            initial={reduceMotion ? false : { opacity: 0, y: -12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ type: "spring", stiffness: 260, damping: 25 }}
+          >
             <div className="sf-header-start">
               <button onClick={() => navigate("/")} className="sf-brand" aria-label="العودة إلى لوحة اليوم">
                 <span className="sf-brand-mark"><BrandMark className="size-5" /></span>
@@ -280,16 +288,25 @@ export default function DashboardLayout({ title, description, children, action }
               </Button>
               <span className="sf-topbar-avatar" aria-label={user.name || "ملف الطالب"}>{initial}</span>
             </div>
-          </header>
+          </motion.header>
 
-          <main className={"sf-main sf-main-" + pageKey}>
-            <div className={"sf-page sf-page-" + pageKey} data-page={pageKey}>
-              {studentProfile.isError && (
-                <QueryErrorNotice onRetry={() => void studentProfile.refetch()} label="تعذّر التحقق من ملفك الدراسي. بياناتك لم تُحذف؛ أعد المحاولة." />
-              )}
-              {children}
-            </div>
-          </main>
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.main
+              key={location}
+              className={"sf-main sf-main-" + pageKey}
+              initial={reduceMotion ? false : { opacity: 0, y: 18, filter: "blur(5px)" }}
+              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+              exit={reduceMotion ? undefined : { opacity: 0, y: -10, filter: "blur(3px)" }}
+              transition={{ duration: reduceMotion ? 0 : 0.34, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <div className={"sf-page sf-page-" + pageKey} data-page={pageKey}>
+                {studentProfile.isError && (
+                  <QueryErrorNotice onRetry={() => void studentProfile.refetch()} label="تعذّر التحقق من ملفك الدراسي. بياناتك لم تُحذف؛ أعد المحاولة." />
+                )}
+                {children}
+              </div>
+            </motion.main>
+          </AnimatePresence>
         </div>
       </div>
 

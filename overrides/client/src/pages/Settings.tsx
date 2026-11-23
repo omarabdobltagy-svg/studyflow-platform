@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useTheme } from "@/contexts/ThemeContext";
 import { trpc } from "@/lib/trpc";
-import { ArrowLeft, BookOpenText, Moon, Palette, ShieldCheck, Sun, UserRound } from "lucide-react";
+import { ArrowLeft, BookOpenText, KeyRound, Moon, Palette, ShieldCheck, Sun, UserRound } from "lucide-react";
 import { useLocation } from "wouter";
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,19 @@ export default function Settings() {
   const [showDeleteForm, setShowDeleteForm] = useState(false);
   const [deletePassword, setDeletePassword] = useState("");
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const changePassword = trpc.auth.changePassword.useMutation({
+    onSuccess: () => {
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmNewPassword("");
+      void utils.auth.me.invalidate();
+      toast.success("تم تحديث كلمة المرور. الجلسة الحالية ما زالت آمنة.");
+    },
+    onError: error => toast.error(error.message),
+  });
   const deleteAccount = trpc.auth.deleteAccount.useMutation({
     onSuccess: () => {
       utils.auth.me.setData(undefined, null);
@@ -86,6 +99,53 @@ export default function Settings() {
             <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" />
             <p>تغيير المظهر لا يغيّر بياناتك الدراسية أو تقدمك أو جلسة تسجيل الدخول.</p>
           </div>
+        </section>
+        <section className="app-card sf-settings-card p-5 sm:p-6 xl:col-span-2">
+          <div className="flex items-start gap-3">
+            <span className="sf-settings-icon"><KeyRound className="size-5" /></span>
+            <div className="min-w-0 flex-1">
+              <h3 className="font-bold">تغيير كلمة المرور</h3>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">كلمة المرور الجديدة يجب ألا تقل عن 10 أحرف. عند التحديث ستنتهي صلاحية الجلسات الأخرى تلقائيًا.</p>
+            </div>
+          </div>
+          <form
+            className="mt-5 grid gap-4 sm:grid-cols-2"
+            onSubmit={event => {
+              event.preventDefault();
+              if (newPassword.length < 10) {
+                toast.error("كلمة المرور الجديدة يجب ألا تقل عن 10 أحرف.");
+                return;
+              }
+              if (newPassword !== confirmNewPassword) {
+                toast.error("تأكيد كلمة المرور غير مطابق.");
+                return;
+              }
+              if (newPassword === currentPassword) {
+                toast.error("اختر كلمة مرور مختلفة عن الحالية.");
+                return;
+              }
+              changePassword.mutate({ currentPassword, newPassword });
+            }}
+          >
+            <div className="space-y-2 sm:col-span-2">
+              <label htmlFor="account-current-password" className="text-sm font-medium">كلمة المرور الحالية</label>
+              <Input id="account-current-password" type="password" autoComplete="current-password" value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} required className="sf-auth-input" />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="account-new-password" className="text-sm font-medium">كلمة المرور الجديدة</label>
+              <Input id="account-new-password" type="password" autoComplete="new-password" minLength={10} value={newPassword} onChange={event => setNewPassword(event.target.value)} required className="sf-auth-input" />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="account-confirm-password" className="text-sm font-medium">تأكيد كلمة المرور الجديدة</label>
+              <Input id="account-confirm-password" type="password" autoComplete="new-password" minLength={10} value={confirmNewPassword} onChange={event => setConfirmNewPassword(event.target.value)} required className="sf-auth-input" />
+            </div>
+            <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
+              <Button type="submit" disabled={changePassword.isPending || !currentPassword || newPassword.length < 10 || newPassword !== confirmNewPassword} className="rounded-xl">
+                {changePassword.isPending ? "جارٍ تحديث كلمة المرور..." : "حفظ كلمة المرور الجديدة"}
+              </Button>
+              <span className="text-xs text-muted-foreground">لا نعرض كلمة المرور أو نرسلها في إشعار.</span>
+            </div>
+          </form>
         </section>
         <section className="app-card sf-danger-zone p-5 sm:p-6 xl:col-span-2">
           <div className="flex flex-wrap items-start justify-between gap-4">
