@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import {
   ArrowDown,
   ArrowLeft,
@@ -8,7 +8,6 @@ import {
   BrainCircuit,
   CalendarDays,
   CheckCircle2,
-  ChevronLeft,
   Code2,
   Folder,
   FolderOpen,
@@ -82,7 +81,7 @@ function FolderCard({ kind, title, subtitle, open, onToggle, children }: {
   subtitle: string;
   open: boolean;
   onToggle: () => void;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   const Icon = open ? FolderOpen : Folder;
   return (
@@ -180,7 +179,7 @@ export default function PortfolioHome() {
             <FolderCard kind="system" title="مكوّنات المنظومة" subtitle="تخطيط، تعلّم، تحليل، ومتابعة." open={openFolder === "system"} onToggle={() => toggleFolder("system")}>
               <div className="sfp-capability-grid">
                 {capabilities.map(({ icon: Icon, title, copy }, index) => (
-                  <article className="sfp-capability" key={title} style={{ "--tile-index": index } as React.CSSProperties}>
+                  <article className="sfp-capability" key={title} style={{ "--tile-index": index } as CSSProperties}>
                     <span><Icon size={19} strokeWidth={1.65} /></span>
                     <div><b>{title}</b><p>{copy}</p></div>
                   </article>
