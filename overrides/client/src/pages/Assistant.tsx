@@ -110,7 +110,7 @@ export default function Assistant() {
   };
 
   return (
-    <DashboardLayout title="المساعد الدراسي" description="محادثة مستقلة لكل موضوع، مع سياق ملفك الدراسي ومواضعك المسجلة في المنهج.">
+    <DashboardLayout title="المساعد الدراسي الذكي" description="ذكاء دراسي متصل بسياق مساحتك، وأنشطتك، والمهام والروتين والتقويم والتقدم المنهجي.">
       <section className="mb-5 overflow-hidden rounded-[1.5rem] border border-border/70 bg-card">
         <div className="flex flex-col gap-4 border-b border-border/70 bg-gradient-to-l from-secondary/75 via-card to-card p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
           <div className="flex items-start gap-3">
