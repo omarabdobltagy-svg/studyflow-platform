@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode } from "react";
-import { AnimatePresence, motion, useMotionValue, useReducedMotion, useScroll, useSpring, useTransform, type MotionValue } from "framer-motion";
+import { AnimatePresence, motion, useMotionValue, useReducedMotion, useScroll, useSpring, useTransform, type MotionValue, type Variants } from "framer-motion";
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
 import QueryErrorNotice from "@/components/QueryErrorNotice";
@@ -29,11 +29,11 @@ function shortDate(date: Date | string) {
   return new Intl.DateTimeFormat("ar-EG", { day: "numeric", month: "short" }).format(new Date(date));
 }
 
-const revealGroup = {
+const revealGroup: Variants = {
   hidden: { opacity: 0 },
   show: { opacity: 1, transition: { staggerChildren: 0.075, delayChildren: 0.08 } },
 };
-const revealItem = {
+const revealItem: Variants = {
   hidden: { opacity: 0, y: 18, filter: "blur(5px)" },
   show: { opacity: 1, y: 0, filter: "blur(0px)", transition: { type: "spring", stiffness: 170, damping: 19 } },
 };
