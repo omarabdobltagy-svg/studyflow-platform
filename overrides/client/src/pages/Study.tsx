@@ -74,11 +74,11 @@ export default function Study() {
   const currentBranchProgress = currentBranchId
     ? branchProgressMap[currentBranchId] || legacyLinearProgress
     : {};
-  const subjectIndex = Math.max(0, subjects.indexOf(subjectId));  const subjectIndex = Math.max(0, subjects.indexOf(subjectId));
+  const subjectIndex = Math.max(0, subjects.indexOf(subjectId));
   const branchIndex = Math.max(0, branches.findIndex(branch => branch.branchId === currentBranchId));
   const [studentFrontierDrafts, setStudentFrontierDrafts] = useState<Record<string, string>>({});
 
-  const studentFrontierDraftKey  const studentFrontierDraftKey = subjectId + "::" + currentBranchId;
+  const studentFrontierDraftKey = subjectId + "::" + currentBranchId;
   const legacyStudentState = ((selection.teacherProgressState || {}) as Record<string, Record<string, any>>)[subjectId] || {};
   const belongsToCurrentBranch = (value: unknown): value is string =>
     typeof value === "string" &&
@@ -104,7 +104,7 @@ export default function Study() {
     : belongsToCurrentBranch(currentCourseProgress.schoolClassFrontierId)
       ? currentCourseProgress.schoolClassFrontierId
       : "__UNKNOWN__";
-  const lastCompletedLessonId = Object.prototype.hasOwnProperty.call(studentFrontierDrafts, studentFrontierDraftKey)  const lastCompletedLessonId = Object.prototype.hasOwnProperty.call(studentFrontierDrafts, studentFrontierDraftKey)
+  const lastCompletedLessonId = Object.prototype.hasOwnProperty.call(studentFrontierDrafts, studentFrontierDraftKey)
     ? studentFrontierDrafts[studentFrontierDraftKey]
     : savedStudentFrontierId;
   const hasStudentFrontierSelection = lastCompletedLessonId !== "__UNKNOWN__"
