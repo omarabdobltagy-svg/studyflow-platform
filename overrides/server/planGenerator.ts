@@ -56,14 +56,112 @@ function contentAsText(content: any): string {
     : "";
 }
 
+function extractBalancedJsonObjects(source: string): string[] {
+  const candidates: string[] = [];
+  let start = -1;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = 0; index < source.length; index++) {
+    const char = source[index];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === '"') inString = false;
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+    if (char === "{") {
+      if (depth === 0) start = index;
+      depth++;
+      continue;
+    }
+    if (char === "}" && depth > 0) {
+      depth--;
+      if (depth === 0 && start >= 0) {
+        candidates.push(source.slice(start, index + 1));
+        start = -1;
+      }
+    }
+  }
+
+  return candidates;
+}
+
+function removeTrailingCommasOutsideStrings(json: string): string {
+  let output = "";
+  let inString = false;
+  let escaped = false;
+
+  for (let index = 0; index < json.length; index++) {
+    const char = json[index];
+    if (inString) {
+      output += char;
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === '"') inString = false;
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+      output += char;
+      continue;
+    }
+
+    if (char === ",") {
+      let next = index + 1;
+      while (next < json.length && /\s/.test(json[next])) next++;
+      if (json[next] === "}" || json[next] === "]") continue;
+    }
+
+    output += char;
+  }
+
+  return output;
+}
+
 export function parseGeneratedPlan(content: string): GeneratedPlan {
-  const cleaned = content.replace(/^\s*```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
-  const first = cleaned.indexOf("{");
-  const last = cleaned.lastIndexOf("}");
-  if (first < 0 || last <= first) throw new Error("تعذّر تحويل الخطة الذكية إلى صيغة صالحة. حاول مرة أخرى.");
+  const normalized = content
+    .replace(/^\uFEFF/, "")
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .trim();
+  const candidates = extractBalancedJsonObjects(normalized);
+  if (candidates.length === 0) {
+    throw new Error("تعذّر تحويل الخطة الذكية إلى صيغة صالحة. حاول مرة أخرى.");
+  }
+
   let value: unknown;
-  try { value = JSON.parse(cleaned.slice(first, last + 1)); }
-  catch { throw new Error("تعذّر قراءة بيانات الخطة. حاول مرة أخرى."); }
+  let lastParseError: unknown;
+  let parsedJson = false;
+  for (const candidate of candidates) {
+    for (const jsonCandidate of [candidate, removeTrailingCommasOutsideStrings(candidate)]) {
+      try {
+        value = JSON.parse(jsonCandidate);
+        parsedJson = true;
+        break;
+      } catch (error) {
+        lastParseError = error;
+      }
+    }
+    if (parsedJson) break;
+  }
+
+  if (!parsedJson) {
+    const parseMessage = lastParseError instanceof Error ? lastParseError.message.slice(0, 180) : "invalid JSON";
+    console.error("[StudyFlow planner] Model output is not valid JSON:", {
+      contentLength: content.length,
+      candidateCount: candidates.length,
+      parseMessage,
+    });
+    throw new Error("تعذّر قراءة بيانات الخطة. حاول مرة أخرى.");
+  }
+
   const parsed = planSchema.safeParse(value);
   if (!parsed.success) {
     console.error("[StudyFlow planner] Invalid plan structure:", parsed.error.issues);
@@ -225,7 +323,7 @@ export async function generatePersonalPlan(
     console.warn("[StudyFlow planner] Primary provider billing/quota unavailable; switching to NVIDIA Nemotron 3 Ultra.");
     // NVIDIA's hosted endpoint does not advertise structured output.
     // Retain the full planning context and validate its JSON response with Zod.
-    return invokeCompact(invokeNvidiaLLM, 4_096, false, false);
+    return invokeCompact(invokeNvidiaLLM, 6_144, false, true);
   };
 
   const isBillingOrQuotaFailure = (error: unknown) => {
@@ -277,7 +375,18 @@ export async function generatePersonalPlan(
     });
     throw new Error("لم تصل استجابة من المخطط الذكي. حاول مرة أخرى.");
   }
-  const plan = parseGeneratedPlan(text);
+  let plan: GeneratedPlan;
+  try {
+    plan = parseGeneratedPlan(text);
+  } catch (error) {
+    console.error("[StudyFlow planner] Plan JSON validation failed:", {
+      model: response.model || null,
+      finishReason: firstChoice?.finish_reason ?? null,
+      completionTokens: response.usage?.completion_tokens ?? null,
+      contentLength: text.length,
+    });
+    throw error;
+  }
   const minutesByDay = new Map<string, number>();
   for (const step of plan.steps) {
     minutesByDay.set(step.day, (minutesByDay.get(step.day) ?? 0) + step.minutes);
