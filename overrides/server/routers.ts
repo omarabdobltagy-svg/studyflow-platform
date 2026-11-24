@@ -92,7 +92,8 @@ type DailyPlanResult = {
   taskCount: number;
 };
 
-const DAILY_PLAN_PREFIX = "SIE_DAILY_PLAN_V1:";
+// V2 invalidates cached plans created before completed-checkpoint enforcement.
+const DAILY_PLAN_PREFIX = "SIE_DAILY_PLAN_V2:";
 const dailyPlanLocks = new Map<number, Promise<DailyPlanResult>>();
 const dailyPlanDirtyUsers = new Set<number>();
 
