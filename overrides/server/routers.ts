@@ -641,7 +641,6 @@ export const appRouter = router({
           customTeacherName: Boolean(!teacher && input.teacherName.trim()),
         });
         queueDailyPlanReconciliation(ctx.user.id);
-        queueDailyPlanReconciliation(ctx.user.id);
         return { success: true, teacherId, courseMode: input.courseMode };
       }),
     updateTeacherProgress: protectedProcedure
@@ -1423,23 +1422,32 @@ export const appRouter = router({
               });
             return positioned.length ? positioned[positioned.length - 1] : candidates.length ? "__UNKNOWN__" : undefined;
           };
-          const savedStudentFrontier = Object.prototype.hasOwnProperty.call(saved, "lastCompletedLessonId")
-            ? saved.lastCompletedLessonId
-            : legacyLinear ? pickLegacyFrontier("lastCompletedLessonId") : undefined;
+          const savedStudentFrontierValue = saved.lastCompletedLessonId;
+          const savedStudentFrontier = belongsToBranch(savedStudentFrontierValue)
+            ? savedStudentFrontierValue
+            : savedStudentFrontierValue === "__UNKNOWN__" && saved.studentFrontierConfirmedAt
+              ? "__UNKNOWN__"
+              : legacyLinear ? pickLegacyFrontier("lastCompletedLessonId") : undefined;
           const studentFrontierId = savedStudentFrontier !== undefined
             ? savedStudentFrontier
             : belongsToBranch(subjectRecord.lastCompletedLessonId)
               ? subjectRecord.lastCompletedLessonId
               : belongsToBranch(legacyStudentFrontier) ? legacyStudentFrontier : "__UNKNOWN__";
-          const savedTeacherFrontier = Object.prototype.hasOwnProperty.call(saved, "teacherTeachingFrontierId")
-            ? saved.teacherTeachingFrontierId
-            : legacyLinear ? pickLegacyFrontier("teacherTeachingFrontierId", true) : undefined;
+          const savedTeacherFrontierValue = saved.teacherTeachingFrontierId;
+          const savedTeacherFrontier = belongsToBranch(savedTeacherFrontierValue)
+            ? savedTeacherFrontierValue
+            : savedTeacherFrontierValue === "__UNKNOWN__" && saved.teacherFrontierConfirmedAt
+              ? "__UNKNOWN__"
+              : legacyLinear ? pickLegacyFrontier("teacherTeachingFrontierId", true) : undefined;
           const teacherFrontierId = savedTeacherFrontier !== undefined
             ? savedTeacherFrontier
             : belongsToBranch(subjectRecord.teacherTeachingFrontierId) ? subjectRecord.teacherTeachingFrontierId : "__UNKNOWN__";
-          const savedSchoolFrontier = Object.prototype.hasOwnProperty.call(saved, "schoolClassFrontierId")
-            ? saved.schoolClassFrontierId
-            : legacyLinear ? pickLegacyFrontier("schoolClassFrontierId") : undefined;
+          const savedSchoolFrontierValue = saved.schoolClassFrontierId;
+          const savedSchoolFrontier = belongsToBranch(savedSchoolFrontierValue)
+            ? savedSchoolFrontierValue
+            : savedSchoolFrontierValue === "__UNKNOWN__" && saved.schoolFrontierConfirmedAt
+              ? "__UNKNOWN__"
+              : legacyLinear ? pickLegacyFrontier("schoolClassFrontierId") : undefined;
           const savedSchoolFrontierId = savedSchoolFrontier !== undefined
             ? savedSchoolFrontier
             : belongsToBranch(subjectRecord.schoolClassFrontierId) ? subjectRecord.schoolClassFrontierId : "__UNKNOWN__";
