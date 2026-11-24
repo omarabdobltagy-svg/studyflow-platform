@@ -1,7 +1,7 @@
 import { calculateLearningGap, type LearningGapResult } from "@shared/sie-learning-progress";
 import { getSIECheckpointBranches, getSIESubject } from "@shared/sie-catalog";
 
-export type BranchGapSnapshot = Partial<LearningGapResult> & {
+export type BranchGapSnapshot = {
   status?: string;
   gapCount?: number | null;
   aheadCount?: number | null;
@@ -108,7 +108,6 @@ function deriveSavedBranchGap(
 
   const ownOrFallback = (
     field: "lastCompletedLessonId" | "teacherTeachingFrontierId" | "schoolClassFrontierId",
-    isTeacher = false,
   ): string => {
     if (Object.prototype.hasOwnProperty.call(record, field)) return String(record[field] ?? "__UNKNOWN__");
     const subjectLevel = subjectRecord?.[field];
@@ -123,13 +122,12 @@ function deriveSavedBranchGap(
       );
       if (legacy !== undefined) return legacy;
     }
-    if (isTeacher) return "__UNKNOWN__";
     return "__UNKNOWN__";
   };
 
   const courseMode = sources.courseModes?.[subjectId] ?? subjectRecord?.courseMode ?? record.courseMode ?? "online";
   const studentFrontierId = ownOrFallback("lastCompletedLessonId");
-  const teacherTeachingFrontierId = ownOrFallback("teacherTeachingFrontierId", true);
+  const teacherTeachingFrontierId = ownOrFallback("teacherTeachingFrontierId");
   const schoolClassFrontierId = courseMode === "center"
     ? ownOrFallback("schoolClassFrontierId")
     : "__UNKNOWN__";
