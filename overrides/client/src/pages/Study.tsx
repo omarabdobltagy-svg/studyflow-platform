@@ -706,9 +706,7 @@ export default function Study() {
                     setManualBranchNavigation(true);
                     setShowFullCourseIndex(false);
                     setBranchId(branch.branchId);
-                    setShowFullCourseIndex(false);
                     setLessonId("");
-                    setCustomCheckpointTitle("");
                   }}
                   className={"flex items-center gap-2 rounded-full border px-3 py-2 text-[11px] font-semibold transition " + (branchHasCompletedLesson ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : index === branchIndex ? "border-primary bg-primary/10 text-foreground" : "border-border bg-background text-muted-foreground hover:border-primary/40")}>
                   <span className="flex size-5 items-center justify-center rounded-full bg-background/80 text-[10px]">
