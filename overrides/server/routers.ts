@@ -362,7 +362,7 @@ export const appRouter = router({
 
         const teacherProgressState = { ...((selection.teacherProgressState ?? {}) as Record<string, Record<string, any>>) };
         const previousTeacherState = teacherProgressState[input.subjectId] ?? {};
-        const sameTeacher = previousTeacherState.teacherId === (teacherId ?? "__SKIP__");
+        const sameTeacher = !teacherIdentityChanged;
         teacherProgressState[input.subjectId] = {
           ...(sameTeacher ? previousTeacherState : {}),
           teacherId: teacherId ?? "__SKIP__",
