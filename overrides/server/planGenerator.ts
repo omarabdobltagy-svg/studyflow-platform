@@ -176,7 +176,7 @@ export function parseGeneratedPlan(content: string): GeneratedPlan {
   }
 
   console.error("[StudyFlow planner] No JSON object matched the plan schema:", lastSchemaIssues);
-  throw new Error("وصلت استجابة من الذكاء الاصطناعي، لكنها لم تطابق بنية الخطة المطلوبة. أعد المحاولة؛ لا تحتاج إلى تبسيط وصفك.");
+  throw new Error("الاستجابة الذكية غير مكتملة أو لا تطابق تنسيق الخطة (تعذّر تحويل الخطة الذكية). لا تحتاج إلى تبسيط وصفك.");
 }
 
 function getFirstPartBranches(subjectId: string) {
