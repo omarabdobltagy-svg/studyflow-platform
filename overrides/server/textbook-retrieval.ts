@@ -23,38 +23,104 @@ type BookSource = {
 
 const ROOT = join(process.cwd(), "server", "curriculum-data");
 
-const SOURCES: Record<string, BookSource> = {
-  ARB_G2_BAC: {
-    title: "كتاب اللغة العربية - البكالوريا المصرية - الصف الثاني - الجزء الأول",
-    files: ["arabic-part1.txt"],
-    coverage: "part_1_full_text_with_extraction_warnings",
-  },
-  HIS_G2_BAC: {
-    title: "كتاب التاريخ الوطني - البكالوريا المصرية - الصف الثاني - الجزء الأول",
-    files: ["history-part1.txt"],
-    coverage: "part_1_full_text_with_extraction_warnings",
-  },
-};
+// No verbatim textbook page corpus is stored or retrieved. The planner consumes
+// a compact derived curriculum profile with lesson names, printed-page spans,
+// provisional size/difficulty indicators and explicit confidence levels.
+const SOURCES: Record<string, BookSource> = {};
 
 // These sources have a verified first-part curriculum index, but their complete
 // textbook page bodies are not present in the checked-in corpus. Never retrieve
 // or cite Part 2 files as a substitute for missing Part 1 content.
 const COVERAGE_ONLY: Record<string, { title: string; description: string }> = {
+  ARB_G2_BAC: {
+    title: "كتاب اللغة العربية - الجزء الأول",
+    description: "بيانات مشتقة من فهرس الكتاب: 3 وحدات و9 دروس بنطاقات صفحات مطبوعة. لا تُخزّن صفحات الكتاب أو اقتباساته حرفيًا.",
+  },
   ENG1_G2_BAC: {
     title: "كتاب اللغة الإنجليزية الأولى - الجزء الأول",
-    description: "فهرس الجزء الأول موثق: 5 وحدات و20 موضوعًا. نصوص الصفحات الكاملة غير مفهرسة في المستودع؛ لا تنسب شرحًا أو اقتباسًا إلى صفحات غير متاحة.",
+    description: "فهرس مرئي موثق: 5 وحدات و20 موضوعًا. نطاقات الصفحات متاحة على مستوى الوحدة فقط؛ صفحات الموضوعات وصعوبة كل موضوع غير محسومة.",
+  },
+  HIS_G2_BAC: {
+    title: "كتاب التاريخ الوطني - الجزء الأول",
+    description: "بيانات مشتقة من فهرس الكتاب: 3 وحدات و12 درسًا بنطاقات صفحات مطبوعة. لا تُخزّن صفحات الكتاب أو اقتباساته حرفيًا.",
   },
   PROG_AI_G2_BAC: {
     title: "كتاب البرمجة والذكاء الاصطناعي - الجزء الأول",
-    description: "فهرس الجزء الأول موثق: الفصول 1–4 و14 درسًا مع صفحات PDF في programming-part1-manifest.json. نص الصفحات غير مفهرس بعد. تم استبعاد نص الجزء الثاني بالكامل من سياق المساعد والمخطط.",
+    description: "فهرس الجزء الأول موثق: 4 فصول و14 درسًا، مع بداية ونهاية صفحات الدرس في الكتاب والـPDF. لا يستخدم أي محتوى من الجزء الثاني.",
   },
   SECOND_LANGUAGE_G2_BAC_PENDING: {
     title: "كتاب اللغة الإيطالية - الجزء الأول",
-    description: "فهرس وحدات الجزء الأول موثق على مستوى وحدتين: Unità 1: Dove abiti? وUnità 2: Tempo libero. نص الصفحات الداخلية غير مفهرس بعد؛ لا تدّعِ قراءة محتوى غير متاح.",
+    description: "المتاح حاليًا اسما وحدتين فقط: Dove abiti? وTempo libero. ملف الكتاب الأصلي غير موجود، لذلك حجم الدروس وصفحاتها وصعوبتها غير محددة.",
   },
 };
 
 const pageCache = new Map<string, TextbookPage[]>();
+
+type CurriculumLessonProfile = {
+  id: string;
+  title: string;
+  pages?: [number, number];
+  pageCount?: number;
+  size?: "small" | "medium" | "large" | "unknown";
+  difficulty?: "easy" | "medium" | "hard" | "unknown";
+  difficultyConfidence?: "low" | "medium" | "high";
+  basis?: string;
+  strategy?: string;
+  lessons?: string[];
+  section?: string;
+};
+
+type CurriculumUnitProfile = {
+  id: string;
+  title: string;
+  pages?: [number, number];
+  pageCount?: number;
+  size?: "small" | "medium" | "large" | "unknown";
+  difficulty?: "easy" | "medium" | "hard" | "unknown";
+  difficultyConfidence?: "low" | "medium" | "high";
+  basis?: string;
+  strategy?: string;
+  section?: string;
+  lessons?: CurriculumLessonProfile[];
+};
+
+type CurriculumIntelligence = {
+  subjects: Record<string, { title: string; coverage: string; units: CurriculumUnitProfile[]; limitation?: string }>;
+};
+
+function getCurriculumIntelligenceNotes(subjectIds: string[]): string[] {
+  try {
+    const file = readFileSync(join(ROOT, "curriculum-intelligence-part1.json"), "utf8");
+    const catalogue = JSON.parse(file) as CurriculumIntelligence;
+    return subjectIds.flatMap(subjectId => {
+      const subject = catalogue.subjects[subjectId];
+      if (!subject) return [];
+      const lines = [`ملف المنهج المشتق — ${subject.title} (${subject.coverage}):`];
+      for (const unit of subject.units) {
+        const unitRange = unit.pages ? `؛ صفحات الكتاب المطبوعة ${unit.pages[0]}–${unit.pages[1]} (${unit.pageCount ?? unit.pages[1] - unit.pages[0] + 1} صفحة)` : "";
+        lines.push(`الوحدة: ${unit.title}${unitRange}${unit.size ? `؛ حجم الوحدة ${unit.size}` : ""}`);
+        if (unit.lessons?.length) {
+          for (const lesson of unit.lessons) {
+            const range = lesson.pages ? `؛ صفحات الكتاب ${lesson.pages[0]}–${lesson.pages[1]} (${lesson.pageCount ?? lesson.pages[1] - lesson.pages[0] + 1} صفحة)` : "";
+            const difficulty = lesson.difficulty && lesson.difficulty !== "unknown"
+              ? `؛ صعوبة مبدئية ${lesson.difficulty} (ثقة ${lesson.difficultyConfidence ?? "low"})`
+              : "؛ الصعوبة غير محسومة";
+            lines.push(`- ${lesson.title}${range}${lesson.size ? `؛ الحجم ${lesson.size}` : ""}${difficulty}${lesson.basis ? `؛ سبب التقدير: ${lesson.basis}` : ""}${lesson.strategy ? `؛ توزيع مقترح: ${lesson.strategy}` : ""}`);
+          }
+        } else if (unit.lessons?.length === 0) {
+          lines.push("- لا توجد بيانات دروس تفصيلية لهذه الوحدة.");
+        } else {
+          lines.push(`- الموضوعات: ${(unit as any).lessons?.join("؛ ") || "غير متاحة"}${unit.section ? `؛ المحاور: ${unit.section}` : ""}${unit.difficulty === "unknown" || !unit.difficulty ? "؛ صعوبة الدروس غير محسومة" : ""}`);
+        }
+      }
+      if (subject.limitation) lines.push("حدود المصدر: " + subject.limitation);
+      return lines;
+    });
+  } catch (error) {
+    console.error("[StudyFlow curriculum] Could not load derived curriculum profile:", error instanceof Error ? error.message : "unknown error");
+    return ["بيانات المنهج التفصيلية غير متاحة الآن؛ لا تخترع أسماء دروس أو صفحات أو أحكام صعوبة."];
+  }
+}
 
 type ProgrammingPart1Manifest = {
   pdfPageCount: number;
@@ -344,11 +410,10 @@ export function retrieveTextbookEvidence(
     const indexOnly = COVERAGE_ONLY[subjectId];
     if (indexOnly) {
       coverageNotes.push(indexOnly.title + ": " + indexOnly.description);
-      if (subjectId === "PROG_AI_G2_BAC") {
-        coverageNotes.push(getProgrammingPart1PageMapNote());
-      }
+
     }
   }
+  coverageNotes.push(...getCurriculumIntelligenceNotes(subjectIds));
   const deduped = new Map<string, TextbookPassage>();
   for (const passage of passages.sort((a, b) => b.score - a.score)) {
     const key = passage.subjectId + ":" + passage.pdfPage + ":" + passage.passage.slice(0, 90);
