@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { hashLocalPassword, verifyLocalPassword } from "./_core/localPassword";
+import { FixedWindowRateLimiter } from "./_core/authRateLimit";
 import { SignJWT } from "jose";
 import { TRPCError } from "@trpc/server";
 import { COOKIE_NAME } from "@shared/const";
@@ -71,7 +72,7 @@ import { decodeAndValidateAttachment } from "./attachments";
 import { parse as parseCookie } from "cookie";
 import { createHeartbeatJob, updateHeartbeatJob } from "./_core/heartbeat";
 import { callDataApi } from "./_core/dataApi";
-import { invokeLLM } from "./_core/llm";
+import { invokeLLMWithNvidiaFallback } from "./_core/llmFallback";
 import { formatTextbookEvidence, retrieveTextbookEvidence } from "./textbook-retrieval";
 import { createReminderCron, getReminderPreferences, listReminderNotifications, markReminderRead, saveReminderPreferences, saveReminderSchedule } from "./reminders";
 
@@ -80,7 +81,8 @@ const LOCAL_AUTH_OPEN_ID = "studyflow-local-owner";
 const LOCAL_SESSION_ISSUER = "studyflow-local";
 const LOCAL_SESSION_AUDIENCE = "studyflow-app";
 const LOCAL_SESSION_MS = 30 * 24 * 60 * 60 * 1000;
-const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+const loginRateLimiter = new FixedWindowRateLimiter(5, 15 * 60 * 1_000);
+const registrationRateLimiter = new FixedWindowRateLimiter(5, 15 * 60 * 1_000);
 
 function toPublicAuthUser(user: NonNullable<Awaited<ReturnType<typeof getUserByUsername>>>) {
   return {
@@ -93,15 +95,6 @@ function toPublicAuthUser(user: NonNullable<Awaited<ReturnType<typeof getUserByU
     createdAt: user.createdAt,
     lastSignedIn: user.lastSignedIn,
   };
-}
-
-function getLoginAttemptBucket(ip: string, now: number) {
-  let bucket = loginAttempts.get(ip);
-  if (!bucket || bucket.resetAt <= now) {
-    bucket = { count: 0, resetAt: now + 15 * 60 * 1000 };
-    loginAttempts.set(ip, bucket);
-  }
-  return bucket;
 }
 
 async function logStudentActivity(
@@ -166,14 +159,14 @@ export const appRouter = router({
         const sessionSecret = process.env.APP_SESSION_SECRET;
         if (!sessionSecret) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "تسجيل الدخول غير مُهيأ على الخادم." });
         const ip = ctx.req.ip || ctx.req.socket.remoteAddress || "unknown";
-        const bucket = getLoginAttemptBucket(ip, Date.now());
-        if (bucket.count >= 5) throw new TRPCError({ code: "FORBIDDEN", message: "محاولات كثيرة. انتظر 15 دقيقة ثم حاول مرة أخرى." });
+        const now = Date.now();
+        if (loginRateLimiter.isLimited(ip, now)) throw new TRPCError({ code: "FORBIDDEN", message: "محاولات كثيرة. انتظر 15 دقيقة ثم حاول مرة أخرى." });
         const user = await getUserByUsername(input.username.toLowerCase());
         if (!user || !verifyLocalPassword(input.password, user.passwordHash)) {
-          bucket.count += 1;
+          loginRateLimiter.record(ip, now);
           throw new TRPCError({ code: "UNAUTHORIZED", message: "اسم المستخدم أو كلمة المرور غير صحيحة." });
         }
-        loginAttempts.delete(ip);
+        loginRateLimiter.reset(ip);
         await touchUserLastSignedIn(user.id);
         const token = await new SignJWT({ ver: user.sessionVersion ?? 0 })
           .setProtectedHeader({ alg: "HS256" })
@@ -197,8 +190,7 @@ export const appRouter = router({
         const sessionSecret = process.env.APP_SESSION_SECRET;
         if (!sessionSecret) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "إنشاء الحساب غير مُهيأ على الخادم." });
         const ip = ctx.req.ip || ctx.req.socket.remoteAddress || "unknown";
-        const bucket = getLoginAttemptBucket(ip, Date.now());
-        if (bucket.count >= 5) throw new TRPCError({ code: "FORBIDDEN", message: "وصلت إلى عدد محاولات التسجيل المسموح. حاول بعد 15 دقيقة." });
+        if (!registrationRateLimiter.consume(ip, Date.now())) throw new TRPCError({ code: "FORBIDDEN", message: "وصلت إلى عدد محاولات التسجيل المسموح. حاول بعد 15 دقيقة." });
         const username = input.username.trim().toLowerCase();
         if (await getUserByUsername(username)) {
           bucket.count += 1;
@@ -212,7 +204,6 @@ export const appRouter = router({
           if (/ER_DUP_ENTRY|duplicate/i.test(message)) throw new TRPCError({ code: "CONFLICT", message: "اسم المستخدم مستخدم بالفعل. اختر اسمًا آخر." });
           throw error;
         }
-        loginAttempts.delete(ip);
         const token = await new SignJWT({ ver: user.sessionVersion ?? 0 })
           .setProtectedHeader({ alg: "HS256" })
           .setSubject(user.openId)
@@ -712,7 +703,7 @@ export const appRouter = router({
         const context = `${profileContext}\\n\\nحالة التطبيق الحالية (قد تتغير بعد تحديث الصفحة):\\n${appContext}\\n\\nسجل أنشطة الطالب الحديث: ${activityContext || "لا توجد أحداث مسجلة بعد."}`;
         let response;
         try {
-          response = await invokeLLM({
+          response = await invokeLLMWithNvidiaFallback({
           messages: [
             { role: "system", content: `أنت المساعد الدراسي المتخصص في StudyFlow. دورك بناء فهم حقيقي للطالب، لا تلخيص الكتاب آليًا ولا إعادة صياغة فقراته فقط. استخدم الكتاب المدرسي بوصفه المصدر الأساسي لتحديد أهداف المنهج ومفاهيمه ومصطلحاته وأمثلته وتسلسله وحدود ما يُنسب رسميًا إلى الكتاب. عند توفير مقتطفات مسترجعة من كتاب رسمي، اعتمد عليها قبل المعرفة العامة واذكر اسم الكتاب ورقم صفحة PDF الفعلية عند الاستناد إليها. لا تنسب معلومة إلى الكتاب إن لم تظهر في المقتطفات المسترجعة. لا تستبدل شرح الكتاب بشرح عام، ولا تغيّر مقصده أو مصطلحاته دون توضيح. إذا لم يكن نص الكتاب أو الصفحة متاحًا في السياق أو عبر استرجاع موثوق فلا تدّع أنك اطلعت عليه؛ اطلب الصفحة أو النص المطلوب بدل اختلاق اقتباس أو رقم صفحة.
 

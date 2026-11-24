@@ -2,6 +2,7 @@ import { z } from "zod";
 import { getSIECheckpointBranches, getSIESubject, getSIETeacher } from "@shared/sie-catalog";
 import { calculateLearningGap } from "@shared/sie-learning-progress";
 import { invokeLLM, invokeNvidiaLLM } from "./_core/llm";
+import { isPrimaryProviderFallbackEligible } from "./_core/llmFallback";
 import { getStudentProfile, saveAiPlan } from "./db";
 import { formatTextbookEvidence, retrieveTextbookEvidence } from "./textbook-retrieval";
 
@@ -328,13 +329,6 @@ export async function generatePersonalPlan(
     return invokeCompact(invokeNvidiaLLM, 6_144, false, true);
   };
 
-  const isBillingOrQuotaFailure = (error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error);
-    return /AI_API_KEY is not configured/i.test(message)
-      || /(?:NVIDIA )?LLM invoke failed:\s*402\b/i.test(message)
-      || /insufficient[_\s-]?(?:credits?|quota|balance)|out of credits|not enough credits|credit balance.{0,40}(?:low|insufficient|exhausted)|quota.{0,30}(?:exceeded|exhausted)|openrouter_credits|payment required/i.test(message);
-  };
-
   const isUnsupportedJsonMode = (error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
     return /response_format|json_object|structured output|unsupported|not support/i.test(message);
@@ -372,14 +366,14 @@ export async function generatePersonalPlan(
     try {
       response = await invokeCompact(invokeLLM, 1_400, false, true);
     } catch (primaryError) {
-      if (isBillingOrQuotaFailure(primaryError)) {
+      if (isPrimaryProviderFallbackEligible(primaryError)) {
         response = await invokeNvidiaFallback();
         providerUsed = "NVIDIA";
       } else if (isUnsupportedJsonMode(primaryError)) {
         try {
           response = await invokeCompact(invokeLLM, 1_400, false, false);
         } catch (retryError) {
-          if (isBillingOrQuotaFailure(retryError)) {
+          if (isPrimaryProviderFallbackEligible(retryError)) {
             response = await invokeNvidiaFallback();
             providerUsed = "NVIDIA";
           } else {

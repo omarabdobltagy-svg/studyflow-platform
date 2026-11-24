@@ -166,7 +166,7 @@ export function splitTextbookPages(
 
 export function inspectTextbookIndex(subjectId: string): {
   sourceRoot: string;
-  files: Array<{ file: string; exists: boolean; bytes: number; markerCount: number; prefix: string }>;
+  files: Array<{ file: string; exists: boolean; bytes: number; markerCount: number; replacementCharacters: number; replacementRatio: number; prefix: string }>;
   pageCount: number;
   indexedCharacters: number;
 } {
@@ -180,6 +180,8 @@ export function inspectTextbookIndex(subjectId: string): {
       exists: true,
       bytes: Buffer.byteLength(content, "utf8"),
       markerCount: findPageMarkers(content).length,
+      replacementCharacters: (content.match(/\uFFFD/g) ?? []).length,
+      replacementRatio: (content.match(/\uFFFD/g) ?? []).length / Math.max(1, content.length),
       prefix: JSON.stringify(normalizeExtractedDocument(content).slice(0, 140)),
     };
   });
@@ -278,6 +280,22 @@ export function retrieveTextbookEvidence(
   for (const subjectId of subjectIds) {
     const source = SOURCES[subjectId];
     if (source) {
+      const diagnostics = inspectTextbookIndex(subjectId);
+      const unindexedFiles = diagnostics.files.filter(file => file.markerCount === 0);
+      if (unindexedFiles.length) {
+        coverageNotes.push(
+          "فجوة فهرسة في " + source.title + ": الملفات التالية لا تحتوي علامات صفحات قابلة للقراءة، لذلك لا تدخل في الاسترجاع ذي المراجع: " +
+          unindexedFiles.map(file => file.file).join("، ") + "."
+        );
+      }
+      const damagedFiles = diagnostics.files.filter(file => file.replacementRatio >= 0.02);
+      if (damagedFiles.length) {
+        coverageNotes.push(
+          "تنبيه جودة استخراج في " + source.title + ": توجد محارف استبدال Unicode (U+FFFD) في بعض ملفات النص، بنسب تقريبية: " +
+          damagedFiles.map(file => file.file + " " + (file.replacementRatio * 100).toFixed(1) + "%").join("، ") +
+          ". لا تنقل اقتباسًا حرفيًا من موضع مشوّه؛ اطلب الصفحة الأصلية عند الحاجة إلى صياغة دقيقة."
+        );
+      }
       const results = rankTextbookPassages(loadPages(subjectId), query, Math.max(1, Math.ceil(limit / Math.max(1, subjectIds.length))));
       passages.push(...results);
       if (subjectId === "PROG_AI_G2_BAC") {

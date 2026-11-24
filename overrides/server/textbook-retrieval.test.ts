@@ -82,3 +82,16 @@ describe("uploaded official textbook corpus", () => {
     expect(result.passages.every(item => item.sourceFile.includes("programming-part2"))).toBe(true);
   });
 });
+
+
+describe("textbook corpus coverage diagnostics", () => {
+  it("reports unindexed source fragments and Unicode extraction warnings", () => {
+    const result = retrieveTextbookEvidence(
+      ["ARB_G2_BAC", "HIS_G2_BAC"],
+      "مقدمة الكتاب وأهداف المنهج",
+      3,
+    );
+    expect(result.coverageNotes.some(note => note.includes("لا تدخل في الاسترجاع"))).toBe(true);
+    expect(result.coverageNotes.some(note => note.includes("U+FFFD"))).toBe(true);
+  });
+});
