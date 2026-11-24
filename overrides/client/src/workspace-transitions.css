@@ -76,3 +76,72 @@
     translate: none !important;
   }
 }
+
+
+/* Final component palette: keep the intelligence cards and folder layers in the
+   same graphite / cocoa / muted-taupe language as the rest of the workspace. */
+.sf-shell-v3 .sf-main .sf-home-intelligence-grid .sf-home-backlog-card,
+.sf-shell-v3 .sf-main .sf-home-intelligence-grid .sf-home-daily-plan-card{
+  color:#eee9e3!important;
+  border:1px solid rgba(218,199,178,.14)!important;
+  background:linear-gradient(145deg,#2c2d2e 0%,#222528 76%,#202326 100%)!important;
+  box-shadow:0 18px 40px -33px rgba(0,0,0,.72),inset 0 1px rgba(255,255,255,.055)!important;
+}
+.sf-shell-v3 .sf-main .sf-home-intelligence-grid .sf-home-daily-plan-card{
+  background:linear-gradient(145deg,#302d29 0%,#252628 74%,#212326 100%)!important;
+}
+.sf-shell-v3 .sf-main .sf-home-intelligence-grid .sf-home-intelligence-heading h3{color:#f3eee8!important}
+.sf-shell-v3 .sf-main .sf-home-intelligence-grid .sf-home-intelligence-heading p{color:#aaa29a!important}
+.sf-shell-v3 .sf-main .sf-home-intelligence-grid .sf-home-backlog-total{
+  border:1px solid rgba(201,172,142,.16)!important;
+  background:linear-gradient(120deg,#39332d,#2e2c2a)!important;color:#f5eee7!important;
+}
+.sf-shell-v3 .sf-main .sf-home-intelligence-grid .sf-home-backlog-total strong{color:#e4c5a5!important}
+.sf-shell-v3 .sf-main .sf-home-intelligence-grid .sf-home-backlog-list>div,
+.sf-shell-v3 .sf-main .sf-home-intelligence-grid .sf-home-plan-steps>div{
+  border:1px solid rgba(230,220,208,.09)!important;background:rgba(255,255,255,.035)!important;
+}
+.sf-shell-v3 .sf-main .sf-home-intelligence-grid .sf-home-backlog-list span,
+.sf-shell-v3 .sf-main .sf-home-intelligence-grid .sf-home-plan-steps strong{color:#e7e0d8!important}
+.sf-shell-v3 .sf-main .sf-home-intelligence-grid .sf-home-backlog-list b{color:#d7b895!important}
+.sf-shell-v3 .sf-main .sf-home-intelligence-grid .sf-home-backlog-list small,
+.sf-shell-v3 .sf-main .sf-home-intelligence-grid .sf-home-plan-summary,
+.sf-shell-v3 .sf-main .sf-home-intelligence-grid .sf-home-plan-steps small,
+.sf-shell-v3 .sf-main .sf-home-intelligence-grid .sf-home-intelligence-note{color:#aaa095!important}
+.sf-shell-v3 .sf-main .sf-home-intelligence-grid .sf-home-backlog-action{
+  border:1px solid rgba(204,174,145,.27)!important;background:linear-gradient(145deg,#504131,#3c332a)!important;color:#f0e7dc!important;
+}
+.sf-shell-v3 .sf-main .sf-planner-subject-card{
+  border-color:rgba(219,204,188,.14)!important;
+  background:linear-gradient(145deg,#2c2d2e 0%,#222528 76%,#202326 100%)!important;
+  color:#eee9e3!important;
+}
+.sf-shell-v3 .sf-main .sf-planner-subject-card :is(h3,b){color:#f0ebe5!important}
+.sf-shell-v3 .sf-main .sf-planner-subject-card p{color:#b3aaa0!important}
+.sf-shell-v3 .sf-main .sf-planner-subject-card .bg-background{
+  border:1px solid rgba(219,204,188,.13)!important;
+  background:rgba(255,255,255,.055)!important;color:#d9c4ad!important;
+}
+
+/* The folder uses stacked paper and a dark front cover, never stark white faces. */
+.sf-shell-v3 .sf-main .sf-folder-paper,
+.sf-shell-v3 .sf-main .sf-folder-paper-front,
+.sf-shell-v3 .sf-main .sf-folder-paper-back{
+  border-color:rgba(222,204,184,.24)!important;
+  background:linear-gradient(140deg,#8c7a67,#766653)!important;
+}
+.sf-shell-v3 .sf-main .sf-folder-paper-back{background:linear-gradient(140deg,#766653,#625445)!important}
+.sf-shell-v3 .sf-main .sf-folder-paper-front{background:linear-gradient(140deg,#95816d,#7d6b59)!important}
+.sf-shell-v3 .sf-main .sf-folder-back{background:linear-gradient(145deg,#584a3c,#3b322b)!important}
+.sf-shell-v3 .sf-main .sf-folder-front{
+  background:linear-gradient(145deg,#665543 0%,#44372c 64%,#332a23 100%)!important;
+  color:#f4eee8!important;
+}
+.sf-shell-v3 .sf-main .sf-folder-emblem{background:rgba(206,173,139,.10)!important;color:#e6d1ba!important}
+.sf-shell-v3 .sf-main .sf-folder-copy strong{color:#f0ebe5!important}
+.sf-shell-v3 .sf-main .sf-folder-subtitle{color:#b3aaa0!important}
+.sf-shell-v3 .sf-main .sf-folder-reveal{background:rgba(12,13,14,.22)!important}
+@media(max-width:760px){
+  .sf-shell-v3 .sf-main .sf-folder-art{width:66px!important;height:76px!important}
+  .sf-shell-v3 .sf-main .sf-folder-front{inset:27px 0 0!important;width:auto!important;height:auto!important;padding:8px!important}
+}
