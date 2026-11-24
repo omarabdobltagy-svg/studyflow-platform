@@ -147,7 +147,7 @@ export default function CurriculumMap() {
   return (
     <DashboardLayout
       title="خريطة المنهج"
-      description="شاهد موضعك وموضع التدريس وفجوة كل فرع من المنهج في صورة واحدة."
+      description="تابع الدروس التي أنجزتها، وآخر درس شرحه المدرس، والفجوة المتبقية في كل وحدة."
       action={<span className="sf-page-action-label"><Network className="size-4" />SIE / CURRICULUM MAP</span>}
     >
       {profile.isError && <div className="app-card p-4 text-sm text-destructive">تعذّر تحميل ملفك الدراسي. أعد المحاولة بعد التحقق من الاتصال.</div>}
@@ -160,7 +160,7 @@ export default function CurriculumMap() {
           <p>الخريطة تجمع تقدمك مع مرجع المدرس أو الفصل، وتحسب الفجوة داخل كل وحدة على حدة. الفروع غير الموثقة تظل ظاهرة كبيانات غير مكتملة.</p>
         </div>
         <div className="sf-map-hero-meta">
-          <span><b>{branches.length}</b><small>فروع هذه المادة</small></span>
+          <span><b>{branches.length}</b><small>وحدات هذه المادة</small></span>
           <span><b>{trackedPositions}</b><small>مواضع طالب مسجلة</small></span>
         </div>
       </section>
@@ -180,8 +180,8 @@ export default function CurriculumMap() {
           {subjects.map(id => <option value={id} key={id}>{getSIESubject(id)?.nameAr || id}</option>)}
         </select>
         <div className="sf-map-view-toggle" role="group" aria-label="طريقة عرض الخريطة">
-          <button type="button" aria-pressed={viewMode === "3d"} onClick={() => setViewMode("3d")}>عرض ثلاثي الأبعاد</button>
-          <button type="button" aria-pressed={viewMode === "list"} onClick={() => setViewMode("list")}>قائمة الفروع</button>
+          <button type="button" aria-pressed={viewMode === "3d"} onClick={() => setViewMode("3d")}>الخريطة التفاعلية</button>
+          <button type="button" aria-pressed={viewMode === "list"} onClick={() => setViewMode("list")}>الدروس والوحدات</button>
         </div>
       </section>
 
@@ -194,8 +194,8 @@ export default function CurriculumMap() {
       {viewMode === "3d" && branches.length > 0 && (
         <section className="sf-map-scene-card mb-5">
           <div className="sf-map-scene-heading">
-            <div><p className="sf-map-eyebrow">INTERACTIVE LEARNING GRAPH</p><h3>مسارات المنهج المسجلة</h3><p>اسحب لتغيير زاوية الرؤية، واختَر عقدة لتحديد فرعها.</p></div>
-            <span className="sf-map-scene-count">{branches.length} مسارات</span>
+            <div><p className="sf-map-eyebrow">INTERACTIVE LEARNING GRAPH</p><h3>خريطة الوحدات والدروس</h3><p>استعرض الوحدات والدروس، ثم افتح الدرس لتحديث تقدمك وموضع المدرس.</p></div>
+            <span className="sf-map-scene-count">{branches.length} وحدات</span>
           </div>
           <CurriculumProgressScene branches={sceneBranches} onSelectBranch={selectBranch} />
           <div className="sf-map-legend">
@@ -208,8 +208,8 @@ export default function CurriculumMap() {
       )}
 
       <section className="grid gap-4 md:grid-cols-3 mb-5">
-        <article className="sf-map-metric"><span><Target className="size-4" />الفجوات المحسوبة</span><b>{learning.isLoading ? "—" : knownGaps.length}</b><small>من أصل {branches.length} فروع</small></article>
-        <article className="sf-map-metric"><span><Gauge className="size-4" />نقاط التراكم المرجعية</span><b>{learning.isLoading ? "—" : branchesWithGap}</b><small>فروع لديها فجوة مرجعية مؤكدة</small></article>
+        <article className="sf-map-metric"><span><Target className="size-4" />الفجوات المحسوبة</span><b>{learning.isLoading ? "—" : knownGaps.length}</b><small>من أصل {branches.length} وحدات</small></article>
+        <article className="sf-map-metric"><span><Gauge className="size-4" />نقاط التراكم المرجعية</span><b>{learning.isLoading ? "—" : branchesWithGap}</b><small>وحدات بها دروس متأخرة</small></article>
         <article className="sf-map-metric"><span><BookOpenCheck className="size-4" />مراجع معروفة</span><b>{learning.isLoading ? "—" : knownReferences}</b><small>مدرس أو تقدم فصل مسجل</small></article>
       </section>
 
@@ -228,7 +228,7 @@ export default function CurriculumMap() {
       )}
 
       <section className="sf-map-branches">
-        <div className="sf-map-section-heading"><div><p className="sf-map-eyebrow">BRANCH STATUS</p><h3>تفاصيل كل فرع</h3></div><span>{branches.length} فروع مستقلة</span></div>
+        <div className="sf-map-section-heading"><div><p className="sf-map-eyebrow">BRANCH STATUS</p><h3>تفاصيل كل وحدة</h3></div><span>{branches.length} وحدات مستقلة</span></div>
         {profile.isLoading || learning.isLoading ? (
           <div className="app-card p-5 text-sm text-muted-foreground">جارٍ تجميع مواضعك من الملف الدراسي...</div>
         ) : branches.length === 0 ? (
@@ -262,7 +262,7 @@ export default function CurriculumMap() {
                     <p>مدة النقطة المتوقعة: <b>{branch.minutesPerLesson === null ? "غير محددة" : branch.minutesPerLesson + " دقيقة"}</b></p>
                   </div>
                   <div className="sf-map-branch-actions">
-                    <Button type="button" variant="outline" onClick={() => goToStudy(branch.branchId)} className="sf-map-update-button">تحديث بيانات الفرع</Button>
+                    <Button type="button" variant="outline" onClick={() => goToStudy(branch.branchId)} className="sf-map-update-button">تحديث تقدم الوحدة</Button>
                     {branch.nextLesson && <Button type="button" onClick={() => goToStudy(branch.branchId, branch.nextLesson?.nodeId)} className="sf-map-next-button">ابدأ بالخطوة التالية</Button>}
                   </div>
                 </article>
