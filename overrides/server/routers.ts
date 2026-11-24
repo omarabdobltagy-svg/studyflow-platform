@@ -340,6 +340,7 @@ export const appRouter = router({
               teacherId: teacherId,
               teacherName: nextCustomTeacherName,
               teacherTeachingFrontierId: "__UNKNOWN__",
+              teacherFrontierConfirmedAt: null,
               teacherTeachingFrontierEvidence: null,
               learningGap,
               backlogCount: learningGap.gapCount,
@@ -1226,6 +1227,7 @@ export const appRouter = router({
           teacherId: teacherChoice && teacherChoice !== "__SKIP__" ? teacherChoice : null,
           lastCompletedLessonId: nextStudentFrontier,
           teacherTeachingFrontierId: nextTeacherFrontier,
+          ...(input.teacherTeachingFrontierId !== undefined ? { teacherFrontierConfirmedAt: now } : {}),
           schoolClassFrontierId: nextSchoolFrontier,
           ...(input.teacherTeachingFrontierId !== undefined ? {
             teacherTeachingFrontierEvidence: nextTeacherFrontier !== "__UNKNOWN__" ? "student_observed_teacher" : null,
