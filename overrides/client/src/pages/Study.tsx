@@ -86,7 +86,40 @@ export default function Study() {
   const lessons = branchChoices;
   const currentBranchId = currentBranch?.branchId ?? "";
   const currentBranchPointLabel = "درس";
-  const currentBranchProgress = currentBranchId ? branchProgressMap[currentBranchId] || {} : {};
+  const isLinearSubject = subjectId === "HIS_G2_BAC" || subjectId === "PROG_AI_G2_BAC";
+  const legacyLinearRecords = isLinearSubject ? Object.values(branchProgressMap) : [];
+  const legacyFrontierFromRecords = (field: string, teacherOnly = false) => {
+    const candidates = legacyLinearRecords
+      .filter(record => Object.prototype.hasOwnProperty.call(record, field))
+      .filter(record => !teacherOnly || (
+        selectedTeacherId
+          ? (!record.teacherId || record.teacherId === selectedTeacherId)
+          : (!record.teacherName || record.teacherName === teacherReferenceNameBase)
+      ))
+      .map(record => {
+        const value = record[field] as string;
+        const rank = value === "__UNKNOWN__" ? -2
+          : value === "__NOT_STARTED__" ? -1
+            : branchChoices.findIndex(choice => choice.nodeId === value);
+        return { value, rank };
+      })
+      .filter(item => item.rank >= -2)
+      .sort((left, right) => left.rank - right.rank);
+    return candidates.length ? candidates[candidates.length - 1].value : undefined;
+  };
+  const legacyLinearProgress = {
+    ...(legacyFrontierFromRecords("lastCompletedLessonId") !== undefined
+      ? { lastCompletedLessonId: legacyFrontierFromRecords("lastCompletedLessonId") } : {}),
+    ...(legacyFrontierFromRecords("teacherTeachingFrontierId", true) !== undefined
+      ? { teacherTeachingFrontierId: legacyFrontierFromRecords("teacherTeachingFrontierId", true) } : {}),
+    ...(legacyFrontierFromRecords("schoolClassFrontierId") !== undefined
+      ? { schoolClassFrontierId: legacyFrontierFromRecords("schoolClassFrontierId") } : {}),
+    ...(selectedTeacherId ? { teacherId: selectedTeacherId } : {}),
+    ...(teacherReferenceNameBase ? { teacherName: teacherReferenceNameBase } : {}),
+  };
+  const currentBranchProgress = currentBranchId
+    ? branchProgressMap[currentBranchId] || legacyLinearProgress
+    : {};
   const teacherName = draftTeacherName || currentBranchProgress.teacherName || "";
   const teacherReferenceName = teacherReferenceNameBase || currentBranchProgress.teacherName || "";
   const teacherFrontierSaved = Object.prototype.hasOwnProperty.call(currentBranchProgress, "teacherTeachingFrontierId");
@@ -613,12 +646,14 @@ export default function Study() {
                 ...branchChoices.map((choice, index) => ({
                   value: choice.nodeId,
                   label: choice.title,
-                  description: choice.courseSequenceNumber ? "تسلسل الكورس " + choice.courseSequenceNumber : "نقطة " + (index + 1),
+                  description: choice.courseSequenceNumber
+                    ? "تسلسل الكورس " + choice.courseSequenceNumber
+                    : choice.unitTitle ? choice.unitTitle : "نقطة " + (index + 1),
                 })),
               ]}
             />
           ) : (
-            <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">لا تتوفر نقاط منهج مفهرسة لهذا الفرع حاليًا.</p>
+            <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">هذا المسار لا يحتوي على دروس مسجلة بعد. أضف دروس المدرس من الحقل أعلاه، أو احفظ أن موضعه غير معروف حاليًا.</p>
           )}
           {courseMode === "center" && (
             <div className="rounded-2xl border border-border/70 bg-muted/15 p-4">
@@ -633,7 +668,9 @@ export default function Study() {
                   ...branchChoices.map((choice, index) => ({
                     value: choice.nodeId,
                     label: choice.title,
-                    description: choice.courseSequenceNumber ? "تسلسل الكورس " + choice.courseSequenceNumber : "نقطة " + (index + 1),
+                    description: choice.courseSequenceNumber
+                    ? "تسلسل الكورس " + choice.courseSequenceNumber
+                    : choice.unitTitle ? choice.unitTitle : "نقطة " + (index + 1),
                   })),
                 ]}
               />
@@ -722,7 +759,9 @@ export default function Study() {
                       ? "تسلسل الكورس " + choice.courseSequenceNumber
                       : choice.lessonNumber
                         ? "رقم الدرس " + choice.lessonNumber
-                        : "نقطة في الفرع";
+                        : choice.unitTitle
+                          ? (subjectId === "PROG_AI_G2_BAC" ? "الفصل: " : "الوحدة: ") + choice.unitTitle
+                          : "نقطة " + (index + 1);
                     return (
                       <motion.button key={choice.nodeId} type="button" aria-pressed={selected}
                         disabled={saveBranchFrontier.isPending || !teacherFrontierSaved || !teacherReferenceName || teacherSelectionDirty}
@@ -741,7 +780,7 @@ export default function Study() {
                   })}
                 </div>
               ) : (
-                <p className="rounded-xl border border-dashed border-border bg-background p-4 text-sm leading-6 text-muted-foreground">فهرس هذا الفرع غير متاح بعد؛ لن نعرض اختيارات غير موثوقة.</p>
+                <p className="rounded-xl border border-dashed border-border bg-background p-4 text-sm leading-6 text-muted-foreground">لا توجد دروس مسجلة في هذا المسار بعد. يمكنك إضافة دروس المدرس في القسم السابق، ثم تحديد موضعك منها.</p>
               )}
 
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
