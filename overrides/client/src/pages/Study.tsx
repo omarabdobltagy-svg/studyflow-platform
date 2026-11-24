@@ -651,7 +651,19 @@ export default function Study() {
               ]}
             />
           ) : (
-            <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">هذا المسار لا يحتوي على دروس مسجلة بعد. أضف دروس المدرس من الحقل أعلاه، أو احفظ أن موضعه غير معروف حاليًا.</p>
+            <div className="space-y-3">
+              <p className="rounded-xl border border-dashed border-border p-4 text-sm leading-6 text-muted-foreground">هذا المسار لا يحتوي على دروس مسجلة بعد. يمكنك حفظ أن المدرس لم يبدأ أو أن موضعه غير معروف، ثم إضافة عناوين الكورس تدريجيًا.</p>
+              <ChoiceButtonGroup
+                label="حالة المسار حاليًا"
+                value={teacherTeachingFrontierId}
+                onChange={setTeacherTeachingFrontierId}
+                disabled={!teacherReferenceName || teacherSelectionDirty}
+                options={[
+                  { value: "__UNKNOWN__", label: "موضعه غير معروف" },
+                  { value: "__NOT_STARTED__", label: "لم يبدأ هذا المسار" },
+                ]}
+              />
+            </div>
           )}
           {courseMode === "center" && (
             <div className="rounded-2xl border border-border/70 bg-muted/15 p-4">
