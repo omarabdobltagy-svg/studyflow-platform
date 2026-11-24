@@ -500,7 +500,13 @@ export default function Study() {
                   const active = id === subjectId;
                   return (
                     <motion.button key={id} type="button" aria-pressed={active}
-                      onClick={() => { setSubjectId(id); setBranchId(""); setLessonId(""); }}
+                      onClick={() => {
+                        setManualBranchNavigation(false);
+                        setSubjectId(id);
+                        setBranchId("");
+                        setLessonId("");
+                        setCustomCheckpointTitle("");
+                      }}
                       whileTap={{ scale: 0.98 }}
                       className={"min-h-12 rounded-xl border px-3 py-3 text-sm font-semibold transition " + (active ? "border-primary bg-primary/10 text-foreground ring-2 ring-primary/15" : "border-border bg-background text-muted-foreground hover:border-primary/35")}>
                       {getSIESubject(id)?.nameAr || id}
