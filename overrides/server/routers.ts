@@ -1093,6 +1093,111 @@ export const appRouter = router({
         memoryUpdatedAt: selection.assistantMemoryUpdatedAt ?? null,
       };
     }),
+    updateBranchFrontier: protectedProcedure
+      .input(z.object({
+        subjectId: z.string().trim().min(1).max(80),
+        branchId: z.string().trim().min(1).max(120),
+        studentFrontierId: z.string().trim().min(1).max(120).optional(),
+        teacherTeachingFrontierId: z.string().trim().min(1).max(120).optional(),
+        schoolClassFrontierId: z.string().trim().min(1).max(120).optional(),
+        schoolClassFrontierEvidenceSource: z.enum(["unknown", "teacher_confirmed", "classmate_confirmed", "class_notes", "class_group"]).optional(),
+      }).refine(input => input.studentFrontierId !== undefined || input.teacherTeachingFrontierId !== undefined || input.schoolClassFrontierId !== undefined, {
+        message: "حدد موضعًا واحدًا على الأقل قبل الحفظ.",
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const profile = await getStudentProfile(ctx.user.id);
+        if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "أكمل ملفك الدراسي أولًا." });
+        if (!profile.subjectIds.includes(input.subjectId)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "هذه المادة ليست ضمن مواد ملفك الدراسي." });
+        }
+
+        const branch = getSIECheckpointBranches(input.subjectId).find(item => item.branchId === input.branchId);
+        if (!branch) throw new TRPCError({ code: "BAD_REQUEST", message: "فرع المنهج غير موجود في فهرس المادة." });
+        const allowed = new Set(branch.choices.map(choice => choice.nodeId));
+        const validFrontier = (value: string) => value === "__UNKNOWN__" || value === "__NOT_STARTED__" || allowed.has(value);
+        for (const value of [input.studentFrontierId, input.teacherTeachingFrontierId, input.schoolClassFrontierId]) {
+          if (value !== undefined && !validFrontier(value)) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "النقطة المختارة لا تنتمي إلى فرع المنهج الحالي." });
+          }
+        }
+
+        const selection = (profile.selection ?? {}) as Record<string, any>;
+        const courseProgress = (selection.learningCourseProgress ?? {}) as Record<string, any>;
+        const subjectRecord = courseProgress[input.subjectId] ?? {};
+        const branchRecords = (subjectRecord.branches ?? {}) as Record<string, Record<string, any>>;
+        const previous = branchRecords[input.branchId] ?? {};
+        const courseMode = selection.courseModes?.[input.subjectId] ?? subjectRecord.courseMode ?? previous.courseMode ?? "online";
+        const teacherChoice = selection.teacherChoices?.[input.subjectId] ?? profile.teacherSelections?.[input.subjectId] ?? null;
+        const customTeacherName = selection.customTeacherNames?.[input.subjectId] ?? "";
+        if (input.teacherTeachingFrontierId !== undefined && input.teacherTeachingFrontierId !== "__UNKNOWN__"
+          && (!teacherChoice || teacherChoice === "__SKIP__") && !customTeacherName.trim()) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "احفظ اختيار المدرس أو اسمه أولًا قبل تسجيل موضع شرحه." });
+        }
+        if ((input.teacherTeachingFrontierId !== undefined || input.schoolClassFrontierId !== undefined) && courseMode !== "center" && courseMode !== "online") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "احفظ طريقة الدراسة أولًا." });
+        }
+
+        const now = new Date().toISOString();
+        const nextStudentFrontier = input.studentFrontierId ?? previous.lastCompletedLessonId ?? "__UNKNOWN__";
+        const nextTeacherFrontier = input.teacherTeachingFrontierId ?? previous.teacherTeachingFrontierId ?? "__UNKNOWN__";
+        const nextSchoolFrontier = courseMode === "center"
+          ? input.schoolClassFrontierId ?? previous.schoolClassFrontierId ?? "__UNKNOWN__"
+          : "__UNKNOWN__";
+        const learningGap = calculateLearningGap(branch.choices, {
+          studentFrontierId: nextStudentFrontier,
+          teacherTeachingFrontierId: nextTeacherFrontier,
+          schoolClassFrontierId: nextSchoolFrontier,
+        });
+        const nextBranchRecord = {
+          ...previous,
+          subjectId: input.subjectId,
+          courseMode,
+          teacherId: teacherChoice && teacherChoice !== "__SKIP__" ? teacherChoice : null,
+          lastCompletedLessonId: nextStudentFrontier,
+          teacherTeachingFrontierId: nextTeacherFrontier,
+          schoolClassFrontierId: nextSchoolFrontier,
+          ...(input.teacherTeachingFrontierId !== undefined ? {
+            teacherTeachingFrontierEvidence: nextTeacherFrontier !== "__UNKNOWN__" ? "student_observed_teacher" : null,
+          } : {}),
+          ...(input.schoolClassFrontierId !== undefined ? {
+            schoolClassFrontierEvidence: input.schoolClassFrontierId !== "__UNKNOWN__" ? "student_reported_center_class" : null,
+          } : {}),
+          ...(input.schoolClassFrontierEvidenceSource !== undefined ? {
+            schoolClassFrontierEvidenceSource: input.schoolClassFrontierEvidenceSource,
+          } : {}),
+          learningGap,
+          backlogCount: learningGap.gapCount,
+          evidenceSource: "student_self_report",
+          confidence: "student_reported",
+          updatedAt: now,
+        };
+        await updateStudentProfileSelection(ctx.user.id, {
+          ...selection,
+          learningCourseProgress: {
+            ...courseProgress,
+            [input.subjectId]: {
+              ...subjectRecord,
+              courseMode,
+              teacherId: nextBranchRecord.teacherId,
+              branches: { ...branchRecords, [input.branchId]: nextBranchRecord },
+              updatedAt: now,
+            },
+          },
+        });
+        const savedStudent = input.studentFrontierId !== undefined;
+        const savedTeacher = input.teacherTeachingFrontierId !== undefined || input.schoolClassFrontierId !== undefined;
+        await logStudentActivity(ctx.user.id, savedStudent && savedTeacher ? "learning.branch_frontiers_updated"
+          : savedStudent ? "learning.student_frontier_updated" : "learning.teacher_frontier_updated",
+          "curriculum_branch", input.branchId, "تم حفظ موضع مستقل في فرع المنهج", {
+            subjectId: input.subjectId,
+            branchId: input.branchId,
+            studentFrontierUpdated: savedStudent,
+            teacherFrontierUpdated: input.teacherTeachingFrontierId !== undefined,
+            schoolFrontierUpdated: input.schoolClassFrontierId !== undefined,
+            backlogCount: learningGap.gapCount,
+          });
+        return { success: true, record: nextBranchRecord, learningGap, savedStudent, savedTeacher };
+      }),
     updateCourseProgress: protectedProcedure
       .input(z.object({
         subjectId: z.string().trim().min(1).max(80),
