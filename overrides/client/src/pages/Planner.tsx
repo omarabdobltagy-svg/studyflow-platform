@@ -81,8 +81,8 @@ export default function Planner() {
            const knownLessons = branches.reduce((total, branch) => total + branch.choices.length, 0);
            return <article key={subjectId} className="sf-planner-subject-card rounded-2xl border border-border/70 bg-muted/20 p-4">
              <div className="flex items-start justify-between gap-3">
-               <div><h3 className="font-bold">{getSIESubject(subjectId)?.nameAr || subjectId}</h3><p className="mt-1 text-xs text-muted-foreground">{backlog?.coverageLabel || "لم تُحسب فجوة هذا الفرع بعد"}</p></div>
-               <span className="rounded-lg bg-background px-2.5 py-1 text-xs font-semibold text-primary">{backlog?.countLabel || "غير محسوب"}</span>
+               <div><h3 className="font-bold">{getSIESubject(subjectId)?.nameAr || subjectId}</h3><p className="mt-1 text-xs text-muted-foreground">{learning.isLoading ? "جارٍ احتساب الفجوة من المواضع المحفوظة..." : learning.isError ? "تعذّر احتساب الفجوة" : backlog?.coverageLabel || "لم تُحسب فجوة هذا الفرع بعد"}</p></div>
+               <span className="rounded-lg bg-background px-2.5 py-1 text-xs font-semibold text-primary">{learning.isLoading ? "جارٍ الحساب..." : learning.isError ? "غير متاح" : backlog?.countLabel || "غير محسوب"}</span>
              </div>
              <div className="mt-3 flex items-center justify-between gap-3 border-t border-border/60 pt-3 text-xs text-muted-foreground">
                <span>نطاق المنهج المفهرس</span><b className="text-foreground">{knownLessons} درسًا / موضوعًا</b>
