@@ -73,6 +73,10 @@ export default function Study() {
   const currentBranchId = currentBranch?.branchId ?? "";
   const currentBranchPointLabel = "درس";
   const isLinearSubject = subjectId === "HIS_G2_BAC" || subjectId === "PROG_AI_G2_BAC";
+  const isDatePacedBranch = isLinearSubject || (
+    subjectId === "ENG1_G2_BAC"
+    && ["ENG_TEXTBOOK", "ENG_VOCABULARY", "ENG_GRAMMAR"].includes(currentBranchId)
+  );
   const legacyLinearRecords = isLinearSubject ? Object.values(branchProgressMap) : [];
   const legacyFrontierFromRecords = (field: string, teacherOnly = false) => {
     const candidates = legacyLinearRecords
@@ -159,14 +163,14 @@ export default function Study() {
   };
 
   const visibleCurriculumChoices = useMemo(() => {
-    if (!isLinearSubject || showFullCourseIndex) return branchChoices;
+    if (!isDatePacedBranch || showFullCourseIndex) return branchChoices;
     const today = new Date();
     const focused = getExpectedToDateChoices(branchChoices, today);
     const preservedIds = [teacherTeachingFrontierId, schoolClassFrontierId, lastCompletedLessonId].filter(Boolean);
     const preserved = branchChoices.filter(choice => preservedIds.includes(choice.nodeId));
     return [...new Map([...focused, ...preserved].map(choice => [choice.nodeId, choice])).values()]
       .sort((left, right) => branchChoices.findIndex(choice => choice.nodeId === left.nodeId) - branchChoices.findIndex(choice => choice.nodeId === right.nodeId));
-  }, [branchChoices, isLinearSubject, showFullCourseIndex, teacherTeachingFrontierId, schoolClassFrontierId, lastCompletedLessonId]);
+  }, [branchChoices, isDatePacedBranch, showFullCourseIndex, teacherTeachingFrontierId, schoolClassFrontierId, lastCompletedLessonId]);
 
   const currentGap = calculateLearningGap(branchChoices, {
     studentFrontierId: lastCompletedLessonId || null,
@@ -577,7 +581,7 @@ export default function Study() {
           {!teacherReferenceName && (
             <p className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-sm leading-6 text-muted-foreground">احفظ اسم المدرس أولًا في قسم اختيار المدرس حتى نربط موضع الشرح بالشخص الصحيح.</p>
           )}
-          {isLinearSubject && branchChoices.length > 0 && (
+          {isDatePacedBranch && branchChoices.length > 0 && (
             <div className="rounded-xl border border-primary/15 bg-primary/[0.035] p-3">
               <p className="text-xs font-semibold">فهرس المقرر وفق تقويم المدارس 2026/2027</p>
               <p className="mt-1 text-xs leading-6 text-muted-foreground">
