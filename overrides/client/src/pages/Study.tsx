@@ -738,7 +738,7 @@ export default function Study() {
                 {saveBranchFrontier.isPending && <span className="shrink-0 rounded-full bg-primary/10 px-3 py-2 text-[11px] font-semibold text-primary">جارٍ الحفظ...</span>}
               </div>
 
-              {isLinearSubject && branchChoices.length > 0 && (
+              {isDatePacedBranch && branchChoices.length > 0 && (
                 <button type="button" onClick={() => setShowFullCourseIndex(value => !value)} className="mb-3 text-xs font-bold text-primary underline underline-offset-4">
                   {showFullCourseIndex ? "إخفاء الدروس اللاحقة" : "عرض الفهرس الكامل للمقرر"}
                 </button>
