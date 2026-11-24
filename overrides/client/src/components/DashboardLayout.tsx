@@ -32,6 +32,7 @@ const navigation: NavigationGroup[] = [
   { label: "التعلّم", items: [
     { label: "المكتبة", path: "/books", icon: LibraryBig },
     { label: "المذاكرة والتقدم", path: "/study", icon: BookOpenText },
+    { label: "جلسة SQ3R", path: "/sq3r", icon: BookOpenCheck },
     { label: "خريطة المنهج", path: "/learning-map", icon: Network },
     { label: "المساعد الدراسي الذكي", path: "/assistant", icon: MessageCircle },
   ] },
