@@ -357,6 +357,8 @@ export const appRouter = router({
         subjectIds: z.array(z.string().trim().min(1).max(80)).min(1).max(12),
         teacherSelections: z.record(z.string(), z.string().trim().min(1).max(80)).default({}),
         skippedTeacherSubjectIds: z.array(z.string().trim().min(1).max(80)).max(12).default([]),
+        courseModes: z.record(z.string(), z.enum(["center", "online"])).default({}),
+        customTeacherNames: z.record(z.string(), z.string().trim().max(120)).default({}),
         teacherFrontierReports: z.record(z.string(), z.string().trim().min(1).max(120)).default({}),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -381,6 +383,16 @@ export const appRouter = router({
         for (const subjectId of input.skippedTeacherSubjectIds) {
           if (!input.subjectIds.includes(subjectId)) {
             throw new TRPCError({ code: "BAD_REQUEST", message: "اختيار تأجيل المدرس لا يطابق مادة في الملف." });
+          }
+        }
+        for (const subjectId of Object.keys(input.courseModes)) {
+          if (!input.subjectIds.includes(subjectId)) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "طريقة الدراسة المرسلة لا تخص مادة في الملف." });
+          }
+        }
+        for (const subjectId of Object.keys(input.customTeacherNames)) {
+          if (!input.subjectIds.includes(subjectId)) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "اسم المدرس المرسل لا يخص مادة في الملف." });
           }
         }
         const validFrontierSentinels = new Set(["__NOT_STARTED__", "__UNKNOWN__", "__DEFERRED__"]);
@@ -429,6 +441,8 @@ export const appRouter = router({
             electiveSubjectId: track.electiveOptions.length ? (input.subjectIds.find(id => !track.requiredSubjectIds.includes(id)) ?? null) : null,
             subjectIds: input.subjectIds,
             teacherChoices,
+            courseModes: Object.fromEntries(input.subjectIds.map(subjectId => [subjectId, input.courseModes[subjectId] ?? "online"])),
+            customTeacherNames: Object.fromEntries(Object.entries(input.customTeacherNames).filter(([subjectId, name]) => input.subjectIds.includes(subjectId) && name.trim())),
             teacherProgressState: Object.fromEntries(Object.entries(input.teacherSelections).map(([subjectId, teacherId]) => {
               const teacher = getSIETeacher(teacherId);
               const report = input.teacherFrontierReports[subjectId] ?? (teacher?.studentInputRequired ? "__DEFERRED__" : "__NOT_REQUIRED__");
@@ -946,6 +960,7 @@ export const appRouter = router({
       const sq3rProgress = (selection.subjectLessonProgress ?? {}) as Record<string, Record<string, any>>;
       const gapByBranch = Object.fromEntries(profile.subjectIds.map(subjectId => {
         const subjectRecord = courseProgress[subjectId] ?? {};
+        const subjectCourseMode = selection.courseModes?.[subjectId] ?? subjectRecord.courseMode ?? "online";
         const branchRecords = subjectRecord.branches ?? {};
         const legacyStudentFrontier = legacyTeacherFrontiers[subjectId] || legacyTeacherState[subjectId]?.studentAttendedFrontier;
         const subjectLessonRecords = sq3rProgress[subjectId] ?? {};
@@ -976,9 +991,10 @@ export const appRouter = router({
           const teacherFrontierId = Object.prototype.hasOwnProperty.call(saved, "teacherTeachingFrontierId")
             ? saved.teacherTeachingFrontierId
             : belongsToBranch(subjectRecord.teacherTeachingFrontierId) ? subjectRecord.teacherTeachingFrontierId : "__UNKNOWN__";
-          const schoolFrontierId = Object.prototype.hasOwnProperty.call(saved, "schoolClassFrontierId")
+          const savedSchoolFrontierId = Object.prototype.hasOwnProperty.call(saved, "schoolClassFrontierId")
             ? saved.schoolClassFrontierId
             : belongsToBranch(subjectRecord.schoolClassFrontierId) ? subjectRecord.schoolClassFrontierId : "__UNKNOWN__";
+          const schoolFrontierId = subjectCourseMode === "center" ? savedSchoolFrontierId : "__UNKNOWN__";
           return [branch.branchId, calculateLearningGap(branch.choices, {
             studentFrontierId,
             teacherTeachingFrontierId: teacherFrontierId,
@@ -993,7 +1009,7 @@ export const appRouter = router({
         return [subjectId, calculateLearningGap(getSIECheckpointChoices(subjectId), {
           studentFrontierId: record.lastCompletedLessonId || legacyStudentFrontier,
           teacherTeachingFrontierId: record.teacherTeachingFrontierId,
-          schoolClassFrontierId: record.schoolClassFrontierId,
+          schoolClassFrontierId: (selection.courseModes?.[subjectId] ?? record.courseMode) === "center" ? record.schoolClassFrontierId : "__UNKNOWN__",
         })];
       }));
       return {
@@ -1012,6 +1028,8 @@ export const appRouter = router({
         subjectId: z.string().trim().min(1).max(80),
         branchId: z.string().trim().min(1).max(120).optional(),
         teacherId: z.string().trim().min(1).max(80).nullable().optional(),
+        teacherName: z.string().trim().max(120).optional(),
+        courseMode: z.enum(["center", "online"]).optional(),
         lastCompletedLessonId: z.string().trim().min(1).max(120).nullable().optional(),
         teacherTeachingFrontierId: z.string().trim().min(1).max(120).default("__UNKNOWN__"),
         schoolClassFrontierId: z.string().trim().min(1).max(120).default("__UNKNOWN__"),
@@ -1051,20 +1069,30 @@ export const appRouter = router({
         }
         const selection = (profile.selection ?? {}) as Record<string, any>;
         const courseProgress = (selection.learningCourseProgress ?? {}) as Record<string, any>;
+        const existingSubjectRecord = courseProgress[input.subjectId] ?? {};
+        const existingBranchRecord = branch ? existingSubjectRecord.branches?.[branch.branchId] ?? {} : {};
+        const courseMode = input.courseMode ?? selection.courseModes?.[input.subjectId] ?? existingSubjectRecord.courseMode ?? "online";
         const teacherId = input.teacherId !== undefined
           ? input.teacherId
           : selection.teacherChoices?.[input.subjectId] ?? profile.teacherSelections?.[input.subjectId] ?? null;
+        const chosenTeacher = teacherId && teacherId !== "__SKIP__" ? getSIETeacher(teacherId) : undefined;
         if (teacherId && teacherId !== "__SKIP__") {
-          const teacher = getSIETeacher(teacherId);
-          if (!teacher || !teacher.subjectIds.includes(input.subjectId)) {
+          if (!chosenTeacher || !chosenTeacher.subjectIds.includes(input.subjectId)) {
             throw new TRPCError({ code: "BAD_REQUEST", message: "المدرس المحدد لا يرتبط بهذه المادة." });
           }
         }
-        if (input.teacherTeachingFrontierId !== "__UNKNOWN__" && (!teacherId || teacherId === "__SKIP__")) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "اختر مدرسًا قبل تسجيل موضعه في المنهج." });
+        const savedCustomTeacherName = selection.customTeacherNames?.[input.subjectId] ?? existingBranchRecord.teacherName ?? existingSubjectRecord.teacherName ?? "";
+        const teacherName = input.teacherName?.trim()
+          ?? (input.teacherId === null ? "" : savedCustomTeacherName || chosenTeacher?.nameAr || "");
+        if (input.teacherTeachingFrontierId !== "__UNKNOWN__" && !teacherName.trim() && !chosenTeacher) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "اكتب اسم المدرس أو اختره قبل تسجيل موضع شرحه." });
         }
         const teacherFrontierId = input.teacherTeachingFrontierId === "__UNKNOWN__" ? null : input.teacherTeachingFrontierId;
-        const schoolFrontierId = input.schoolClassFrontierId === "__UNKNOWN__" ? null : input.schoolClassFrontierId;
+        const schoolFrontierId = courseMode === "center" && input.schoolClassFrontierId !== "__UNKNOWN__"
+          ? input.schoolClassFrontierId : null;
+        const storedSchoolFrontierId = courseMode === "center"
+          ? schoolFrontierId ?? "__UNKNOWN__"
+          : existingBranchRecord.schoolClassFrontierId ?? "__UNKNOWN__";
         const learningGap = calculateLearningGap(choices, {
           studentFrontierId: input.lastCompletedLessonId ?? null,
           teacherTeachingFrontierId: teacherFrontierId,
@@ -1073,13 +1101,15 @@ export const appRouter = router({
         const now = new Date().toISOString();
         const evidenceRecord = {
           subjectId: input.subjectId,
+          courseMode,
           teacherId: teacherId && teacherId !== "__SKIP__" ? teacherId : null,
+          teacherName: chosenTeacher ? "" : teacherName.trim(),
           lastCompletedLessonId: input.lastCompletedLessonId ?? "__UNKNOWN__",
           teacherTeachingFrontierId: teacherFrontierId ?? "__UNKNOWN__",
           teacherTeachingFrontierEvidence: teacherFrontierId ? "student_observed_teacher" : null,
-          schoolClassFrontierId: schoolFrontierId ?? "__UNKNOWN__",
-          schoolClassFrontierEvidence: schoolFrontierId ? "student_reported_school_class" : null,
-          schoolClassFrontierEvidenceSource: input.schoolClassFrontierEvidenceSource,
+          schoolClassFrontierId: storedSchoolFrontierId,
+          schoolClassFrontierEvidence: courseMode === "center" && schoolFrontierId ? "student_reported_center_class" : null,
+          schoolClassFrontierEvidenceSource: courseMode === "center" ? input.schoolClassFrontierEvidenceSource : existingBranchRecord.schoolClassFrontierEvidenceSource ?? "unknown",
           teacherCourseFrontier: input.teacherCourseFrontier,
           status: input.status,
           learningGap,
@@ -1091,7 +1121,6 @@ export const appRouter = router({
           confidence: "student_reported",
           updatedAt: now,
         };
-        const existingSubjectRecord = courseProgress[input.subjectId] ?? {};
         await updateStudentLearningBaseline(ctx.user.id, {
           // A single branch gap must never masquerade as a whole-subject backlog.
           backlog: branch ? {} : learningGap.gapCount === null ? {} : { [input.subjectId]: learningGap.gapCount },
@@ -1104,7 +1133,9 @@ export const appRouter = router({
         const latestSubjectRecord = latestCourseProgress[input.subjectId] ?? existingSubjectRecord;
         const record = branch ? {
           ...latestSubjectRecord,
+          courseMode,
           teacherId: evidenceRecord.teacherId,
+          teacherName: chosenTeacher ? "" : teacherName.trim(),
           status: input.status,
           teacherCourseFrontier: input.teacherCourseFrontier,
           estimatedMinutesPerLesson: input.estimatedMinutesPerLesson,
@@ -1119,6 +1150,10 @@ export const appRouter = router({
         } : evidenceRecord;
         const nextTeacherChoices = { ...((latestSelection.teacherChoices ?? {}) as Record<string, string>) };
         const nextTeacherStates = { ...((latestSelection.teacherProgressState ?? {}) as Record<string, Record<string, any>>) };
+        const nextCourseModes = { ...((latestSelection.courseModes ?? {}) as Record<string, "center" | "online">), [input.subjectId]: courseMode };
+        const nextCustomTeacherNames = { ...((latestSelection.customTeacherNames ?? {}) as Record<string, string>) };
+        if (!chosenTeacher && teacherName.trim()) nextCustomTeacherNames[input.subjectId] = teacherName.trim();
+        else delete nextCustomTeacherNames[input.subjectId];
         if (input.teacherId !== undefined) {
           const chosenTeacher = teacherId && teacherId !== "__SKIP__" ? getSIETeacher(teacherId) : undefined;
           const previousTeacherState = nextTeacherStates[input.subjectId] ?? {};
@@ -1149,6 +1184,8 @@ export const appRouter = router({
             teacherChoices: nextTeacherChoices,
             teacherProgressState: nextTeacherStates,
           } : {}),
+          courseModes: nextCourseModes,
+          customTeacherNames: nextCustomTeacherNames,
           learningCourseProgress: { ...latestCourseProgress, [input.subjectId]: record },
         });
         await logStudentActivity(ctx.user.id, "learning.frontier_updated", "curriculum_branch", branch?.branchId ?? input.subjectId, "تم تحديث موضع الطالب ومرجع التدريس", {
