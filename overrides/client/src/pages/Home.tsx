@@ -222,6 +222,8 @@ export default function Home() {
           ...(profile.data?.teacherSelections ?? {}),
         },
         teacherNames: (profile.data as any)?.selection?.customTeacherNames ?? {},
+        legacyStudentFrontiers: (profile.data as any)?.selection?.teacherFrontiers ?? {},
+        legacyStudentProgress: (profile.data as any)?.selection?.teacherProgressState ?? {},
       },
     ),
     [profile.data, learning.data],
