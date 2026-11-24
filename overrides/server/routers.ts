@@ -12,6 +12,7 @@ import {
   addLibraryAttachment,
   assertLibraryAttachmentTarget,
   approvePlanAsGoalTree,
+  syncDailyPlanGoalTree,
   completeStudyStep,
   createBook,
   createCalendarEvent,
@@ -2052,15 +2053,27 @@ export const appRouter = router({
           ctx.user.id, input.prompt, input.includeStudentProfile,
           { dailyMinutes: input.dailyMinutes, startDate }
         );
-        const taskSync = await approvePlanAsGoalTree(ctx.user.id, {
-          title: result.title,
-          summary: result.summary,
-          steps: result.steps.map((step, index) => ({ ...step, day: index + 1 })),
-        }, { startDate, dailyMinutes: input.dailyMinutes });
+        const synced = await syncDailyPlanGoalTree(
+          ctx.user.id,
+          result,
+          { startDate, dailyMinutes: input.dailyMinutes },
+          { goalTitle: `خطة: ${result.title}`, goalCategory: "خطة ذكية" },
+        );
+        const taskSync = {
+          parentGoalId: synced.parentGoalId,
+          stageCount: synced.taskCount,
+          taskCount: synced.taskCount,
+          routineId: null,
+          createdTaskCount: synced.createdTaskCount,
+          refreshedTaskCount: synced.refreshedTaskCount,
+          preservedCompletedTaskCount: synced.preservedCompletedTaskCount,
+        };
         await logStudentActivity(ctx.user.id, "plan.generated", "ai_plan", null, "ولّد المخطط الذكي خطة وحوّلها تلقائيًا إلى مهام", {
           title: result.title,
           stepCount: result.steps.length,
           taskCount: taskSync.taskCount,
+          createdTaskCount: taskSync.createdTaskCount,
+          refreshedTaskCount: taskSync.refreshedTaskCount,
         });
         return { ...result, taskSync };
       }),
