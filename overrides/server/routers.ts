@@ -2191,6 +2191,7 @@ export const appRouter = router({
           createdTaskCount: taskSync.createdTaskCount,
           refreshedTaskCount: taskSync.refreshedTaskCount,
         });
+        queueDailyPlanReconciliation(ctx.user.id);
         return { ...result, taskSync };
       }),
     approve: protectedProcedure
@@ -2236,6 +2237,7 @@ export const appRouter = router({
         await logStudentActivity(ctx.user.id, "plan.approved", "ai_plan", null, "تم اعتماد خطة وتحويلها إلى مهام", {
           title: input.plan.title, taskCount: result.taskCount, routineCreated: Boolean(result.routineId),
         });
+        queueDailyPlanReconciliation(ctx.user.id);
         return result;
       }),
   }),
