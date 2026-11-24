@@ -8,7 +8,6 @@
 /**
  * General Egyptian pre-university structure under Education Law 139/1981
  * as amended by Law 169/2025 (effective 14 August 2025).
- * Baccalaureate-specific rules are intentionally not modeled here.
  */
 export const EGYPT_GENERAL_EDUCATION_STRUCTURE = {
   compulsoryYears: 12,
@@ -69,6 +68,7 @@ export type EgyptSchoolPhase =
   | "midyear_break"
   | "second_term"
   | "second_term_exams"
+  | "general_secondary_exams"
   | "after_school_year";
 
 export type EgyptSchoolProgress = {
@@ -117,7 +117,7 @@ export function getEgyptSchoolProgress(value: string | Date = new Date()): Egypt
     return { academicYear: c.academicYear, phase: "first_term", term: 1, termProgress: fraction(date, c.firstTermInstructionStart, c.firstTermInstructionEnd), activePart: 1, labelAr: "الفصل الدراسي الأول" };
   }
 
-  if (between(date, c.transferFirstTermExamsStart, c.midyearBreakStart)) {
+  if (between(date, c.transferFirstTermExamsStart, "2027-01-22")) {
     return { academicYear: c.academicYear, phase: "first_term_exams", term: 1, termProgress: 1, activePart: 1, labelAr: "امتحانات الفصل الدراسي الأول" };
   }
 
@@ -131,6 +131,10 @@ export function getEgyptSchoolProgress(value: string | Date = new Date()): Egypt
 
   if (between(date, c.transferSecondTermExamsStart, c.schoolYearEnd)) {
     return { academicYear: c.academicYear, phase: "second_term_exams", term: 2, termProgress: 1, activePart: 2, labelAr: "امتحانات الفصل الدراسي الثاني" };
+  }
+
+  if (between(date, c.generalSecondaryExamsStart, c.generalSecondaryExamsEnd)) {
+    return { academicYear: c.academicYear, phase: "general_secondary_exams", term: null, termProgress: 1, activePart: 2, labelAr: "امتحانات الثانوية العامة" };
   }
 
   return { academicYear: c.academicYear, phase: "after_school_year", term: null, termProgress: 1, activePart: 2, labelAr: "بعد نهاية العام الدراسي" };
