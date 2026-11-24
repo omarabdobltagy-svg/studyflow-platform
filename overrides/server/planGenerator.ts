@@ -116,14 +116,40 @@ function buildPlannerProgressSnapshot(
       const belongsToBranch = (value: unknown) =>
         typeof value === "string" &&
         (value === "__NOT_STARTED__" || branch.choices.some(choice => choice.nodeId === value));
-      const studentFrontier = Object.prototype.hasOwnProperty.call(saved, "lastCompletedLessonId")
-        ? saved.lastCompletedLessonId
-        : belongsToBranch(legacyFrontier) ? legacyFrontier : "__UNKNOWN__";
-      const teacherFrontier = Object.prototype.hasOwnProperty.call(saved, "teacherTeachingFrontierId")
-        ? saved.teacherTeachingFrontierId
+
+      // Match the learning.get resolver: an unconfirmed legacy "__UNKNOWN__"
+      // in the branch record must not hide a valid subject-level saved frontier.
+      // Only an explicitly confirmed unknown is authoritative and blocks fallback.
+      const savedStudentFrontierValue = saved.lastCompletedLessonId;
+      const savedStudentFrontier = belongsToBranch(savedStudentFrontierValue)
+        ? savedStudentFrontierValue
+        : savedStudentFrontierValue === "__UNKNOWN__" && saved.studentFrontierConfirmedAt
+          ? "__UNKNOWN__"
+          : undefined;
+      const studentFrontier = savedStudentFrontier !== undefined
+        ? savedStudentFrontier
+        : belongsToBranch(reported.lastCompletedLessonId)
+          ? reported.lastCompletedLessonId
+          : belongsToBranch(legacyFrontier) ? legacyFrontier : "__UNKNOWN__";
+
+      const savedTeacherFrontierValue = saved.teacherTeachingFrontierId;
+      const savedTeacherFrontier = belongsToBranch(savedTeacherFrontierValue)
+        ? savedTeacherFrontierValue
+        : savedTeacherFrontierValue === "__UNKNOWN__" && saved.teacherFrontierConfirmedAt
+          ? "__UNKNOWN__"
+          : undefined;
+      const teacherFrontier = savedTeacherFrontier !== undefined
+        ? savedTeacherFrontier
         : belongsToBranch(reported.teacherTeachingFrontierId) ? reported.teacherTeachingFrontierId : "__UNKNOWN__";
-      const schoolFrontier = Object.prototype.hasOwnProperty.call(saved, "schoolClassFrontierId")
-        ? saved.schoolClassFrontierId
+
+      const savedSchoolFrontierValue = saved.schoolClassFrontierId;
+      const savedSchoolFrontier = belongsToBranch(savedSchoolFrontierValue)
+        ? savedSchoolFrontierValue
+        : savedSchoolFrontierValue === "__UNKNOWN__" && saved.schoolFrontierConfirmedAt
+          ? "__UNKNOWN__"
+          : undefined;
+      const schoolFrontier = savedSchoolFrontier !== undefined
+        ? savedSchoolFrontier
         : belongsToBranch(reported.schoolClassFrontierId) ? reported.schoolClassFrontierId : "__UNKNOWN__";
       const gap = calculateLearningGap(branch.choices, {
         studentFrontierId: studentFrontier,
