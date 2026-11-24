@@ -21,7 +21,7 @@ vi.mock("./textbook-retrieval", () => ({
   retrieveTextbookEvidence: () => ({ passages: [], coverageNotes: [] }),
 }));
 
-import { generatePersonalPlan } from "./planGenerator";
+import { generatePersonalPlan, parseGeneratedPlan } from "./planGenerator";
 
 const validPlan = {
   title: "خطة مراجعة التاريخ",
@@ -49,6 +49,25 @@ beforeEach(() => {
   mocks.saveAiPlan.mockResolvedValue(undefined);
 });
 
+describe("generated plan JSON parser", () => {
+  it("extracts a fenced JSON object after explanatory text and ignores braces inside strings", () => {
+    const planWithBraces = {
+      ...validPlan,
+      steps: validPlan.steps.map((step, index) => ({
+        ...step,
+        detail: index === 0 ? "اكتب الرمز {A} داخل الملخص ثم اشرح الفكرة." : step.detail,
+      })),
+    };
+    const jsonWithTrailingComma = JSON.stringify(planWithBraces).replace(/}$/, ",}");
+    const response = "إليك الخطة المطلوبة:\n\n\`\`\`json\n" + jsonWithTrailingComma + "\n\`\`\`";
+    expect(parseGeneratedPlan(response)).toEqual(planWithBraces);
+  });
+
+  it("does not accept an incomplete JSON object", () => {
+    expect(() => parseGeneratedPlan('{"title":"خطة ناقصة"')).toThrow("تعذّر تحويل الخطة الذكية");
+  });
+});
+
 describe("smart planner NVIDIA fallback", () => {
   it("switches to NVIDIA when the primary provider reports exhausted credits", async () => {
     mocks.invokeLLM.mockRejectedValue(new Error(
@@ -66,8 +85,8 @@ describe("smart planner NVIDIA fallback", () => {
     expect(mocks.invokeLLM).toHaveBeenCalledOnce();
     expect(mocks.invokeNvidiaLLM).toHaveBeenCalledOnce();
     const nvidiaRequest = mocks.invokeNvidiaLLM.mock.calls[0][0];
-    expect(nvidiaRequest.maxTokens).toBe(4_096);
-    expect(nvidiaRequest.response_format).toBeUndefined();
+    expect(nvidiaRequest.maxTokens).toBe(6_144);
+    expect(nvidiaRequest.response_format).toEqual({ type: "json_object" });
     expect(result.title).toBe(validPlan.title);
     expect(mocks.saveAiPlan).toHaveBeenCalledOnce();
   });
