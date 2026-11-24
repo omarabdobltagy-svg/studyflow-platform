@@ -179,7 +179,7 @@ function normalizePlannerLessonText(value: string): string {
   return value
     .normalize("NFKC")
     .toLocaleLowerCase("ar")
-    .replace(/[ؐ-ٰٟـ]/g, "")
+    .replace(/[ً-ٰٟـ]/g, "")
     .replace(/[أإآٱ]/g, "ا")
     .replace(/ى/g, "ي")
     .replace(/ة/g, "ه")
