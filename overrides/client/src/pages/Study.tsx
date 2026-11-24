@@ -32,6 +32,7 @@ export default function Study() {
   const [teacherNameDrafts, setTeacherNameDrafts] = useState<Record<string, string>>({});
   const [markSessionLessonCompleted, setMarkSessionLessonCompleted] = useState(false);
   const [customCheckpointTitle, setCustomCheckpointTitle] = useState("");
+  const [manualBranchNavigation, setManualBranchNavigation] = useState(false);
   const initialStudyParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
   const [subjectId, setSubjectId] = useState(initialStudyParams?.get("subject") || "");
   const [branchId, setBranchId] = useState(initialStudyParams?.get("branch") || "");
@@ -246,6 +247,11 @@ export default function Study() {
           delete next[studentFrontierDraftKey];
           return next;
         });
+        if (manualBranchNavigation) {
+          setManualBranchNavigation(false);
+          toast.success("تم تعديل موضعك في " + (currentBranch?.branchTitle || "المسار") + " دون تغيير المسار المفتوح.");
+          return;
+        }
         const nextBranch = branches[branchIndex + 1];
         if (nextBranch) {
           setBranchId(nextBranch.branchId);
@@ -258,6 +264,7 @@ export default function Study() {
           setSubjectId(nextSubjectId);
           setBranchId("");
           setLessonId("");
+          setManualBranchNavigation(false);
           toast.success("اكتملت فروع " + subjectName + "؛ ننتقل إلى " + (getSIESubject(nextSubjectId)?.nameAr || "المادة التالية") + ".");
           return;
         }
@@ -723,7 +730,12 @@ export default function Study() {
             {branches.map((branch, index) => (
               <motion.button key={branch.branchId} type="button" layout
                 aria-current={index === branchIndex ? "step" : undefined}
-                onClick={() => { setBranchId(branch.branchId); setLessonId(""); setCustomCheckpointTitle(""); }}
+                onClick={() => {
+                  setManualBranchNavigation(true);
+                  setBranchId(branch.branchId);
+                  setLessonId("");
+                  setCustomCheckpointTitle("");
+                }}
                 className={"flex items-center gap-2 rounded-full border px-3 py-2 text-[11px] font-semibold transition " + (index < branchIndex ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : index === branchIndex ? "border-primary bg-primary/10 text-foreground" : "border-border bg-background text-muted-foreground hover:border-primary/40")}>
                 <span className="flex size-5 items-center justify-center rounded-full bg-background/80 text-[10px]">
                   {index < branchIndex ? <Check className="size-3" /> : index + 1}
