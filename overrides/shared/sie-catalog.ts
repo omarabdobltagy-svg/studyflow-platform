@@ -727,10 +727,10 @@ const ENGLISH_SECTION_TITLES: Record<string, string> = {
 };
 
 /**
- * الفروع هنا مستخرجة من فهرس الكتاب:
- * العربية/التاريخ/البرمجة: وحدات أو فصول مستقلة.
- * الإنجليزية: أقسام A/B داخل كل وحدة، لأن هذا هو التقسيم الرسمي الأدق.
- * المهارات مثل Grammar وVocabulary تبقى أبعاد إتقان، لا تسلسل دروس مخترع.
+ * التصنيف التفاعلي يراعي بنية المادة الفعلية:
+ * العربية مسارات مهارية مستقلة، والإنجليزية Vocabulary/Grammar/GRE
+ * إلى جانب موضوعات الكتاب، بينما التاريخ والبرمجة مساران خطيان كاملان.
+ * المواد التي لم يصل فهرسها بعد تظل قابلة لبناء مسار مخصص دون اختراع محتوى رسمي.
  */
 function getOfficialBranch(subjectId: string, choice: SIECheckpointChoice) {
   if (choice.branchId && choice.branchTitle && choice.branchType) {
@@ -958,6 +958,17 @@ export function getSIECheckpointBranches(subjectId: string): SIECheckpointBranch
         })),
       },
     ];
+  }
+
+  // Subjects whose official index is not loaded yet still get one editable
+  // linear path so learners can enter their teacher's actual course contents.
+  if (choices.length === 0) {
+    return [{
+      branchId: `${subjectId}:FULL`,
+      branchTitle: "المقرر بالكامل",
+      branchType: "course_track",
+      choices: [],
+    }];
   }
 
   // Arabic Reading is the list of named texts, not analysis skills within a text.
