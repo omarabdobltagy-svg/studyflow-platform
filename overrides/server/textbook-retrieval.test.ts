@@ -7,12 +7,12 @@ import {
   splitTextbookPages,
 } from "./textbook-retrieval";
 
-describe("textbook page retrieval", () => {
+describe("generic page parsing helpers", () => {
   const pages = splitTextbookPages(
     "HIS_G2_BAC",
-    "كتاب التاريخ الوطني - الجزء الأول",
-    "history-part1.txt",
-    "full_text_part_1",
+    "Synthetic history fixture",
+    "fixture.txt",
+    "test_only",
     [
       "<PARSED TEXT OF PAGE: 1 / 3>",
       "مقدمة عن الدولة المصرية وتطورها عبر التاريخ.",
@@ -25,85 +25,102 @@ describe("textbook page retrieval", () => {
     ].join("\n"),
   );
 
-  it("preserves physical PDF page numbers when splitting source text", () => {
+  it("preserves physical page numbers when splitting a supplied test fixture", () => {
     expect(pages.map(page => page.pdfPage)).toEqual([1, 2, 3]);
     expect(pages[1].text).toContain("الاحتلال");
   });
 
-  it("ranks the relevant book passage for an Arabic question", () => {
+  it("ranks a relevant Arabic passage in a synthetic fixture", () => {
     const results = rankTextbookPassages(pages, "مقاومة الدولة المصرية القديمة للاحتلال", 2);
     expect(results[0].pdfPage).toBe(2);
     expect(results[0].passage).toContain("الاحتلال");
   });
 
-  it("returns book identity and a page reference with retrieved evidence", () => {
+  it("formats synthetic source identity and page references", () => {
     const result = rankTextbookPassages(pages, "التحولات السياسية والاقتصادية", 1);
     const formatted = formatTextbookEvidence({ passages: result, coverageNotes: [] });
-    expect(formatted).toContain("كتاب التاريخ الوطني");
+    expect(formatted).toContain("Synthetic history fixture");
     expect(formatted).toContain("صفحة PDF الفعلية: 3");
   });
 });
 
-
-describe("uploaded official textbook corpus", () => {
-  it("parses the page markers from the actual source files", () => {
-    const history = inspectTextbookIndex("HIS_G2_BAC");
-    const arabic = inspectTextbookIndex("ARB_G2_BAC");
-    const programming = inspectTextbookIndex("PROG_AI_G2_BAC");
-    expect(history.files.every(file => file.exists && file.bytes > 0)).toBe(true);
-    expect(programming.files).toHaveLength(0);
-    expect(history.files.reduce((sum, file) => sum + file.markerCount, 0), JSON.stringify(history.files)).toBeGreaterThan(80);
-    expect(arabic.files.every(file => file.exists && file.bytes > 0)).toBe(true);
-    expect(arabic.files.reduce((sum, file) => sum + file.markerCount, 0)).toBeGreaterThan(100);
-    expect(arabic.pageCount).toBeGreaterThan(80);
-    expect(programming.pageCount).toBe(0);
-    expect(history.pageCount).toBeGreaterThan(80);
-    expect(history.files.map(file => file.file)).toEqual(["history-part1.txt"]);
-    expect(arabic.files.map(file => file.file)).toEqual(["arabic-part1.txt"]);
+describe("metadata-only official first-part curriculum", () => {
+  it("does not load or store verbatim textbook page bodies", () => {
+    for (const subjectId of [
+      "ARB_G2_BAC",
+      "ENG1_G2_BAC",
+      "HIS_G2_BAC",
+      "PROG_AI_G2_BAC",
+      "SECOND_LANGUAGE_G2_BAC_PENDING",
+    ]) {
+      const result = inspectTextbookIndex(subjectId);
+      expect(result.files).toHaveLength(0);
+      expect(result.pageCount).toBe(0);
+    }
   });
 
-  it("retrieves a page from the uploaded National History Part 1 source", () => {
-    const result = retrieveTextbookEvidence(
-      ["HIS_G2_BAC"],
-      "بناء الدولة المصرية واستمرارها عبر التاريخ",
-      3,
-    );
-    expect(result.passages.length).toBeGreaterThan(0);
-    expect(result.passages.every(item => item.sourceFile.includes("history-part1"))).toBe(true);
-    expect(result.passages.some(item => item.bookTitle.includes("التاريخ الوطني") && item.pdfPage > 0)).toBe(true);
+  it("provides Arabic lesson names, printed page ranges, size and provisional difficulty", () => {
+    const result = retrieveTextbookEvidence(["ARB_G2_BAC"], "اللغة العربية", 3);
+    const note = result.coverageNotes.join("\n");
+    expect(result.passages).toHaveLength(0);
+    expect(note).toContain("9 دروس");
+    expect(note).toContain("العلم بين القانون والضمير");
+    expect(note).toContain("صفحات الكتاب 8–25");
+    expect(note).toContain("صعوبة مبدئية hard");
+    expect(note).toContain("ثقة low");
   });
 
-  it("never retrieves Programming and AI Part 2 when the requested scope is first part", () => {
+  it("provides History lesson ranges and distinguishes lesson length from difficulty", () => {
+    const result = retrieveTextbookEvidence(["HIS_G2_BAC"], "التاريخ الوطني", 3);
+    const note = result.coverageNotes.join("\n");
+    expect(note).toContain("12 درسًا");
+    expect(note).toContain("بناء الدولة المصرية واستمرارها عبر التاريخ");
+    expect(note).toContain("صفحات الكتاب 9–20");
+    expect(note).toContain("مرتكزات الدور المصري إقليميًا ودوليًا");
+    expect(note).toContain("الحجم small");
+  });
+
+  it("uses only first-part Programming chapters and their printed page ranges", () => {
+    const result = retrieveTextbookEvidence(["PROG_AI_G2_BAC"], "البرمجة والذكاء الاصطناعي", 3);
+    const note = result.coverageNotes.join("\n");
+    expect(note).toContain("14 درسًا");
+    expect(note).toContain("كيف يعمل الذكاء الاصطناعي");
+    expect(note).toContain("صفحات الكتاب 12–17");
+    expect(note).toContain("صعوبة مبدئية hard");
+    expect(note).not.toContain("جمع البيانات وتنقيتها");
+    expect(note).not.toContain("الشبكات العصبية والتعلم العميق");
+  });
+
+  it("provides English topics and unit-level ranges without inventing topic difficulty", () => {
+    const result = retrieveTextbookEvidence(["ENG1_G2_BAC"], "English", 3);
+    const note = result.coverageNotes.join("\n");
+    expect(note).toContain("5 وحدات");
+    expect(note).toContain("20 موضوعًا");
+    expect(note).toContain("Living Well in a Complex World");
+    expect(note).toContain("Social Media and Self-Image");
+    expect(note).toContain("صفحات الكتاب المطبوعة 12–38");
+    expect(note).toContain("حجم وصعوبة كل موضوع على حدة غير محسومين");
+  });
+
+  it("reports missing Italian source accurately without guessing page ranges or difficulty", () => {
+    const result = retrieveTextbookEvidence(["SECOND_LANGUAGE_G2_BAC_PENDING"], "Italian", 3);
+    const note = result.coverageNotes.join("\n");
+    expect(note).toContain("Dove abiti?");
+    expect(note).toContain("Tempo libero");
+    expect(note).toContain("ملف الكتاب الأصلي غير موجود");
+    expect(note).toContain("غير محسومين");
+  });
+
+  it("keeps retrieved text passages empty and excludes every Part 2 source", () => {
     const result = retrieveTextbookEvidence(
-      ["PROG_AI_G2_BAC"],
-      "كيف يعمل الذكاء الاصطناعي",
-      3,
+      ["ARB_G2_BAC", "ENG1_G2_BAC", "HIS_G2_BAC", "PROG_AI_G2_BAC", "SECOND_LANGUAGE_G2_BAC_PENDING"],
+      "خطة الترم الأول",
+      10,
     );
     expect(result.passages).toHaveLength(0);
-    expect(result.coverageNotes.some(note => note.includes("الجزء الأول") && note.includes("14 درسًا"))).toBe(true);
-    expect(result.coverageNotes.some(note => note.includes("صفحة PDF") && note.includes("بداية الدرس التالي"))).toBe(true);
-    expect(result.coverageNotes.some(note => note.includes("الجزء الثاني") && note.includes("استبعاد"))).toBe(true);
-  });
-
-  it("reports verified Italian first-part unit index without pretending its page body is indexed", () => {
-    const result = retrieveTextbookEvidence(
-      ["SECOND_LANGUAGE_G2_BAC_PENDING"],
-      "Dove abiti?",
-      3,
-    );
-    expect(result.passages).toHaveLength(0);
-    expect(result.coverageNotes.some(note => note.includes("Dove abiti?") && note.includes("Tempo libero"))).toBe(true);
-  });
-});
-
-
-describe("textbook corpus coverage diagnostics", () => {
-  it("reports unindexed source fragments and Unicode extraction warnings", () => {
-    const result = retrieveTextbookEvidence(
-      ["ARB_G2_BAC", "HIS_G2_BAC"],
-      "مقدمة الكتاب وأهداف المنهج",
-      3,
-    );
-    expect(result.coverageNotes.some(note => note.includes("U+FFFD"))).toBe(true);
+    const note = result.coverageNotes.join("\n");
+    expect(note).toContain("الجزء الأول");
+    expect(note).not.toContain("الجزء الثاني - الفصول 5–7");
+    expect(note).not.toContain("جمع البيانات وتنقيتها");
   });
 });
