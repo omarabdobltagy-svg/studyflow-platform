@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion, useReducedMotion, type Variants } from "framer-motion";
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -16,6 +16,7 @@ import {
   Sparkles, Target, WandSparkles, X,
 } from "lucide-react";
 import { useLocation } from "wouter";
+import { toast } from "sonner";
 
 const priorityStyle = {
   high: "sf-priority-high",
@@ -163,10 +164,28 @@ export default function Home() {
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
   const summary = trpc.dashboard.summary.useQuery({ timeZone });
   const learning = trpc.learning.get.useQuery();
+  const profile = trpc.studentProfile.get.useQuery();
+  const autoPlanRequested = useRef(false);
+  const dailyPlan = trpc.plans.ensureDaily.useMutation({
+    onError: error => toast.error("تعذّر تحديث خطة اليوم: " + error.message),
+  });
   const toggleTask = trpc.tasks.toggle.useMutation({ onSuccess: () => void utils.dashboard.summary.invalidate() });
   const toggleRoutine = trpc.routines.toggleItem.useMutation({ onSuccess: () => void utils.dashboard.summary.invalidate() });
   const [openFolder, setOpenFolder] = useState<string | null>(null);
   const data = summary.data;
+  const requestDailyPlan = dailyPlan.mutate;
+  useEffect(() => {
+    if (!profile.isSuccess || !profile.data?.subjectIds?.length || autoPlanRequested.current) return;
+    autoPlanRequested.current = true;
+    requestDailyPlan({ dailyMinutes: 120 });
+  }, [profile.isSuccess, profile.data, requestDailyPlan]);
+
+  const backlogBySubject = useMemo(() => (profile.data?.subjectIds ?? []).map((subjectId: string) => {
+    const subjectName = getSIESubject(subjectId)?.nameAr || subjectId;
+    const value = profile.data?.backlog?.[subjectId] ?? profile.data?.backlog?.[subjectName] ?? 0;
+    return { subjectId, subjectName, count: Math.max(0, Number(value) || 0) };
+  }), [profile.data]);
+  const totalBacklog = backlogBySubject.reduce((total, item) => total + item.count, 0);
   const routineRate = data ? (data.routineStats.total ? Math.round((data.routineStats.completed / data.routineStats.total) * 100) : 0) : null;
   const learningPriority = useMemo(() => {
     const gapsBySubject = ((learning.data as any)?.gapByBranch ?? {}) as Record<string, Record<string, any>>;
@@ -285,6 +304,41 @@ export default function Home() {
           >
             {learningPriority?.nextLesson ? "ابدأ الدرس التالي" : "افتح خريطة المنهج"} <ArrowLeft size={15} />
           </Button>
+        </motion.section>
+
+        <motion.section
+          className="sf-home-intelligence-grid"
+          initial={reduceMotion ? false : { opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.36, duration: 0.4 }}
+        >
+          <section className="sf-home-backlog-card">
+            <div className="sf-home-intelligence-heading">
+              <div><span>STUDY / BACKLOG</span><h3>التراكم الدراسي</h3><p>ملخص سريع من ملف الدراسة والتراكم المحفوظ.</p></div>
+              <BookOpenText size={19} />
+            </div>
+            {profile.isLoading ? <div className="sf-home-intelligence-loading">جارٍ قراءة ملفك الدراسي...</div>
+              : profile.isError ? <p className="sf-home-intelligence-empty">تعذّر تحميل بيانات التراكم.</p>
+              : <><div className="sf-home-backlog-total"><strong>{totalBacklog}</strong><span>إجمالي العناصر المسجلة كتراكم</span></div>
+                <div className="sf-home-backlog-list">
+                  {backlogBySubject.map(item => <div key={item.subjectId}><span>{item.subjectName}</span><b>{item.count}</b></div>)}
+                </div>
+                <p className="sf-home-intelligence-note">الأرقام هنا هي القيم المحفوظة في ملفك، وليست تقديرًا آليًا من عدد وحدات المنهج.</p>
+              </>}
+          </section>
+          <section className="sf-home-daily-plan-card">
+            <div className="sf-home-intelligence-heading">
+              <div><span>STUDYFLOW / DAILY PLAN</span><h3>خطة الدراسة الحالية</h3><p>تُنشأ من ملفك تلقائيًا، ويُعاد تحديثها عند مرور 24 ساعة على آخر خطة محفوظة وفتحك للمساحة.</p></div>
+              <Sparkles size={19} />
+            </div>
+            {dailyPlan.isPending ? <div className="sf-home-intelligence-loading">المخطط بيقرأ المنهج والتراكم ويرتب أولويات اليوم...</div>
+              : dailyPlan.data?.plan ? <><div className="sf-home-plan-status"><span className="sf-home-plan-status-dot" />{dailyPlan.data.generated ? "تم إنشاء خطة محدثة تلقائيًا" : "خطة محفوظة وجاهزة للمتابعة"}</div>
+                <h4>{dailyPlan.data.plan.title}</h4>
+                <p className="sf-home-plan-summary">{dailyPlan.data.plan.summary}</p>
+                <div className="sf-home-plan-steps">{dailyPlan.data.plan.steps.slice(0, 3).map((step, index) => <div key={index}><span>{step.day}</span><strong>{step.title}</strong><small>{step.minutes} دقيقة</small></div>)}</div>
+                <div className="sf-home-plan-footer"><span>{dailyPlan.data.plan.steps.length} خطوة · {dailyPlan.data.plan.durationLabel}</span><Button type="button" onClick={() => setLocation("/planner")} className="sf-home-plan-button">مراجعة الخطة <ArrowLeft size={14} /></Button></div>
+              </> : <div className="sf-home-intelligence-empty">أكمل ملفك الدراسي وحدد المواد لبدء إنشاء خطتك التلقائية.</div>}
+          </section>
         </motion.section>
 
         <motion.section
