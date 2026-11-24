@@ -30,6 +30,8 @@ export type LearningBacklogSources = {
   courseModes?: Record<string, "center" | "online"> | null;
   teacherIds?: Record<string, string> | null;
   teacherNames?: Record<string, string> | null;
+  legacyStudentFrontiers?: Record<string, string> | null;
+  legacyStudentProgress?: Record<string, Record<string, any>> | null;
 };
 
 const NOT_STARTED = "__NOT_STARTED__";
@@ -110,9 +112,27 @@ function deriveSavedBranchGap(
   const ownOrFallback = (
     field: "lastCompletedLessonId" | "teacherTeachingFrontierId" | "schoolClassFrontierId",
   ): string => {
-    if (Object.prototype.hasOwnProperty.call(record, field)) return String(record[field] ?? "__UNKNOWN__");
+    const confirmationKey = field === "lastCompletedLessonId"
+      ? "studentFrontierConfirmedAt"
+      : field === "teacherTeachingFrontierId"
+        ? "teacherFrontierConfirmedAt"
+        : "schoolFrontierConfirmedAt";
+    const branchValue = record[field];
+
+    // A valid position in the current branch always wins. An explicit unknown
+    // only blocks fallback when the student confirmed that unknown on purpose.
+    if (validPosition(choices, branchValue)) return branchValue;
+    if (branchValue === "__UNKNOWN__" && record[confirmationKey]) return "__UNKNOWN__";
+
     const subjectLevel = subjectRecord?.[field];
     if (validPosition(choices, subjectLevel)) return subjectLevel;
+
+    if (field === "lastCompletedLessonId") {
+      const legacyStudent = sources.legacyStudentFrontiers?.[subjectId]
+        ?? sources.legacyStudentProgress?.[subjectId]?.studentAttendedFrontier;
+      if (validPosition(choices, legacyStudent)) return legacyStudent;
+    }
+
     if (linear) {
       const legacy = pickLegacyLinearFrontier(
         legacyRecords,
