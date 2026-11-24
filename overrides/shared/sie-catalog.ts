@@ -740,7 +740,8 @@ const ENGLISH_SECTION_TITLES: Record<string, string> = {
  * التصنيف التفاعلي يراعي بنية المادة الفعلية:
  * العربية مسارات مهارية مستقلة، والإنجليزية Vocabulary/Grammar/GRE
  * إلى جانب موضوعات الكتاب، بينما التاريخ والبرمجة مساران خطيان كاملان.
- * المواد التي لم يصل فهرسها بعد تظل قابلة لبناء مسار مخصص دون اختراع محتوى رسمي.
+ * المواد التي لم يكتمل فهرسها تظهر كمسار غير مكتمل بلا عناوين مخترعة؛
+ * لا يُسمح للطالب بإنشاء نقاط منهج خارج الفهرس الرسمي.
  */
 function getOfficialBranch(subjectId: string, choice: SIECheckpointChoice) {
   if (choice.branchId && choice.branchTitle && choice.branchType) {
@@ -1007,8 +1008,9 @@ export function getSIECheckpointBranches(subjectId: string): SIECheckpointBranch
     }];
   }
 
-  // English has separate teacher course streams, the complete 10-unit textbook,
-  // and its own official story book. Keep these catalogs independent.
+  // English keeps distinct Vocabulary and Grammar tracking views grouped by
+  // the ten textbook units, the official textbook topics, and the story book.
+  // GRE is supplemental and is never represented as a Ministry textbook unit.
   if (subjectId === "ENG1_G2_BAC") {
     const textbookBranchId = "ENG_TEXTBOOK";
     const textbookChoices = choices.filter(choice => !choice.nodeId.startsWith("ENG_LOST_WORLD_"));
@@ -1029,7 +1031,7 @@ export function getSIECheckpointBranches(subjectId: string): SIECheckpointBranch
       unitNumber: unit.unitNumber,
       lessonNumber: `${unit.unitNumber}.1`,
       lessonType,
-      sourceLabel: unit.unitNumber <= 5 ? "منهج اللغة الإنجليزية - الجزء الأول" : "منهج اللغة الإنجليزية - الجزء الثاني",
+      sourceLabel: unit.unitNumber <= 5 ? "تجميع متابعة Vocabulary حسب وحدات الكتاب - الجزء الأول" : "تجميع متابعة Vocabulary حسب وحدات الكتاب - الجزء الثاني",
       branchId: streamId,
       branchTitle: streamTitle === "Vocabulary" ? "المفردات (Vocabulary)" : "القواعد (Grammar)",
       branchType: "course_track" as const,
@@ -1075,8 +1077,8 @@ export function getSIECheckpointBranches(subjectId: string): SIECheckpointBranch
     ];
   }
 
-  // Subjects whose official index is not loaded yet still get one editable
-  // linear path so learners can enter their teacher's actual course contents.
+  // Subjects whose official index is not loaded get an explicit empty linear
+  // path. Do not invent titles or offer student-created curriculum checkpoints.
   if (choices.length === 0) {
     return [{
       branchId: `${subjectId}:FULL`,
