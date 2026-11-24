@@ -44,9 +44,11 @@ type FormState = {
   electiveSubjectId: string;
   teacherSelections: TeacherChoiceMap;
   checkpointSelections: Record<string, string>;
+  courseModes: Record<string, "center" | "online">;
+  customTeacherNames: Record<string, string>;
 };
 
-const steps = ["بياناتك", "النظام الدراسي", "المسار", "المواد", "المدرسون ونقطة البداية"];
+const steps = ["بياناتك", "النظام الدراسي", "المسار", "المواد", "طريقة الدراسة لكل مادة"];
 const SKIP_TEACHER = "__SKIP__";
 const CHECKPOINT_NOT_STARTED = "__NOT_STARTED__";
 const CHECKPOINT_UNKNOWN = "__UNKNOWN__";
@@ -84,7 +86,6 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
     onSuccess: async () => {
       await Promise.all([utils.auth.me.invalidate(), utils.studentProfile.get.invalidate()]);
       toast.success(editMode ? "تم تحديث اختيارات ملفك الدراسي." : "اكتمل إعداد حسابك الدراسي.");
-      setRefreshCheckpointMode(false);
       if (editMode) {
         setIsEditingProfile(false);
         setStep(0);
@@ -96,6 +97,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
   });
 
   const [step, setStep] = useState(0);
+  const [subjectSetupIndex, setSubjectSetupIndex] = useState(0);
   const [expandedCheckpointChoices, setExpandedCheckpointChoices] = useState<Record<string, number>>({});
   const [refreshCheckpointMode, setRefreshCheckpointMode] = useState(false);
   const [form, setForm] = useState<FormState>({
@@ -106,6 +108,8 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
     electiveSubjectId: "",
     teacherSelections: {},
     checkpointSelections: {},
+    courseModes: {},
+    customTeacherNames: {},
   });
 
   useEffect(() => {
@@ -123,6 +127,8 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
       checkpointSelections: Object.keys(current.checkpointSelections).length
         ? current.checkpointSelections
         : (saved?.teacherFrontiers ?? {}),
+      courseModes: Object.keys(current.courseModes).length ? current.courseModes : (saved?.courseModes ?? {}),
+      customTeacherNames: Object.keys(current.customTeacherNames).length ? current.customTeacherNames : (saved?.customTeacherNames ?? {}),
     }));
   }, [auth.data, profile.data]);
 
@@ -142,17 +148,10 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
     ];
   }, [track, fixedSubjects, firstElectiveGroup, form.electiveSubjectId]);
 
-  const hasCheckpointStep = selectedSubjects.some(subject => {
-    const teacherId = form.teacherSelections[subject.subjectId];
-    const teacher = teacherId && teacherId !== SKIP_TEACHER ? getSIETeacher(teacherId) : undefined;
-    return teacher?.studentInputRequired === true;
-  });
-  const requiresCheckpoint = selectedSubjects.some(subject => {
-    const teacherId = form.teacherSelections[subject.subjectId];
-    const teacher = teacherId && teacherId !== SKIP_TEACHER ? getSIETeacher(teacherId) : undefined;
-    return teacher?.studentInputRequired === true && (refreshCheckpointMode || form.checkpointSelections[subject.subjectId] === undefined);
-  });
   const activeSteps = steps;
+  const currentSetupSubject = selectedSubjects[subjectSetupIndex] ?? selectedSubjects[0];
+  const currentSetupSubjectId = currentSetupSubject?.subjectId ?? "";
+  const setupTeacherOptions = currentSetupSubjectId && form.systemId ? getSIETeachersForSubject(currentSetupSubjectId, form.systemId) : [];
 
   const isIdentityValid =
     form.studentName.trim().length >= 2 &&
@@ -166,7 +165,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
         ? Boolean(form.trackId)
         : step === 3
           ? Boolean(track && (track.fixedSubjectIds || (firstElectiveGroup.length > 0 && firstElectiveGroup.some(item => item.subjectId === form.electiveSubjectId))))
-          : true;
+          : Boolean(currentSetupSubject && form.courseModes[currentSetupSubject.subjectId]);
 
   const next = () => {
     if (!stepValid) {
@@ -176,33 +175,30 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
       else if (step === 3) toast.error("اختر المادة التخصصية المطلوبة لمسارك.");
       return;
     }
-    if (step === 4 && !requiresCheckpoint) {
-      save();
+    if (step === 4) {
+      if (subjectSetupIndex < selectedSubjects.length - 1) setSubjectSetupIndex(index => index + 1);
+      else save();
       return;
     }
     setStep(current => Math.min(activeSteps.length - 1, current + 1));
   };
 
-  const previous = () => setStep(current => Math.max(0, current - 1));
+  const previous = () => {
+    if (step === 4 && subjectSetupIndex > 0) { setSubjectSetupIndex(index => Math.max(0, index - 1)); return; }
+    setStep(current => Math.max(0, current - 1));
+  };
 
   const chooseSystem = (systemId: SIESystemId) => {
+    setSubjectSetupIndex(0);
     setForm(current => ({
-      ...current,
-      systemId,
-      trackId: "",
-      electiveSubjectId: "",
-      teacherSelections: {},
-      checkpointSelections: {},
+      ...current, systemId, trackId: "", electiveSubjectId: "", teacherSelections: {}, checkpointSelections: {}, courseModes: {}, customTeacherNames: {},
     }));
   };
 
   const chooseTrack = (trackId: string) => {
+    setSubjectSetupIndex(0);
     setForm(current => ({
-      ...current,
-      trackId,
-      electiveSubjectId: "",
-      teacherSelections: {},
-      checkpointSelections: {},
+      ...current, trackId, electiveSubjectId: "", teacherSelections: {}, checkpointSelections: {}, courseModes: {}, customTeacherNames: {},
     }));
   };
 
@@ -211,14 +207,10 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
       toast.error("راجع بياناتك واختياراتك قبل الحفظ.");
       return;
     }
-    const missingCheckpoints = selectedSubjects.filter(subject => {
-      const teacherId = form.teacherSelections[subject.subjectId];
-      const teacher = teacherId && teacherId !== SKIP_TEACHER ? getSIETeacher(teacherId) : undefined;
-      return teacher?.studentInputRequired === true && !form.checkpointSelections[subject.subjectId];
-    });
-    if (missingCheckpoints.length > 0) {
-      setRefreshCheckpointMode(true);
-      toast.error("حدد نقطة البداية أو اختر «تخطي دلوقتي» لكل مدرس يحتاج تحديد موضعك.");
+    const missingCourseMode = selectedSubjects.find(subject => !form.courseModes[subject.subjectId]);
+    if (missingCourseMode) {
+      setSubjectSetupIndex(selectedSubjects.findIndex(subject => subject.subjectId === missingCourseMode.subjectId));
+      toast.error(`حدد طريقة دراسة مادة ${missingCourseMode.nameAr} أولًا.`);
       return;
     }
     const teacherSelections = Object.fromEntries(
@@ -231,10 +223,10 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
       trackId: track.trackId,
       subjectIds: selectedSubjects.map(subject => subject.subjectId),
       teacherSelections,
-      skippedTeacherSubjectIds: selectedSubjects
-        .filter(subject => !teacherSelections[subject.subjectId])
-        .map(subject => subject.subjectId),
-      teacherFrontierReports: Object.fromEntries(Object.entries(form.checkpointSelections).filter(([subjectId]) => Boolean(teacherSelections[subjectId]))),
+      skippedTeacherSubjectIds: selectedSubjects.filter(subject => !teacherSelections[subject.subjectId]).map(subject => subject.subjectId),
+      courseModes: Object.fromEntries(selectedSubjects.map(subject => [subject.subjectId, form.courseModes[subject.subjectId] ?? "online"])),
+      customTeacherNames: Object.fromEntries(Object.entries(form.customTeacherNames).filter(([id, name]) => selectedSubjects.some(subject => subject.subjectId === id) && name.trim()).map(([id, name]) => [id, name.trim()])),
+      teacherFrontierReports: {},
     });
   };
 
@@ -425,183 +417,57 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                 </div>
               )}
 
-              {step === 4 && (
-                <div className="space-y-5">
-                  <div className="flex items-start gap-3 rounded-2xl border border-primary/15 bg-secondary/25 p-4">
-                    <CircleHelp className="mt-0.5 size-5 shrink-0 text-primary" />
-                    <p className="text-sm leading-7 text-muted-foreground">
-                      تظهر الترشيحات التي يوجد لها دليل في الحزمة للنظام والصف والسنة والمادة المختارة فقط. هذه ترشيحات أولية وليست ترتيبًا لجودة المدرسين أو ادعاءً بأنها أشهر ثلاثة على مستوى مصر. يمكنك تأجيل اختيار أي مدرس.
-                    </p>
-                  </div>
-
-                  {selectedSubjects.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">اختر موادك أولًا.</p>
-                  ) : selectedSubjects.map(subject => {
-                    const candidates = form.systemId
-                      ? getSIETeachersForSubject(subject.subjectId, form.systemId)
-                      : [];
-                    const selectedTeacher = form.teacherSelections[subject.subjectId] || "";
-                    return (
-                      <section key={subject.subjectId} className="rounded-2xl border border-border p-4 sm:p-5">
-                        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-                          <div>
-                            <p className="font-bold">مدرس {subject.nameAr}</p>
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              {candidates.length ? "اختَر اسم المدرس" : "لا توجد أسماء متاحة لهذه المادة حاليًا"}
-                            </p>
-                          </div>
-                          {selectedTeacher && <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-                            {selectedTeacher === SKIP_TEACHER ? "مؤجل" : "تم الاختيار"}
-                          </span>}
-                        </div>
-
-                        {candidates.length ? (
-                          <div className="grid gap-3 md:grid-cols-2">
-                            {candidates.map(teacher => {
-                              return (
-                                <button
-                                  key={teacher.teacherId}
-                                  type="button"
-                                  onClick={() => setForm(current => ({
-                                    ...current,
-                                    teacherSelections: { ...current.teacherSelections, [subject.subjectId]: teacher.teacherId },
-                                    checkpointSelections: (() => {
-                                      const next = { ...current.checkpointSelections };
-                                      delete next[subject.subjectId];
-                                      return next;
-                                    })(),
-                                  }))}
-                                  aria-pressed={selectedTeacher === teacher.teacherId}
-                                  className={"teacher-choice-card flex min-h-[76px] w-full items-center justify-between gap-3 rounded-2xl border px-5 py-4 text-right transition " + (selectedTeacher === teacher.teacherId
-                                    ? "border-primary bg-secondary/55 ring-1 ring-primary/20"
-                                    : "border-border bg-card hover:border-primary/40")}
-                                >
-                                  <span className="text-base font-bold">{teacher.nameAr}</span>
-                                  <span className="flex size-7 shrink-0 items-center justify-center rounded-full border border-border/70 bg-background/75">
-                                    {selectedTeacher === teacher.teacherId ? <Check className="size-4 text-primary" /> : <span className="size-1.5 rounded-full bg-muted-foreground/35" />}
-                                  </span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          <div className="rounded-xl border border-dashed border-border bg-muted/20 p-4 text-sm leading-7 text-muted-foreground">
-                            لا نعرض أسماء غير متحقق منها. بيانات المدرسين لهذا النظام/المادة لم تكتمل بعد، ويمكن إكمال الإعداد دون اختيار مدرس.
-                          </div>
-                        )}
-
-                        <button
-                          type="button"
-                          onClick={() => setForm(current => ({
-                            ...current,
-                            teacherSelections: { ...current.teacherSelections, [subject.subjectId]: SKIP_TEACHER },
-                          }))}
-                          aria-pressed={selectedTeacher === SKIP_TEACHER}
-                          className={"mt-3 rounded-xl border px-3 py-2 text-xs font-semibold transition " + (selectedTeacher === SKIP_TEACHER
-                            ? "border-primary bg-secondary text-primary"
-                            : "border-border text-muted-foreground hover:border-primary/30")}
-                        >
-                          لا أختار مدرسًا الآن
-                        </button>
-                      </section>
-                    );
-                  })}
-                </div>
-              )}
-              {step === 4 && hasCheckpointStep && (
-                <div className="space-y-5">
-                  <div className="flex items-start gap-3 rounded-2xl border border-primary/15 bg-secondary/25 p-4">
-                    <CircleHelp className="mt-0.5 size-5 shrink-0 text-primary" />
-                    <p className="text-sm leading-7 text-muted-foreground">
-                      دي خطوة اختيارية بتظهر فقط لما نحتاج نحدد نقطة بدايتك. مش مطلوب رقم محاضرة ولا كتابة حرة. لو عندنا مقاطع عامة موثقة هنعرضها أولًا، وإلا هنبدأ من 3–5 موضوعات من فهرس المنهج. اختيارك تقرير منك فقط، ومش بيتسجل كإنجاز دراسي.
-                    </p>
-                  </div>
-                  {selectedSubjects.filter(subject => {
-                    const teacherId = form.teacherSelections[subject.subjectId];
-                    const teacher = teacherId && teacherId !== SKIP_TEACHER ? getSIETeacher(teacherId) : undefined;
-                    return teacher?.studentInputRequired === true && (refreshCheckpointMode || form.checkpointSelections[subject.subjectId] === undefined);
-                  }).length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-5 text-sm leading-7 text-muted-foreground">
-                      لا توجد مادة تحتاج تحديد نقطة بداية الآن. تقدر تكمل إعداد حسابك.
+              {step === 4 && currentSetupSubject && (
+                <div className="space-y-6">
+                  <div className="flex flex-col gap-3 rounded-2xl border border-primary/15 bg-secondary/25 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="eyebrow">إعداد مادة واحدة في كل مرة</p>
+                      <h3 className="mt-1 text-xl font-bold">{currentSetupSubject.nameAr}</h3>
+                      <p className="mt-1 text-sm leading-6 text-muted-foreground">المادة {subjectSetupIndex + 1} من {selectedSubjects.length}. هنحفظ طريقة دراستك والمدرس، وبعدها ننتقل للمادة التالية.</p>
                     </div>
-                  ) : selectedSubjects.filter(subject => {
-                    const teacherId = form.teacherSelections[subject.subjectId];
-                    const teacher = teacherId && teacherId !== SKIP_TEACHER ? getSIETeacher(teacherId) : undefined;
-                    return teacher?.studentInputRequired === true && (refreshCheckpointMode || form.checkpointSelections[subject.subjectId] === undefined);
-                  }).map(subject => {
-                    const teacherId = form.teacherSelections[subject.subjectId] ?? "";
-                    const teacher = getSIETeacher(teacherId);
-                    const allChoices = getSIECheckpointChoices(subject.subjectId);
-                    const initialChoices = getSIECheckpointChoicesForTeacher(teacherId);
-                    const extraCount = expandedCheckpointChoices[subject.subjectId] ?? 0;
-                    const visibleChoices = [
-                      ...initialChoices,
-                      ...allChoices.filter(choice => !initialChoices.some(initial => initial.nodeId === choice.nodeId)).slice(0, extraCount),
-                    ];
-                    const hasMoreChoices = visibleChoices.length < allChoices.length;
-                    const selected = form.checkpointSelections[subject.subjectId] ?? "";
-                    return (
-                      <section key={subject.subjectId} className="rounded-2xl border border-border p-4 sm:p-5">
-                        <div className="mb-4">
-                          <p className="font-bold">{subject.nameAr} · {teacher?.nameAr ?? "المدرس المختار"}</p>
-                          <p className="mt-1 text-xs leading-6 text-muted-foreground">
-                            إيه آخر موضوع خلصته فعلًا مع المدرس ده؟ اختر أقرب عنوان تعرفه. مش هنفترض إن آخر فيديو منشور هو آخر حاجة درستها.
-                          </p>
+                    <span className="rounded-full border border-border bg-background px-3 py-2 text-xs font-semibold">{subjectSetupIndex + 1} / {selectedSubjects.length}</span>
+                  </div>
+                  <div>
+                    <p className="mb-3 text-sm font-bold">بتدرس {currentSetupSubject.nameAr} إزاي؟</p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <button type="button" aria-pressed={form.courseModes[currentSetupSubjectId] === "center"}
+                        onClick={() => setForm(current => ({ ...current, courseModes: { ...current.courseModes, [currentSetupSubjectId]: "center" }, teacherSelections: { ...current.teacherSelections, [currentSetupSubjectId]: SKIP_TEACHER }, customTeacherNames: { ...current.customTeacherNames, [currentSetupSubjectId]: "" } }))}
+                        className={"rounded-2xl border p-5 text-right transition " + (form.courseModes[currentSetupSubjectId] === "center" ? "border-primary bg-secondary/45 ring-1 ring-primary/20" : "border-border bg-card hover:border-primary/40")}>
+                        <span className="block text-lg font-bold">سنتر / مجموعة</span><span className="mt-1 block text-xs leading-6 text-muted-foreground">بتحضر شرح المادة مع مدرس في مكان أو مجموعة.</span>
+                      </button>
+                      <button type="button" aria-pressed={form.courseModes[currentSetupSubjectId] === "online"}
+                        onClick={() => setForm(current => ({ ...current, courseModes: { ...current.courseModes, [currentSetupSubjectId]: "online" }, teacherSelections: { ...current.teacherSelections, [currentSetupSubjectId]: "" }, customTeacherNames: { ...current.customTeacherNames, [currentSetupSubjectId]: "" } }))}
+                        className={"rounded-2xl border p-5 text-right transition " + (form.courseModes[currentSetupSubjectId] === "online" ? "border-primary bg-secondary/45 ring-1 ring-primary/20" : "border-border bg-card hover:border-primary/40")}>
+                        <span className="block text-lg font-bold">أونلاين</span><span className="mt-1 block text-xs leading-6 text-muted-foreground">بتتابع الشرح من منصة أو فيديوهات على الإنترنت.</span>
+                      </button>
+                    </div>
+                  </div>
+                  {form.courseModes[currentSetupSubjectId] === "center" && (
+                    <div className="rounded-2xl border border-border bg-card p-4 sm:p-5">
+                      <p className="font-bold">اسم مدرس السنتر (اختياري)</p><p className="mt-1 text-xs leading-6 text-muted-foreground">اكتب اسم المدرس الذي تحضر معه. بيانات السنتر والفصل ستظهر لاحقًا لهذه المادة فقط.</p>
+                      <Input value={form.customTeacherNames[currentSetupSubjectId] ?? ""} onChange={event => setForm(current => ({ ...current, customTeacherNames: { ...current.customTeacherNames, [currentSetupSubjectId]: event.target.value } }))} placeholder="اسم مدرس السنتر" maxLength={120} className="mt-3 h-12 rounded-xl bg-background" />
+                    </div>
+                  )}
+                  {form.courseModes[currentSetupSubjectId] === "online" && (
+                    <div className="rounded-2xl border border-border bg-card p-4 sm:p-5">
+                      <div className="mb-4"><p className="font-bold">مين المدرس اللي بتتابعه أونلاين؟</p><p className="mt-1 text-xs leading-6 text-muted-foreground">اختار من الأسماء المتاحة، أو اكتب اسم مدرسك لو مش موجود في القائمة.</p></div>
+                      {setupTeacherOptions.length ? (
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {setupTeacherOptions.map(teacher => {
+                            const selected = form.teacherSelections[currentSetupSubjectId] === teacher.teacherId;
+                            return <button key={teacher.teacherId} type="button" aria-pressed={selected} onClick={() => setForm(current => ({ ...current, teacherSelections: { ...current.teacherSelections, [currentSetupSubjectId]: teacher.teacherId }, customTeacherNames: { ...current.customTeacherNames, [currentSetupSubjectId]: "" } }))} className={"flex items-center justify-between gap-3 rounded-xl border p-4 text-right transition " + (selected ? "border-primary bg-secondary/45 ring-1 ring-primary/20" : "border-border hover:border-primary/35")}>
+                              <span className="font-semibold">{teacher.nameAr}</span>{selected && <Check className="size-4 shrink-0 text-primary" />}
+                            </button>;
+                          })}
                         </div>
-                        {visibleChoices.length > 0 ? (
-                          <div className="grid gap-2 sm:grid-cols-2">
-                            {visibleChoices.map(choice => (
-                              <ChoiceCard
-                                key={choice.nodeId}
-                                selected={selected === choice.nodeId}
-                                onClick={() => setForm(current => ({
-                                  ...current,
-                                  checkpointSelections: { ...current.checkpointSelections, [subject.subjectId]: choice.nodeId },
-                                }))}
-                                icon={<BookOpen className="size-5" />}
-                                title={choice.title}
-                                subtitle={choice.unitTitle}
-                                note={choice.note}
-                              />
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="rounded-xl bg-muted/25 p-3 text-xs leading-6 text-muted-foreground">
-                            فهرس المادة غير متاح في الحزمة الحالية. يمكنك تخطي تحديد نقطة البداية؛ لن نخمن موضعك.
-                          </p>
-                        )}
-                        {hasMoreChoices && (
-                          <button
-                            type="button"
-                            onClick={() => setExpandedCheckpointChoices(current => ({
-                              ...current,
-                              [subject.subjectId]: (current[subject.subjectId] ?? 0) + 5,
-                            }))}
-                            className="mt-3 rounded-xl border border-dashed border-primary/40 px-3 py-2 text-xs font-semibold text-primary hover:bg-secondary/30"
-                          >
-                            موضوع تاني / اعرض اختيارات إضافية
-                          </button>
-                        )}
-                        <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                          <button type="button" aria-pressed={selected === CHECKPOINT_NOT_STARTED}
-                            onClick={() => setForm(current => ({ ...current, checkpointSelections: { ...current.checkpointSelections, [subject.subjectId]: CHECKPOINT_NOT_STARTED } }))}
-                            className={"rounded-xl border px-3 py-3 text-sm font-semibold transition " + (selected === CHECKPOINT_NOT_STARTED ? "border-primary bg-secondary text-primary" : "border-border text-muted-foreground hover:border-primary/30")}>
-                            لسه ما بدأتش مع المدرس ده
-                          </button>
-                          <button type="button" aria-pressed={selected === CHECKPOINT_UNKNOWN}
-                            onClick={() => setForm(current => ({ ...current, checkpointSelections: { ...current.checkpointSelections, [subject.subjectId]: CHECKPOINT_UNKNOWN } }))}
-                            className={"rounded-xl border px-3 py-3 text-sm font-semibold transition " + (selected === CHECKPOINT_UNKNOWN ? "border-primary bg-secondary text-primary" : "border-border text-muted-foreground hover:border-primary/30")}>
-                            مش متأكد
-                          </button>
-                          <button type="button" aria-pressed={selected === CHECKPOINT_DEFERRED}
-                            onClick={() => setForm(current => ({ ...current, checkpointSelections: { ...current.checkpointSelections, [subject.subjectId]: CHECKPOINT_DEFERRED } }))}
-                            className={"rounded-xl border px-3 py-3 text-sm font-semibold transition " + (selected === CHECKPOINT_DEFERRED ? "border-primary bg-secondary text-primary" : "border-border text-muted-foreground hover:border-primary/30")}>
-                            تخطي دلوقتي
-                          </button>
-                        </div>
-                      </section>
-                    );
-                  })}
+                      ) : <p className="rounded-xl border border-dashed border-border bg-muted/20 p-3 text-xs leading-6 text-muted-foreground">لا توجد أسماء موثقة لهذه المادة في القائمة حاليًا. اكتب اسم المدرس يدويًا أو اتركه فارغًا.</p>}
+                      <label className="mt-4 block text-sm font-semibold">مدرس آخر (اختياري)
+                        <Input value={form.customTeacherNames[currentSetupSubjectId] ?? ""} onChange={event => setForm(current => ({ ...current, customTeacherNames: { ...current.customTeacherNames, [currentSetupSubjectId]: event.target.value }, teacherSelections: { ...current.teacherSelections, [currentSetupSubjectId]: event.target.value.trim() ? SKIP_TEACHER : current.teacherSelections[currentSetupSubjectId] ?? "" } }))} placeholder="اكتب اسم المدرس لو مش موجود فوق" maxLength={120} className="mt-2 h-12 rounded-xl bg-background" />
+                      </label>
+                      <button type="button" onClick={() => setForm(current => ({ ...current, teacherSelections: { ...current.teacherSelections, [currentSetupSubjectId]: SKIP_TEACHER }, customTeacherNames: { ...current.customTeacherNames, [currentSetupSubjectId]: "" } }))} className="mt-3 rounded-xl border border-border px-3 py-2 text-xs font-semibold text-muted-foreground hover:border-primary/30">لم أحدد مدرسًا للمادة دي</button>
+                    </div>
+                  )}
+                  {!form.courseModes[currentSetupSubjectId] && <p className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-3 text-sm text-muted-foreground">اختار «سنتر» أو «أونلاين» عشان نعرف نعرض لك الأسئلة المناسبة بعد كده.</p>}
                 </div>
               )}
 
@@ -613,7 +479,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
               </Button>
               {step < activeSteps.length - 1 ? (
                 <Button type="button" onClick={next} disabled={!stepValid || complete.isPending} className="rounded-xl bg-primary">
-                  {step === 4 && !requiresCheckpoint ? "إكمال الإعداد" : "التالي"} <ArrowLeft className="size-4" />
+                  {step === 4 ? (subjectSetupIndex < selectedSubjects.length - 1 ? `التالي: ${selectedSubjects[subjectSetupIndex + 1]?.nameAr ?? "المادة التالية"}` : "حفظ اختيارات المواد") : "التالي"} <ArrowLeft className="size-4" />
                 </Button>
               ) : (
                 <Button type="button" onClick={save} disabled={complete.isPending || !track || selectedSubjects.length === 0} className="rounded-xl bg-primary">
@@ -643,6 +509,8 @@ function StudentProfileOverview({
 }) {
   const selection = (profile?.selection ?? {}) as Record<string, any>;
   const teacherChoices = (selection.teacherChoices ?? {}) as Record<string, string>;
+  const courseModes = (selection.courseModes ?? {}) as Record<string, "center" | "online">;
+  const customTeacherNames = (selection.customTeacherNames ?? {}) as Record<string, string>;
   const subjectIds = Array.isArray(selection.subjectIds) && selection.subjectIds.length
     ? selection.subjectIds as string[]
     : Object.keys(teacherChoices);
@@ -685,10 +553,12 @@ function StudentProfileOverview({
             const subject = getSIESubject(subjectId);
             const teacherId = teacherChoices[subjectId];
             const teacher = teacherId && teacherId !== "__SKIP__" ? getSIETeacher(teacherId) : undefined;
+            const modeLabel = courseModes[subjectId] === "center" ? "سنتر" : courseModes[subjectId] === "online" ? "أونلاين" : "طريقة الدراسة غير محددة";
+            const teacherName = customTeacherNames[subjectId]?.trim() || teacher?.nameAr || "لم يتم اختيار مدرس";
             return (
-              <div key={subjectId} className="flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-background/60 p-4">
+              <div key={subjectId} className="flex flex-col gap-2 rounded-xl border border-border/70 bg-background/60 p-4 sm:flex-row sm:items-center sm:justify-between">
                 <span className="text-sm font-semibold">{subject?.nameAr ?? subjectId}</span>
-                <span className="text-sm text-muted-foreground">{teacher?.nameAr ?? "لم يتم اختيار مدرس"}</span>
+                <span className="text-xs text-muted-foreground">{modeLabel} · {teacherName}</span>
               </div>
             );
           })}
