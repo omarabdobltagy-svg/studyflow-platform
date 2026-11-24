@@ -81,7 +81,7 @@ type CurriculumUnitProfile = {
   basis?: string;
   strategy?: string;
   section?: string;
-  lessons?: CurriculumLessonProfile[];
+  lessons?: Array<CurriculumLessonProfile | string>;
 };
 
 type CurriculumIntelligence = {
@@ -99,18 +99,19 @@ function getCurriculumIntelligenceNotes(subjectIds: string[]): string[] {
       for (const unit of subject.units) {
         const unitRange = unit.pages ? `؛ صفحات الكتاب المطبوعة ${unit.pages[0]}–${unit.pages[1]} (${unit.pageCount ?? unit.pages[1] - unit.pages[0] + 1} صفحة)` : "";
         lines.push(`الوحدة: ${unit.title}${unitRange}${unit.size ? `؛ حجم الوحدة ${unit.size}` : ""}`);
-        if (unit.lessons?.length) {
-          for (const lesson of unit.lessons) {
-            const range = lesson.pages ? `؛ صفحات الكتاب ${lesson.pages[0]}–${lesson.pages[1]} (${lesson.pageCount ?? lesson.pages[1] - lesson.pages[0] + 1} صفحة)` : "";
-            const difficulty = lesson.difficulty && lesson.difficulty !== "unknown"
-              ? `؛ صعوبة مبدئية ${lesson.difficulty} (ثقة ${lesson.difficultyConfidence ?? "low"})`
+        if (unit.lessons?.length && typeof unit.lessons[0] !== "string") {
+          for (const entry of unit.lessons) {
+            if (typeof entry === "string") continue;
+            const range = entry.pages ? `؛ صفحات الكتاب ${entry.pages[0]}–${entry.pages[1]} (${entry.pageCount ?? entry.pages[1] - entry.pages[0] + 1} صفحة)` : "";
+            const difficulty = entry.difficulty && entry.difficulty !== "unknown"
+              ? `؛ صعوبة مبدئية ${entry.difficulty} (ثقة ${entry.difficultyConfidence ?? "low"})`
               : "؛ الصعوبة غير محسومة";
-            lines.push(`- ${lesson.title}${range}${lesson.size ? `؛ الحجم ${lesson.size}` : ""}${difficulty}${lesson.basis ? `؛ سبب التقدير: ${lesson.basis}` : ""}${lesson.strategy ? `؛ توزيع مقترح: ${lesson.strategy}` : ""}`);
+            lines.push(`- ${entry.title}${range}${entry.size ? `؛ الحجم ${entry.size}` : ""}${difficulty}${entry.basis ? `؛ سبب التقدير: ${entry.basis}` : ""}${entry.strategy ? `؛ توزيع مقترح: ${entry.strategy}` : ""}`);
           }
-        } else if (unit.lessons?.length === 0) {
-          lines.push("- لا توجد بيانات دروس تفصيلية لهذه الوحدة.");
+        } else if (unit.lessons?.length && typeof unit.lessons[0] === "string") {
+          lines.push(`- الموضوعات: ${unit.lessons.join("؛ ")}؛ حجم الوحدة ${unit.size ?? "غير محدد"}؛ حجم وصعوبة كل موضوع على حدة غير محسومين من الفهرس.`);
         } else {
-          lines.push(`- الموضوعات: ${(unit as any).lessons?.join("؛ ") || "غير متاحة"}${unit.section ? `؛ المحاور: ${unit.section}` : ""}${unit.difficulty === "unknown" || !unit.difficulty ? "؛ صعوبة الدروس غير محسومة" : ""}`);
+          lines.push("- أسماء الوحدات فقط؛ حجم الدروس وصعوبتها غير محسومين.");
         }
       }
       if (subject.limitation) lines.push("حدود المصدر: " + subject.limitation);
@@ -119,35 +120,6 @@ function getCurriculumIntelligenceNotes(subjectIds: string[]): string[] {
   } catch (error) {
     console.error("[StudyFlow curriculum] Could not load derived curriculum profile:", error instanceof Error ? error.message : "unknown error");
     return ["بيانات المنهج التفصيلية غير متاحة الآن؛ لا تخترع أسماء دروس أو صفحات أو أحكام صعوبة."];
-  }
-}
-
-type ProgrammingPart1Manifest = {
-  pdfPageCount: number;
-  chapters: Array<{
-    title: string;
-    pdfPage: number;
-    lessons: Array<{ title: string; pdfPage: number }>;
-  }>;
-};
-
-function getProgrammingPart1PageMapNote(): string {
-  try {
-    const manifest = JSON.parse(
-      readFileSync(join(ROOT, "programming-part1-manifest.json"), "utf8"),
-    ) as ProgrammingPart1Manifest;
-    const lessons = manifest.chapters.flatMap((chapter, chapterIndex) =>
-      chapter.lessons.map((lesson, lessonIndex) => {
-        const nextLesson = chapter.lessons[lessonIndex + 1];
-        const nextChapter = manifest.chapters[chapterIndex + 1];
-        const nextStart = nextLesson?.pdfPage ?? nextChapter?.pdfPage ?? manifest.pdfPageCount + 1;
-        const interval = Math.max(1, nextStart - lesson.pdfPage);
-        return `${lesson.title}: بداية موثقة صفحة PDF ${lesson.pdfPage}؛ الفاصل حتى بداية الدرس التالي ${interval} صفحات (مؤشر حجم تقريبي لا يثبت كثافة المحتوى أو صعوبته).`;
-      }),
-    );
-    return "خريطة صفحات البرمجة والذكاء الاصطناعي - الجزء الأول فقط (14 درسًا): " + lessons.join(" ");
-  } catch {
-    return "خريطة صفحات الجزء الأول للبرمجة غير متاحة في بيئة التشغيل؛ لا تخترع أرقام صفحات.";
   }
 }
 
@@ -399,12 +371,7 @@ export function retrieveTextbookEvidence(
       }
       const results = rankTextbookPassages(loadPages(subjectId), query, Math.max(1, Math.ceil(limit / Math.max(1, subjectIds.length))));
       passages.push(...results);
-      if (subjectId === "ARB_G2_BAC") {
-        coverageNotes.push("اللغة العربية: الاسترجاع مقصور على نص الجزء الأول فقط. بعض الصفحات بها عيوب استخراج؛ تعامل مع الاقتباسات الحرفية بحذر.");
-      }
-      if (subjectId === "HIS_G2_BAC") {
-        coverageNotes.push("التاريخ الوطني: الاسترجاع مقصور على نص الجزء الأول فقط. بعض الصفحات بها عيوب استخراج؛ راجع الصفحة الأصلية عند الحاجة إلى اقتباس دقيق.");
-      }
+
       continue;
     }
     const indexOnly = COVERAGE_ONLY[subjectId];
