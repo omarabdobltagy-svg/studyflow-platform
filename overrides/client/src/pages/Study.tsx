@@ -736,22 +736,30 @@ export default function Study() {
               transition={{ type: "spring", stiffness: 100, damping: 20 }} />
           </div>
           <div className="flex flex-wrap gap-2">
-            {branches.map((branch, index) => (
-              <motion.button key={branch.branchId} type="button" layout
-                aria-current={index === branchIndex ? "step" : undefined}
-                onClick={() => {
-                  setManualBranchNavigation(true);
-                  setBranchId(branch.branchId);
-                  setLessonId("");
-                  setCustomCheckpointTitle("");
-                }}
-                className={"flex items-center gap-2 rounded-full border px-3 py-2 text-[11px] font-semibold transition " + (index < branchIndex ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : index === branchIndex ? "border-primary bg-primary/10 text-foreground" : "border-border bg-background text-muted-foreground hover:border-primary/40")}>
-                <span className="flex size-5 items-center justify-center rounded-full bg-background/80 text-[10px]">
-                  {index < branchIndex ? <Check className="size-3" /> : index + 1}
-                </span>
-                {branch.branchTitle}
-              </motion.button>
-            ))}
+            {branches.map((branch, index) => {
+              const savedBranchPosition = branchProgressMap[branch.branchId]?.lastCompletedLessonId;
+              const branchHasCompletedLesson = typeof savedBranchPosition === "string"
+                && savedBranchPosition !== "__UNKNOWN__"
+                && savedBranchPosition !== "__NOT_STARTED__"
+                && branch.choices.some(choice => choice.nodeId === savedBranchPosition);
+              return (
+                <motion.button key={branch.branchId} type="button" layout
+                  aria-current={index === branchIndex ? "step" : undefined}
+                  aria-label={branch.branchTitle + (branchHasCompletedLesson ? " — تم تسجيل تقدم" : "")}
+                  onClick={() => {
+                    setManualBranchNavigation(true);
+                    setBranchId(branch.branchId);
+                    setLessonId("");
+                    setCustomCheckpointTitle("");
+                  }}
+                  className={"flex items-center gap-2 rounded-full border px-3 py-2 text-[11px] font-semibold transition " + (branchHasCompletedLesson ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : index === branchIndex ? "border-primary bg-primary/10 text-foreground" : "border-border bg-background text-muted-foreground hover:border-primary/40")}>
+                  <span className="flex size-5 items-center justify-center rounded-full bg-background/80 text-[10px]">
+                    {branchHasCompletedLesson ? <Check className="size-3" /> : index + 1}
+                  </span>
+                  {branch.branchTitle}
+                </motion.button>
+              );
+            })}
           </div>
 
           <AnimatePresence mode="wait" initial={false}>
