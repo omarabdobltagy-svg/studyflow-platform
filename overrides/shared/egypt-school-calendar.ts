@@ -183,6 +183,6 @@ export function getChoicesForCurrentSchoolPart<T extends { sourceLabel?: string;
   const activePart = getEgyptSchoolProgress(value).activePart;
   const partTwo = (choice: T) =>
     /الجزء\s*الثاني|part\s*2|part\s*ii/i.test(choice.sourceLabel ?? "") ||
-    (typeof choice.unitNumber === "number" && choice.unitNumber >= 5);
+    (typeof choice.unitNumber === "number" && choice.unitNumber >= 6);
   return choices.filter(choice => activePart === 2 ? partTwo(choice) : !partTwo(choice));
 }
