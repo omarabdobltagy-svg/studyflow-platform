@@ -28,6 +28,9 @@ export default function Study() {
   const activeExternalSession = trpc.learning.activeExternalSession.useQuery();
   const [sessionNow, setSessionNow] = useState(Date.now());
   const [teacherChoiceDrafts, setTeacherChoiceDrafts] = useState<Record<string, string>>({});
+  const [courseModeDrafts, setCourseModeDrafts] = useState<Record<string, "center" | "online">>({});
+  const [teacherNameDrafts, setTeacherNameDrafts] = useState<Record<string, string>>({});
+  const [advanceAfterSave, setAdvanceAfterSave] = useState(false);
   const [markSessionLessonCompleted, setMarkSessionLessonCompleted] = useState(false);
   const initialStudyParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
   const [subjectId, setSubjectId] = useState(initialStudyParams?.get("subject") || "");
@@ -60,6 +63,15 @@ export default function Study() {
     ? (teacherChoiceDrafts[subjectId] === "__NONE__" ? undefined : teacherChoiceDrafts[subjectId])
     : (savedTeacherId && savedTeacherId !== "__SKIP__" ? savedTeacherId : undefined);
   const selectedTeacher = selectedTeacherId ? getSIETeacher(selectedTeacherId) : undefined;
+  const savedCourseModes = (selection.courseModes || {}) as Record<string, "center" | "online">;
+  const savedTeacherNames = (selection.customTeacherNames || {}) as Record<string, string>;
+  const courseMode = courseModeDrafts[subjectId] || savedCourseModes[subjectId] || currentCourseProgress.courseMode || "";
+  const teacherName = Object.prototype.hasOwnProperty.call(teacherNameDrafts, subjectId)
+    ? teacherNameDrafts[subjectId]
+    : savedTeacherNames[subjectId] || currentBranchProgress.teacherName || currentCourseProgress.teacherName || "";
+  const teacherReferenceName = teacherName.trim() || selectedTeacher?.nameAr || "";
+  const subjectIndex = Math.max(0, subjects.indexOf(subjectId));
+  const branchIndex = Math.max(0, branches.findIndex(branch => branch.branchId === currentBranchId));
   const systemId: SIESystemId = selection.systemId === "EG_GENERAL_SECONDARY"
     ? "EG_GENERAL_SECONDARY"
     : selection.systemId === "EG_BACCALAUREATE"
@@ -89,7 +101,7 @@ export default function Study() {
   const currentGap = calculateLearningGap(branchChoices, {
     studentFrontierId: lastCompletedLessonId || null,
     teacherTeachingFrontierId,
-    schoolClassFrontierId,
+    schoolClassFrontierId: courseMode === "center" ? schoolClassFrontierId : "__UNKNOWN__",
   });
 
 
@@ -176,15 +188,31 @@ export default function Study() {
 
   const saveCourseProgress = trpc.learning.updateCourseProgress.useMutation({
     onSuccess: async () => {
-      setTeacherChoiceDrafts(current => {
-        const next = { ...current };
-        delete next[subjectId];
-        return next;
-      });
       await Promise.all([utils.studentProfile.get.invalidate(), utils.learning.get.invalidate()]);
-      toast.success("تم تحديث التراكم والتقدم الدراسي.");
+      const shouldAdvance = advanceAfterSave;
+      setAdvanceAfterSave(false);
+      if (shouldAdvance) {
+        const nextBranch = branches[branchIndex + 1];
+        if (nextBranch) {
+          setBranchId(nextBranch.branchId);
+          setLessonId("");
+          toast.success("تم حفظ " + (currentBranch?.branchTitle || "الفرع") + "؛ ننتقل للفرع التالي.");
+        } else {
+          const nextSubjectId = subjects[subjectIndex + 1];
+          if (nextSubjectId) {
+            setSubjectId(nextSubjectId);
+            setBranchId("");
+            setLessonId("");
+            toast.success("اكتملت فروع " + subjectName + "؛ ننتقل إلى " + (getSIESubject(nextSubjectId)?.nameAr || "المادة التالية") + ".");
+          } else {
+            toast.success("تم حفظ آخر فرع. اكتمل تحديث تقدم موادك.");
+          }
+        }
+      } else {
+        toast.success("تم حفظ تقدم هذا الفرع.");
+      }
     },
-    onError: error => toast.error(error.message),
+    onError: error => { setAdvanceAfterSave(false); toast.error(error.message); },
   });
   const startExternalSession = trpc.learning.startExternalSession.useMutation({
     onSuccess: async () => {
@@ -212,15 +240,30 @@ export default function Study() {
     onError: error => toast.error(error.message),
   });
 
-  const submitCourseProgress = () => {
+  const submitCourseProgress = (advance = false) => {
     if (!subjectId) return;
+    if (!courseMode) {
+      toast.error("حدد أولًا هل تدرس المادة في سنتر أم أونلاين.");
+      return;
+    }
+    if (!currentBranchId) {
+      toast.error("لا يوجد فرع منهج محدد لهذه المادة.");
+      return;
+    }
+    if (teacherTeachingFrontierId !== "__UNKNOWN__" && !teacherReferenceName) {
+      toast.error("اكتب اسم المدرس أو اختره قبل تحديد موضع شرحه.");
+      return;
+    }
+    setAdvanceAfterSave(advance);
     saveCourseProgress.mutate({
       subjectId,
       branchId: currentBranchId,
       teacherId: selectedTeacherId || null,
+      teacherName: teacherReferenceName,
+      courseMode,
       lastCompletedLessonId: lastCompletedLessonId || "__UNKNOWN__",
       teacherTeachingFrontierId,
-      schoolClassFrontierId,
+      schoolClassFrontierId: courseMode === "center" ? schoolClassFrontierId : "__UNKNOWN__",
       schoolClassFrontierEvidenceSource: schoolClassEvidenceSource,
       teacherCourseFrontier: teacherCourseFrontier.trim(),
       status: courseStatus,
@@ -307,69 +350,165 @@ export default function Study() {
     <DashboardLayout title="المذاكرة وذكاء التقدم" description="تابع تقدمك وتراكمك، ثم استخدم SQ3R لتحويل كل درس إلى خطوات تعلم قابلة للقياس.">
       {profile.isError && <div className="rounded-2xl border border-destructive/20 bg-destructive/5 p-4 text-sm">تعذّر تحميل ملفك الدراسي. <button className="font-bold underline" onClick={() => void profile.refetch()}>إعادة المحاولة</button></div>}
       <section className="app-card mb-5 overflow-hidden rounded-2xl">
-        <div className="border-b border-border/70 bg-gradient-to-l from-secondary/65 to-card p-5 sm:p-6">
+        <header className="border-b border-border/70 bg-gradient-to-l from-secondary/65 to-card p-5 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <span className="flex size-10 items-center justify-center rounded-xl bg-secondary text-primary"><BookOpenText className="size-5" /></span>
-              <div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">CURRICULUM PICKER</p><h2 className="font-bold">حدد مكانك في المنهج</h2><p className="text-xs text-muted-foreground">ثلاث خطوات واضحة: المادة، الفرع، ثم الدرس.</p></div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">تقدمك الدراسي</p>
+              <h2 className="mt-1 text-xl font-bold">نحدد مكانك خطوة بخطوة</h2>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">المادة {subjectIndex + 1} من {subjects.length} · {subjectName}</p>
             </div>
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
-              <span className="rounded-lg bg-primary/10 px-2.5 py-1.5 text-primary">1 المادة</span><span>←</span><span className="rounded-lg bg-muted px-2.5 py-1.5">2 الفرع</span><span>←</span><span className="rounded-lg bg-muted px-2.5 py-1.5">3 الدرس</span>
+            <span className="rounded-full border border-border bg-background px-3 py-2 text-xs font-semibold">الفرع {branchIndex + 1} من {branches.length}</span>
+          </div>
+        </header>
+        <div className="space-y-5 p-5 sm:p-6">
+          {subjects.length > 1 && (
+            <div className="flex flex-wrap gap-2" aria-label="المواد الدراسية">
+              {subjects.map((id, index) => (
+                <span key={id} className={"rounded-lg px-3 py-2 text-xs font-semibold " + (id === subjectId ? "bg-primary text-primary-foreground" : index < subjectIndex ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-muted text-muted-foreground")}>
+                  {index + 1}. {getSIESubject(id)?.nameAr || id}
+                </span>
+              ))}
+            </div>
+          )}
+          <div>
+            <p className="mb-2 text-sm font-bold">طريقة دراستك للمادة دي</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <button type="button" aria-pressed={courseMode === "center"} onClick={() => setCourseModeDrafts(current => ({ ...current, [subjectId]: "center" }))}
+                className={"rounded-xl border p-4 text-right transition " + (courseMode === "center" ? "border-primary bg-secondary/40 ring-1 ring-primary/20" : "border-border hover:border-primary/30")}>
+                <span className="block font-bold">سنتر / مجموعة</span><span className="mt-1 block text-xs leading-5 text-muted-foreground">بتحضر مع مدرس في مكان أو مجموعة.</span>
+              </button>
+              <button type="button" aria-pressed={courseMode === "online"} onClick={() => setCourseModeDrafts(current => ({ ...current, [subjectId]: "online" }))}
+                className={"rounded-xl border p-4 text-right transition " + (courseMode === "online" ? "border-primary bg-secondary/40 ring-1 ring-primary/20" : "border-border hover:border-primary/30")}>
+                <span className="block font-bold">أونلاين</span><span className="mt-1 block text-xs leading-5 text-muted-foreground">بتتابع الشرح من منصة أو فيديوهات.</span>
+              </button>
             </div>
           </div>
+          {courseMode && (
+            <>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {courseMode === "online" && (
+                  <label className="block text-sm font-semibold">
+                    المدرس الذي تتابعه أونلاين
+                    <Select value={selectedTeacherId || "__NONE__"} onValueChange={value => {
+                      setTeacherChoiceDrafts(current => ({ ...current, [subjectId]: value }));
+                      setTeacherNameDrafts(current => ({ ...current, [subjectId]: "" }));
+                      setTeacherTeachingFrontierId("__UNKNOWN__");
+                    }}>
+                      <SelectTrigger className="mt-2 h-11 rounded-xl bg-background"><SelectValue placeholder="اختر مدرسك" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__NONE__">لم أحدد مدرسًا بعد</SelectItem>
+                        {teacherOptions.map(teacher => <SelectItem key={teacher.teacherId} value={teacher.teacherId}>{teacher.nameAr}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </label>
+                )}
+                <label className="block text-sm font-semibold">
+                  {courseMode === "center" ? "اسم مدرس السنتر" : "اسم مدرس آخر (لو مش موجود في القائمة)"}
+                  <Input value={teacherName} onChange={event => {
+                    setTeacherNameDrafts(current => ({ ...current, [subjectId]: event.target.value }));
+                    if (event.target.value.trim()) setTeacherChoiceDrafts(current => ({ ...current, [subjectId]: "__NONE__" }));
+                  }} placeholder={courseMode === "center" ? "اكتب اسم مدرس السنتر" : "اختياري"} maxLength={120} className="mt-2 h-11 rounded-xl bg-background" />
+                </label>
+              </div>
+              <div className="rounded-2xl border border-border/70 bg-muted/15 p-4">
+                <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-bold">الفرع الحالي: {currentBranch?.branchTitle || "غير محدد"}</p>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">اختار موضعك وموضع المدرس في الفرع ده فقط. مش بنقارن فروع مختلفة ببعض.</p>
+                  </div>
+                  <span className="rounded-full bg-background px-3 py-1.5 text-[11px] font-semibold text-muted-foreground">{branchChoices.length} عنصر مفهرس حاليًا</span>
+                </div>
+                {branches.length > 1 && (
+                  <div className="mb-4 flex flex-wrap gap-2">
+                    {branches.map((branch, index) => (
+                      <button key={branch.branchId} type="button" aria-pressed={branch.branchId === currentBranchId} onClick={() => { setBranchId(branch.branchId); setLessonId(""); }}
+                        className={"rounded-lg border px-3 py-2 text-xs font-semibold transition " + (branch.branchId === currentBranchId ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-muted-foreground hover:border-primary/30")}>
+                        {index + 1}. {branch.branchTitle}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {branchChoices.length === 1 && (
+                  <p className="mb-4 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-xs leading-6 text-muted-foreground">
+                    الفهرس الحالي يعرض عنصرًا واحدًا فقط لهذا الفرع. ده لا يعني إن الفرع كله درس واحد؛ عدد العناصر المعروضة هو ما تم فهرسته حاليًا فقط.
+                  </p>
+                )}
+                {branchChoices.length === 0 && (
+                  <p className="mb-4 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-xs leading-6 text-muted-foreground">
+                    فهرس هذا الفرع غير متاح أو لم يكتمل بعد. لن نخمن دروسًا أو نحسب فجوة غير موثوقة؛ يمكنك حفظ إعداد المادة والانتقال للفرع التالي.
+                  </p>
+                )}
+                {branchChoices.length > 0 && (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <label className="block text-sm font-semibold">
+                      أنت خلصت لحد أنهي درس؟
+                      <Select value={lastCompletedLessonId || "__UNKNOWN__"} onValueChange={setLastCompletedLessonId}>
+                        <SelectTrigger className="mt-2 h-11 rounded-xl bg-background"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__UNKNOWN__">لسه ما حددتش</SelectItem><SelectItem value="__NOT_STARTED__">لسه ما بدأتش الفرع ده</SelectItem>
+                          {branchChoices.map(choice => <SelectItem key={choice.nodeId} value={choice.nodeId}>{getSIECheckpointChoiceDisplayLabel(choice)}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <span className="mt-1 block text-[11px] font-normal text-muted-foreground">اختار آخر درس خلصت مذاكرته فعلًا، مش الدرس اللي بدأت فيه.</span>
+                    </label>
+                    <label className="block text-sm font-semibold">
+                      {teacherReferenceName ? "مدرسك (" + teacherReferenceName + ") وصل لحد فين؟" : "مدرسك وصل لحد فين؟"}
+                      <Select value={teacherTeachingFrontierId} onValueChange={setTeacherTeachingFrontierId} disabled={!teacherReferenceName}>
+                        <SelectTrigger className="mt-2 h-11 rounded-xl bg-background"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__UNKNOWN__">مش عارف / لسه ما حددتش</SelectItem><SelectItem value="__NOT_STARTED__">لسه ما بدأش الفرع ده</SelectItem>
+                          {branchChoices.map(choice => <SelectItem key={choice.nodeId} value={choice.nodeId}>{getSIECheckpointChoiceDisplayLabel(choice)}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <span className="mt-1 block text-[11px] font-normal text-muted-foreground">{teacherReferenceName ? "حدد آخر درس انتهى المدرس من شرحه بالفعل." : "اكتب اسم المدرس أولًا عشان نسجل موضع شرحه."}</span>
+                    </label>
+                    {courseMode === "center" && (
+                      <div className="rounded-xl border border-border/70 bg-background/65 p-3 md:col-span-2">
+                        <label className="block text-sm font-semibold">
+                          السنتر / المجموعة وصلوا لحد أنهي درس في الفرع ده؟
+                          <Select value={schoolClassFrontierId} onValueChange={setSchoolClassFrontierId}>
+                            <SelectTrigger className="mt-2 h-11 rounded-xl bg-background"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__UNKNOWN__">مش عارف / مش متأكد</SelectItem><SelectItem value="__NOT_STARTED__">لسه ما شرحوش الفرع ده</SelectItem>
+                              {branchChoices.map(choice => <SelectItem key={choice.nodeId} value={choice.nodeId}>{getSIECheckpointChoiceDisplayLabel(choice)}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </label>
+                        <label className="mt-3 block text-sm font-semibold">عرفت المعلومة دي منين؟
+                          <Select value={schoolClassEvidenceSource} onValueChange={value => setSchoolClassEvidenceSource(value as typeof schoolClassEvidenceSource)}>
+                            <SelectTrigger className="mt-2 h-10 rounded-xl bg-background"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="unknown">لسه ما تأكدتش</SelectItem><SelectItem value="teacher_confirmed">المدرس أكّدها</SelectItem><SelectItem value="classmate_confirmed">زميل في المجموعة قالّي</SelectItem><SelectItem value="class_notes">من ملاحظات الحصة</SelectItem><SelectItem value="class_group">من جروب المجموعة</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4">
+                <p className="text-sm font-bold">ماذا يعني التقدم هنا؟</p>
+                <p className="mt-1 text-xs leading-6 text-muted-foreground">نقارن آخر درس أنهيته بآخر درس شرحه المدرس داخل الفرع نفسه. لو أنت في سنتر، نستخدم تقدم المجموعة كمرجع بديل فقط عندما لا نعرف تقدم المدرس.</p>
+                <p className="mt-3 text-sm font-semibold text-foreground">
+                  {currentGap.status === "calculated"
+                    ? currentGap.gapCount! > 0 ? "أنت متأخر عن المرجع بـ " + currentGap.gapCount + " درس"
+                      : currentGap.aheadCount! > 0 ? "أنت متقدم على المرجع بـ " + currentGap.aheadCount + " درس"
+                      : "أنت مواكب للمرجع في الفرع ده"
+                    : currentGap.status === "student_position_missing" ? "حدد آخر درس أنهيته أنت عشان نحسب الفرق" : "حدد موضعك وموضع المدرس عشان نحسب الفرق"}
+                </p>
+                {currentGap.status === "calculated" && <p className="mt-1 text-[11px] text-muted-foreground">المرجع المستخدم: {currentGap.referenceSource === "teacher" ? "مدرسك" : currentGap.referenceSource === "school" ? "السنتر / المجموعة" : "غير محدد"}</p>}
+              </div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs leading-6 text-muted-foreground">هنحفظ موضعك في الفرع ده فقط، وبعدها نفتح الفرع التالي. بيانات الفروع الأخرى تفضل محفوظة كما هي.</p>
+                <Button type="button" onClick={() => submitCourseProgress(true)} disabled={saveCourseProgress.isPending || !courseMode || !currentBranchId} className="shrink-0 rounded-xl bg-primary">
+                  {saveCourseProgress.isPending ? "جارٍ الحفظ..." : branchIndex < branches.length - 1 ? "حفظ والانتقال للفرع التالي" : subjectIndex < subjects.length - 1 ? "حفظ وإنهاء " + subjectName : "حفظ وإنهاء الإعداد"}
+                </Button>
+              </div>
+            </>
+          )}
+          {!courseMode && <p className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-sm leading-6 text-muted-foreground">اختار طريقة دراسة المادة الأول. بعدها هتظهر بيانات المدرس والفرع والأسئلة المناسبة.</p>}
         </div>
-        <div className="grid gap-4 p-5 sm:p-6 md:grid-cols-[.78fr_.95fr_1.35fr]">
-          <div className="min-w-0">
-            <label className="mb-2 block text-xs font-bold text-muted-foreground">01 · المادة الدراسية</label>
-            <Select value={subjectId} onValueChange={value => { setSubjectId(value); setBranchId(""); setLessonId(""); }} disabled={profile.isLoading || subjects.length === 0}>
-              <SelectTrigger className="h-12 rounded-xl bg-background"><SelectValue placeholder="اختر المادة" /></SelectTrigger>
-              <SelectContent>{subjects.map(id => <SelectItem key={id} value={id}>{getSIESubject(id)?.nameAr || id}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          <div className="min-w-0">
-            <label className="mb-2 block text-xs font-bold text-muted-foreground">02 · فرع المادة</label>
-            <Select value={currentBranchId} onValueChange={value => { setBranchId(value); setLessonId(""); }} disabled={!branches.length}>
-              <SelectTrigger className="h-12 rounded-xl bg-background"><SelectValue placeholder="اختر الفرع" /></SelectTrigger>
-              <SelectContent>
-                {branches.map(branch => <SelectItem key={branch.branchId} value={branch.branchId}>{branch.branchTitle}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="min-w-0">
-            <label className="mb-2 block text-xs font-bold text-muted-foreground">03 · الدرس داخل الفرع</label>
-            <Select value={lessonId} onValueChange={setLessonId} disabled={!branchChoices.length}>
-              <SelectTrigger className="h-12 rounded-xl bg-background"><SelectValue placeholder="اختر درسًا من الفرع المحدد" /></SelectTrigger>
-              <SelectContent className="max-h-[360px]">
-                {lessons.map(lesson => (
-                  <SelectItem key={lesson.nodeId} value={lesson.nodeId} textValue={getSIECheckpointChoiceDisplayLabel(lesson)}>
-                    <span className="flex min-w-0 flex-col gap-1 py-1 text-right" dir="rtl">
-                      <span className="text-sm font-semibold leading-5">{lesson.lessonType === "topic" ? `Lesson ${lesson.lessonNumber} — ${lesson.title}` : lesson.lessonType === "grammar" ? `قاعدة نحوية ${lesson.lessonNumber} — ${lesson.title}` : lesson.lessonNumber ? `الدرس ${lesson.lessonNumber} — ${lesson.title}` : lesson.title}</span>
-                      <span className="text-[11px] leading-4 text-muted-foreground">{getSIECheckpointChoiceTypeLabel(lesson)} · {lesson.branchTitle ?? lesson.unitTitle}</span>
-                      <span className="text-[10px] leading-4 text-muted-foreground">{lesson.lessonType === "topic" ? `Unit ${lesson.unitNumber}: ${lesson.unitTitle}` : `الوحدة ${lesson.unitNumber ?? ""}: ${lesson.unitTitle}`}</span>
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-        {selectedLesson && <div className="mx-5 mb-5 flex flex-wrap items-center gap-2 rounded-xl border border-primary/15 bg-primary/5 p-3 sm:mx-6">
-          <span className="text-xs font-bold text-foreground">{selectedLesson.lessonType === "topic" ? `Lesson ${selectedLesson.lessonNumber}` : selectedLesson.lessonType === "grammar" ? `قاعدة نحوية ${selectedLesson.lessonNumber}` : `الدرس ${selectedLesson.lessonNumber}`}</span>
-          <span className="text-xs text-foreground">{selectedLesson.title}</span>
-          <span className="rounded-md bg-background px-2 py-1 text-[10px] font-semibold text-primary">{getSIECheckpointChoiceTypeLabel(selectedLesson)}</span>
-          <span className="text-[10px] text-muted-foreground">{selectedLesson.branchTitle}</span>
-        </div>}
-        {subjectId === "ARB_G2_BAC" && <div className="mx-5 mb-5 rounded-xl border border-border/70 bg-muted/20 p-3 sm:mx-6">
-          <p className="mb-2 text-[11px] font-semibold text-muted-foreground">فروع العربي — اختر الفرع ثم الدرس داخله</p>
-          <div className="flex flex-wrap gap-1.5">
-            {branches.map(branch => <span key={branch.branchId} className="rounded-lg bg-primary/10 px-2.5 py-1.5 text-xs font-semibold text-primary">
-              {branch.branchTitle} · {branch.choices.length}
-            </span>)}
-          </div>
-          <p className="mt-2 text-[10px] leading-5 text-muted-foreground">أرقام 1–21 تتبع فهرس منصة الشرح؛ وباقي نقاط الكتاب تظهر بمصدرها ورقم وحدتها دون اختلاق ترتيب منصة.</p>
-        </div>}
-        {subjectId && !subjectChoices.length && <p className="mx-5 mb-5 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-sm leading-6 text-muted-foreground sm:mx-6">فهرس هذه المادة غير محمّل في النسخة الحالية؛ لن نعرض دروسًا مخمّنة.</p>}
-        {!subjects.length && !profile.isLoading && <p className="m-5 rounded-xl bg-muted/50 p-3 text-sm text-muted-foreground">لم تُضف مواد إلى ملفك الدراسي بعد. أضف المواد من الملف الشخصي أولًا.</p>}
       </section>
       <section className="app-card mb-5 p-5 sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -409,234 +548,23 @@ export default function Study() {
           </div>
         )}
       </section>
-      <motion.section
-        className="learning-progress-panel app-card mb-6 overflow-hidden"
-        initial={{ opacity: 0, y: 22, rotateX: -1.5 }}
-        animate={{ opacity: 1, y: 0, rotateX: 0 }}
-        transition={{ duration: 0.48, ease: [0.22, 1, 0.36, 1] }}
-      >
-        <div className="sf-learning-hero relative overflow-hidden rounded-t-2xl px-5 py-6 text-white sm:px-7">
-          <div className="relative z-10 max-w-[70%] sm:max-w-[74%]">
-            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[var(--sf-gold-light)]">LEARNING INTELLIGENCE</p>
-            <h2 className="mt-2 text-xl font-bold sm:text-2xl">حالة تعلّمك الفعلية</h2>
-            <p className="mt-2 max-w-xl text-xs leading-6 text-white/65 sm:text-sm">يتابع SIE موضعك وموضع التدريس داخل كل فرع رسمي بصورة مستقلة؛ ولن يقارن بين وحدات أو أقسام مختلفة.</p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <span className="rounded-full border border-white/15 bg-white/8 px-3 py-1.5 text-[11px] text-white/80">{subjectName}</span>
-              <span className="rounded-full border border-[var(--sf-gold)]/30 bg-[var(--sf-gold)]/10 px-3 py-1.5 text-[11px] text-[var(--sf-gold-light)]">{selectedTeacher?.nameAr || "لم تحدد مدرسًا"}</span>
-            </div>
-          </div>
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-l from-transparent via-[var(--sf-gold)]/70 to-transparent" />
+
+
+      <section className="app-card mb-5 p-5 sm:p-6">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">ابدأ المذاكرة</p>
+          <h2 className="mt-1 text-lg font-bold">الدرس الذي ستذاكره الآن</h2>
+          <p className="mt-1 text-xs leading-6 text-muted-foreground">{subjectName} · {currentBranch?.branchTitle || "الفرع الحالي"}</p>
         </div>
-
-        <div className="grid gap-5 p-5 sm:p-6 xl:grid-cols-[1.2fr_.8fr]">
-          <div className="rounded-2xl border border-accent/25 bg-accent/5 p-4 text-sm leading-7 text-muted-foreground xl:col-span-2">
-            <p className="font-bold text-foreground">حدّث موضع المدرس بنفسك</p>
-            <p className="mt-1">اختر آخر درس شرح المدرس محتواه بالفعل، وليس الدرس التالي في الخطة أو جدول المنهج. هذه المعلومة التي يبلغك بها الطالب هي مرجع المخطط لحساب التراكم.</p>
-            <p className="mt-1">لكي تُحسب الفجوة، حدّد أيضًا آخر درس أنهيته أنت. موضع المدرس له الأولوية؛ وموضع الفصل يُستخدم بديلًا فقط عندما لا يكون موضع المدرس معروفًا.</p>
-          </div>
-          <div className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              <label className="text-sm font-semibold">
-                المدرس الذي تتابعه في هذه المادة
-                <Select
-                  value={selectedTeacherId || "__NONE__"}
-                  onValueChange={value => {
-                    setTeacherChoiceDrafts(current => ({ ...current, [subjectId]: value }));
-                    setTeacherTeachingFrontierId("__UNKNOWN__");
-                    setTeacherCourseFrontier("");
-                  }}
-                  disabled={!subjectId || profile.isLoading}
-                >
-                  <SelectTrigger className="mt-2 h-11 rounded-xl bg-background"><SelectValue placeholder="اختر المدرس" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__NONE__">لم أحدد مدرسًا بعد</SelectItem>
-                    {teacherOptions.map(teacher => (
-                      <SelectItem key={teacher.teacherId} value={teacher.teacherId}>{teacher.nameAr}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <span className="mt-1 block text-[11px] font-normal text-muted-foreground">
-                  اختيار المدرس هنا يحفظه في ملفك الدراسي ويُفعّل اختيار موضع شرحه للمنهج.
-                </span>
-                {!teacherOptions.length && (
-                  <span className="mt-1 block text-[11px] font-normal text-amber-700 dark:text-amber-300">
-                    لا توجد ترشيحات مدرسين موثقة لهذه المادة والنظام حاليًا. يمكنك مراجعة اختيار المدرس من الملف الدراسي.
-                  </span>
-                )}
-              </label>
-              <label className="text-sm font-semibold">
-                آخر درس أنهيته أنت
-                <Select value={lastCompletedLessonId || "__UNKNOWN__"} onValueChange={setLastCompletedLessonId} disabled={!branchChoices.length}>
-                  <SelectTrigger className="mt-2 h-11 rounded-xl bg-background"><SelectValue placeholder="غير محدد" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__UNKNOWN__">غير محدد</SelectItem>
-                    <SelectItem value="__NOT_STARTED__">لم أبدأ المنهج بعد</SelectItem>
-                    {branchChoices.map(lesson => <SelectItem key={lesson.nodeId} value={lesson.nodeId}>{getSIECheckpointChoiceDisplayLabel(lesson)}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <span className="mt-1 block text-[11px] font-normal text-muted-foreground">ده موضع الطالب، وليس موضع المدرس أو المدرسة.</span>
-              </label>
-              <label className="text-sm font-semibold">
-                المدرس وصل لحد أنهي درس؟
-                <Select value={teacherTeachingFrontierId} onValueChange={setTeacherTeachingFrontierId} disabled={!selectedTeacher || !lessons.length}>
-                  <SelectTrigger className="mt-2 h-11 rounded-xl bg-background"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__UNKNOWN__">لا أعرف / غير متاح</SelectItem>
-                    <SelectItem value="__NOT_STARTED__">لم يبدأ التدريس بعد</SelectItem>
-                    {branchChoices.map(lesson => <SelectItem key={lesson.nodeId} value={lesson.nodeId}>{getSIECheckpointChoiceDisplayLabel(lesson)}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <span className="mt-1 block text-[11px] font-normal text-muted-foreground">يُستخدم كمرجع أول فقط عندما يكون معروفًا.</span>
-              </label>
-              <div className="rounded-xl border border-border/70 bg-background/55 p-3">
-                <label className="block text-sm font-semibold">آخر درس انتهت المدرسة من شرحه للفصل
-                  <Select value={schoolClassFrontierId} onValueChange={setSchoolClassFrontierId} disabled={!branchChoices.length}>
-                    <SelectTrigger className="mt-2 h-11 rounded-xl bg-background"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__UNKNOWN__">لا أعرف حتى الآن</SelectItem>
-                      <SelectItem value="__NOT_STARTED__">لم يبدأ الفصل المادة بعد</SelectItem>
-                      {branchChoices.map(lesson => <SelectItem key={lesson.nodeId} value={lesson.nodeId}>{getSIECheckpointChoiceDisplayLabel(lesson)}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </label>
-                <label className="mt-3 block text-sm font-semibold">مصدر المعلومة
-                  <Select value={schoolClassEvidenceSource} onValueChange={value => setSchoolClassEvidenceSource(value as typeof schoolClassEvidenceSource)}>
-                    <SelectTrigger className="mt-2 h-11 rounded-xl bg-background"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="unknown">لم أتحقق بعد</SelectItem>
-                      <SelectItem value="teacher_confirmed">أكده المدرس</SelectItem>
-                      <SelectItem value="classmate_confirmed">أكده زميل في الفصل</SelectItem>
-                      <SelectItem value="class_notes">من كشكول/ملاحظات الحصة</SelectItem>
-                      <SelectItem value="class_group">من مجموعة الفصل</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </label>
-                <p className="mt-2 text-[11px] font-normal leading-5 text-muted-foreground">هذه معلومة يبلّغ بها الطالب حاليًا؛ لا يوجد اتصال مباشر بنظام المدرسة. إذا كان موضع المدرس معروفًا فسيظل هو المرجع الأول في حساب الفجوة.</p>
-              </div>
-              <label className="text-sm font-semibold">
-                آخر محاضرة شاهدتها على منصة المدرس (اختياري)
-                <Input value={teacherCourseFrontier} onChange={event => setTeacherCourseFrontier(event.target.value)} placeholder="مثال: المحاضرة 12" maxLength={120} className="mt-2 h-11 rounded-xl bg-background" />
-                <span className="mt-1 block text-[11px] font-normal text-muted-foreground">للتوثيق فقط؛ لا تدخل في حساب فجوة المنهج.</span>
-              </label>
-              <label className="text-sm font-semibold">
-                وضعك الحالي مع المادة
-                <Select value={courseStatus} onValueChange={value => setCourseStatus(value as CourseStatus)}>
-                  <SelectTrigger className="mt-2 h-11 rounded-xl bg-background"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="not_started">لم أبدأ بعد</SelectItem>
-                    <SelectItem value="in_progress">أتابع المحتوى حاليًا</SelectItem>
-                    <SelectItem value="caught_up">مواكب لآخر محتوى</SelectItem>
-                    <SelectItem value="needs_review">أنهيت المحتوى ويحتاج مراجعة</SelectItem>
-                  </SelectContent>
-                </Select>
-              </label>
-              <label className="text-sm font-semibold">
-                الوقت المعتاد للدرس بالدقائق
-                <Input type="number" min={5} max={480} value={estimatedMinutes} onChange={event => setEstimatedMinutes(Math.max(5, Math.min(480, Number(event.target.value) || 5)))} className="mt-2 h-11 rounded-xl bg-background" />
-              </label>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-[.7fr_1.3fr]">
-              <label className="text-sm font-semibold">
-                صعوبة المادة
-                <Select value={courseDifficulty} onValueChange={value => setCourseDifficulty(value as typeof courseDifficulty)}>
-                  <SelectTrigger className="mt-2 h-11 rounded-xl bg-background"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="unknown">غير محددة</SelectItem>
-                    <SelectItem value="easy">سهلة</SelectItem>
-                    <SelectItem value="medium">متوسطة</SelectItem>
-                    <SelectItem value="hard">صعبة وتحتاج وقتًا</SelectItem>
-                  </SelectContent>
-                </Select>
-              </label>
-              <label className="text-sm font-semibold">
-                ملاحظات اختيارية
-                <Input value={courseNotes} onChange={event => setCourseNotes(event.target.value)} placeholder="مثال: المحاضرتان الأخيرتان لم أراجعهما" maxLength={600} className="mt-2 h-11 rounded-xl bg-background" />
-              </label>
-            </div>
-            <label className="block text-sm font-semibold">
-              العائق الرئيسي الذي يؤثر على مذاكرتك (اختياري)
-              <Textarea value={learningObstacle} onChange={event => setLearningObstacle(event.target.value)} placeholder="مثال: صعوبة البدء، تشتت، وقت قليل، أو تراكم كبير" maxLength={600} className="mt-2 min-h-20 rounded-xl bg-background leading-7" />
-            </label>
-            <div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-muted/25 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-xs leading-6 text-muted-foreground">سيُحفظ موضعك وموضع المدرس وموضع الفصل كلٌّ على حدة داخل فرع «{currentBranch?.branchTitle || "غير محدد"}» فقط. إذا لم تحدد آخر درس أنهيته أنت، فستظل الفجوة غير محسوبة حتى لو حفظت موضع المدرسة.</p>
-              <Button type="button" onClick={submitCourseProgress} disabled={saveCourseProgress.isPending || !subjectId} className="pressable shrink-0 rounded-xl bg-primary">
-                {saveCourseProgress.isPending ? "جارٍ حفظ التقدم..." : "حفظ موضع المدرس وتقدمك"}
-              </Button>
-            </div>
-          </div>
-
-          <aside className="learning-glass-card rounded-2xl border border-border/70 bg-muted/20 p-4 sm:p-5">
-            <div className="flex items-center gap-2"><Activity className="size-4 text-primary" /><h3 className="font-bold">مؤشرات المادة</h3></div>
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              <div className="rounded-xl border border-border/60 bg-background/75 p-3">
-                <p className="text-[11px] text-muted-foreground">فجوة المنهج المحسوبة</p>
-                <p className="mt-1 text-2xl font-bold tabular-nums text-primary">{currentGap.gapCount === null ? "—" : currentGap.gapCount}</p>
-                <p className="mt-1 text-[10px] text-muted-foreground">{currentBranch?.branchTitle || "الفرع غير محدد"} · {currentGap.referenceSource === "teacher" ? "المرجع: المدرس" : currentGap.referenceSource === "school" ? "المرجع: المدرسة" : "لا يوجد مرجع داخل هذا الفرع"}</p>
-              </div>
-            </div>
-            <div className="mt-3 rounded-xl border border-border/60 bg-background/75 p-3">
-              <p className="text-[11px] text-muted-foreground">حالة المقارنة</p>
-              <p className="mt-1 text-sm font-semibold">{currentGap.status === "calculated" ? (currentGap.gapCount! > 0 ? "الطالب متأخر عن المرجع" : currentGap.aheadCount! > 0 ? "الطالب متقدم على المرجع" : "الطالب مواكب للمرجع") : currentGap.status === "student_position_missing" ? "موضع الطالب غير محدد" : "لا يوجد موضع مرجعي معروف"}</p>
-              {currentGap.aheadCount !== null && currentGap.aheadCount > 0 && <p className="mt-1 text-[11px] text-muted-foreground">تقدم بمقدار {currentGap.aheadCount} {currentBranchPointLabel} عن المرجع.</p>}
-            </div>
-            <div className="mt-3 flex items-start gap-2 text-xs leading-6 text-muted-foreground">
-              <Gauge className="mt-1 size-4 shrink-0 text-primary" />
-              <p>المخطط سيوازن التراكم مع صعوبة الدروس ودرجة تقدمك في كل فرع بدل اعتبار عدد المحاضرات مقياسًا وحيدًا.</p>
-            </div>
-          </aside>
-        </div>
-
-        <section className="border-t border-border/70 p-5 sm:p-6">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">BRANCH OVERVIEW</p>
-              <h3 className="mt-1 font-bold">ملخص التقدم في كل فروع المادة</h3>
-              <p className="mt-1 text-xs text-muted-foreground">كل وحدة أو فصل أو قسم يُقارن بمرجعه داخل حدوده فقط. اضغط على أي فرع لتحديث مواضعه.</p>
-            </div>
-            <span className="rounded-full border border-border bg-background px-3 py-1 text-[11px] text-muted-foreground">{branches.length} فروع مستقلة</span>
-          </div>
-          {learning.isLoading ? (
-            <p className="rounded-xl border border-border/70 bg-background/70 p-4 text-sm text-muted-foreground">جارٍ تحميل مؤشرات الفروع...</p>
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {branches.map(branch => {
-                const gap = branchGapMap[branch.branchId];
-                const saved = branchProgressMap[branch.branchId] || {};
-                const studentLabel = gap?.studentFrontierTitle
-                  || (gap?.studentFrontierId === "__NOT_STARTED__" || saved.lastCompletedLessonId === "__NOT_STARTED__" ? "لم يبدأ بعد" : "غير محدد");
-                const referenceLabel = gap?.referenceFrontierTitle
-                  || (gap?.referenceFrontierId === "__NOT_STARTED__" ? "لم يبدأ بعد" : "غير معروف");
-                const referenceSourceLabel = gap?.referenceSource === "teacher"
-                  ? "المدرس" : gap?.referenceSource === "school" ? "المدرسة" : "لا يوجد مرجع";
-                const branchPointLabel = branch.branchType === "official_section" ? "موضوع" : "درس";
-                const gapLabel = gap?.gapCount === null || gap?.gapCount === undefined
-                  ? "غير محسوبة" : `${gap.gapCount} ${branchPointLabel}`;
-                const isSelected = branch.branchId === currentBranchId;
-                return (
-                  <button
-                    key={branch.branchId}
-                    type="button"
-                    onClick={() => setBranchId(branch.branchId)}
-                    className={`rounded-xl border p-4 text-start transition-colors ${isSelected ? "border-primary/50 bg-primary/5" : "border-border/70 bg-background/70 hover:bg-muted/50"}`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <h4 className="text-sm font-semibold leading-6">{branch.branchTitle}</h4>
-                      <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground">{branch.choices.length} {branchPointLabel === "موضوع" ? "موضوعات" : "دروس"}</span>
-                    </div>
-                    <p className="mt-3 text-xs text-muted-foreground">موضع الطالب: <span className="font-medium text-foreground">{studentLabel}</span></p>
-                    <p className="mt-1 text-xs text-muted-foreground">موضع {referenceSourceLabel}: <span className="font-medium text-foreground">{referenceLabel}</span></p>
-                    <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/60 pt-3">
-                      <span className="text-[11px] text-muted-foreground">فجوة هذا الفرع</span>
-                      <span className="text-sm font-bold tabular-nums text-primary">{gapLabel}</span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </section>
-
-      </motion.section>
+        {branchChoices.length ? (
+          <Select value={lessonId} onValueChange={setLessonId}>
+            <SelectTrigger className="mt-4 h-12 rounded-xl bg-background"><SelectValue placeholder="اختر الدرس الذي ستذاكره" /></SelectTrigger>
+            <SelectContent className="max-h-[360px]">
+              {branchChoices.map(lesson => <SelectItem key={lesson.nodeId} value={lesson.nodeId}>{getSIECheckpointChoiceDisplayLabel(lesson)}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        ) : <p className="mt-4 rounded-xl bg-muted/30 p-3 text-xs leading-6 text-muted-foreground">لا توجد دروس مفهرسة كافية لهذا الفرع حاليًا؛ لن نعرض اختيارًا غير موثوق.</p>}
+      </section>
 
       {lessonId && selectedLesson ? (
         <>
