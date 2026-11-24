@@ -37,6 +37,7 @@ import {
   getStudyAnalytics,
   getStudentProfile,
   getLatestAiPlanByPromptPrefix,
+  ensureDailyPlanTasks,
   listRecentStudentActivityEvents,
   recordStudentActivityEvent,
   startStudySession,
@@ -83,6 +84,8 @@ type DailyPlanResult = {
   plan: Awaited<ReturnType<typeof generatePersonalPlan>>;
   generatedAt: Date;
   generated: boolean;
+  tasksAdded: number;
+  taskCount: number;
 };
 
 const dailyPlanLocks = new Map<number, Promise<DailyPlanResult>>();
@@ -100,15 +103,22 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): 
       });
     }
 
+    const startDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
     const latestDailyPlan = await getLatestAiPlanByPromptPrefix(userId, "SIE_DAILY_PLAN_V1:");
-    if (latestDailyPlan && !isDailyPlanStale(latestDailyPlan.createdAt)) {
+    const latestPlanDay = latestDailyPlan
+      ? new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date(latestDailyPlan.createdAt))
+      : null;
+    if (latestDailyPlan && latestPlanDay === startDate && !isDailyPlanStale(latestDailyPlan.createdAt)) {
       try {
         const saved = JSON.parse(latestDailyPlan.planJson) as Awaited<ReturnType<typeof generatePersonalPlan>>;
         if (saved && typeof saved.title === "string" && Array.isArray(saved.steps) && saved.steps.length > 0) {
+          const taskSync = await ensureDailyPlanTasks(userId, saved, startDate, dailyMinutes);
           return {
             plan: saved,
             generatedAt: new Date(latestDailyPlan.createdAt),
             generated: false,
+            tasksAdded: taskSync.addedCount,
+            taskCount: taskSync.taskCount,
           };
         }
       } catch {
@@ -116,7 +126,6 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): 
       }
     }
 
-    const startDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
     const plan = await generatePersonalPlan(
       userId,
       "SIE_DAILY_PLAN_V1: حلّل ملفي الدراسي كاملًا وحدد أهم ما يجب أن أذاكره الآن. أنشئ خطة يومية واقعية تبدأ اليوم، وتعالج التراكم حسب أولوية المنهج وصعوبة كل درس وحجمه والوقت المتاح.",
@@ -127,7 +136,14 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): 
         context: "هذه خطة التشغيل اليومية الافتراضية. استخدم بيانات ملف الدراسة والتراكم والتقدم ومواضع التدريس وسجل التقييمات المتاحة؛ لا تطلب من الطالب إعادة إدخال أي معلومة موجودة. اجعل أول خطوة واضحة وقابلة للبدء فورًا.",
       },
     );
-    return { plan, generatedAt: new Date(), generated: true };
+    const taskSync = await ensureDailyPlanTasks(userId, plan, startDate, dailyMinutes);
+    return {
+      plan,
+      generatedAt: new Date(),
+      generated: true,
+      tasksAdded: taskSync.addedCount,
+      taskCount: taskSync.taskCount,
+    };
   })();
 
   dailyPlanLocks.set(userId, task);
@@ -2010,6 +2026,8 @@ export const appRouter = router({
           await logStudentActivity(ctx.user.id, "plan.daily_generated", "ai_plan", null, "أنشأ المخطط الذكي خطة اليوم تلقائيًا", {
             title: result.plan.title,
             stepCount: result.plan.steps.length,
+            tasksAdded: result.tasksAdded,
+            taskCount: result.taskCount,
           });
         }
         return result;
