@@ -54,9 +54,14 @@ describe("Arabic course taxonomy", () => {
     });
   });
 
-  it("keeps all remaining textbook-only Arabic grammar, reading and text checkpoints", () => {
+  it("keeps all Arabic textbook grammar checkpoints, including the named application lessons", () => {
     const choices = getSIECheckpointChoices("ARB_G2_BAC");
-    expect(choices.map(choice => choice.nodeId)).toContain("ARB_U3_N2");
+    const nahw = getSIECheckpointBranches("ARB_G2_BAC").find(branch => branch.branchId === "ARB_NAHW");
+    expect(nahw?.choices).toHaveLength(8);
+    expect(nahw?.choices.map(choice => choice.nodeId)).toContain("ARB_U1_N3");
+    expect(nahw?.choices.map(choice => choice.nodeId)).toContain("ARB_U2_N3");
+    expect(nahw?.choices.map(choice => choice.title)).toContain("تطبيق على الأسماء الخمسة");
+    expect(nahw?.choices.map(choice => choice.title)).toContain("تطبيق على الممنوع من الصرف وعلل منعه");
     expect(choices.map(choice => choice.nodeId)).toContain("ARB_U3_L3");
     expect(new Set(choices.map(choice => choice.nodeId)).size).toBe(choices.length);
   });
