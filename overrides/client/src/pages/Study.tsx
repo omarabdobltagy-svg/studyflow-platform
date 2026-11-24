@@ -163,6 +163,8 @@ export default function Study() {
         ? (choice.unitNumber ? "الوحدة " + choice.unitNumber + " · " : "") + "الدرس " + choice.lessonNumber
         : choice.unitTitle || "نقطة " + (index + 1),
   }));
+  const currentBranchLastLessonId = branchChoices[branchChoices.length - 1]?.nodeId;
+  const isCurrentBranchComplete = Boolean(currentBranchLastLessonId && lastCompletedLessonId === currentBranchLastLessonId);
   const setLastCompletedLessonId = (value: string) => {
     setStudentFrontierDrafts(current => ({ ...current, [studentFrontierDraftKey]: value }));
   };
@@ -240,6 +242,12 @@ export default function Study() {
           delete next[studentFrontierDraftKey];
           return next;
         });
+        const lastLessonId = currentBranch?.choices[currentBranch.choices.length - 1]?.nodeId;
+        const branchCompleted = Boolean(lastLessonId && result.record?.lastCompletedLessonId === lastLessonId);
+        if (!branchCompleted) {
+          toast.success("تم حفظ تقدمك في " + (currentBranch?.branchTitle || "الفرع") + ". ستبقى هنا حتى تسجل إكمال آخر درس.");
+          return;
+        }
         const nextBranch = branches[branchIndex + 1];
         if (nextBranch) {
           setBranchId(nextBranch.branchId);
@@ -570,9 +578,12 @@ export default function Study() {
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
                     {branches.map((branch, index) => {
                       const savedPosition = branchProgressMap[branch.branchId]?.lastCompletedLessonId;
-                      const hasSavedPosition = typeof savedPosition === "string"
+                      const hasProgress = typeof savedPosition === "string"
                         && savedPosition !== "__UNKNOWN__"
-                        && (savedPosition === "__NOT_STARTED__" || branch.choices.some(choice => choice.nodeId === savedPosition));
+                        && savedPosition !== "__NOT_STARTED__"
+                        && branch.choices.some(choice => choice.nodeId === savedPosition);
+                      const isComplete = branch.choices.length > 0
+                        && savedPosition === branch.choices[branch.choices.length - 1]?.nodeId;
                       const active = branch.branchId === currentBranchId;
                       return (
                         <button key={branch.branchId} type="button" aria-pressed={active} aria-current={active ? "step" : undefined}
@@ -581,9 +592,9 @@ export default function Study() {
                             setLessonId("");
                           }}
                           className={"flex min-h-14 min-w-0 items-center gap-2 rounded-xl border px-3 py-2.5 text-right text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 " +
-                            (active ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary/20" : hasSavedPosition ? "border-emerald-500/25 bg-emerald-500/[0.05] text-foreground" : "border-border bg-background text-muted-foreground hover:border-primary/35 hover:text-foreground")}>
-                          <span className={"flex size-6 shrink-0 items-center justify-center rounded-full text-[10px] " + (hasSavedPosition ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>
-                            {hasSavedPosition ? <Check className="size-3.5" /> : index + 1}
+                            (active ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary/20" : isComplete ? "border-emerald-500/25 bg-emerald-500/[0.05] text-foreground" : hasProgress ? "border-primary/25 bg-primary/[0.035] text-foreground" : "border-border bg-background text-muted-foreground hover:border-primary/35 hover:text-foreground")}>
+                          <span className={"flex size-6 shrink-0 items-center justify-center rounded-full text-[10px] " + (isComplete ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>
+                            {isComplete ? <Check className="size-3.5" /> : index + 1}
                           </span>
                           <span className="min-w-0 break-words leading-5">{branch.branchTitle}</span>
                         </button>
@@ -686,7 +697,11 @@ export default function Study() {
                     <Button type="button" onClick={submitBranchProgress}
                       disabled={!hasStudentFrontierSelection || !courseMode || teacherSelectionDirty || saveBranchFrontier.isPending || !branchChoices.length || !currentBranchId}
                       className="w-full shrink-0 rounded-xl bg-primary sm:w-auto">
-                      {saveBranchFrontier.isPending ? "جارٍ حفظ الموضعين..." : branches[branchIndex + 1] ? "حفظ والانتقال للفرع التالي" : "حفظ وإكمال المادة"}
+                      {saveBranchFrontier.isPending
+                        ? "جارٍ حفظ التقدم..."
+                        : isCurrentBranchComplete
+                          ? branches[branchIndex + 1] ? "إكمال الفرع والانتقال للتالي" : "إكمال الفرع"
+                          : "حفظ التقدم"}
                     </Button>
                   </div>
                 </motion.div>
