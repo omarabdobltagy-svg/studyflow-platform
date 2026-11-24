@@ -5,6 +5,38 @@
  * Official school dates are refreshed per academic year; the current
  * 2026/27 dates below cover public, official-language and private schools.
  */
+/**
+ * General Egyptian pre-university structure under Education Law 139/1981
+ * as amended by Law 169/2025 (effective 14 August 2025).
+ * Baccalaureate-specific rules are intentionally not modeled here.
+ */
+export const EGYPT_GENERAL_EDUCATION_STRUCTURE = {
+  compulsoryYears: 12,
+  basicEducation: { primaryYears: 6, preparatoryYears: 3, totalYears: 9 },
+  generalSecondaryYears: 3,
+  technicalSecondaryYears: 3,
+  advancedTechnologicalYears: 5,
+  vocationalSecondaryYears: { minimum: 1, maximum: 2 },
+  law: "139/1981 amended by 169/2025",
+  effectiveDate: "2025-08-14",
+  scope: "general_secondary_and_technical_routes_only",
+} as const;
+
+/**
+ * Assessment and calendar facts for the 2026/27 school year. A monthly
+ * examination reflects what was taught, not every item printed in the
+ * full-year curriculum index. Assessment weights vary by grade and stage.
+ */
+export const EGYPT_GENERAL_ASSESSMENT_CONTEXT_2026_2027 = {
+  firstMonthlyTransferGradeExams: { start: "2026-10-18", end: "2026-10-22" },
+  firstMonthlyExamScope: "content taught from the start of the school year through the end of the first month",
+  monthlyAssessmentAppliesToTransferGrades: true,
+  prepCertificateExamScheduleIsGovernorateSpecific: true,
+  ongoingAssessmentIncludes: ["monthly exams", "weekly assessments", "classwork", "homework", "attendance and participation"],
+  endOfCurriculumDistributionWeekReservedForRevision: true,
+  note: "The listed assessment elements are not a universal fixed grading-weight formula for every grade.",
+} as const;
+
 export const EGYPT_SCHOOL_CALENDAR_2026_2027 = {
   academicYear: "2026/2027",
   schoolYearStart: "2026-09-12",
@@ -24,8 +56,10 @@ export const EGYPT_SCHOOL_CALENDAR_2026_2027 = {
   schoolYearEnd: "2027-06-24",
   generalSecondaryExamsStart: "2027-06-26",
   generalSecondaryExamsEnd: "2027-07-21",
-  firstTermWeeks: 17,
-  secondTermWeeks: 15,
+  firstTermActualSchoolDays: 93,
+  secondTermActualSchoolDays: 90,
+  totalActualSchoolDays: 183,
+  schoolWeeksAcrossYear: 39,
 } as const;
 
 export type EgyptSchoolPhase =
