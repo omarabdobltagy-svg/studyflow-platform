@@ -5,6 +5,7 @@ import {
   EGYPT_GENERAL_ASSESSMENT_CONTEXT_2026_2027,
   estimateTermCheckpointFrontier,
   getChoicesForCurrentSchoolPart,
+  getExpectedToDateChoices,
   getEgyptSchoolProgress,
 } from "./egypt-school-calendar";
 
@@ -48,6 +49,21 @@ describe("Egyptian public school calendar", () => {
     expect(october).toBeLessThan(6);
     expect(november).toBeGreaterThan(october);
     expect(november).toBeLessThan(12);
+  });
+
+  it("shows a small expected-to-date window instead of the full history course", () => {
+    const history = Array.from({ length: 24 }, (_, index) => ({
+      nodeId: "HIS_" + (index + 1),
+      sourceLabel: index < 12 ? "كتاب التاريخ - الجزء الأول" : "كتاب التاريخ - الجزء الثاني",
+      unitNumber: index < 12 ? Math.floor(index / 4) + 1 : Math.floor((index - 12) / 4) + 4,
+    }));
+    const october = getExpectedToDateChoices(history, "2026-10-18");
+    const november = getExpectedToDateChoices(history, "2026-11-24");
+    expect(october).toHaveLength(4);
+    expect(october.every(choice => choice.sourceLabel.includes("الجزء الأول"))).toBe(true);
+    expect(november).toHaveLength(8);
+    expect(november.length).toBeLessThan(12);
+    expect(getExpectedToDateChoices(history, "2027-03-01").every(choice => choice.sourceLabel.includes("الجزء الثاني"))).toBe(true);
   });
 
   it("switches from first-term to second-term curriculum without mixing both parts", () => {
