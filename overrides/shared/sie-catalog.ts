@@ -105,7 +105,7 @@ export const SIE_SUBJECTS: SIESubject[] = [
   { subjectId: "ACCOUNTING_G2_BAC_PENDING", nameAr: "المحاسبة", curriculumAvailable: false, note: "المادة ضمن اختيار المسار، لكن فهرسها غير محمّل في الحزمة." },
   { subjectId: "BUSINESS_G2_BAC_PENDING", nameAr: "إدارة الأعمال", curriculumAvailable: false, note: "المادة ضمن اختيار المسار، لكن فهرسها غير محمّل في الحزمة." },
   { subjectId: "PSYCHOLOGY_G2_BAC_PENDING", nameAr: "علم النفس", curriculumAvailable: false, note: "المادة ضمن اختيار المسار، لكن فهرسها غير محمّل في الحزمة." },
-  { subjectId: "SECOND_LANGUAGE_G2_BAC_PENDING", nameAr: "لغة أجنبية ثانية", curriculumAvailable: false, note: "المادة ضمن اختيار المسار، لكن فهرسها غير محمّل في الحزمة." },
+  { subjectId: "SECOND_LANGUAGE_G2_BAC_PENDING", nameAr: "اللغة الإيطالية (لغة أجنبية ثانية)", curriculumAvailable: true, note: "فهرس الجزء الأول موثق على مستوى وحدتين؛ نص الصفحات غير مفهرس بعد." },
   { subjectId: "ARB_G2_GENERAL", nameAr: "اللغة العربية", curriculumAvailable: false, note: "يلزم تحميل فهرس الثانوية العامة المنفصل." },
   { subjectId: "ENG1_G2_GENERAL", nameAr: "اللغة الأجنبية الأولى", curriculumAvailable: false, note: "يلزم تحميل فهرس الثانوية العامة المنفصل." },
   { subjectId: "HIS_G2_GENERAL", nameAr: "التاريخ", curriculumAvailable: false, note: "يلزم تحميل فهرس الثانوية العامة المنفصل." },
@@ -745,7 +745,9 @@ function getOfficialBranch(subjectId: string, choice: SIECheckpointChoice) {
       ? /^(ARB_U\d+)/
       : subjectId === "HIS_G2_BAC"
         ? /^(HIS_U\d+)/
-        : null;
+        : subjectId === "SECOND_LANGUAGE_G2_BAC_PENDING"
+          ? /^(ITA_U\d+)/
+          : null;
   const prefix = prefixPattern ? choice.nodeId.match(prefixPattern)?.[1] : null;
   return {
     branchId: prefix ?? `${subjectId}:${choice.unitTitle}`,
@@ -801,6 +803,10 @@ export const SIE_CHECKPOINT_CHOICES: Record<string, SIECheckpointChoice[]> = {
     { nodeId: "HIS_U3_L2", title: "حركات التحرر الوطني ضد الاحتلال البريطاني والإسباني في العالم العربي", unitTitle: "مصر وقضايا التحرر الوطني في الوطن العربي وإفريقيا" },
     { nodeId: "HIS_U3_L3", title: "مرتكزات الدور المصري إقليميًا ودوليًا", unitTitle: "مصر وقضايا التحرر الوطني في الوطن العربي وإفريقيا" },
     { nodeId: "HIS_U3_L4", title: "دور مصر في دعم حركات التحرر الوطني", unitTitle: "مصر وقضايا التحرر الوطني في الوطن العربي وإفريقيا" },
+  ],
+  SECOND_LANGUAGE_G2_BAC_PENDING: [
+    { nodeId: "ITA_U1_T1", title: "Dove abiti?", unitTitle: "Unità 1: Dove abiti?" },
+    { nodeId: "ITA_U2_T1", title: "Tempo libero", unitTitle: "Unità 2: Tempo libero" },
   ],
   PROG_AI_G2_BAC: [
     { nodeId: "PROG_1_1", title: "تطور تكنولوجيا المعلومات والتحول الاجتماعي", unitTitle: "تكنولوجيا المعلومات والمجتمع" },
