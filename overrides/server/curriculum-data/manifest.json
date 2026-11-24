@@ -1,50 +1,76 @@
 {
-  "schemaVersion": 1,
-  "ingestionDate": "2026-11-22",
+  "schemaVersion": 2,
+  "ingestionDate": "2026-11-24",
+  "scope": "first_part_first_term_only",
   "books": {
     "ARB_G2_BAC": {
       "title": "كتاب اللغة العربية - البكالوريا المصرية - الصف الثاني - الجزء الأول",
+      "part": 1,
+      "term": 1,
       "files": [
-        "arabic-part1.txt",
-        "arabic-part2.txt"
+        "arabic-part1.txt"
       ],
-      "coverage": "full_text_part_1",
+      "coverage": "full_text_indexed_with_quality_warnings",
+      "sourceType": "official_textbook",
+      "pageBodyIndexed": true
+    },
+    "ENG1_G2_BAC": {
+      "title": "English - Egyptian Baccalaureate - 2nd Year - Part 1",
+      "part": 1,
+      "term": 1,
+      "files": [],
+      "coverage": "table_of_contents_only",
+      "tocVerified": true,
+      "lessonCount": 20,
+      "pageBodyIndexed": false,
       "sourceType": "official_textbook"
     },
     "HIS_G2_BAC": {
       "title": "كتاب التاريخ الوطني - البكالوريا المصرية - الصف الثاني - الجزء الأول",
+      "part": 1,
+      "term": 1,
       "files": [
-        "history-part1.txt",
-        "history-part2.txt"
+        "history-part1.txt"
       ],
-      "coverage": "full_text_part_1",
-      "sourceType": "official_textbook"
+      "coverage": "full_text_indexed_with_quality_warnings",
+      "sourceType": "official_textbook",
+      "pageBodyIndexed": true
     },
     "PROG_AI_G2_BAC": {
-      "title": "كتاب البرمجة والذكاء الاصطناعي - البكالوريا المصرية - الصف الثاني - الجزء الثاني",
-      "files": [
-        "programming-part2.txt"
-      ],
-      "coverage": "full_text_part_2_chapters_5_7",
+      "title": "كتاب البرمجة والذكاء الاصطناعي - البكالوريا المصرية - الصف الثاني - الجزء الأول",
+      "part": 1,
+      "term": 1,
+      "files": [],
+      "coverage": "table_of_contents_and_page_map_only",
+      "tocVerified": true,
+      "chapterCount": 4,
+      "lessonCount": 14,
+      "pageBodyIndexed": false,
+      "manifestFile": "programming-part1-manifest.json",
       "sourceType": "official_textbook"
     },
-    "ENG1_G2_BAC": {
-      "title": "English - Egyptian Baccalaureate - 2nd Year - Part 1",
+    "SECOND_LANGUAGE_G2_BAC_PENDING": {
+      "title": "Lingua e Cultura italiana - Seconda lingua - Parte Prima",
+      "part": 1,
+      "term": 1,
       "files": [],
-      "coverage": "toc_only",
-      "tocPdfPages": [
-        10,
-        11
-      ],
+      "coverage": "unit_index_only",
+      "tocVerified": true,
+      "unitCount": 2,
+      "pageBodyIndexed": false,
+      "manifestFile": "italian-part1-manifest.json",
       "sourceType": "official_textbook"
     }
   },
+  "exclusions": [
+    "All Part 2 textbook files are excluded from the assistant and planner retrieval context.",
+    "No missing first-part textbook is represented as having full page-text retrieval."
+  ],
   "limitations": [
-    "Arabic, History, and Programming content is stored as page-labelled extracted text for retrieval.",
-    "English Part 1 is image-only in the provided PDF; only its table of contents has been verified. Do not claim that lesson body text is indexed.",
-    "Programming Part 1 was not among the newly available source PDFs; the catalog may contain its lesson titles but not its full text in this corpus.",
-    "The literary supplement 'من روائع الأدب العربي' is separate from the core Arabic textbook and is not included as an official syllabus source.",
-    "Arabic Part 2 and History Part 2 text fragments contain page markers and are indexed in the current retrieval pipeline, but the extracted text includes Unicode replacement characters (U+FFFD); quotations and exact wording must be checked against the original PDF.",
-    "Some extracted Arabic and History text contains Unicode replacement characters (U+FFFD). Retrieval reports a quality warning; exact quotations must be checked against the original PDF page."
+    "Arabic and History are indexed from first-part text files, but extraction quality warnings remain and exact quotations require checking the original PDF.",
+    "English first-part text body is not included; only its 5-unit/20-topic verified curriculum catalog is available.",
+    "Programming first-part lesson titles and PDF page map are available, but page body text and images are not indexed.",
+    "Italian first-part unit index is available; full page body is not indexed.",
+    "The current runtime cannot infer official lesson difficulty from a table of contents alone. When body text is absent, difficulty remains tentative until assessed by the student or supported by indexed pages."
   ]
 }
