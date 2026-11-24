@@ -533,6 +533,11 @@ function SearchableFrontierPicker({
 }) {
   const [query, setQuery] = useState("");
   const [showAllOptions, setShowAllOptions] = useState(false);
+  const optionsIdentity = options.length + "::" + (options[0]?.value ?? "") + "::" + (options[options.length - 1]?.value ?? "");
+  useEffect(() => {
+    setShowAllOptions(false);
+    setQuery("");
+  }, [optionsIdentity]);
   const normalizedQuery = normalizeFrontierSearch(query);
   const matchingOptions = normalizedQuery
     ? options.filter(option => normalizeFrontierSearch(option.label + " " + (option.description ?? "")).includes(normalizedQuery))
