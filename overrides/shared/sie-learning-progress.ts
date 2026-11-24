@@ -152,10 +152,9 @@ export function getNextLearningTarget(
   currentBranchId: string,
 ): LearningNavigationTarget | null {
   const branchIndex = branches.findIndex(branch => branch.branchId === currentBranchId);
+  if (branchIndex < 0) return null;
   const nextBranch = branches[branchIndex + 1];
-  if (branchIndex >= 0 && nextBranch) {
-    return { subjectId: currentSubjectId, branchId: nextBranch.branchId };
-  }
+  if (nextBranch) return { subjectId: currentSubjectId, branchId: nextBranch.branchId };
 
   const subjectIndex = subjectIds.indexOf(currentSubjectId);
   const nextSubjectId = subjectIds[subjectIndex + 1];
