@@ -217,14 +217,6 @@ export default function WorkspaceInteractionHub() {
         </AnimatePresence>
 
         <div className="sf-hub-launcher-row">
-          <motion.button type="button" className="sf-hub-search-button" onClick={openPalette} aria-label="فتح البحث والتنقل السريع"
-            title="بحث وتنقل سريع — Ctrl K" whileHover={reduceMotion ? undefined : { y: -3, scale: 1.04 }} whileTap={reduceMotion ? undefined : { scale: 0.94 }}>
-            <Search size={18} /><span>بحث</span><kbd>⌘ K</kbd>
-          </motion.button>
-          <motion.button type="button" className="sf-hub-timer-button" onClick={openFocus} aria-label="فتح مؤقت التركيز"
-            title="جلسة تركيز — Ctrl Shift F" whileHover={reduceMotion ? undefined : { y: -3, scale: 1.04 }} whileTap={reduceMotion ? undefined : { scale: 0.94 }}>
-            <Timer size={18} /><span>{isRunning ? formatTime(remaining) : "تركيز"}</span>{isRunning && <i aria-label="المؤقت يعمل" />}
-          </motion.button>
           <motion.button ref={launcherRef} type="button" className="sf-hub-launcher" onClick={() => setQuickOpen(value => !value)}
             aria-controls="sf-hub-quick-menu" aria-expanded={quickOpen} aria-pressed={quickOpen}
             aria-label={quickOpen ? "إغلاق أدوات StudyFlow" : "فتح أدوات StudyFlow"}
