@@ -26,7 +26,7 @@ function plannerProviderError(error: unknown): Error {
   const message = error instanceof Error ? error.message : String(error);
   const isNvidia = /NVIDIA LLM invoke failed/i.test(message);
   if (/NVIDIA_API_KEY is not configured/i.test(message)) {
-    return new Error("تعذر استخدام المخطط: رصيد أو مفتاح المزوّد الأساسي غير متاح، ومفتاح NVIDIA الاحتياطي غير مهيأ. أضف NVIDIA_API_KEY كمتغير سرّي على خدمة StudyFlow Preview 360 في Railway، وليس كمتغير Shared.");
+    return new Error("استجابة المزوّد الأساسي غير صالحة أو غير مكتملة، ومفتاح NVIDIA الاحتياطي غير مهيأ. أضف NVIDIA_API_KEY كمتغير سرّي على خدمة StudyFlow Preview 360 في Railway، وليس كمتغير Shared.");
   }
   if (/AI_API_KEY is not configured/i.test(message)) {
     return new Error("مفتاح المزوّد الأساسي غير مهيأ، كما أن مسار NVIDIA الاحتياطي غير متاح. راجع AI_API_KEY وNVIDIA_API_KEY في إعدادات خدمة التشغيل.");
@@ -308,7 +308,7 @@ export async function generatePersonalPlan(
     "كل خطوة يجب أن تحدد المادة والوحدة/الفرع والدرس وطريقة مذاكرته، لا عنوانًا عامًا.",
   ].join("\n");
   const user = "طلب الطالب أو قيوده الجديدة:\n" + prompt.slice(0, 1_200) + "\n\nبيانات الملف الدراسي الحالية:\n" + context;
-  let response;
+  let response: Awaited<ReturnType<typeof invokeLLM>>;
   const invokeCompact = async (
     provider: typeof invokeLLM,
     maxTokens: number,
@@ -324,17 +324,15 @@ export async function generatePersonalPlan(
   });
 
   const invokeNvidiaFallback = async () => {
-    console.warn("[StudyFlow planner] Primary provider billing/quota unavailable; switching to NVIDIA Nemotron 3 Ultra.");
-    // NVIDIA's hosted endpoint does not advertise structured output.
-    // Retain the full planning context and validate its JSON response with Zod.
+    console.warn("[StudyFlow planner] Switching to NVIDIA Nemotron 3 Ultra because the primary provider did not produce a usable plan.");
     return invokeCompact(invokeNvidiaLLM, 6_144, false, true);
   };
 
   const isBillingOrQuotaFailure = (error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
     return /AI_API_KEY is not configured/i.test(message)
-      || /(?:NVIDIA )?LLM invoke failed:\s*402\b/i.test(message)
-      || /insufficient[_\s-]?(?:credits?|quota|balance)|out of credits|not enough credits|credit balance.{0,40}(?:low|insufficient|exhausted)|quota.{0,30}(?:exceeded|exhausted)|openrouter_credits|payment required/i.test(message);
+      || /(?:NVIDIA )?LLM invoke failed:\\s*402\\b/i.test(message)
+      || /insufficient[_\\s-]?(?:credits?|quota|balance)|out of credits|not enough credits|credit balance.{0,40}(?:low|insufficient|exhausted)|quota.{0,30}(?:exceeded|exhausted)|openrouter_credits|payment required/i.test(message);
   };
 
   const isUnsupportedJsonMode = (error: unknown) => {
@@ -342,18 +340,48 @@ export async function generatePersonalPlan(
     return /response_format|json_object|structured output|unsupported|not support/i.test(message);
   };
 
+  const parseProviderResponse = (
+    providerResponse: Awaited<ReturnType<typeof invokeLLM>>,
+    providerLabel: "primary" | "NVIDIA"
+  ): GeneratedPlan => {
+    const firstChoice = providerResponse.choices?.[0];
+    const text = contentAsText(firstChoice?.message?.content ?? "");
+    const diagnostics = {
+      provider: providerLabel,
+      model: providerResponse.model || null,
+      finishReason: firstChoice?.finish_reason ?? null,
+      completionTokens: providerResponse.usage?.completion_tokens ?? null,
+      contentLength: text.length,
+    };
+
+    if (!text.trim()) {
+      console.error("[StudyFlow planner] Provider returned no final content:", diagnostics);
+      throw new Error("لم يصل محتوى نهائي من المزوّد (" + (diagnostics.finishReason || "unknown finish reason") + ").");
+    }
+
+    try {
+      return parseGeneratedPlan(text);
+    } catch (error) {
+      console.error("[StudyFlow planner] Provider output failed plan JSON/schema validation:", diagnostics);
+      throw error;
+    }
+  };
+
+  let providerUsed: "primary" | "NVIDIA" = "primary";
   try {
     try {
       response = await invokeCompact(invokeLLM, 1_400, false, true);
     } catch (primaryError) {
       if (isBillingOrQuotaFailure(primaryError)) {
         response = await invokeNvidiaFallback();
+        providerUsed = "NVIDIA";
       } else if (isUnsupportedJsonMode(primaryError)) {
         try {
           response = await invokeCompact(invokeLLM, 1_400, false, false);
         } catch (retryError) {
           if (isBillingOrQuotaFailure(retryError)) {
             response = await invokeNvidiaFallback();
+            providerUsed = "NVIDIA";
           } else {
             throw retryError;
           }
@@ -367,30 +395,36 @@ export async function generatePersonalPlan(
     throw plannerProviderError(error);
   }
 
-  const firstChoice = response.choices?.[0];
-  const result = firstChoice?.message?.content ?? "";
-  const text = contentAsText(result);
-  if (!text) {
-    console.error("[StudyFlow planner] Provider returned no final content:", {
-      model: response.model || null,
-      choiceCount: Array.isArray(response.choices) ? response.choices.length : 0,
-      finishReason: firstChoice?.finish_reason ?? null,
-      completionTokens: response.usage?.completion_tokens ?? null,
-    });
-    throw new Error("لم تصل استجابة من المخطط الذكي. حاول مرة أخرى.");
+  let plan: GeneratedPlan | undefined;
+  if (providerUsed === "primary") {
+    try {
+      plan = parseProviderResponse(response, "primary");
+    } catch (primaryOutputError) {
+      // HTTP 200 is not sufficient: some reasoning models consume the whole
+      // token budget and finish with length but provide no final content.
+      console.warn("[StudyFlow planner] Primary provider response is unusable; invoking NVIDIA fallback.", {
+        model: response.model || null,
+        finishReason: response.choices?.[0]?.finish_reason ?? null,
+        completionTokens: response.usage?.completion_tokens ?? null,
+        reason: primaryOutputError instanceof Error ? primaryOutputError.message.slice(0, 180) : "invalid primary output",
+      });
+      try {
+        response = await invokeNvidiaFallback();
+        providerUsed = "NVIDIA";
+      } catch (fallbackError) {
+        console.error("[StudyFlow planner] NVIDIA fallback request failed:", fallbackError instanceof Error ? fallbackError.message.slice(0, 700) : "Unknown NVIDIA error");
+        throw plannerProviderError(fallbackError);
+      }
+    }
   }
-  let plan: GeneratedPlan;
-  try {
-    plan = parseGeneratedPlan(text);
-  } catch (error) {
-    console.error("[StudyFlow planner] Plan JSON validation failed:", {
-      model: response.model || null,
-      finishReason: firstChoice?.finish_reason ?? null,
-      completionTokens: response.usage?.completion_tokens ?? null,
-      contentLength: text.length,
-    });
-    throw error;
+
+  if (providerUsed === "NVIDIA") {
+    plan = parseProviderResponse(response, "NVIDIA");
   }
+  if (!plan) {
+    throw new Error("تعذّر إنشاء خطة دراسية صالحة. لم يتم حفظ أي بيانات ناقصة.");
+  }
+
   const minutesByDay = new Map<string, number>();
   for (const step of plan.steps) {
     minutesByDay.set(step.day, (minutesByDay.get(step.day) ?? 0) + step.minutes);
