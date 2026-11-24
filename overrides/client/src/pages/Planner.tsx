@@ -5,6 +5,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
+import { buildLearningBacklogSummary } from "@/lib/learningBacklog";
 import { getSIECheckpointBranches, getSIESubject } from "@shared/sie-catalog";
 import { ArrowUpRight, BrainCircuit, CheckCircle2, Clock3, Lightbulb, ListTree, Loader2, Sparkles, Target, UserRound } from "lucide-react";
 import { FormEvent, useMemo, useState } from "react";
@@ -39,6 +40,15 @@ export default function Planner() {
   const [dailyMinutes, setDailyMinutes] = useState(120);
   const history = trpc.plans.list.useQuery();
   const profile = trpc.studentProfile.get.useQuery();
+  const learning = trpc.learning.get.useQuery();
+  const backlogBySubject = useMemo(
+    () => buildLearningBacklogSummary(
+      profile.data?.subjectIds ?? [],
+      (learning.data as any)?.gapByBranch ?? {},
+      profile.data?.backlog ?? {},
+    ),
+    [profile.data, learning.data],
+  );
   const generate = trpc.plans.generate.useMutation({ onSuccess: result => { setPlan(result); void utils.plans.list.invalidate(); toast.success("خطتك الشخصية جاهزة للمراجعة."); }, onError: error => toast.error(error.message) });
   const approve = trpc.plans.approve.useMutation({ onSuccess: (result, variables) => { setApprovedPlanKey(`${variables.plan.title}|${variables.plan.summary}`); setApprovalResult(result); setApprovalOpen(false); void utils.goals.list.invalidate(); void utils.tasks.list.invalidate(); void utils.routines.list.invalidate(); void utils.calendar.list.invalidate(); void utils.dashboard.summary.invalidate(); toast.success(result.routineId ? "تم اعتماد الخطة وإنشاء الروتين المرتبط بها." : "تم اعتماد الخطة وتوزيع مهامها على التقويم."); }, onError: error => toast.error(error.message) });
   const submit = (event: FormEvent) => {
@@ -55,22 +65,22 @@ export default function Planner() {
   const openApproval = () => { if (!plan || approvedPlanKey === planKey) return; setApprovalOpen(true); };
   return <DashboardLayout title="المخطط الذكي" description="اكتب ما تريد إنجازه، وسنحوّله إلى مسار واقعي يراعي ملفك الدراسي ووقتك وطاقة يومك." action={<div className="hidden items-center gap-2 rounded-2xl bg-secondary px-3 py-2 text-xs font-semibold text-primary sm:flex"><BrainCircuit className="size-4" />تخطيط متكيف</div>}>
     {history.isError && <QueryErrorNotice onRetry={() => void history.refetch()} label="تعذّر تحميل خططك المحفوظة." />}
-    {profile.isError && <QueryErrorNotice onRetry={() => void profile.refetch()} label="تعذّر تحميل ملفك الدراسي؛ يمكنك إنشاء خطة عامة، لكن لن تُخصّص حتى يعود الملف." />}
+    {profile.isError && <QueryErrorNotice onRetry={() => void profile.refetch()} label="تعذّر تحميل ملفك الدراسي؛ لا يمكن إنشاء خطة مخصصة قبل عودة بيانات الملف." />}
+    {learning.isError && <QueryErrorNotice onRetry={() => void learning.refetch()} label="تعذّر تحميل مواضع الفروع؛ أعد المحاولة حتى يستطيع المخطط قراءة التراكم المحسوب." />}
     <section className="sf-feature-hero relative mb-6 overflow-hidden rounded-[1.55rem] p-6 text-primary-foreground shadow-2xl sm:p-8"><div className="onboarding-orb onboarding-orb-one" /><div className="onboarding-orb onboarding-orb-two" /><div className="relative grid gap-6 lg:grid-cols-[1.1fr_.9fr]"><div><p className="eyebrow text-primary-foreground/65">من الوصف إلى مسار عملي</p><h2 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">خطة مبنية على المنهج، لا على تخمين عدد المهام.</h2><p className="mt-3 max-w-xl text-sm leading-7 text-primary-foreground/75">يربط المخطط الدروس بتقدمك وموضع المدرس وتقييمك للصعوبة، ويستخدم نصوص الكتب المتاحة فعليًا. ثم يقسم الدروس الكبيرة إلى جلسات فهم وتطبيق واسترجاع، ويرتبها حسب الأولوية والوقت.</p><div className="mt-5 flex flex-wrap gap-2">{["فجوة كل وحدة مستقلة", "أولوية وصعوبة وحجم الدرس", "موافقتك قبل إنشاء المهام"].map(item => <span key={item} className="rounded-full border border-white/12 bg-white/8 px-3 py-1.5 text-xs text-primary-foreground/75">{item}</span>)}</div></div><div className="rounded-2xl border border-white/12 bg-white/8 p-4 backdrop-blur-sm"><div className="flex items-center gap-3"><span className="flex size-10 items-center justify-center rounded-xl bg-white/12"><Sparkles className="size-5 text-violet-200" /></span><div><p className="font-semibold">مبدأ التخطيط</p><p className="mt-1 text-xs leading-5 text-primary-foreground/65">جلسة تبدأ بها اليوم أفضل من خطة لا تفتحها.</p></div></div>{profile.data && <div className="mt-4 flex items-center gap-2 rounded-xl bg-black/10 p-3 text-xs text-primary-foreground/75"><UserRound className="size-4" />{profile.data.studentName} · {profile.data.track}</div>}<a href="/study" className="mt-3 flex items-center justify-between rounded-xl border border-white/15 bg-white/8 px-3 py-3 text-sm font-semibold text-primary-foreground hover:bg-white/12"><span>تحديث موضع المدرس وتقدمك</span><ArrowUpRight className="size-4" /></a></div></div></section>
     {profile.data && <section className="app-card mb-6 p-5 sm:p-6">
-       <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><p className="eyebrow">ملف الدراسة والتراكم</p><h2 className="mt-1 font-bold">ملخص حالة المواد</h2><p className="mt-1 text-xs leading-6 text-muted-foreground">عدد التراكم المسجل ونطاق الدروس المتاحة لكل مادة، من غير تفاصيل متابعة مزدحمة.</p></div><div className="flex items-center gap-2"><span className="rounded-xl bg-secondary px-3 py-2 text-xs font-semibold text-primary">{profile.data.subjectIds.length} مواد</span><a href="/study" className="inline-flex items-center gap-1 rounded-xl border border-border px-3 py-2 text-xs font-semibold hover:border-primary/40 hover:text-primary">تحديث المواضع <ArrowUpRight className="size-3.5" /></a></div></div>
+       <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><p className="eyebrow">ملف الدراسة والتراكم</p><h2 className="mt-1 font-bold">الفجوات المحسوبة من مواضعك</h2><p className="mt-1 text-xs leading-6 text-muted-foreground">المخطط يقرأ موضعك وموضع المدرس أو المجموعة داخل كل فرع، ولا يحوّل الفروع غير المكتملة إلى صفر.</p></div><div className="flex items-center gap-2"><span className="rounded-xl bg-secondary px-3 py-2 text-xs font-semibold text-primary">{profile.data.subjectIds.length} مواد</span><a href="/study" className="inline-flex items-center gap-1 rounded-xl border border-border px-3 py-2 text-xs font-semibold hover:border-primary/40 hover:text-primary">تحديث المواضع <ArrowUpRight className="size-3.5" /></a></div></div>
        <div className="grid gap-3 md:grid-cols-2">
          {profile.data.subjectIds.map((subjectId: string) => {
            const branches = getSIECheckpointBranches(subjectId).map(branch => subjectId === "PROG_AI_G2_BAC"
              ? { ...branch, choices: branch.choices.filter((choice: any) => /^PROG_[1-4]_/.test(choice.nodeId)) }
              : branch).filter(branch => branch.choices.length > 0);
-           const rawBacklog = profile.data?.backlog?.[subjectId] ?? profile.data?.backlog?.[getSIESubject(subjectId)?.nameAr || ""] ?? 0;
-           const backlog = Math.max(0, Number(rawBacklog) || 0);
+           const backlog = backlogBySubject.find(item => item.subjectId === subjectId);
            const knownLessons = branches.reduce((total, branch) => total + branch.choices.length, 0);
-           return <article key={subjectId} className="rounded-2xl border border-border/70 bg-muted/20 p-4">
+           return <article key={subjectId} className="sf-planner-subject-card rounded-2xl border border-border/70 bg-muted/20 p-4">
              <div className="flex items-start justify-between gap-3">
-               <div><h3 className="font-bold">{getSIESubject(subjectId)?.nameAr || subjectId}</h3><p className="mt-1 text-xs text-muted-foreground">حالة التراكم المسجلة في ملف الدراسة</p></div>
-               <span className="rounded-lg bg-background px-2.5 py-1 text-xs font-semibold text-primary">{backlog > 0 ? `${backlog} متراكم` : "لا يوجد تراكم مسجل"}</span>
+               <div><h3 className="font-bold">{getSIESubject(subjectId)?.nameAr || subjectId}</h3><p className="mt-1 text-xs text-muted-foreground">{backlog?.coverageLabel || "لم تُحسب فجوة هذا الفرع بعد"}</p></div>
+               <span className="rounded-lg bg-background px-2.5 py-1 text-xs font-semibold text-primary">{backlog?.countLabel || "غير محسوب"}</span>
              </div>
              <div className="mt-3 flex items-center justify-between gap-3 border-t border-border/60 pt-3 text-xs text-muted-foreground">
                <span>نطاق المنهج المفهرس</span><b className="text-foreground">{knownLessons} درسًا / موضوعًا</b>
