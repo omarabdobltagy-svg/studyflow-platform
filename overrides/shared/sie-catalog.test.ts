@@ -9,7 +9,7 @@ import {
 describe("official checkpoint catalog structure", () => {
   it("separates Arabic reading/texts from grammar branches", () => {
     const branches = getSIECheckpointBranches("ARB_G2_BAC");
-    expect(branches.map(branch => branch.branchId)).toEqual(["ARB_READING", "ARB_NAHW"]);
+    expect(branches.map(branch => branch.branchId)).toEqual(["ARB_NAHW", "ARB_READING"]);
     expect(branches.find(branch => branch.branchId === "ARB_NAHW")?.choices.map(choice => choice.title)).toEqual([
       "الأسماء الخمسة",
       "تابع الأسماء الخمسة",

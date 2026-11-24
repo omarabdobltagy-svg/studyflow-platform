@@ -691,7 +691,7 @@ export function validateSIESubjectSelection(systemId: SIESystemId, trackId: stri
 
 
 /** نقطة منهج رسمية مع فرع مستقل داخل بنية الكتاب. */
-export type SIECheckpointChoice = {
+export export type SIECheckpointChoice = {
   nodeId: string;
   title: string;
   unitTitle: string;

@@ -355,7 +355,7 @@ export default function Study() {
           </div>
         </div>
         {selectedLesson && <div className="mx-5 mb-5 flex flex-wrap items-center gap-2 rounded-xl border border-primary/15 bg-primary/5 p-3 sm:mx-6">
-          <span className="text-xs font-bold text-foreground">{selectedLesson.lessonType === "topic" ? `Lesson ${selectedLesson.lessonNumber}` : `الدرس ${selectedLesson.lessonNumber}`}</span>
+          <span className="text-xs font-bold text-foreground">{selectedLesson.lessonType === "topic" ? `Lesson ${selectedLesson.lessonNumber}` : selectedLesson.lessonType === "grammar" ? `قاعدة نحوية ${selectedLesson.lessonNumber}` : `الدرس ${selectedLesson.lessonNumber}`}</span>
           <span className="text-xs text-foreground">{selectedLesson.title}</span>
           <span className="rounded-md bg-background px-2 py-1 text-[10px] font-semibold text-primary">{getSIECheckpointChoiceTypeLabel(selectedLesson)}</span>
           <span className="text-[10px] text-muted-foreground">{selectedLesson.branchTitle}</span>
