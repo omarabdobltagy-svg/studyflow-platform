@@ -193,6 +193,40 @@ describe("planner completed-curriculum guard", () => {
     ]);
   });
 
+  it("falls back from an unconfirmed unknown subject record to a valid legacy teacher frontier", () => {
+    const legacyProfile = {
+      subjectIds: ["ARB_G2_BAC"],
+      selection: {
+        teacherFrontiers: { ARB_G2_BAC: "ARB_U2_N1" },
+        learningCourseProgress: {
+          ARB_G2_BAC: {
+            lastCompletedLessonId: "__UNKNOWN__",
+            branches: {
+              ARB_NAHW: {
+                lastCompletedLessonId: "__UNKNOWN__",
+              },
+            },
+          },
+        },
+      },
+    } as any;
+    const plan = {
+      ...validPlan,
+      steps: [
+        step("الممنوع من الصرف وعلل منعه", "ARB_U2_N1"),
+        step("تابع الممنوع من الصرف وعلل منعه", "ARB_U2_N2"),
+        step("العطف", "ARB_U3_N2"),
+      ],
+    };
+
+    const guarded = applyPlannerProgressGuard(plan as any, legacyProfile);
+
+    expect(guarded.steps.map(item => item.curriculumNodeIds)).toEqual([
+      ["ARB_U2_N2"],
+      ["ARB_U3_N2"],
+    ]);
+  });
+
   it("does not replace an explicitly confirmed unknown branch position with legacy subject data", () => {
     const confirmedUnknownProfile = {
       subjectIds: ["ARB_G2_BAC"],
