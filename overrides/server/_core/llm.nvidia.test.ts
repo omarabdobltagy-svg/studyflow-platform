@@ -42,8 +42,8 @@ describe("NVIDIA Nemotron provider", () => {
     const body = JSON.parse(String(init.body));
     expect(body.model).toBe("nvidia/nemotron-3-ultra-550b-a55b");
     expect(body.max_tokens).toBe(200);
-    expect(body.reasoning_effort).toBe("medium");
-    expect(body.reasoning_budget).toBe(1_024);
+    expect(body.reasoning_effort).toBe("none");
+    expect(body.chat_template_kwargs).toEqual({ force_nonempty_content: true });
     expect(body.stream).toBe(false);
     expect(body.response_format).toEqual({ type: "json_object" });
   });
