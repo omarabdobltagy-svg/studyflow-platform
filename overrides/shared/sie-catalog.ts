@@ -116,7 +116,7 @@ export const SIE_SUBJECTS: SIESubject[] = [
   { subjectId: "PSYCHOLOGY_G2_GENERAL", nameAr: "علم النفس", curriculumAvailable: false, note: "يلزم تحميل فهرس الثانوية العامة المنفصل." },
 ];
 
-const bacCore = ["ARB_G2_BAC", "ENG1_G2_BAC", "HIS_G2_BAC"];
+const bacCore = ["ARB_G2_BAC", "ENG1_G2_BAC", "SECOND_LANGUAGE_G2_BAC_PENDING", "HIS_G2_BAC"];
 export const SIE_TRACKS: SIETrack[] = [
   {
     trackId: "BAC_MED_LIFE", systemId: BAC_SYSTEM, nameAr: "الطب وعلوم الحياة",
