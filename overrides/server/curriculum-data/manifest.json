@@ -69,6 +69,54 @@
     "Italian has two unit names only until its original Part 1 PDF is provided.",
     "Arabic and History page ranges derive from the official tables of contents; exact page body content is not stored."
   ],
+  "generalEgyptianSchoolSystem": {
+    "law": "Education Law 139/1981 as amended by Law 169/2025",
+    "effectiveDate": "2025-08-14",
+    "compulsoryYears": 12,
+    "basicEducation": {
+      "primaryYears": 6,
+      "preparatoryYears": 3,
+      "totalYears": 9
+    },
+    "generalSecondaryYears": 3,
+    "technicalSecondaryYears": 3,
+    "advancedTechnologicalYears": 5,
+    "vocationalSecondaryYears": {
+      "minimum": 1,
+      "maximum": 2
+    },
+    "academicYear2026_2027": {
+      "publicSchoolStart": "2026-09-12",
+      "schoolYearEnd": "2027-06-24",
+      "schoolWeeks": 39,
+      "actualSchoolDays": 183,
+      "firstTermActualSchoolDays": 93,
+      "secondTermActualSchoolDays": 90,
+      "firstTermTransferExams": ["2027-01-09", "2027-01-14"],
+      "preparatoryCertificateFirstTermExams": ["2027-01-16", "2027-01-21"],
+      "midyearBreak": ["2027-01-23", "2027-02-04"],
+      "secondTermStart": "2027-02-06",
+      "secondTermTransferExams": ["2027-05-22", "2027-05-27"],
+      "preparatoryCertificateSecondTermExams": ["2027-05-29", "2027-06-03"],
+      "generalSecondaryCertificateExams": ["2027-06-26", "2027-07-21"],
+      "technicalDiplomaExams": ["2027-05-29", "2027-06-10"]
+    },
+    "assessment": {
+      "firstMonthlyTransferGradeExams": ["2026-10-18", "2026-10-22"],
+      "firstMonthlyExamScope": "Only material taught from the start of the school year through the end of the first month",
+      "prepCertificateExamsAreGovernorateSpecific": true,
+      "ongoingAssessmentComponents": ["monthly exams", "weekly assessments", "classwork", "homework", "attendance and participation"],
+      "lastCurriculumDistributionWeekReservedForRevision": true,
+      "gradeWeightsAreNotUniversalAcrossAllStages": true
+    },
+    "productRules": [
+      "A full-year index is not evidence that a teacher has already taught every listed lesson.",
+      "A monthly assessment covers taught content for that assessment period, not the full-year syllabus.",
+      "Teacher progress must be reported or verified separately; date-based pacing is only an estimate.",
+      "Preparatory certificate schedules must be treated as governorate-specific rather than nationwide-identical."
+    ],
+    "sourceDomains": ["sis.gov.eg", "cairo.gov.eg", "eastlaws.com"]
+  },
   "curriculumCatalogCoverage": {
     "coverage": "full_year_lesson_metadata",
     "academicYear": "2026/2027",
@@ -97,7 +145,7 @@
           "Grammar",
           "GRE"
         ],
-        "note": "The three teacher-course streams accept teacher-specific custom lessons independently of the 40 textbook topics and 10 story chapters."
+        "note": "Vocabulary and Grammar are separate progress views grouped by the 10 textbook units; GRE is a supplementary skills track, not part of the Ministry textbook. Student-entered out-of-index lesson creation is disabled."
       },
       "HIS_G2_BAC": {
         "parts": [
