@@ -452,6 +452,17 @@ export async function generatePersonalPlan(
     throw new Error("تعذّر إنشاء خطة دراسية صالحة. لم يتم حفظ أي بيانات ناقصة.");
   }
 
+  // A model may suggest a page number that was not actually retrieved from an indexed
+  // book page. Only allow page references backed by the retrieved first-part passages.
+  const verifiedSourcePages = new Set(textbookRetrieval.passages.map(passage => passage.pdfPage));
+  plan = {
+    ...plan,
+    steps: plan.steps.map(step => ({
+      ...step,
+      sourcePages: step.sourcePages.filter(page => verifiedSourcePages.has(page)),
+    })),
+  };
+
   // Reassign sequential tasks to real daily capacity rather than rejecting an otherwise valid plan
   // because the model grouped too many items under the same display-day label.
   let scheduleDay = 1;
