@@ -179,13 +179,14 @@ function normalizePlannerLessonText(value: string): string {
   return value
     .normalize("NFKC")
     .toLocaleLowerCase("ar")
-    .replace(/[\\u064B-\\u065F\\u0670\\u0640]/g, "")
+    .replace(/[ؐ-ٰٟـ]/g, "")
     .replace(/[أإآٱ]/g, "ا")
     .replace(/ى/g, "ي")
     .replace(/ة/g, "ه")
-    .replace(/[^\\p{L}\\p{N}]+/gu, " ")
+    .replace(/[^A-Za-z0-9ء-ي٠-٩]+/g, " ")
+    .replace(/  +/g, " ")
     .trim()
-    .split(/\\s+/)
+    .split(" ")
     .filter(token => token && !stopWords.has(token))
     .join(" ");
 }
@@ -198,7 +199,7 @@ function mentionsCompletedLesson(text: string, lessonTitle: string): boolean {
   for (let size = 2; size <= words.length; size += 1) {
     for (let start = 0; start + size <= words.length; start += 1) {
       const phrase = words.slice(start, start + size).join(" ");
-      if (phrase.replace(/\\s/g, "").length >= 9 && haystack.includes(" " + phrase + " ")) {
+      if (phrase.split(" ").join("").length >= 9 && haystack.includes(" " + phrase + " ")) {
         return true;
       }
     }
