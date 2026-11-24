@@ -175,9 +175,7 @@ describe("automatic curriculum advancement", () => {
   });
 
   it("does not advance from an unknown branch or an unselected subject", () => {
-    expect(getNextLearningTarget(subjects, "ARB_G2_BAC", branches, "missing")).toEqual({
-      subjectId: "ENG1_G2_BAC", branchId: null,
-    });
+    expect(getNextLearningTarget(subjects, "ARB_G2_BAC", branches, "missing")).toBeNull();
     expect(getNextLearningTarget(subjects, "not-selected", branches, "unit-a")).toBeNull();
   });
 });
