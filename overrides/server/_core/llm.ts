@@ -222,6 +222,51 @@ const assertApiKey = (apiKey: string, variableName: string) => {
   if (!apiKey) throw new Error(variableName + " is not configured");
 };
 
+const normalizeResponseFormat = ({
+  responseFormat,
+  response_format,
+  outputSchema,
+  output_schema,
+}: {
+  responseFormat?: ResponseFormat;
+  response_format?: ResponseFormat;
+  outputSchema?: OutputSchema;
+  output_schema?: OutputSchema;
+}):
+  | { type: "json_schema"; json_schema: JsonSchema }
+  | { type: "text" }
+  | { type: "json_object" }
+  | undefined => {
+  const explicitFormat = responseFormat || response_format;
+  if (explicitFormat) {
+    if (
+      explicitFormat.type === "json_schema" &&
+      !explicitFormat.json_schema?.schema
+    ) {
+      throw new Error(
+        "responseFormat json_schema requires a defined schema object"
+      );
+    }
+    return explicitFormat;
+  }
+
+  const schema = outputSchema || output_schema;
+  if (!schema) return undefined;
+
+  if (!schema.name || !schema.schema) {
+    throw new Error("outputSchema requires both name and schema");
+  }
+
+  return {
+    type: "json_schema",
+    json_schema: {
+      name: schema.name,
+      schema: schema.schema,
+      ...(typeof schema.strict === "boolean" ? { strict: schema.strict } : {}),
+    },
+  };
+};
+
 const RETRY_MAX_RETRIES = 4;
 const RETRY_BASE_DELAY_MS = 500;
 const RETRY_MAX_DELAY_MS = 30_000;
