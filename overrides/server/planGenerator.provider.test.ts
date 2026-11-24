@@ -92,6 +92,85 @@ describe("smart planner NVIDIA fallback", () => {
     expect(mocks.saveAiPlan).toHaveBeenCalledOnce();
   });
 
+  it("switches to NVIDIA when the primary returns HTTP 200 but exhausts its output budget", async () => {
+    mocks.invokeLLM.mockResolvedValue({
+      model: "deepseek/deepseek-v4.1-flash-1017",
+      choices: [{
+        index: 0,
+        message: { role: "assistant", content: "" },
+        finish_reason: "length",
+      }],
+      usage: { prompt_tokens: 2_100, completion_tokens: 1_400, total_tokens: 3_500 },
+    });
+    mocks.invokeNvidiaLLM.mockResolvedValue(validResponse);
+
+    await expect(generatePersonalPlan(
+      7,
+      "أحتاج خطة لمراجعة التاريخ وحل الأسئلة خلال ثلاثة أيام.",
+      false,
+      { dailyMinutes: 120 }
+    )).resolves.toMatchObject({ title: validPlan.title });
+
+    expect(mocks.invokeLLM).toHaveBeenCalledOnce();
+    expect(mocks.invokeNvidiaLLM).toHaveBeenCalledOnce();
+    expect(mocks.saveAiPlan).toHaveBeenCalledOnce();
+  });
+
+  it("switches to NVIDIA when primary HTTP 200 content is invalid JSON", async () => {
+    mocks.invokeLLM.mockResolvedValue({
+      model: "deepseek/test-model",
+      choices: [{
+        index: 0,
+        message: { role: "assistant", content: "{\\"title\\":\\"unfinished\\" " },
+        finish_reason: "length",
+      }],
+      usage: { prompt_tokens: 500, completion_tokens: 1_400, total_tokens: 1_900 },
+    });
+    mocks.invokeNvidiaLLM.mockResolvedValue(validResponse);
+
+    await expect(generatePersonalPlan(
+      7,
+      "أحتاج خطة لمراجعة التاريخ وحل الأسئلة خلال ثلاثة أيام.",
+      false
+    )).resolves.toMatchObject({ title: validPlan.title });
+
+    expect(mocks.invokeNvidiaLLM).toHaveBeenCalledOnce();
+    expect(mocks.saveAiPlan).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the primary provider when it returns a complete valid plan", async () => {
+    mocks.invokeLLM.mockResolvedValue(validResponse);
+
+    await expect(generatePersonalPlan(
+      7,
+      "أحتاج خطة لمراجعة التاريخ وحل الأسئلة خلال ثلاثة أيام.",
+      false
+    )).resolves.toMatchObject({ title: validPlan.title });
+
+    expect(mocks.invokeNvidiaLLM).not.toHaveBeenCalled();
+    expect(mocks.saveAiPlan).toHaveBeenCalledOnce();
+  });
+
+  it("does not save a plan when NVIDIA returns empty content", async () => {
+    mocks.invokeLLM.mockResolvedValue({
+      model: "deepseek/test-model",
+      choices: [{ index: 0, message: { role: "assistant", content: "" }, finish_reason: "length" }],
+    });
+    mocks.invokeNvidiaLLM.mockResolvedValue({
+      model: "nvidia/nemotron-3-ultra-550b-a55b",
+      choices: [{ index: 0, message: { role: "assistant", content: "" }, finish_reason: "length" }],
+    });
+
+    await expect(generatePersonalPlan(
+      7,
+      "أحتاج خطة لمراجعة التاريخ وحل الأسئلة خلال ثلاثة أيام.",
+      false
+    )).rejects.toThrow("لم يصل محتوى نهائي من المزوّد");
+
+    expect(mocks.invokeNvidiaLLM).toHaveBeenCalledOnce();
+    expect(mocks.saveAiPlan).not.toHaveBeenCalled();
+  });
+
   it("switches to NVIDIA for an explicit insufficient-quota 429 response", async () => {
     mocks.invokeLLM.mockRejectedValue(new Error(
       'LLM invoke failed: 429 Too Many Requests – {"error":{"code":"insufficient_quota"}}'
