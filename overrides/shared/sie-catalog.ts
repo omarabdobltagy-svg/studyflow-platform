@@ -435,7 +435,7 @@ export const SIE_TEACHERS: SIETeacher[] = [
     mappedCurriculumNodeIds: [],
     evidenceLabel: "محتوى تاريخ عام منشور",
     confidenceLabel: "ثقة متوسطة – منشور عام",
-    evidenceNote: "المصدر العام لا يثبت تسلسل الكورس المدفوع أو تقدم الطالب.",
+    evidenceNote: "المصدر العام لا يثبت موضع المحتوى المدفوع أو تقدم الطالب.",
     systemCourseVerification: { EG_BACCALAUREATE: "public_2027_course_evidence_found", EG_GENERAL_SECONDARY: "not_verified_for_2026_2027" },
     sourceId: "SRC_ABDELHADY",
   },
@@ -964,13 +964,13 @@ export function getSIECheckpointChoiceTypeLabel(choice: SIECheckpointChoice): st
 }
 
 export function getSIECheckpointChoiceDisplayLabel(choice: SIECheckpointChoice): string {
-  const lessonNumber = choice.courseSequenceNumber
-    ? `الدرس ${choice.courseSequenceNumber} من 21`
-    : choice.lessonNumber
-      ? choice.lessonType === "topic" ? `Lesson ${choice.lessonNumber}`
-        : choice.lessonType === "grammar" ? `قاعدة نحوية ${choice.lessonNumber}`
-          : `الدرس ${choice.lessonNumber}`
-      : "";
+  // The internal teacher-course ordering is metadata only; never show it as a
+  // second numbering system beside the official textbook lesson number.
+  const lessonNumber = choice.lessonNumber
+    ? choice.lessonType === "topic" ? `Lesson ${choice.lessonNumber}`
+      : choice.lessonType === "grammar" ? `قاعدة نحوية ${choice.lessonNumber}`
+        : `الدرس ${choice.lessonNumber}`
+    : "";
   const unit = choice.unitNumber
     ? choice.lessonType === "topic" ? `Unit ${choice.unitNumber}: ${choice.unitTitle}` : `الوحدة ${choice.unitNumber}: ${choice.unitTitle}`
     : choice.unitTitle;
