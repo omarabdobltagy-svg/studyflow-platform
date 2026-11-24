@@ -71,7 +71,9 @@ describe("Arabic course taxonomy", () => {
 describe("English curriculum selector metadata", () => {
   it("provides all 20 English topics with numbering, type, unit and official A/B section", () => {
     const choices = getSIECheckpointChoices("ENG1_G2_BAC");
-    expect(choices).toHaveLength(20);
+    expect(choices).toHaveLength(50);
+    expect(choices.filter(choice => choice.nodeId.startsWith("ENG_U") && choice.nodeId.includes("_SEC_"))).toHaveLength(40);
+    expect(choices.filter(choice => choice.nodeId.startsWith("ENG_LOST_WORLD_CH"))).toHaveLength(10);
     expect(choices.find(choice => choice.nodeId === "ENG_U1_SEC_A_T1")).toMatchObject({
       lessonNumber: "1.1",
       unitNumber: 1,
@@ -80,6 +82,9 @@ describe("English curriculum selector metadata", () => {
       branchTitle: "Unit 1 · Section A — Social Reflection",
     });
     expect(choices.find(choice => choice.nodeId === "ENG_U5_SEC_B_T2")?.lessonNumber).toBe("5.4");
+    expect(choices.find(choice => choice.nodeId === "ENG_U6_SEC_A_T1")?.lessonNumber).toBe("6.1");
+    expect(choices.find(choice => choice.nodeId === "ENG_U10_SEC_B_T2")?.lessonNumber).toBe("10.4");
+    expect(choices.find(choice => choice.nodeId === "ENG_U8_SEC_B_T1")?.branchTitle).toContain("Building Future Professionals");
   });
 
   it("shows lesson number, name, type and section in the visible English label", () => {
@@ -98,7 +103,13 @@ describe("subject curriculum layouts", () => {
     const branches = getSIECheckpointBranches("HIS_G2_BAC");
     expect(branches).toHaveLength(1);
     expect(branches[0].branchTitle).toBe("المقرر بالكامل");
-    expect(branches[0].choices).toHaveLength(12);
+    expect(branches[0].choices).toHaveLength(24);
+    expect(branches[0].choices[12]).toMatchObject({
+      nodeId: "HIS_U4_L1",
+      lessonNumber: "4.1",
+      unitNumber: 4,
+    });
+    expect(branches[0].choices[23].nodeId).toBe("HIS_U6_L4");
   });
 
   it("keeps all seven Programming chapters in one complete linear list", () => {
@@ -106,15 +117,23 @@ describe("subject curriculum layouts", () => {
     expect(branches).toHaveLength(1);
     expect(branches[0].branchTitle).toBe("المقرر بالكامل");
     expect(branches[0].choices).toHaveLength(23);
+    expect(branches[0].choices[13]).toMatchObject({
+      nodeId: "PROG_5_1",
+      unitNumber: 5,
+      lessonNumber: "5.1",
+      sourceLabel: "كتاب البرمجة - الجزء 2",
+    });
     expect(branches[0].choices[22].nodeId).toBe("PROG_7_3");
   });
 
   it("models English Vocabulary, Grammar and GRE separately from all textbook topics", () => {
     const branches = getSIECheckpointBranches("ENG1_G2_BAC");
     expect(branches.map(branch => branch.branchId)).toEqual([
-      "ENG_VOCABULARY", "ENG_GRAMMAR", "ENG_GRE", "ENG_TEXTBOOK",
+      "ENG_VOCABULARY", "ENG_GRAMMAR", "ENG_GRE", "ENG_TEXTBOOK", "ENG_STORY",
     ]);
-    expect(branches.find(branch => branch.branchId === "ENG_TEXTBOOK")?.choices).toHaveLength(20);
+    expect(branches.find(branch => branch.branchId === "ENG_TEXTBOOK")?.choices).toHaveLength(40);
+    expect(branches.find(branch => branch.branchId === "ENG_STORY")?.choices).toHaveLength(10);
+    expect(branches.find(branch => branch.branchId === "ENG_STORY")?.choices[0].title).toBe("A Dream of Adventure");
   });
 
   it("gives subjects without a loaded index one editable linear curriculum path", () => {
@@ -131,7 +150,7 @@ describe("subject curriculum layouts", () => {
   it("does not truncate a teacher's available course index to the first five lessons", () => {
     const teacher = getSIETeachersForSubject("ENG1_G2_BAC", "EG_BACCALAUREATE")[0];
     expect(teacher).toBeDefined();
-    expect(getSIECheckpointChoicesForTeacher(teacher.teacherId)).toHaveLength(20);
+    expect(getSIECheckpointChoicesForTeacher(teacher.teacherId)).toHaveLength(50);
   });
 });
 
@@ -141,7 +160,17 @@ describe("Arabic named reading texts", () => {
     const titles = reading?.choices.map(choice => choice.title) ?? [];
     expect(titles).toContain("العلم بين القانون والضمير");
     expect(titles).toContain("التقنية وصناعة الرأي العام");
+    expect(titles).toContain("المرأة وبناء الدولة الحديثة");
+    expect(titles).toContain("الثقافة أداة لا حلية");
     expect(titles).not.toContain("شرح زاوية الرؤية");
     expect(titles).not.toContain("أنواع الخطاب في النص المعلوماتي");
+  });
+
+  it("keeps Part 2 named poems in the Texts path rather than Reading skills", () => {
+    const texts = getSIECheckpointBranches("ARB_G2_BAC").find(branch => branch.branchId === "ARB_TEXTS");
+    const titles = texts?.choices.map(choice => choice.title) ?? [];
+    expect(titles).toContain("أهواك يا وطني");
+    expect(titles).toContain("دعوة إلى السلام");
+    expect(titles).toContain("غُربة وحنين");
   });
 });
