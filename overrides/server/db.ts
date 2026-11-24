@@ -1394,6 +1394,14 @@ export async function getLatestAiPlanByPromptPrefix(userId: number, prefix: stri
   return rows[0] ?? null;
 }
 
+export async function updateAiPlanPrompt(userId: number, planId: number, prompt: string) {
+  const db = await requireDb();
+  const result = await db.update(aiPlans)
+    .set({ prompt })
+    .where(and(eq(aiPlans.id, planId), eq(aiPlans.userId, userId)));
+  if (result[0].affectedRows === 0) throw new Error("خطة الدراسة المطلوب تحديثها غير موجودة.");
+}
+
 export async function recordStudentActivityEvent(input: {
   userId: number;
   eventType: string;
