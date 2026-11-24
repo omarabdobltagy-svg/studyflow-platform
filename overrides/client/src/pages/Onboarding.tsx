@@ -442,15 +442,10 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                       </button>
                     </div>
                   </div>
-                  {form.courseModes[currentSetupSubjectId] === "center" && (
+
+                  {Boolean(form.courseModes[currentSetupSubjectId]) && (
                     <div className="rounded-2xl border border-border bg-card p-4 sm:p-5">
-                      <p className="font-bold">اسم مدرس السنتر (اختياري)</p><p className="mt-1 text-xs leading-6 text-muted-foreground">اكتب اسم المدرس الذي تحضر معه. بيانات السنتر والفصل ستظهر لاحقًا لهذه المادة فقط.</p>
-                      <Input value={form.customTeacherNames[currentSetupSubjectId] ?? ""} onChange={event => setForm(current => ({ ...current, customTeacherNames: { ...current.customTeacherNames, [currentSetupSubjectId]: event.target.value } }))} placeholder="اسم مدرس السنتر" maxLength={120} className="mt-3 h-12 rounded-xl bg-background" />
-                    </div>
-                  )}
-                  {form.courseModes[currentSetupSubjectId] === "online" && (
-                    <div className="rounded-2xl border border-border bg-card p-4 sm:p-5">
-                      <div className="mb-4"><p className="font-bold">مين المدرس اللي بتتابعه أونلاين؟</p><p className="mt-1 text-xs leading-6 text-muted-foreground">اختار من الأسماء المتاحة، أو اكتب اسم مدرسك لو مش موجود في القائمة.</p></div>
+                      <div className="mb-4"><p className="font-bold">{form.courseModes[currentSetupSubjectId] === "center" ? "مين مدرس السنتر اللي بتتابعه؟" : "مين المدرس اللي بتتابعه أونلاين؟"}</p><p className="mt-1 text-xs leading-6 text-muted-foreground">اختار المدرس من القائمة، أو اكتب اسمه لو مش موجود. اختيار المدرس مستقل عن تسجيل موضع شرحه.</p></div>
                       {setupTeacherOptions.length ? (
                         <div className="grid gap-2 sm:grid-cols-2">
                           {setupTeacherOptions.map(teacher => {
@@ -461,8 +456,8 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                           })}
                         </div>
                       ) : <p className="rounded-xl border border-dashed border-border bg-muted/20 p-3 text-xs leading-6 text-muted-foreground">لا توجد أسماء موثقة لهذه المادة في القائمة حاليًا. اكتب اسم المدرس يدويًا أو اتركه فارغًا.</p>}
-                      <label className="mt-4 block text-sm font-semibold">مدرس آخر (اختياري)
-                        <Input value={form.customTeacherNames[currentSetupSubjectId] ?? ""} onChange={event => setForm(current => ({ ...current, customTeacherNames: { ...current.customTeacherNames, [currentSetupSubjectId]: event.target.value }, teacherSelections: { ...current.teacherSelections, [currentSetupSubjectId]: event.target.value.trim() ? SKIP_TEACHER : current.teacherSelections[currentSetupSubjectId] ?? "" } }))} placeholder="اكتب اسم المدرس لو مش موجود فوق" maxLength={120} className="mt-2 h-12 rounded-xl bg-background" />
+                      <label className="mt-4 block text-sm font-semibold">{form.courseModes[currentSetupSubjectId] === "center" ? "مدرس السنتر (اختياري)" : "مدرس آخر (اختياري)"}
+                        <Input value={form.customTeacherNames[currentSetupSubjectId] ?? ""} onChange={event => setForm(current => ({ ...current, customTeacherNames: { ...current.customTeacherNames, [currentSetupSubjectId]: event.target.value }, teacherSelections: { ...current.teacherSelections, [currentSetupSubjectId]: event.target.value.trim() ? SKIP_TEACHER : current.teacherSelections[currentSetupSubjectId] ?? "" } }))} placeholder={form.courseModes[currentSetupSubjectId] === "center" ? "اكتب اسم مدرس السنتر لو مش موجود فوق" : "اكتب اسم المدرس لو مش موجود فوق"} maxLength={120} className="mt-2 h-12 rounded-xl bg-background" />
                       </label>
                       <button type="button" onClick={() => setForm(current => ({ ...current, teacherSelections: { ...current.teacherSelections, [currentSetupSubjectId]: SKIP_TEACHER }, customTeacherNames: { ...current.customTeacherNames, [currentSetupSubjectId]: "" } }))} className="mt-3 rounded-xl border border-border px-3 py-2 text-xs font-semibold text-muted-foreground hover:border-primary/30">لم أحدد مدرسًا للمادة دي</button>
                     </div>
