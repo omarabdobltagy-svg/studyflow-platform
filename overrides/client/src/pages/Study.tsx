@@ -114,14 +114,12 @@ export default function Study() {
   const hasSchoolFrontierSelection = schoolClassFrontierId !== "__UNKNOWN__"
     || Boolean(currentBranchProgress.schoolFrontierConfirmedAt)
     || Object.prototype.hasOwnProperty.call(schoolFrontierDrafts, studentFrontierDraftKey);
-  const branchChoiceOptions = branchChoices.map((choice, index) => ({
+  const branchChoiceOptions = branchChoices.map(choice => ({
     value: choice.nodeId,
     label: choice.title,
-    description: choice.courseSequenceNumber
-      ? "تسلسل الكورس " + choice.courseSequenceNumber
-      : choice.lessonNumber
-        ? (choice.unitNumber ? "الوحدة " + choice.unitNumber + " · " : "") + "الدرس " + choice.lessonNumber
-        : choice.unitTitle || "نقطة " + (index + 1),
+    description: choice.lessonNumber
+      ? (choice.unitNumber ? "الوحدة " + choice.unitNumber + " · " : "") + "الدرس " + choice.lessonNumber
+      : choice.unitTitle || "",
   }));
   const currentBranchLastLessonId = branchChoices[branchChoices.length - 1]?.nodeId;
   const isCurrentBranchComplete = Boolean(currentBranchLastLessonId && lastCompletedLessonId === currentBranchLastLessonId);
@@ -136,6 +134,10 @@ export default function Study() {
     teacherTeachingFrontierId,
     schoolClassFrontierId: courseMode === "center" ? schoolClassFrontierId : "__UNKNOWN__",
   });
+  const nextStudentLesson = typeof currentGap.studentPosition === "number"
+    ? branchChoices[currentGap.studentPosition]
+    : undefined;
+  const isStudentDoneWithBranch = currentGap.studentPosition === branchChoices.length && branchChoices.length > 0;
 
 
   useEffect(() => {
@@ -155,7 +157,7 @@ export default function Study() {
       await Promise.all([utils.studentProfile.get.invalidate(), utils.learning.get.invalidate()]);
       const clearDraft = (drafts: Record<string, string>) => { const next = { ...drafts }; delete next[studentFrontierDraftKey]; return next; };
       setStudentFrontierDrafts(clearDraft); setTeacherFrontierDrafts(clearDraft); setSchoolFrontierDrafts(clearDraft);
-      if (result.savedStudent) {
+      if (result.savedStudent && result.learningGap?.studentPosition === branchChoices.length && branchChoices.length > 0) {
         const nextTarget = getNextLearningTarget(subjects, subjectId, branches, currentBranchId);
         if (nextTarget) {
           setSubjectId(nextTarget.subjectId);
@@ -163,10 +165,17 @@ export default function Study() {
           const nextLabel = nextTarget.branchId
             ? branches.find(item => item.branchId === nextTarget.branchId)?.branchTitle
             : getSIESubject(nextTarget.subjectId)?.nameAr;
-          toast.success("تمت مزامنة موضعك مع موضع المدرس؛ انتقلنا تلقائيًا إلى " + (nextLabel || "الموضع التالي") + ".");
+          toast.success("أنهيت موضوعات هذا الفرع؛ انتقلنا إلى " + (nextLabel || "الموضع التالي") + ".");
           return;
         }
-        toast.success("تمت مزامنة موضعك مع موضع المدرس، واكتملت الفروع المحددة.");
+        toast.success("أنهيت كل نقاط المنهج المفهرسة في مسارك الحالي.");
+      } else if (result.savedStudent) {
+        const nextLesson = typeof result.learningGap?.studentPosition === "number"
+          ? branchChoices[result.learningGap.studentPosition]
+          : undefined;
+        toast.success(nextLesson
+          ? "تم حفظ آخر موضوع أنهيته. التالي عليك: " + nextLesson.title + "."
+          : "تم حفظ آخر موضوع أنهيته في هذا الفرع.");
       } else if (result.savedTeacher) toast.success("تم حفظ موضع المدرس لهذا الفرع.");
       else toast.success("تم حفظ التقدم.");
     },
@@ -390,12 +399,16 @@ export default function Study() {
                       </div>
                       <div className="mt-4 grid gap-6 md:grid-cols-2">
                         <div className="min-w-0 rounded-xl border border-border/70 bg-background/70 p-3">
-                          <SearchableFrontierPicker label="موضعك أنت في هذا الفرع" hint="آخر درس أنهيته بنفسك."
+                          <SearchableFrontierPicker label="آخر موضوع أنهيته" hint="اختيارك هنا يحدد آخر موضوع اكتمل. الموضوع الذي يليه يظل ضمن المتراكم عليك."
                             value={hasStudentFrontierSelection ? lastCompletedLessonId : ""} onChange={setLastCompletedLessonId} disabled={saveBranchFrontier.isPending}
                             onPrevious={() => setLastCompletedLessonId(stepFrontier(lastCompletedLessonId, "previous"))}
                             onNext={() => setLastCompletedLessonId(stepFrontier(lastCompletedLessonId || "__UNKNOWN__", "next"))}
                             previousDisabled={!canMovePrevious(lastCompletedLessonId)} nextDisabled={!canMoveNext(lastCompletedLessonId)}
                             options={[{ value: "__NOT_STARTED__", label: "لم أبدأ هذا الفرع" },{ value: "__UNKNOWN__", label: "موضعي غير معروف" },...branchChoiceOptions]} />
+                          {hasStudentFrontierSelection && currentGap.studentPosition !== null && <div className="mt-3 rounded-xl border border-primary/15 bg-primary/[0.045] px-3 py-2.5">
+                            <p className="text-[10px] font-semibold text-muted-foreground">الخطوة التالية عليك</p>
+                            <p className="mt-1 text-sm font-bold text-foreground">{nextStudentLesson?.title || (isStudentDoneWithBranch ? "أنهيت كل الموضوعات المفهرسة في هذا الفرع" : "لم يتم تحديد الموضوع التالي")}</p>
+                          </div>}
                         </div>
                         <div className="min-w-0 rounded-xl border border-border/70 bg-background/70 p-3">
                           <SearchableFrontierPicker label="موضع المدرس في هذا الفرع"
@@ -519,10 +532,13 @@ function SearchableFrontierPicker({
   previousDisabled?: boolean; nextDisabled?: boolean;
 }) {
   const [query, setQuery] = useState("");
+  const [showAllOptions, setShowAllOptions] = useState(false);
   const normalizedQuery = normalizeFrontierSearch(query);
-  const visibleOptions = normalizedQuery
+  const matchingOptions = normalizedQuery
     ? options.filter(option => normalizeFrontierSearch(option.label + " " + (option.description ?? "")).includes(normalizedQuery))
     : options;
+  const visibleOptions = normalizedQuery || showAllOptions ? matchingOptions : matchingOptions.slice(0, 6);
+  const hiddenOptionCount = Math.max(0, options.length - 6);
   return (
     <div className="min-w-0 space-y-2.5">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -551,6 +567,8 @@ function SearchableFrontierPicker({
           </button>;
         })}
       </div>
+      {!normalizedQuery && hiddenOptionCount > 0 && !showAllOptions && <Button type="button" variant="outline" size="sm" className="w-full rounded-xl text-xs" onClick={() => setShowAllOptions(true)}>إظهار باقي الخيارات ({hiddenOptionCount})</Button>}
+      {!normalizedQuery && showAllOptions && hiddenOptionCount > 0 && <Button type="button" variant="ghost" size="sm" className="w-full rounded-xl text-xs" onClick={() => setShowAllOptions(false)}>عرض خيارات أقل</Button>}
       {!visibleOptions.length && <p className="rounded-xl bg-muted/30 p-3 text-center text-xs text-muted-foreground">لا توجد نتيجة مطابقة في فهرس هذا الفرع.</p>}
       {value && <button type="button" disabled={disabled} onClick={() => onChange(options.some(option => option.value === "__UNKNOWN__") ? "__UNKNOWN__" : "")}
         className="text-xs font-semibold text-muted-foreground underline underline-offset-4 disabled:opacity-50">إلغاء الاختيار</button>}
