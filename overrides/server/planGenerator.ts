@@ -328,9 +328,10 @@ export async function generatePersonalPlan(
   userId: number,
   prompt: string,
   includeStudentProfile = true,
-  constraints: { dailyMinutes?: number; startDate?: string } = {}
+  constraints: { dailyMinutes?: number; startDate?: string; context?: string } = {}
 ): Promise<GeneratedPlan> {
   const dailyMinutes = Math.max(20, Math.min(600, Math.trunc(constraints.dailyMinutes ?? 120)));
+  const additionalContext = String(constraints.context ?? "").trim().slice(0, 3_000);
   const profile = includeStudentProfile ? await getStudentProfile(userId) : null;
   const curriculumTitles = profile
     ? (profile.subjectIds || []).flatMap(subjectId =>
@@ -349,6 +350,8 @@ export async function generatePersonalPlan(
     : "لم يطلب المستخدم تخصيص الخطة بالملف الدراسي.").slice(0, 13_000);
   const system = [
     "أنت محرك التخطيط الدراسي داخل StudyFlow، ولست مساعد دردشة عام.",
+    "جودة الخطة لا تعتمد على قوة صياغة الطالب أو طول طلبه. استخرج النية حتى لو كان الطلب قصيرًا أو عاميًا أو غير مرتب، ثم استعن تلقائيًا بكل بيانات الملف الدراسي والمنهج والتراكم والتقدم والتقييمات والسياق المتاح لبناء أفضل خطة عملية ممكنة.",
+    "لا تطلب من الطالب إعادة كتابة بيانات موجودة في ملفه، ولا تنتظر منه هندسة برومبت احترافي. افترض أقل قدر ممكن، واذكر الافتراضات المؤثرة فقط داخل الملخص، ولا تخترع بيانات ناقصة.",
     "حلّل فجوة المنهج المحسوبة تلقائيًا لكل فرع مستقل داخل المادة، وموضع الطالب وموضع التدريس المرجعي داخل الفرع نفسه، وتقدم SQ3R ونتائج التقييم وصعوبة الدروس؛ ثم ابنِ خطة عملية متوازنة.",
     "مصدر المرجع له أولوية صارمة داخل كل فرع: استخدم موضع المدرس إذا كان معروفًا، وإلا استخدم موضع الفصل في المدرسة داخل الفرع نفسه. موضع الطالب يظل مستقلًا عن الاثنين. لا تقارن أو تجمع فجوات فروع متوازية، ولا تستخدم رقم التراكم القديم كأنه فجوة مؤكدة.",
     "لا تخلط بين آخر محتوى عام للمدرس، محتوى الكورس المدفوع، موضع ما شرحه المدرس، موضع المدرسة، وما أتمه الطالب. لا تخترع أرقام محاضرات أو أسماء دروس أو مواضع غير مسجلة.",
@@ -368,7 +371,13 @@ export async function generatePersonalPlan(
     "أخرج JSON صحيحًا فقط بالعربية: title, summary, durationLabel, steps (3-30 عنصرًا، وكل عنصر فيه day,title,detail,minutes,category,priority,difficulty,lessonSize,difficultyBasis,difficultyConfidence,printedPageRange,sourcePages)، habits (0-5 فيها title,cue), reviewQuestion. printedPageRange نطاق صفحات الكتاب المطبوع [البداية، النهاية] عند توافره فقط؛ sourcePages مراجع PDF المسترجعة فعليًا فقط وتكون [] في غير ذلك. اجعل الملخص واضحًا والتفاصيل مركزة.",
     "كل خطوة يجب أن تحدد المادة والوحدة/الفرع والدرس وطريقة مذاكرته، لا عنوانًا عامًا.",
   ].join("\n");
-  const user = "طلب الطالب أو قيوده الجديدة:\n" + prompt.slice(0, 1_200) + "\n\nبيانات الملف الدراسي الحالية:\n" + context;
+  const user = [
+    "طلب الطالب أو هدفه الحالي:",
+    prompt.slice(0, 1_200),
+    additionalContext ? "\\nالسياق الإضافي الذي يجب دمجه في القرار:\\n" + additionalContext : "",
+    "\\nبيانات الملف الدراسي الحالية:",
+    context,
+  ].join("\\n");
   let response: Awaited<ReturnType<typeof invokeLLM>>;
   const invokeCompact = async (
     provider: typeof invokeLLM,
