@@ -193,7 +193,6 @@ export const appRouter = router({
         if (!registrationRateLimiter.consume(ip, Date.now())) throw new TRPCError({ code: "FORBIDDEN", message: "وصلت إلى عدد محاولات التسجيل المسموح. حاول بعد 15 دقيقة." });
         const username = input.username.trim().toLowerCase();
         if (await getUserByUsername(username)) {
-          bucket.count += 1;
           throw new TRPCError({ code: "CONFLICT", message: "اسم المستخدم مستخدم بالفعل. اختر اسمًا آخر." });
         }
         let user;
