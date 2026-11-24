@@ -276,6 +276,76 @@ export const appRouter = router({
 
   studentProfile: router({
     get: protectedProcedure.query(({ ctx }) => getStudentProfile(ctx.user.id)),
+    updateTeacherSelection: protectedProcedure
+      .input(z.object({
+        subjectId: z.string().trim().min(1).max(80),
+        courseMode: z.enum(["center", "online"]),
+        teacherId: z.string().trim().min(1).max(80).nullable().optional(),
+        teacherName: z.string().trim().max(120).default(""),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const profile = await getStudentProfile(ctx.user.id);
+        if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "أكمل ملفك الدراسي أولًا." });
+        if (!profile.subjectIds.includes(input.subjectId)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "هذه المادة ليست ضمن مواد ملفك الدراسي." });
+        }
+
+        const selection = (profile.selection ?? {}) as Record<string, any>;
+        const systemId = selection.systemId === "EG_GENERAL_SECONDARY" || profile.educationSystem === "general_secondary"
+          ? "EG_GENERAL_SECONDARY"
+          : "EG_BACCALAUREATE";
+        const teacherId = input.teacherId && input.teacherId !== "__SKIP__" ? input.teacherId : null;
+        const teacher = teacherId ? getSIETeacher(teacherId) : undefined;
+        if (teacherId) {
+          const eligible = getSIETeachersForSubject(input.subjectId, systemId);
+          if (!teacher || !teacher.subjectIds.includes(input.subjectId) || !eligible.some(item => item.teacherId === teacherId)) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "اختيار المدرس لا يطابق المادة أو النظام الدراسي." });
+          }
+        }
+
+        const teacherChoices = { ...((selection.teacherChoices ?? {}) as Record<string, string>), [input.subjectId]: teacherId ?? "__SKIP__" };
+        const courseModes = { ...((selection.courseModes ?? {}) as Record<string, "center" | "online">), [input.subjectId]: input.courseMode };
+        const customTeacherNames = { ...((selection.customTeacherNames ?? {}) as Record<string, string>) };
+        if (!teacher && input.teacherName.trim()) customTeacherNames[input.subjectId] = input.teacherName.trim();
+        else delete customTeacherNames[input.subjectId];
+
+        const teacherProgressState = { ...((selection.teacherProgressState ?? {}) as Record<string, Record<string, any>>) };
+        const previousTeacherState = teacherProgressState[input.subjectId] ?? {};
+        const sameTeacher = previousTeacherState.teacherId === (teacherId ?? "__SKIP__");
+        teacherProgressState[input.subjectId] = {
+          ...(sameTeacher ? previousTeacherState : {}),
+          teacherId: teacherId ?? "__SKIP__",
+          teacherSourceId: teacher?.sourceId ?? null,
+          teacherSourceUrl: teacher?.profileUrl ?? null,
+          coursePresence: teacher?.coursePresence ?? "unknown",
+          courseVerifiedFor: teacher?.courseVerifiedFor ?? null,
+          teacherPublicContentFrontier: teacher?.latestPublicCheckpoint ?? null,
+          teacherPublicContentFrontierDate: teacher?.latestCheckpointDate ?? null,
+          teacherPublicContentSegments: teacher?.publicSegments ?? [],
+          teacherPaidCourseFrontier: teacher?.paidCourseCatalogFrontier ?? null,
+          teacherPaidCoursePositionStatus: teacher?.paidCoursePositionStatus ?? "unknown",
+          studentAttendedFrontier: sameTeacher ? previousTeacherState.studentAttendedFrontier ?? null : null,
+          status: sameTeacher ? previousTeacherState.status ?? (teacher ? "unknown" : "not_selected") : teacher ? "unknown" : "not_selected",
+          evidenceSource: sameTeacher ? previousTeacherState.evidenceSource ?? "student_selection_state" : "student_selection_state",
+          confidence: sameTeacher ? previousTeacherState.confidence ?? "student_reported" : "unknown",
+          selectedAt: new Date().toISOString(),
+        };
+
+        await updateStudentProfileSelection(ctx.user.id, {
+          ...selection,
+          teacherChoices,
+          courseModes,
+          customTeacherNames,
+          teacherProgressState,
+        });
+        await logStudentActivity(ctx.user.id, "student.teacher_selection_updated", "subject", input.subjectId, "تم حفظ اختيار المدرس وطريقة الدراسة", {
+          subjectId: input.subjectId,
+          teacherId,
+          courseMode: input.courseMode,
+          customTeacherName: Boolean(!teacher && input.teacherName.trim()),
+        });
+        return { success: true, teacherId, courseMode: input.courseMode };
+      }),
     updateTeacherProgress: protectedProcedure
       .input(z.object({ subjectId: z.string().trim().min(1).max(80), checkpoint: z.string().trim().min(1).max(120) }))
       .mutation(async ({ ctx, input }) => {
