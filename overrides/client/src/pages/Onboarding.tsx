@@ -367,7 +367,9 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                     <p className="mt-1 text-xs leading-6 text-muted-foreground">
                       {track.fixedSubjectIds
                         ? "المواد التالية مرتبطة بالشعبة المختارة، ولا تحتاج إلى إدخالها واحدةً واحدة."
-                        : "المواد الأساسية تُضاف تلقائيًا. اختر مادة تخصصية واحدة من الاختيارات المتاحة لمسارك."}
+                        : firstElectiveGroup.length === 0
+                          ? "المواد المطلوبة لمسارك محددة مسبقًا، ولا توجد مادة تخصصية أخرى للاختيار."
+                          : "المواد الأساسية تُضاف تلقائيًا. اختر مادة تخصصية واحدة من الاختيارات المتاحة لمسارك."}
                     </p>
                   </div>
 
@@ -385,7 +387,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                   ) : (
                     <>
                       <div>
-                        <p className="mb-3 text-sm font-semibold">المواد الأساسية المضافة تلقائيًا</p>
+                        <p className="mb-3 text-sm font-semibold">{track.trackId === "BAC_ARTS_HUM" ? "المواد الأساسية والمادة التخصصية المقررة" : "المواد الأساسية المضافة تلقائيًا"}</p>
                         <div className="grid gap-3 sm:grid-cols-3">
                           {track.requiredSubjectIds.map(id => {
                             const subject = getSIESubject(id);
@@ -393,7 +395,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                             return <div key={id} className="rounded-2xl border border-primary/20 bg-secondary/35 p-4">
                               <Check className="mb-2 size-4 text-primary" />
                               <p className="font-semibold">{subject.nameAr}</p>
-                              <p className="mt-1 text-xs text-muted-foreground">مادة أساسية</p>
+                              <p className="mt-1 text-xs text-muted-foreground">{id === "PSYCHOLOGY_G2_BAC_PENDING" ? "المادة التخصصية المقررة" : "مادة أساسية"}</p>
                             </div>;
                           })}
                         </div>
