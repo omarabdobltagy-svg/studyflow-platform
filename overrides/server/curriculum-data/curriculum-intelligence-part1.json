@@ -1,0 +1,781 @@
+{
+  "schemaVersion": 1,
+  "scope": {
+    "academicYear": "2026/2027",
+    "grade": "الصف الثاني الثانوي",
+    "part": 1,
+    "term": 1,
+    "sourcePolicy": "derived_curriculum_metadata_only",
+    "notice": "هذه بيانات تخطيط مشتقة من فهارس الكتب الأصلية، وليست نصوصًا منقولة من صفحات الكتب. تقدير الصعوبة استرشادي وليس حكمًا رسميًا من الوزارة. تقييم الطالب ونتائج الاختبارات يتقدمان على التقدير."
+  },
+  "sizingRules": {
+    "small": "حتى 6 صفحات مطبوعة",
+    "medium": "7 إلى 14 صفحة مطبوعة",
+    "large": "15 صفحة مطبوعة فأكثر",
+    "basis": "نطاق الصفحات من فهرس الكتاب؛ لا يقيس كثافة كل صفحة، لذلك يبقى تقدير حجم أوليًا."
+  },
+  "priorityRules": [
+    "موضع المدرس داخل الفرع نفسه مقابل آخر درس أنجزه الطالب",
+    "موعد الاختبار والتكليفات",
+    "تقييم الطالب للصعوبة ونتائج استرجاعه واختباراته",
+    "حجم الدرس والمتطلبات السابقة",
+    "لا تعني كثرة الصفحات تلقائيًا أن الدرس صعب."
+  ],
+  "subjects": {
+    "ARB_G2_BAC": {
+      "title": "اللغة العربية",
+      "book": "كتاب اللغة العربية – الجزء الأول",
+      "coverage": "toc_and_lesson_page_ranges",
+      "confidence": "medium",
+      "units": [
+        {
+          "id": "ARB_U1",
+          "title": "العلم والضمير",
+          "lessons": [
+            {
+              "id": "ARB_U1_L1",
+              "title": "العلم بين القانون والضمير",
+              "pages": [
+                8,
+                25
+              ],
+              "pageCount": 18,
+              "size": "large",
+              "difficulty": "hard",
+              "difficultyConfidence": "low",
+              "basis": "قضية فكرية تتطلب الموازنة بين المعرفة والمسؤولية والاستدلال.",
+              "strategy": "قراءة تحليلية ثم تحديد الأطروحة والحجج والأدلة، يليها تدريب تطبيقي."
+            },
+            {
+              "id": "ARB_U1_L2",
+              "title": "الخلق جوهر الفضيلة",
+              "pages": [
+                26,
+                40
+              ],
+              "pageCount": 15,
+              "size": "large",
+              "difficulty": "medium",
+              "difficultyConfidence": "low",
+              "basis": "مفاهيم قيمية تحتاج فهمًا وربطًا بالأمثلة.",
+              "strategy": "فهم المفاهيم واستخراج الأفكار ثم أسئلة تطبيقية."
+            },
+            {
+              "id": "ARB_U1_L3",
+              "title": "العلم نور – نص شعري",
+              "pages": [
+                41,
+                55
+              ],
+              "pageCount": 15,
+              "size": "large",
+              "difficulty": "medium",
+              "difficultyConfidence": "low",
+              "basis": "نص شعري يجمع الفهم والتذوق والتحليل اللغوي.",
+              "strategy": "قراءة النص وتقسيم الأفكار ثم الصور والمعاني والتدريب."
+            }
+          ]
+        },
+        {
+          "id": "ARB_U2",
+          "title": "سلطان الكلمة الرقمية",
+          "lessons": [
+            {
+              "id": "ARB_U2_L1",
+              "title": "التقنية وصناعة الرأي العام",
+              "pages": [
+                56,
+                72
+              ],
+              "pageCount": 17,
+              "size": "large",
+              "difficulty": "hard",
+              "difficultyConfidence": "low",
+              "basis": "تحليل تأثير الإعلام والتقنية والعلاقات بين السبب والنتيجة.",
+              "strategy": "خريطة مفاهيم ثم تحليل أمثلة وأسئلة استدلال."
+            },
+            {
+              "id": "ARB_U2_L2",
+              "title": "بين الذوق والعقل",
+              "pages": [
+                73,
+                89
+              ],
+              "pageCount": 17,
+              "size": "large",
+              "difficulty": "medium",
+              "difficultyConfidence": "low",
+              "basis": "مقارنة مفاهيم وأحكام وتبريرها.",
+              "strategy": "جدول مقارنة ثم صياغة رأي مدعوم بالأدلة."
+            },
+            {
+              "id": "ARB_U2_L3",
+              "title": "أثر الكلمة وحفظ اللسان – نص شعري",
+              "pages": [
+                90,
+                105
+              ],
+              "pageCount": 16,
+              "size": "large",
+              "difficulty": "medium",
+              "difficultyConfidence": "low",
+              "basis": "نص شعري يتطلب فهم المعنى والتذوق والاستشهاد.",
+              "strategy": "تقسيم النص إلى أفكار ثم تفسير الصور واللغة وحل تدريبات."
+            }
+          ]
+        },
+        {
+          "id": "ARB_U3",
+          "title": "الإنسان وكرامته",
+          "lessons": [
+            {
+              "id": "ARB_U3_L1",
+              "title": "حقوق الإنسان بين العالمية والخصوصية",
+              "pages": [
+                106,
+                123
+              ],
+              "pageCount": 18,
+              "size": "large",
+              "difficulty": "hard",
+              "difficultyConfidence": "low",
+              "basis": "مقارنة أطر ومبادئ وتطبيقها على سياقات مختلفة.",
+              "strategy": "تلخيص محاور الحقوق ثم مقارنة المواقف وحل أسئلة استدلال."
+            },
+            {
+              "id": "ARB_U3_L2",
+              "title": "الحرية الفكرية",
+              "pages": [
+                124,
+                142
+              ],
+              "pageCount": 19,
+              "size": "large",
+              "difficulty": "hard",
+              "difficultyConfidence": "low",
+              "basis": "مفاهيم مجردة وعلاقات بين الحرية والمسؤولية.",
+              "strategy": "تعريفات دقيقة وأمثلة مضادة ثم أسئلة تحليل."
+            },
+            {
+              "id": "ARB_U3_L3",
+              "title": "يا أخي الإنسان – نص شعري",
+              "pages": [
+                143,
+                163
+              ],
+              "pageCount": 21,
+              "size": "large",
+              "difficulty": "medium",
+              "difficultyConfidence": "low",
+              "basis": "نص شعري طويل نسبيًا يجمع المعنى والتذوق واللغة.",
+              "strategy": "تقسيم النص ومراجعته على مقاطع ثم حل أسئلة شاملة."
+            }
+          ]
+        }
+      ]
+    },
+    "HIS_G2_BAC": {
+      "title": "التاريخ الوطني",
+      "book": "كتاب التاريخ الوطني – الجزء الأول",
+      "coverage": "toc_and_lesson_page_ranges",
+      "confidence": "medium",
+      "units": [
+        {
+          "id": "HIS_U1",
+          "title": "مصر بين الماضي والحاضر",
+          "lessons": [
+            {
+              "id": "HIS_U1_L1",
+              "title": "بناء الدولة المصرية واستمرارها عبر التاريخ",
+              "pages": [
+                9,
+                20
+              ],
+              "pageCount": 12,
+              "size": "medium",
+              "difficulty": "hard",
+              "difficultyConfidence": "low",
+              "basis": "تركيب زمني عبر عصور متعددة وفهم الاستمرارية والتغير.",
+              "strategy": "خط زمني ثم أسباب ونتائج واسترجاع متباعد."
+            },
+            {
+              "id": "HIS_U1_L2",
+              "title": "الدولة المصرية القديمة ومقاومة الاحتلال",
+              "pages": [
+                21,
+                30
+              ],
+              "pageCount": 10,
+              "size": "medium",
+              "difficulty": "medium",
+              "difficultyConfidence": "low",
+              "basis": "أحداث تاريخية وعلاقات سبب ونتيجة.",
+              "strategy": "تسلسل الأحداث والأطراف ثم أسئلة تفسير."
+            },
+            {
+              "id": "HIS_U1_L3",
+              "title": "التحولات الكبرى في مصر – العصر الوسيط",
+              "pages": [
+                31,
+                40
+              ],
+              "pageCount": 10,
+              "size": "medium",
+              "difficulty": "hard",
+              "difficultyConfidence": "low",
+              "basis": "الربط بين تحولات سياسية واجتماعية خلال فترة تاريخية.",
+              "strategy": "مقارنة المراحل وتحليل عوامل التحول."
+            },
+            {
+              "id": "HIS_U1_L4",
+              "title": "التحولات الكبرى في مصر – العصر الحديث",
+              "pages": [
+                41,
+                54
+              ],
+              "pageCount": 14,
+              "size": "medium",
+              "difficulty": "hard",
+              "difficultyConfidence": "low",
+              "basis": "تتابع أحداث وتغيرات متعددة تحتاج ربطًا زمنيًا.",
+              "strategy": "خط زمني وجدول مقارنة للأحداث والنتائج."
+            }
+          ]
+        },
+        {
+          "id": "HIS_U2",
+          "title": "تحولات القوة وبناء الوعي بمصر في العصر الحديث والمعاصر",
+          "lessons": [
+            {
+              "id": "HIS_U2_L1",
+              "title": "سياسات الاحتلال بمصر في العصر الحديث",
+              "pages": [
+                55,
+                63
+              ],
+              "pageCount": 9,
+              "size": "medium",
+              "difficulty": "hard",
+              "difficultyConfidence": "low",
+              "basis": "تحليل سياسات وأهداف وآثار ومقارنة بينها.",
+              "strategy": "مصفوفة سياسة/هدف/أثر مع أسئلة استدلال."
+            },
+            {
+              "id": "HIS_U2_L2",
+              "title": "صمود الشعب المصري ومقاومة الاحتلال",
+              "pages": [
+                64,
+                72
+              ],
+              "pageCount": 9,
+              "size": "medium",
+              "difficulty": "medium",
+              "difficultyConfidence": "low",
+              "basis": "ربط حركات المقاومة بسياقها ونتائجها.",
+              "strategy": "خريطة أحداث وشخصيات وأسباب ونتائج."
+            },
+            {
+              "id": "HIS_U2_L3",
+              "title": "ثورة 23 يوليو والتحولات الكبرى في مصر",
+              "pages": [
+                73,
+                82
+              ],
+              "pageCount": 10,
+              "size": "medium",
+              "difficulty": "hard",
+              "difficultyConfidence": "low",
+              "basis": "أسباب ونتائج وتحولات سياسية واجتماعية متداخلة.",
+              "strategy": "تحليل قبل/بعد ومقارنة النتائج وتطبيق."
+            },
+            {
+              "id": "HIS_U2_L4",
+              "title": "الهوية الوطنية في مواجهة الاستعمار الجديد",
+              "pages": [
+                83,
+                94
+              ],
+              "pageCount": 12,
+              "size": "medium",
+              "difficulty": "hard",
+              "difficultyConfidence": "low",
+              "basis": "مفاهيم مجردة وتفسير تأثيرات متعددة.",
+              "strategy": "مفاهيم رئيسية وأمثلة وروابط سببية."
+            }
+          ]
+        },
+        {
+          "id": "HIS_U3",
+          "title": "مصر وقضايا التحرر الوطني في الوطن العربي وإفريقيا",
+          "lessons": [
+            {
+              "id": "HIS_U3_L1",
+              "title": "حركات التحرر الوطني ضد الاحتلال الفرنسي والإيطالي في العالم العربي",
+              "pages": [
+                95,
+                104
+              ],
+              "pageCount": 10,
+              "size": "medium",
+              "difficulty": "hard",
+              "difficultyConfidence": "low",
+              "basis": "مقارنة حركات وسياقات استعمارية متعددة.",
+              "strategy": "جدول مقارنة حسب البلد والقوة الاستعمارية والنتيجة."
+            },
+            {
+              "id": "HIS_U3_L2",
+              "title": "حركات التحرر الوطني ضد الاحتلال البريطاني والإسباني في العالم العربي",
+              "pages": [
+                105,
+                111
+              ],
+              "pageCount": 7,
+              "size": "medium",
+              "difficulty": "hard",
+              "difficultyConfidence": "low",
+              "basis": "مقارنة جغرافية وزمنية بين حركات مختلفة.",
+              "strategy": "خريطة وجدول مقارنة مع استرجاع نشط."
+            },
+            {
+              "id": "HIS_U3_L3",
+              "title": "مرتكزات الدور المصري إقليميًا ودوليًا",
+              "pages": [
+                112,
+                117
+              ],
+              "pageCount": 6,
+              "size": "small",
+              "difficulty": "medium",
+              "difficultyConfidence": "low",
+              "basis": "مفاهيم وعلاقات على مستويين إقليمي ودولي.",
+              "strategy": "تصنيف المرتكزات وربط كل منها بمثال."
+            },
+            {
+              "id": "HIS_U3_L4",
+              "title": "دور مصر في دعم حركات التحرر الوطني",
+              "pages": [
+                118,
+                126
+              ],
+              "pageCount": 9,
+              "size": "medium",
+              "difficulty": "medium",
+              "difficultyConfidence": "low",
+              "basis": "ربط مواقف وأدوار بنتائجها التاريخية.",
+              "strategy": "خط زمني وأمثلة وأسئلة تطبيقية."
+            }
+          ]
+        }
+      ]
+    },
+    "PROG_AI_G2_BAC": {
+      "title": "البرمجة والذكاء الاصطناعي",
+      "book": "كتاب البرمجة والذكاء الاصطناعي – الجزء الأول",
+      "coverage": "toc_and_pdf_page_map",
+      "confidence": "medium",
+      "units": [
+        {
+          "id": "PROG_U1",
+          "title": "تكنولوجيا المعلومات والمجتمع",
+          "lessons": [
+            {
+              "id": "PROG_1_1",
+              "title": "تطور تكنولوجيا المعلومات والتحول الاجتماعي",
+              "pages": [
+                4,
+                11
+              ],
+              "pdfPages": [
+                5,
+                12
+              ],
+              "pageCount": 8,
+              "size": "medium",
+              "difficulty": "medium",
+              "difficultyConfidence": "low",
+              "basis": "مفاهيم تأسيسية مع ربط التقنية بالمجتمع.",
+              "strategy": "فهم المفاهيم وخريطة أثر ثم أسئلة تطبيق."
+            },
+            {
+              "id": "PROG_1_2",
+              "title": "كيف يعمل الذكاء الاصطناعي",
+              "pages": [
+                12,
+                17
+              ],
+              "pdfPages": [
+                13,
+                18
+              ],
+              "pageCount": 6,
+              "size": "small",
+              "difficulty": "hard",
+              "difficultyConfidence": "low",
+              "basis": "مفهوم تقني تأسيسي يعتمد عليه فهم تطبيقات لاحقة.",
+              "strategy": "شرح المفاهيم والمكونات ثم أمثلة وتحقق من الفهم."
+            },
+            {
+              "id": "PROG_1_3",
+              "title": "الذكاء الاصطناعي في الحياة اليومية والصناعة",
+              "pages": [
+                18,
+                23
+              ],
+              "pdfPages": [
+                19,
+                24
+              ],
+              "pageCount": 6,
+              "size": "small",
+              "difficulty": "medium",
+              "difficultyConfidence": "low",
+              "basis": "تمييز تطبيقات وسياقات استخدام وربط المفهوم بالواقع.",
+              "strategy": "تصنيف أمثلة واختيار التقنية المناسبة."
+            },
+            {
+              "id": "PROG_1_4",
+              "title": "القضايا الأخلاقية للذكاء الاصطناعي",
+              "pages": [
+                24,
+                30
+              ],
+              "pdfPages": [
+                25,
+                31
+              ],
+              "pageCount": 7,
+              "size": "medium",
+              "difficulty": "medium",
+              "difficultyConfidence": "low",
+              "basis": "تقييم حالات وموازنة الخصوصية والعدالة والمسؤولية.",
+              "strategy": "تحليل حالة ومناقشة حجج متعارضة."
+            }
+          ]
+        },
+        {
+          "id": "PROG_U2",
+          "title": "الأمن السيبراني",
+          "lessons": [
+            {
+              "id": "PROG_2_1",
+              "title": "تقنيات التشفير والمصادقة",
+              "pages": [
+                31,
+                37
+              ],
+              "pdfPages": [
+                32,
+                38
+              ],
+              "pageCount": 7,
+              "size": "medium",
+              "difficulty": "hard",
+              "difficultyConfidence": "low",
+              "basis": "مصطلحات تقنية وآليات مترابطة تحتاج تطبيقًا.",
+              "strategy": "رسم تدفق مبسط ثم تطبيق على سيناريوهات."
+            },
+            {
+              "id": "PROG_2_2",
+              "title": "تصميم أمن الشبكات",
+              "pages": [
+                38,
+                43
+              ],
+              "pdfPages": [
+                39,
+                44
+              ],
+              "pageCount": 6,
+              "size": "small",
+              "difficulty": "hard",
+              "difficultyConfidence": "low",
+              "basis": "تصميم بنية وحلول أمنية يتطلب فهم علاقات الأنظمة.",
+              "strategy": "مخطط شبكة وتحليل تهديدات وتطبيق."
+            },
+            {
+              "id": "PROG_2_3",
+              "title": "الاستجابة للحوادث وإدارة المخاطر",
+              "pages": [
+                44,
+                49
+              ],
+              "pdfPages": [
+                45,
+                50
+              ],
+              "pageCount": 6,
+              "size": "small",
+              "difficulty": "hard",
+              "difficultyConfidence": "low",
+              "basis": "تسلسل إجراءات واتخاذ قرار في سيناريوهات متغيرة.",
+              "strategy": "خطوات استجابة مرتبة ومحاكاة ذهنية غير تشغيلية."
+            }
+          ]
+        },
+        {
+          "id": "PROG_U3",
+          "title": "تطبيقات الويب",
+          "lessons": [
+            {
+              "id": "PROG_3_1",
+              "title": "البنية العامة لتطبيقات الويب",
+              "pages": [
+                50,
+                55
+              ],
+              "pdfPages": [
+                51,
+                56
+              ],
+              "pageCount": 6,
+              "size": "small",
+              "difficulty": "medium",
+              "difficultyConfidence": "low",
+              "basis": "فهم المكونات والطبقات والعلاقات بينها.",
+              "strategy": "رسم معماري عالي المستوى وربط المكونات."
+            },
+            {
+              "id": "PROG_3_2",
+              "title": "طرق الاتصال في تطبيقات الويب",
+              "pages": [
+                56,
+                61
+              ],
+              "pdfPages": [
+                57,
+                62
+              ],
+              "pageCount": 6,
+              "size": "small",
+              "difficulty": "medium",
+              "difficultyConfidence": "low",
+              "basis": "فهم تدفق الطلبات والاستجابات والمفاهيم المرتبطة.",
+              "strategy": "رسم تدفق البيانات ثم أمثلة قصيرة."
+            },
+            {
+              "id": "PROG_3_3",
+              "title": "أساسيات تكنولوجيا الواجهة الأمامية",
+              "pages": [
+                62,
+                67
+              ],
+              "pdfPages": [
+                63,
+                68
+              ],
+              "pageCount": 6,
+              "size": "small",
+              "difficulty": "medium",
+              "difficultyConfidence": "low",
+              "basis": "مفاهيم الواجهة ومكونات بناء الصفحة.",
+              "strategy": "فهم المكونات وتطبيق عملي قصير."
+            }
+          ]
+        },
+        {
+          "id": "PROG_U4",
+          "title": "تصميم الويب والوسائط",
+          "lessons": [
+            {
+              "id": "PROG_4_1",
+              "title": "أنواع الوسائط وخصائصها",
+              "pages": [
+                68,
+                73
+              ],
+              "pdfPages": [
+                69,
+                74
+              ],
+              "pageCount": 6,
+              "size": "small",
+              "difficulty": "easy",
+              "difficultyConfidence": "low",
+              "basis": "تصنيف خصائص وأمثلة مباشرة؛ تقدير أولي من عنوان الدرس.",
+              "strategy": "بطاقات تصنيف وأمثلة تطبيقية."
+            },
+            {
+              "id": "PROG_4_2",
+              "title": "تصميم المعلومات وتجربة المستخدم للمواقع",
+              "pages": [
+                74,
+                80
+              ],
+              "pdfPages": [
+                75,
+                81
+              ],
+              "pageCount": 7,
+              "size": "medium",
+              "difficulty": "medium",
+              "difficultyConfidence": "low",
+              "basis": "تطبيق معايير تصميم على احتياجات المستخدم.",
+              "strategy": "تحليل واجهة وربط كل قرار بهدف استخدام."
+            },
+            {
+              "id": "PROG_4_3",
+              "title": "أساليب تقييم المواقع الإلكترونية",
+              "pages": [
+                81,
+                86
+              ],
+              "pdfPages": [
+                82,
+                87
+              ],
+              "pageCount": 6,
+              "size": "small",
+              "difficulty": "medium",
+              "difficultyConfidence": "low",
+              "basis": "تقييم وفق معايير متعددة وتبرير الحكم.",
+              "strategy": "قائمة تحقق وتقييم مثال مع التعليل."
+            },
+            {
+              "id": "PROG_4_4",
+              "title": "عملية التحسين التكراري للمواقع",
+              "pages": [
+                87,
+                94
+              ],
+              "pdfPages": [
+                88,
+                95
+              ],
+              "pageCount": 8,
+              "size": "medium",
+              "difficulty": "medium",
+              "difficultyConfidence": "low",
+              "basis": "دورة متكررة تتطلب فهم القياس والتحسين.",
+              "strategy": "رسم دورة التحسين وتطبيقها على مثال."
+            }
+          ]
+        }
+      ]
+    },
+    "ENG1_G2_BAC": {
+      "title": "اللغة الإنجليزية الأولى",
+      "book": "English – Part 1",
+      "coverage": "toc_only_unit_ranges",
+      "confidence": "low",
+      "units": [
+        {
+          "id": "ENG_U1",
+          "title": "Living Well in a Complex World",
+          "pages": [
+            12,
+            38
+          ],
+          "pageCount": 27,
+          "size": "large",
+          "difficulty": "unknown",
+          "difficultyConfidence": "low",
+          "section": "Social Reflection / Shared Responsibility",
+          "lessons": [
+            "Social Media and Self-Image",
+            "Exploring Modern Lifestyles",
+            "Whose Responsibility Is It?",
+            "Understanding Mental Health"
+          ]
+        },
+        {
+          "id": "ENG_U2",
+          "title": "Leisure Time",
+          "pages": [
+            39,
+            73
+          ],
+          "pageCount": 35,
+          "size": "large",
+          "difficulty": "unknown",
+          "difficultyConfidence": "low",
+          "section": "Leisure in a Digital World / Lifelong Activity",
+          "lessons": [
+            "Screen Time and Young People",
+            "Creative Arts as Leisure Activities",
+            "Sport and Physical Activity as Leisure",
+            "Not Exactly a Relaxing Day"
+          ]
+        },
+        {
+          "id": "ENG_U3",
+          "title": "Echoes of the Past",
+          "pages": [
+            74,
+            101
+          ],
+          "pageCount": 28,
+          "size": "large",
+          "difficulty": "unknown",
+          "difficultyConfidence": "low",
+          "section": "Historical Landscape / Documenting History",
+          "lessons": [
+            "Sites of Memory",
+            "The Museum as a Storyteller",
+            "The Viral Past",
+            "Social Media and Historical Events"
+          ]
+        },
+        {
+          "id": "ENG_U4",
+          "title": "The Power of Choice",
+          "pages": [
+            102,
+            139
+          ],
+          "pageCount": 38,
+          "size": "large",
+          "difficulty": "unknown",
+          "difficultyConfidence": "low",
+          "section": "Food Awareness / Online Consumption",
+          "lessons": [
+            "Food Waste",
+            "Beyond the Brand",
+            "Digital Consumption",
+            "Black Friday and Sales Culture"
+          ]
+        },
+        {
+          "id": "ENG_U5",
+          "title": "The Greenhouse Effect",
+          "pages": [
+            140,
+            171
+          ],
+          "pageCount": 32,
+          "size": "large",
+          "difficulty": "unknown",
+          "difficultyConfidence": "low",
+          "section": "Climate Change / Egypt’s Green Change Makers",
+          "lessons": [
+            "The Climate Crisis",
+            "Renewable Energy – Powering a Sustainable Future",
+            "Greening Projects in Egypt",
+            "Individual and Collective Actions"
+          ]
+        }
+      ],
+      "limitation": "The scanned PDF's unit contents are verified visually; lesson-level page ranges and the complete text are not indexed. Do not invent individual topic sizes or difficulty."
+    },
+    "SECOND_LANGUAGE_G2_BAC_PENDING": {
+      "title": "اللغة الإيطالية – اللغة الأجنبية الثانية",
+      "book": "Lingua e Cultura italiana – Parte Prima",
+      "coverage": "unit_titles_only",
+      "confidence": "low",
+      "units": [
+        {
+          "id": "ITA_U1",
+          "title": "Dove abiti?",
+          "difficulty": "unknown",
+          "size": "unknown"
+        },
+        {
+          "id": "ITA_U2",
+          "title": "Tempo libero",
+          "difficulty": "unknown",
+          "size": "unknown"
+        }
+      ],
+      "limitation": "لم يُعثر على ملف الكتاب الأصلي داخل المكتبة. هذه أسماء وحدات فقط؛ يلزم ملف الكتاب لتحديد الصفحات والحجم والمحتوى."
+    }
+  }
+}
