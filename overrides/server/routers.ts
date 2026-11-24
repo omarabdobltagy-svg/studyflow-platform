@@ -106,6 +106,23 @@ function getCurrentTeacherKey(selection: Record<string, any>, profile: any, subj
   return teacherName ? `custom:${teacherName.toLocaleLowerCase("en")}` : "";
 }
 
+
+function mergeSubjectLessonProgress(legacyValue: unknown, currentValue: unknown): Record<string, Record<string, any>> {
+  const legacy = legacyValue && typeof legacyValue === "object" && !Array.isArray(legacyValue)
+    ? legacyValue as Record<string, Record<string, any>>
+    : {};
+  const current = currentValue && typeof currentValue === "object" && !Array.isArray(currentValue)
+    ? currentValue as Record<string, Record<string, any>>
+    : {};
+  const merged: Record<string, Record<string, any>> = {};
+  for (const subjectId of new Set([...Object.keys(legacy), ...Object.keys(current)])) {
+    const legacyRecords = legacy[subjectId] && typeof legacy[subjectId] === "object" ? legacy[subjectId] : {};
+    const currentRecords = current[subjectId] && typeof current[subjectId] === "object" ? current[subjectId] : {};
+    merged[subjectId] = { ...legacyRecords, ...currentRecords };
+  }
+  return merged;
+}
+
 function getTeacherCustomCurriculumEntries(
   selection: Record<string, any>,
   profile: any,
@@ -325,7 +342,7 @@ export const appRouter = router({
           teacherFrontiers: stripSubjectMap(selection.teacherFrontiers),
           learningCourseProgress: stripSubjectMap(selection.learningCourseProgress),
           subjectLessonProgress: stripSubjectMap(selection.subjectLessonProgress),
-          sq3rProgress: stripSubjectMap(selection.sq3rProgress ?? selection.subjectLessonProgress),
+          sq3rProgress: stripSubjectMap(mergeSubjectLessonProgress(selection.subjectLessonProgress, selection.sq3rProgress)),
         },
       };
     }),
@@ -837,7 +854,7 @@ export const appRouter = router({
           const branchRecords = (record.branches ?? {}) as Record<string, Record<string, any>>;
           const legacyTeacherState = teacherProgressState[subjectId] ?? {};
           const legacyStudentFrontier = teacherFrontiers[subjectId] || legacyTeacherState.studentAttendedFrontier || null;
-          const sq3rLessonProgress = (selection.sq3rProgress ?? selection.subjectLessonProgress ?? {}) as Record<string, Record<string, any>>;
+          const sq3rLessonProgress = mergeSubjectLessonProgress(selection.subjectLessonProgress, selection.sq3rProgress);
           const subjectLessonRecords = sq3rLessonProgress[subjectId] ?? {};
           const branches = firstPartBranches(subjectId);
           const branchContext = branches.map(branch => {
@@ -1138,7 +1155,7 @@ export const appRouter = router({
       const courseProgress = (selection.learningCourseProgress ?? {}) as Record<string, any>;
       const legacyTeacherFrontiers = (selection.teacherFrontiers ?? {}) as Record<string, string>;
       const legacyTeacherState = (selection.teacherProgressState ?? {}) as Record<string, Record<string, any>>;
-      const sq3rProgress = (selection.sq3rProgress ?? selection.subjectLessonProgress ?? {}) as Record<string, Record<string, any>>;
+      const sq3rProgress = mergeSubjectLessonProgress(selection.subjectLessonProgress, selection.sq3rProgress);
       const activeSubjectIds = profile.subjectIds.filter(subjectId => subjectId !== "SECOND_LANGUAGE_G2_BAC_PENDING");
       const gapByBranch = Object.fromEntries(activeSubjectIds.map(subjectId => {
         const subjectRecord = courseProgress[subjectId] ?? {};
@@ -1689,7 +1706,7 @@ export const appRouter = router({
           .find(item => item.nodeId === input.lessonId);
         const lesson = staticLesson ?? customLesson;
         if (!lesson) throw new TRPCError({ code: "BAD_REQUEST", message: "الدرس غير موجود في فهرس المادة أو كورس المدرس الحالي." });
-        const progress = (selection.sq3rProgress ?? selection.subjectLessonProgress ?? {}) as Record<string, Record<string, any>>;
+        const progress = mergeSubjectLessonProgress(selection.subjectLessonProgress, selection.sq3rProgress);
         const subjectProgress = { ...(progress[input.subjectId] || {}) };
         const record = {
           completedSteps: [...new Set(input.completedSteps)],
