@@ -105,7 +105,6 @@ export const SIE_SUBJECTS: SIESubject[] = [
   { subjectId: "ACCOUNTING_G2_BAC_PENDING", nameAr: "المحاسبة", curriculumAvailable: false, note: "المادة ضمن اختيار المسار، لكن فهرسها غير محمّل في الحزمة." },
   { subjectId: "BUSINESS_G2_BAC_PENDING", nameAr: "إدارة الأعمال", curriculumAvailable: false, note: "المادة ضمن اختيار المسار، لكن فهرسها غير محمّل في الحزمة." },
   { subjectId: "PSYCHOLOGY_G2_BAC_PENDING", nameAr: "علم النفس", curriculumAvailable: false, note: "المادة ضمن اختيار المسار، لكن فهرسها غير محمّل في الحزمة." },
-  { subjectId: "SECOND_LANGUAGE_G2_BAC_PENDING", nameAr: "اللغة الإيطالية (لغة أجنبية ثانية)", curriculumAvailable: true, note: "فهرس الجزء الأول موثق على مستوى وحدتين؛ نص الصفحات غير مفهرس بعد." },
   { subjectId: "ARB_G2_GENERAL", nameAr: "اللغة العربية", curriculumAvailable: false, note: "يلزم تحميل فهرس الثانوية العامة المنفصل." },
   { subjectId: "ENG1_G2_GENERAL", nameAr: "اللغة الأجنبية الأولى", curriculumAvailable: false, note: "يلزم تحميل فهرس الثانوية العامة المنفصل." },
   { subjectId: "HIS_G2_GENERAL", nameAr: "التاريخ", curriculumAvailable: false, note: "يلزم تحميل فهرس الثانوية العامة المنفصل." },
@@ -116,7 +115,7 @@ export const SIE_SUBJECTS: SIESubject[] = [
   { subjectId: "PSYCHOLOGY_G2_GENERAL", nameAr: "علم النفس", curriculumAvailable: false, note: "يلزم تحميل فهرس الثانوية العامة المنفصل." },
 ];
 
-const bacCore = ["ARB_G2_BAC", "ENG1_G2_BAC", "SECOND_LANGUAGE_G2_BAC_PENDING", "HIS_G2_BAC"];
+const bacCore = ["ARB_G2_BAC", "ENG1_G2_BAC", "HIS_G2_BAC"];
 export const SIE_TRACKS: SIETrack[] = [
   {
     trackId: "BAC_MED_LIFE", systemId: BAC_SYSTEM, nameAr: "الطب وعلوم الحياة",
@@ -147,12 +146,9 @@ export const SIE_TRACKS: SIETrack[] = [
   },
   {
     trackId: "BAC_ARTS_HUM", systemId: BAC_SYSTEM, nameAr: "الآداب والفنون",
-    gradeYear: GRADE_YEAR, requiredSubjectIds: bacCore,
-    electiveOptions: [[
-      SIE_SUBJECTS.find(s => s.subjectId === "PSYCHOLOGY_G2_BAC_PENDING")!,
-      SIE_SUBJECTS.find(s => s.subjectId === "SECOND_LANGUAGE_G2_BAC_PENDING")!,
-    ]],
-    note: "اختر مادة واحدة من علم النفس أو اللغة الأجنبية الثانية.",
+    gradeYear: GRADE_YEAR, requiredSubjectIds: [...bacCore, "PSYCHOLOGY_G2_BAC_PENDING"],
+    electiveOptions: [],
+    note: "علم النفس هو المادة التخصصية المعتمدة في مسار الآداب والفنون.",
   },
   {
     trackId: "GENERAL_SCIENCE", systemId: GENERAL_SYSTEM, nameAr: "الشعبة العلمية",
@@ -767,9 +763,7 @@ function getOfficialBranch(subjectId: string, choice: SIECheckpointChoice) {
       ? /^(ARB_U\d+)/
       : subjectId === "HIS_G2_BAC"
         ? /^(HIS_U\d+)/
-        : subjectId === "SECOND_LANGUAGE_G2_BAC_PENDING"
-          ? /^(ITA_U\d+)/
-          : null;
+        : null;
   const prefix = prefixPattern ? choice.nodeId.match(prefixPattern)?.[1] : null;
   return {
     branchId: prefix ?? `${subjectId}:${choice.unitTitle}`,
@@ -911,10 +905,6 @@ export const SIE_CHECKPOINT_CHOICES: Record<string, SIECheckpointChoice[]> = {
     { nodeId: "HIS_U6_L2", title: "تحديات تحقيق السلام العالمي", unitTitle: "السلام العالمي بين الواقع والمأمول", unitNumber: 6, lessonNumber: "6.2", sourceLabel: "كتاب التاريخ - الجزء الثاني" },
     { nodeId: "HIS_U6_L3", title: "المنظمات الدولية والإقليمية ودورها في حفظ السلام العالمي", unitTitle: "السلام العالمي بين الواقع والمأمول", unitNumber: 6, lessonNumber: "6.3", sourceLabel: "كتاب التاريخ - الجزء الثاني" },
     { nodeId: "HIS_U6_L4", title: "دور مصر في دعم السلام العالمي", unitTitle: "السلام العالمي بين الواقع والمأمول", unitNumber: 6, lessonNumber: "6.4", sourceLabel: "كتاب التاريخ - الجزء الثاني" },
-  ],
-  SECOND_LANGUAGE_G2_BAC_PENDING: [
-    { nodeId: "ITA_U1_T1", title: "Dove abiti?", unitTitle: "Unità 1: Dove abiti?" },
-    { nodeId: "ITA_U2_T1", title: "Tempo libero", unitTitle: "Unità 2: Tempo libero" },
   ],
   PROG_AI_G2_BAC: [
     { nodeId: "PROG_1_1", title: "تطور تكنولوجيا المعلومات والتحول الاجتماعي", unitTitle: "تكنولوجيا المعلومات والمجتمع", unitNumber: 1, lessonNumber: "1.1", sourceLabel: "كتاب البرمجة - الجزء 1" },

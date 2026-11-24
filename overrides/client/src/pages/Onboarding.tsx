@@ -153,6 +153,14 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
   const currentSetupSubjectId = currentSetupSubject?.subjectId ?? "";
   const setupTeacherOptions = currentSetupSubjectId && form.systemId ? getSIETeachersForSubject(currentSetupSubjectId, form.systemId) : [];
 
+  useEffect(() => {
+    if (step !== 3 || firstElectiveGroup.length !== 1) return;
+    const onlyElectiveId = firstElectiveGroup[0].subjectId;
+    if (form.electiveSubjectId !== onlyElectiveId) {
+      setForm(current => ({ ...current, electiveSubjectId: onlyElectiveId }));
+    }
+  }, [step, firstElectiveGroup, form.electiveSubjectId]);
+
   const isIdentityValid =
     form.studentName.trim().length >= 2 &&
     form.studentName.trim().length <= 120 &&
@@ -392,7 +400,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                       </div>
                       {firstElectiveGroup.length > 0 && (
                         <div>
-                          <p className="mb-3 text-sm font-semibold">اختر مادة تخصصية واحدة</p>
+                          <p className="mb-3 text-sm font-semibold">{firstElectiveGroup.length === 1 ? "المادة التخصصية لهذا المسار" : "اختر مادة تخصصية واحدة"}</p>
                           <div className="grid gap-3 sm:grid-cols-2">
                             {firstElectiveGroup.map(subject => (
                               <ChoiceCard
