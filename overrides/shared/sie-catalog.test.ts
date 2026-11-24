@@ -4,6 +4,8 @@ import {
   getSIECheckpointChoiceDisplayLabel,
   getSIECheckpointChoiceTypeLabel,
   getSIECheckpointChoices,
+  getSIECheckpointChoicesForTeacher,
+  getSIETeachersForSubject,
 } from "./sie-catalog";
 
 describe("Arabic course taxonomy", () => {
@@ -87,5 +89,48 @@ describe("English curriculum selector metadata", () => {
     expect(label).toContain("Social Media and Self-Image");
     expect(label).toContain("موضوع (Topic)");
     expect(label).toContain("Section A — Social Reflection");
+  });
+});
+
+
+describe("subject curriculum layouts", () => {
+  it("keeps History as one complete linear list rather than chapter branches", () => {
+    const branches = getSIECheckpointBranches("HIS_G2_BAC");
+    expect(branches).toHaveLength(1);
+    expect(branches[0].branchTitle).toBe("المقرر بالكامل");
+    expect(branches[0].choices).toHaveLength(12);
+  });
+
+  it("keeps all seven Programming chapters in one complete linear list", () => {
+    const branches = getSIECheckpointBranches("PROG_AI_G2_BAC");
+    expect(branches).toHaveLength(1);
+    expect(branches[0].branchTitle).toBe("المقرر بالكامل");
+    expect(branches[0].choices).toHaveLength(23);
+    expect(branches[0].choices[22].nodeId).toBe("PROG_7_3");
+  });
+
+  it("models English Vocabulary, Grammar and GRE separately from all textbook topics", () => {
+    const branches = getSIECheckpointBranches("ENG1_G2_BAC");
+    expect(branches.map(branch => branch.branchId)).toEqual([
+      "ENG_VOCABULARY", "ENG_GRAMMAR", "ENG_GRE", "ENG_TEXTBOOK",
+    ]);
+    expect(branches.find(branch => branch.branchId === "ENG_TEXTBOOK")?.choices).toHaveLength(20);
+  });
+
+  it("does not truncate a teacher's available course index to the first five lessons", () => {
+    const teacher = getSIETeachersForSubject("ENG1_G2_BAC", "EG_BACCALAUREATE")[0];
+    expect(teacher).toBeDefined();
+    expect(getSIECheckpointChoicesForTeacher(teacher.teacherId)).toHaveLength(20);
+  });
+});
+
+describe("Arabic named reading texts", () => {
+  it("keeps actual text titles and excludes generic reading-analysis skills", () => {
+    const reading = getSIECheckpointBranches("ARB_G2_BAC").find(branch => branch.branchId === "ARB_READING");
+    const titles = reading?.choices.map(choice => choice.title) ?? [];
+    expect(titles).toContain("العلم بين القانون والضمير");
+    expect(titles).toContain("التقنية وصناعة الرأي العام");
+    expect(titles).not.toContain("شرح زاوية الرؤية");
+    expect(titles).not.toContain("أنواع الخطاب في النص المعلوماتي");
   });
 });
