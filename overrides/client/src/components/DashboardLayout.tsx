@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
-  BarChart3, BookOpenCheck, BookOpenText, BrainCircuit, CalendarDays,
+  BarChart3, BookOpenCheck, BookOpenText, BrainCircuit, CalendarDays, CalendarRange, MessageCircle, Network,
   CheckSquare2, ChevronLeft, Goal, LayoutDashboard, LibraryBig, LogOut,
   Menu, Moon, Settings2, Sparkles, Sun,
 } from "lucide-react";
@@ -32,12 +32,12 @@ const navigation: NavigationGroup[] = [
   { label: "التعلّم", items: [
     { label: "المكتبة", path: "/books", icon: LibraryBig },
     { label: "المذاكرة والتقدم", path: "/study", icon: BookOpenText },
-    { label: "خريطة المنهج", path: "/learning-map", icon: BrainCircuit },
-    { label: "المساعد الدراسي الذكي", path: "/assistant", icon: BrainCircuit },
+    { label: "خريطة المنهج", path: "/learning-map", icon: Network },
+    { label: "المساعد الدراسي الذكي", path: "/assistant", icon: MessageCircle },
   ] },
   { label: "التخطيط", items: [
     { label: "الأهداف", path: "/goals", icon: Goal },
-    { label: "المخطط الذكي", path: "/planner", icon: BookOpenCheck },
+    { label: "المخطط الذكي", path: "/planner", icon: CalendarRange },
     { label: "تحليل الأداء", path: "/analytics", icon: BarChart3 },
   ] },
   { label: "إدارة المساحة", items: [
