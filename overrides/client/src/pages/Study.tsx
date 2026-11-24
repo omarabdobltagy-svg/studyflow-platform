@@ -71,7 +71,7 @@ export default function Study() {
   const teacherReferenceName = teacherName.trim() || selectedTeacher?.nameAr || "";
   const savedTeacherChoiceValue = savedTeacherId && savedTeacherId !== "__SKIP__" ? savedTeacherId : "__NONE__";
   const persistedCourseMode = savedCourseModes[subjectId] || currentCourseProgress.courseMode || "";
-  const persistedTeacherName = savedTeacherNames[subjectId] || "";
+  const persistedTeacherName = savedTeacherNames[subjectId] || currentBranchProgress.teacherName || currentCourseProgress.teacherName || "";
   const teacherSelectionDirty = courseMode !== persistedCourseMode
     || (selectedTeacherId || "__NONE__") !== savedTeacherChoiceValue
     || teacherName.trim() !== persistedTeacherName.trim();
@@ -372,6 +372,18 @@ export default function Study() {
           </div>
         </header>
         <div className="space-y-5 p-5 sm:p-6">
+          {subjects.length > 1 && (
+            <NativeSelectField
+              label="المادة"
+              value={subjectId}
+              onChange={nextSubjectId => {
+                setSubjectId(nextSubjectId);
+                setBranchId("");
+                setLessonId("");
+              }}
+              options={subjects.map(id => ({ value: id, label: getSIESubject(id)?.nameAr || id }))}
+            />
+          )}
           <div>
             <p className="mb-3 text-sm font-bold">طريقة دراسة المادة</p>
             <div className="grid gap-3 sm:grid-cols-2">
