@@ -31,6 +31,7 @@ export default function Study() {
   const [courseModeDrafts, setCourseModeDrafts] = useState<Record<string, "center" | "online">>({});
   const [teacherNameDrafts, setTeacherNameDrafts] = useState<Record<string, string>>({});
   const [markSessionLessonCompleted, setMarkSessionLessonCompleted] = useState(false);
+  const [customCheckpointTitle, setCustomCheckpointTitle] = useState("");
   const initialStudyParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
   const [subjectId, setSubjectId] = useState(initialStudyParams?.get("subject") || "");
   const [branchId, setBranchId] = useState(initialStudyParams?.get("branch") || "");
@@ -39,23 +40,11 @@ export default function Study() {
   const [difficulty, setDifficulty] = useState<"unknown" | "easy" | "medium" | "hard">("unknown");
   const [notes, setNotes] = useState("");
   const subjects = profile.data?.subjectIds || [];
-  const subjectChoices = useMemo(() => getSIECheckpointChoices(subjectId), [subjectId]);
-  const branches = useMemo(() => getSIECheckpointBranches(subjectId), [subjectId]);
-  const currentBranch = branches.find(branch => branch.branchId === branchId) ?? branches[0];
-  const branchChoices = currentBranch?.choices ?? [];
-  const lessons = branchChoices;
-  const currentBranchId = currentBranch?.branchId ?? "";
-  const currentBranchPointLabel = currentBranch?.branchType === "official_section" ? "موضوع" : "درس";
-  const selection = (profile.data?.selection || {}) as Record<string, unknown>;
+  const selection = (profile.data?.selection || {}) as Record<string, any>;
   const progressMap = (selection.subjectLessonProgress || {}) as Record<string, Record<string, LessonProgress>>;
-  const currentProgress = progressMap[subjectId] && progressMap[subjectId][lessonId];
-
-  type CourseStatus = "not_started" | "in_progress" | "caught_up" | "needs_review";
   const courseProgressMap = (selection.learningCourseProgress || {}) as Record<string, any>;
   const currentCourseProgress = courseProgressMap[subjectId] || {};
   const branchProgressMap = (currentCourseProgress.branches || {}) as Record<string, Record<string, any>>;
-  const currentBranchProgress = currentBranchId ? branchProgressMap[currentBranchId] || {} : {};
-  const branchGapMap = ((learning.data as any)?.gapByBranch?.[subjectId] || {}) as Record<string, any>;
   const savedTeacherId = ((selection.teacherChoices || {}) as Record<string, string>)[subjectId]
     || (profile.data?.teacherSelections || {})[subjectId];
   const selectedTeacherId = Object.prototype.hasOwnProperty.call(teacherChoiceDrafts, subjectId)
@@ -65,16 +54,46 @@ export default function Study() {
   const savedCourseModes = (selection.courseModes || {}) as Record<string, "center" | "online">;
   const savedTeacherNames = (selection.customTeacherNames || {}) as Record<string, string>;
   const courseMode = courseModeDrafts[subjectId] || savedCourseModes[subjectId] || currentCourseProgress.courseMode || "";
-  const teacherName = Object.prototype.hasOwnProperty.call(teacherNameDrafts, subjectId)
+  const draftTeacherName = Object.prototype.hasOwnProperty.call(teacherNameDrafts, subjectId)
     ? teacherNameDrafts[subjectId]
-    : savedTeacherNames[subjectId] || currentBranchProgress.teacherName || currentCourseProgress.teacherName || "";
-  const teacherReferenceName = teacherName.trim() || selectedTeacher?.nameAr || "";
-  const savedTeacherChoiceValue = savedTeacherId && savedTeacherId !== "__SKIP__" ? savedTeacherId : "__NONE__";
+    : savedTeacherNames[subjectId] || currentCourseProgress.teacherName || "";
+  const teacherReferenceNameBase = draftTeacherName.trim() || selectedTeacher?.nameAr || "";
+  const currentTeacherKey = selectedTeacherId
+    || (teacherReferenceNameBase ? `custom:${teacherReferenceNameBase.toLocaleLowerCase("en")}` : "");
   const persistedCourseMode = savedCourseModes[subjectId] || currentCourseProgress.courseMode || "";
-  const persistedTeacherName = savedTeacherNames[subjectId] || currentBranchProgress.teacherName || currentCourseProgress.teacherName || "";
+  const persistedTeacherName = savedTeacherNames[subjectId] || currentCourseProgress.teacherName || "";
+  const savedTeacherChoiceValue = savedTeacherId && savedTeacherId !== "__SKIP__" ? savedTeacherId : "__NONE__";
   const teacherSelectionDirty = courseMode !== persistedCourseMode
     || (selectedTeacherId || "__NONE__") !== savedTeacherChoiceValue
-    || teacherName.trim() !== persistedTeacherName.trim();
+    || draftTeacherName.trim() !== persistedTeacherName.trim();
+  const storedCustomCurriculumEntries = (selection.customCurriculumEntries?.[subjectId] ?? []) as Array<any>;
+  const baseBranches = useMemo(() => getSIECheckpointBranches(subjectId), [subjectId]);
+  const branches = useMemo(() => baseBranches.map(branch => ({
+    ...branch,
+    choices: [
+      ...branch.choices,
+      ...storedCustomCurriculumEntries
+        .filter(entry => entry.branchId === branch.branchId && entry.teacherKey === currentTeacherKey)
+        .map(entry => ({
+          ...entry,
+          lessonType: entry.lessonType || "topic",
+          sourceLabel: entry.sourceLabel || "محتوى مخصص",
+        })),
+    ],
+  })), [baseBranches, storedCustomCurriculumEntries, currentTeacherKey]);
+  const currentBranch = branches.find(branch => branch.branchId === branchId) ?? branches[0];
+  const branchChoices = currentBranch?.choices ?? [];
+  const lessons = branchChoices;
+  const currentBranchId = currentBranch?.branchId ?? "";
+  const currentBranchPointLabel = "درس";
+  const currentBranchProgress = currentBranchId ? branchProgressMap[currentBranchId] || {} : {};
+  const teacherName = draftTeacherName || currentBranchProgress.teacherName || "";
+  const teacherReferenceName = teacherReferenceNameBase || currentBranchProgress.teacherName || "";
+  const teacherFrontierSaved = Object.prototype.hasOwnProperty.call(currentBranchProgress, "teacherTeachingFrontierId");
+  const currentProgress = progressMap[subjectId] && progressMap[subjectId][lessonId];
+  const branchGapMap = ((learning.data as any)?.gapByBranch?.[subjectId] || {}) as Record<string, any>;
+
+  type CourseStatus = "not_started" | "in_progress" | "caught_up" | "needs_review";
   const subjectIndex = Math.max(0, subjects.indexOf(subjectId));
   const branchIndex = Math.max(0, branches.findIndex(branch => branch.branchId === currentBranchId));
   const systemId: SIESystemId = selection.systemId === "EG_GENERAL_SECONDARY"
@@ -216,6 +235,15 @@ export default function Study() {
     },
     onError: error => toast.error(error.message || "تعذّر حفظ موضع المنهج."),
   });
+  const addCustomCheckpointMutation = trpc.learning.addCustomCurriculumCheckpoint.useMutation({
+    onSuccess: async () => {
+      setCustomCheckpointTitle("");
+      await Promise.all([utils.studentProfile.get.invalidate(), utils.learning.get.invalidate()]);
+      toast.success("تمت إضافة الدرس إلى فهرس المدرس، وأصبح متاحًا لتحديد موضعه وموضعك.");
+    },
+    onError: error => toast.error(error.message || "تعذّرت إضافة الدرس المخصص."),
+  });
+
   const saveTeacherSelection = trpc.studentProfile.updateTeacherSelection.useMutation({
     onSuccess: async () => {
       await utils.studentProfile.get.invalidate();
@@ -267,7 +295,15 @@ export default function Study() {
 
   const submitStudentFrontier = (frontierId: string) => {
     if (!subjectId || !currentBranchId) {
-      toast.error("اختر المادة والفرع أولًا.");
+      toast.error("اختر المادة ومسارها أولًا.");
+      return;
+    }
+    if (!teacherReferenceName || teacherSelectionDirty) {
+      toast.error("اختَر المدرس واحفظ اختياره أولًا.");
+      return;
+    }
+    if (!teacherFrontierSaved) {
+      toast.error("حدّد آخر نقطة وصل لها المدرس واحفظها أولًا، ثم سجّل موضعك.");
       return;
     }
     setLastCompletedLessonId(frontierId);
@@ -275,6 +311,23 @@ export default function Study() {
       subjectId,
       branchId: currentBranchId,
       studentFrontierId: frontierId,
+    });
+  };
+
+  const addCustomCheckpoint = () => {
+    if (!subjectId || !currentBranchId || !currentTeacherKey || teacherSelectionDirty) {
+      toast.error("احفظ اختيار المدرس أولًا قبل إضافة محتوى خاص بكورسه.");
+      return;
+    }
+    if (!customCheckpointTitle.trim()) {
+      toast.error("اكتب اسم الدرس أو المحاضرة أولًا.");
+      return;
+    }
+    addCustomCheckpointMutation.mutate({
+      subjectId,
+      branchId: currentBranchId,
+      title: customCheckpointTitle.trim(),
+      teacherKey: currentTeacherKey,
     });
   };
 
@@ -287,7 +340,7 @@ export default function Study() {
       toast.error("احفظ طريقة الدراسة واختيار المدرس أولًا من القسم المستقل.");
       return;
     }
-    if (!teacherReferenceName && courseMode !== "center") {
+    if (!teacherReferenceName) {
       toast.error("اختر المدرس أو اكتب اسمه قبل تسجيل موضع شرحه.");
       return;
     }
@@ -519,115 +572,34 @@ export default function Study() {
       </section>
 
       <section className="app-card mb-5 overflow-hidden rounded-2xl">
-        <header className="border-b border-border/70 bg-gradient-to-l from-secondary/55 to-card p-5 sm:p-6">
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">02 · YOUR CURRICULUM PATH</p>
-          <h2 className="mt-1 text-xl font-bold">حدد موضعك في المنهج</h2>
-          <p className="mt-1 text-sm leading-6 text-muted-foreground">اختيارك يُحفظ فورًا. بعدها ينتقل بك النظام للفرع التالي تلقائيًا؛ النحو ثم البلاغة ثم القراءة وباقي الفروع.</p>
-        </header>
-        <div className="space-y-5 p-5 sm:p-6">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs text-muted-foreground">{subjectName}</p>
-              <h3 className="mt-1 text-lg font-bold">{currentBranch?.branchTitle || "الفرع الحالي"}</h3>
-            </div>
-            <span className="rounded-full border border-primary/20 bg-primary/5 px-3 py-2 text-xs font-bold tabular-nums">
-              {branchIndex + 1} / {branches.length}
-            </span>
-          </div>
-
-          <div className="h-2 overflow-hidden rounded-full bg-muted">
-            <motion.div className="h-full rounded-full bg-primary" initial={false}
-              animate={{ width: ((branchIndex + 1) / Math.max(branches.length, 1) * 100) + "%" }}
-              transition={{ type: "spring", stiffness: 100, damping: 20 }} />
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {branches.map((branch, index) => (
-              <motion.div key={branch.branchId} layout
-                className={"flex items-center gap-2 rounded-full border px-3 py-2 text-[11px] font-semibold " + (index < branchIndex ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : index === branchIndex ? "border-primary bg-primary/10 text-foreground" : "border-border bg-background text-muted-foreground")}>
-                <span className="flex size-5 items-center justify-center rounded-full bg-background/80 text-[10px]">
-                  {index < branchIndex ? <Check className="size-3" /> : index + 1}
-                </span>
-                {branch.branchTitle}
-              </motion.div>
-            ))}
-          </div>
-
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div key={subjectId + "::" + currentBranchId}
-              initial={{ opacity: 0, x: -18, filter: "blur(4px)" }}
-              animate={{ opacity: 1, x: 0, filter: "blur(0px)" }}
-              exit={{ opacity: 0, x: 16, filter: "blur(4px)" }}
-              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-              className="rounded-2xl border border-border/70 bg-muted/15 p-4 sm:p-5">
-              <div className="mb-4 flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-[10px] font-bold tracking-[0.14em] text-primary">CURRENT STEP · {branchIndex + 1}</p>
-                  <h4 className="mt-1 font-bold">آخر نقطة أنهيتها في {currentBranch?.branchTitle || "الفرع"}</h4>
-                  <p className="mt-1 text-xs leading-6 text-muted-foreground">
-                    اضغط على النقطة المناسبة. سيتم حفظها والانتقال للفرع التالي مباشرة.
-                  </p>
-                </div>
-                {saveBranchFrontier.isPending && <span className="shrink-0 rounded-full bg-primary/10 px-3 py-2 text-[11px] font-semibold text-primary">جارٍ الحفظ...</span>}
-              </div>
-
-              {branchChoices.length ? (
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {branchChoices.map((choice, index) => {
-                    const selected = lastCompletedLessonId === choice.nodeId;
-                    const sequence = choice.courseSequenceNumber
-                      ? "تسلسل الكورس " + choice.courseSequenceNumber
-                      : choice.lessonNumber
-                        ? "رقم الدرس " + choice.lessonNumber
-                        : "نقطة في الفرع";
-                    return (
-                      <motion.button key={choice.nodeId} type="button" aria-pressed={selected}
-                        disabled={saveBranchFrontier.isPending}
-                        onClick={() => submitStudentFrontier(choice.nodeId)}
-                        whileTap={{ scale: 0.985 }}
-                        className={"flex min-h-[76px] items-center justify-between gap-3 rounded-xl border p-4 text-right transition " + (selected ? "border-primary bg-primary/10 ring-2 ring-primary/15" : "border-border bg-background hover:border-primary/40 hover:bg-primary/[0.03]")}>
-                        <span className="min-w-0">
-                          <span className="block font-bold leading-6">{choice.title}</span>
-                          <span className="mt-1 block text-[10px] text-muted-foreground">{sequence}</span>
-                        </span>
-                        <span className={"flex size-7 shrink-0 items-center justify-center rounded-full border " + (selected ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground")}>
-                          {selected ? <Check className="size-4" /> : <span className="text-[10px]">{index + 1}</span>}
-                        </span>
-                      </motion.button>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="rounded-xl border border-dashed border-border bg-background p-4 text-sm leading-6 text-muted-foreground">فهرس هذا الفرع غير متاح بعد؛ لن نعرض اختيارات غير موثوقة.</p>
-              )}
-
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                <motion.button type="button" disabled={saveBranchFrontier.isPending}
-                  onClick={() => submitStudentFrontier("__NOT_STARTED__")} whileTap={{ scale: 0.985 }}
-                  className={"rounded-xl border px-4 py-3 text-sm font-semibold transition " + (lastCompletedLessonId === "__NOT_STARTED__" ? "border-primary bg-primary/10" : "border-border bg-background hover:border-primary/35")}>
-                  لم أبدأ هذا الفرع
-                </motion.button>
-                <motion.button type="button" disabled={saveBranchFrontier.isPending}
-                  onClick={() => submitStudentFrontier("__UNKNOWN__")} whileTap={{ scale: 0.985 }}
-                  className={"rounded-xl border px-4 py-3 text-sm font-semibold transition " + (lastCompletedLessonId === "__UNKNOWN__" ? "border-primary bg-primary/10" : "border-border bg-background hover:border-primary/35")}>
-                  مش متأكد من موضعي
-                </motion.button>
-              </div>
-            </motion.div>
-          </AnimatePresence>
-          <p className="text-[11px] leading-6 text-muted-foreground">التقدم المحفوظ في كل فرع مستقل. الانتقال التلقائي لا يغيّر موضع المدرس ولا بيانات SQ3R.</p>
-        </div>
-      </section>
-
-      <section className="app-card mb-5 overflow-hidden rounded-2xl">
         <header className="border-b border-border/70 bg-card p-5 sm:p-6">
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">03 · TEACHER FRONTIER</p>
-          <h2 className="mt-1 text-xl font-bold">موضع المدرس / المجموعة</h2>
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">02 · TEACHER FRONTIER</p>
+          <h2 className="mt-1 text-xl font-bold">المدرس وصل لفين؟</h2>
           <p className="mt-1 text-sm leading-6 text-muted-foreground">سجل آخر نقطة انتهى المدرس من شرحها. لو الدراسة في سنتر، سجل موضع المجموعة في حقل منفصل؛ الأونلاين لا يعرض بيانات مجموعة.</p>
         </header>
         <div className="space-y-4 p-5 sm:p-6">
           {!teacherReferenceName && (
             <p className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-sm leading-6 text-muted-foreground">احفظ اسم المدرس أولًا في قسم اختيار المدرس حتى نربط موضع الشرح بالشخص الصحيح.</p>
           )}
+          <div className="rounded-2xl border border-border/70 bg-muted/15 p-4">
+            <p className="text-sm font-bold">فيه درس أو محاضرة خاصة بالمدرس مش موجودة في الفهرس؟</p>
+            <p className="mt-1 text-xs leading-6 text-muted-foreground">أضف عنوانها هنا؛ ستظهر ضمن اختيارات موضع المدرس والطالب في هذا المسار فقط.</p>
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+              <Input
+                value={customCheckpointTitle}
+                onChange={event => setCustomCheckpointTitle(event.target.value)}
+                placeholder="اسم الدرس أو المحاضرة"
+                maxLength={180}
+                disabled={!currentTeacherKey || teacherSelectionDirty || addCustomCheckpointMutation.isPending}
+                className="h-11 rounded-xl bg-background"
+              />
+              <Button type="button" onClick={addCustomCheckpoint}
+                disabled={!customCheckpointTitle.trim() || !currentTeacherKey || teacherSelectionDirty || addCustomCheckpointMutation.isPending}
+                variant="outline" className="shrink-0 rounded-xl">
+                {addCustomCheckpointMutation.isPending ? "جارٍ الإضافة..." : "إضافة إلى الفهرس"}
+              </Button>
+            </div>
+          </div>
           {branchChoices.length > 0 ? (
             <ChoiceButtonGroup
               label={teacherReferenceName ? "آخر درس انتهى " + teacherReferenceName + " من شرحه" : "موضع شرح المدرس"}
@@ -685,6 +657,114 @@ export default function Study() {
               حفظ موضع المدرس
             </Button>
           </div>
+        </div>
+      </section>
+
+      <section className="app-card mb-5 overflow-hidden rounded-2xl">
+        <header className="border-b border-border/70 bg-gradient-to-l from-secondary/55 to-card p-5 sm:p-6">
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">03 · YOUR CURRICULUM PATH</p>
+          <h2 className="mt-1 text-xl font-bold">أنت وصلت لفين في المنهج؟</h2>
+          <p className="mt-1 text-sm leading-6 text-muted-foreground">بعد تسجيل موضع المدرس، اختَر آخر نقطة أنهيتها أنت. يُحفظ الاختيار ثم ينتقل للمسار التالي، مع إمكانية الرجوع لأي مسار وتعديله.</p>
+        </header>
+        <div className="space-y-5 p-5 sm:p-6">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs text-muted-foreground">{subjectName}</p>
+              <h3 className="mt-1 text-lg font-bold">{currentBranch?.branchTitle || "الفرع الحالي"}</h3>
+            </div>
+            <span className="rounded-full border border-primary/20 bg-primary/5 px-3 py-2 text-xs font-bold tabular-nums">
+              {branchIndex + 1} / {branches.length}
+            </span>
+          </div>
+
+          <div className="h-2 overflow-hidden rounded-full bg-muted">
+            <motion.div className="h-full rounded-full bg-primary" initial={false}
+              animate={{ width: ((branchIndex + 1) / Math.max(branches.length, 1) * 100) + "%" }}
+              transition={{ type: "spring", stiffness: 100, damping: 20 }} />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {branches.map((branch, index) => (
+              <motion.button key={branch.branchId} type="button" layout
+                aria-current={index === branchIndex ? "step" : undefined}
+                onClick={() => { setBranchId(branch.branchId); setLessonId(""); setCustomCheckpointTitle(""); }}
+                className={"flex items-center gap-2 rounded-full border px-3 py-2 text-[11px] font-semibold transition " + (index < branchIndex ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : index === branchIndex ? "border-primary bg-primary/10 text-foreground" : "border-border bg-background text-muted-foreground hover:border-primary/40")}>
+                <span className="flex size-5 items-center justify-center rounded-full bg-background/80 text-[10px]">
+                  {index < branchIndex ? <Check className="size-3" /> : index + 1}
+                </span>
+                {branch.branchTitle}
+              </motion.button>
+            ))}
+          </div>
+
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div key={subjectId + "::" + currentBranchId}
+              initial={{ opacity: 0, x: -18, filter: "blur(4px)" }}
+              animate={{ opacity: 1, x: 0, filter: "blur(0px)" }}
+              exit={{ opacity: 0, x: 16, filter: "blur(4px)" }}
+              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+              className="rounded-2xl border border-border/70 bg-muted/15 p-4 sm:p-5">
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-bold tracking-[0.14em] text-primary">CURRENT STEP · {branchIndex + 1}</p>
+                  <h4 className="mt-1 font-bold">آخر نقطة أنهيتها في {currentBranch?.branchTitle || "الفرع"}</h4>
+                  <p className="mt-1 text-xs leading-6 text-muted-foreground">
+                    اضغط على النقطة المناسبة. سيتم حفظها والانتقال للفرع التالي مباشرة.
+                  </p>
+                </div>
+                {saveBranchFrontier.isPending && <span className="shrink-0 rounded-full bg-primary/10 px-3 py-2 text-[11px] font-semibold text-primary">جارٍ الحفظ...</span>}
+              </div>
+
+              {branchChoices.length ? (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {branchChoices.map((choice, index) => {
+                    const selected = lastCompletedLessonId === choice.nodeId;
+                    const sequence = choice.courseSequenceNumber
+                      ? "تسلسل الكورس " + choice.courseSequenceNumber
+                      : choice.lessonNumber
+                        ? "رقم الدرس " + choice.lessonNumber
+                        : "نقطة في الفرع";
+                    return (
+                      <motion.button key={choice.nodeId} type="button" aria-pressed={selected}
+                        disabled={saveBranchFrontier.isPending || !teacherFrontierSaved || !teacherReferenceName || teacherSelectionDirty}
+                        onClick={() => submitStudentFrontier(choice.nodeId)}
+                        whileTap={{ scale: 0.985 }}
+                        className={"flex min-h-[76px] items-center justify-between gap-3 rounded-xl border p-4 text-right transition " + (selected ? "border-primary bg-primary/10 ring-2 ring-primary/15" : "border-border bg-background hover:border-primary/40 hover:bg-primary/[0.03]")}>
+                        <span className="min-w-0">
+                          <span className="block font-bold leading-6">{choice.title}</span>
+                          <span className="mt-1 block text-[10px] text-muted-foreground">{sequence}</span>
+                        </span>
+                        <span className={"flex size-7 shrink-0 items-center justify-center rounded-full border " + (selected ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground")}>
+                          {selected ? <Check className="size-4" /> : <span className="text-[10px]">{index + 1}</span>}
+                        </span>
+                      </motion.button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="rounded-xl border border-dashed border-border bg-background p-4 text-sm leading-6 text-muted-foreground">فهرس هذا الفرع غير متاح بعد؛ لن نعرض اختيارات غير موثوقة.</p>
+              )}
+
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <motion.button type="button" disabled={saveBranchFrontier.isPending || !teacherFrontierSaved || !teacherReferenceName || teacherSelectionDirty}
+                  onClick={() => submitStudentFrontier("__NOT_STARTED__")} whileTap={{ scale: 0.985 }}
+                  className={"rounded-xl border px-4 py-3 text-sm font-semibold transition " + (lastCompletedLessonId === "__NOT_STARTED__" ? "border-primary bg-primary/10" : "border-border bg-background hover:border-primary/35")}>
+                  لم أبدأ هذا الفرع
+                </motion.button>
+                <motion.button type="button" disabled={saveBranchFrontier.isPending || !teacherFrontierSaved || !teacherReferenceName || teacherSelectionDirty}
+                  onClick={() => submitStudentFrontier("__UNKNOWN__")} whileTap={{ scale: 0.985 }}
+                  className={"rounded-xl border px-4 py-3 text-sm font-semibold transition " + (lastCompletedLessonId === "__UNKNOWN__" ? "border-primary bg-primary/10" : "border-border bg-background hover:border-primary/35")}>
+                  مش متأكد من موضعي
+                </motion.button>
+              </div>
+            </motion.div>
+          </AnimatePresence>
+          <p className="text-[11px] leading-6 text-muted-foreground">
+            {!teacherReferenceName || teacherSelectionDirty
+              ? "ابدأ باختيار المدرس واحفظه في القسم الأول."
+              : !teacherFrontierSaved
+                ? "سجّل موضع المدرس في هذا المسار أولًا؛ بعدها ستُفتح اختيارات موضعك."
+                : "المسارات مستقلة ويمكن الرجوع لأي مسار وتعديل موضعك. لا يتغير اختيار درس SQ3R."}
+          </p>
         </div>
       </section>
 
