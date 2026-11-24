@@ -61,7 +61,10 @@ describe("generated plan JSON parser", () => {
     const jsonWithTrailingComma = JSON.stringify(planWithBraces).replace(/}$/, ",}");
     const fence = String.fromCharCode(96).repeat(3);
     const response = "مثال غير صالح: {\"hint\":\"ignore this object\"}\nإليك الخطة المطلوبة:\n\n" + fence + "json\n" + jsonWithTrailingComma + "\n" + fence;
-    expect(parseGeneratedPlan(response)).toEqual(planWithBraces);
+    const parsed = parseGeneratedPlan(response);
+    expect(parsed).toMatchObject(planWithBraces);
+    expect(parsed.steps[0].difficulty).toBe("unknown");
+    expect(parsed.steps[0].lessonSize).toBe("unknown");
   });
 
   it("does not accept an incomplete JSON object", () => {
@@ -72,7 +75,7 @@ describe("generated plan JSON parser", () => {
     const expandedPlan = {
       ...validPlan,
       title: "خطة مراجعة شاملة للترم الأول",
-      summary: "خطة مفصلة توزع التراكم على عدة أيام، وتفصل الدروس الكبيرة إلى فهم وتطبيق واسترجاع، مع ترتيب الأولويات بحسب فجوة المنهج وصعوبة كل درس وتقدمه لدى المدرس.",
+      summary: ("خطة مفصلة توزع التراكم على عدة أيام، وتفصل الدروس الكبيرة إلى فهم وتطبيق واسترجاع، مع ترتيب الأولويات بحسب فجوة المنهج وصعوبة كل درس وتقدمه لدى المدرس. ").repeat(5),
       steps: Array.from({ length: 14 }, (_, index) => ({
         day: "اليوم " + (Math.floor(index / 3) + 1),
         title: "مهمة الدرس " + (index + 1),
