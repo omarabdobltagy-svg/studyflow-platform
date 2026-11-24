@@ -186,8 +186,10 @@ export default function Home() {
     ),
     [profile.data, learning.data],
   );
-  const totalBacklog = backlogBySubject.reduce((total, item) => total
-    + (item.source === "frontier" ? item.gapCount : item.legacyCount), 0);
+  // Count affected subjects, not lesson points summed across incompatible subjects.
+  const totalBacklog = backlogBySubject.filter(item =>
+    item.source === "frontier" ? item.gapCount > 0 : item.source === "legacy" && item.legacyCount > 0
+  ).length;
   const hasBacklogEvidence = backlogBySubject.some(item => item.source !== "unknown");
   const uncalculatedBacklogBranches = backlogBySubject.reduce((total, item) => total + item.uncalculatedBranches, 0);
   const routineRate = data ? (data.routineStats.total ? Math.round((data.routineStats.completed / data.routineStats.total) * 100) : 0) : null;
@@ -323,7 +325,7 @@ export default function Home() {
             </div>
             {profile.isLoading || learning.isLoading ? <div className="sf-home-intelligence-loading">جارٍ قراءة مواضعك ومقارنتها بموضع المدرس أو المجموعة...</div>
               : profile.isError || learning.isError ? <p className="sf-home-intelligence-empty">تعذّر تحميل مواضع الدراسة والتراكم. أعد المحاولة من صفحة الدراسة.</p>
-              : <><div className="sf-home-backlog-total"><strong>{hasBacklogEvidence ? totalBacklog : "—"}</strong><span>نقاط متأخرة محسوبة من مواضع المنهج</span></div>
+              : <><div className="sf-home-backlog-total"><strong>{hasBacklogEvidence ? totalBacklog : "—"}</strong><span>مواد بها تراكم مؤكد</span></div>
                 <div className="sf-home-backlog-list">
                   {backlogBySubject.map(item => <div key={item.subjectId}>
                     <span>{item.subjectName}</span>
