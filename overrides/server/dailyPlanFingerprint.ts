@@ -12,6 +12,6 @@ function canonicalize(value: unknown): unknown {
 
 /** Stable, non-reversible identifier for the current student planning inputs. */
 export function createDailyPlanSourceFingerprint(source: unknown): string {
-  const serialized = JSON.stringify(canonicalize(source));
+  const serialized = JSON.stringify(canonicalize(source) ?? null);
   return createHash("sha256").update(serialized).digest("hex").slice(0, 32);
 }
