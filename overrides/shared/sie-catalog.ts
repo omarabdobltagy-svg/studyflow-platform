@@ -801,6 +801,17 @@ export const SIE_CHECKPOINT_CHOICES: Record<string, SIECheckpointChoice[]> = {
     { nodeId: "ARB_U3_L1", title: "حقوق الإنسان بين العالمية والخصوصية", unitTitle: "الإنسان وكرامته", unitNumber: 3, lessonNumber: "1", lessonType: "reading", sourceLabel: "كتاب الطالب", branchId: "ARB_READING", branchTitle: "القراءة", branchType: "course_track" },
     { nodeId: "ARB_U3_L2", title: "الحرية الفكرية", unitTitle: "الإنسان وكرامته", unitNumber: 3, lessonNumber: "2", lessonType: "reading", sourceLabel: "كتاب الطالب", branchId: "ARB_READING", branchTitle: "القراءة", branchType: "course_track" },
     { nodeId: "ARB_U3_L3", title: "يا أخي الإنسان", unitTitle: "الإنسان وكرامته", unitNumber: 3, lessonNumber: "3", lessonType: "poetry", sourceLabel: "كتاب الطالب", branchId: "ARB_TEXTS", branchTitle: "النصوص", branchType: "course_track" },
+
+    // Part 2 — units 4–6, named textbook readings and poems.
+    { nodeId: "ARB_U4_L1", title: "المرأة وبناء الدولة الحديثة", unitTitle: "بناء الوعي", unitNumber: 4, lessonNumber: "1", lessonType: "reading", sourceLabel: "كتاب الطالب - الجزء الثاني", branchId: "ARB_READING", branchTitle: "القراءة", branchType: "course_track" },
+    { nodeId: "ARB_U4_L2", title: "مصر الحقيقة والمرأة المصرية", unitTitle: "بناء الوعي", unitNumber: 4, lessonNumber: "2", lessonType: "reading", sourceLabel: "كتاب الطالب - الجزء الثاني", branchId: "ARB_READING", branchTitle: "القراءة", branchType: "course_track" },
+    { nodeId: "ARB_U4_L3", title: "أهواك يا وطني", unitTitle: "بناء الوعي", unitNumber: 4, lessonNumber: "3", lessonType: "poetry", sourceLabel: "كتاب الطالب - الجزء الثاني", branchId: "ARB_TEXTS", branchTitle: "النصوص", branchType: "course_track" },
+    { nodeId: "ARB_U5_L1", title: "التفاوض: استراتيجية القيادة الواعية", unitTitle: "فن التفاوض والقيادة", unitNumber: 5, lessonNumber: "1", lessonType: "reading", sourceLabel: "كتاب الطالب - الجزء الثاني", branchId: "ARB_READING", branchTitle: "القراءة", branchType: "course_track" },
+    { nodeId: "ARB_U5_L2", title: "القيادة أمانة وعدل", unitTitle: "فن التفاوض والقيادة", unitNumber: 5, lessonNumber: "2", lessonType: "reading", sourceLabel: "كتاب الطالب - الجزء الثاني", branchId: "ARB_READING", branchTitle: "القراءة", branchType: "course_track" },
+    { nodeId: "ARB_U5_L3", title: "دعوة إلى السلام", unitTitle: "فن التفاوض والقيادة", unitNumber: 5, lessonNumber: "3", lessonType: "poetry", sourceLabel: "كتاب الطالب - الجزء الثاني", branchId: "ARB_TEXTS", branchTitle: "النصوص", branchType: "course_track" },
+    { nodeId: "ARB_U6_L1", title: "المثقف في العصر الرقمي", unitTitle: "الثقافة أسلوب حياة", unitNumber: 6, lessonNumber: "1", lessonType: "reading", sourceLabel: "كتاب الطالب - الجزء الثاني", branchId: "ARB_READING", branchTitle: "القراءة", branchType: "course_track" },
+    { nodeId: "ARB_U6_L2", title: "الثقافة أداة لا حلية", unitTitle: "الثقافة أسلوب حياة", unitNumber: 6, lessonNumber: "2", lessonType: "reading", sourceLabel: "كتاب الطالب - الجزء الثاني", branchId: "ARB_READING", branchTitle: "القراءة", branchType: "course_track" },
+    { nodeId: "ARB_U6_L3", title: "غُربة وحنين", unitTitle: "الثقافة أسلوب حياة", unitNumber: 6, lessonNumber: "3", lessonType: "poetry", sourceLabel: "كتاب الطالب - الجزء الثاني", branchId: "ARB_TEXTS", branchTitle: "النصوص", branchType: "course_track" },
   ],
   ENG1_G2_BAC: [
     { nodeId: "ENG_U1_SEC_A_T1", title: "Social Media and Self-Image", unitTitle: "Living Well in a Complex World", unitNumber: 1, lessonNumber: "1.1", lessonType: "topic" },
@@ -827,6 +838,40 @@ export const SIE_CHECKPOINT_CHOICES: Record<string, SIECheckpointChoice[]> = {
     { nodeId: "ENG_U5_SEC_A_T2", title: "Renewable Energy – Powering a Sustainable Future", unitTitle: "The Greenhouse Effect", unitNumber: 5, lessonNumber: "5.2", lessonType: "topic" },
     { nodeId: "ENG_U5_SEC_B_T1", title: "Greening Projects in Egypt", unitTitle: "The Greenhouse Effect", unitNumber: 5, lessonNumber: "5.3", lessonType: "topic" },
     { nodeId: "ENG_U5_SEC_B_T2", title: "Individual and Collective Actions", unitTitle: "The Greenhouse Effect", unitNumber: 5, lessonNumber: "5.4", lessonType: "topic" },
+
+    // Part 2 — units 6–10, complete 40-topic textbook catalog.
+    { nodeId: "ENG_U6_SEC_A_T1", title: "A World We Borrow", unitTitle: "The Space We Share", unitNumber: 6, lessonNumber: "6.1", lessonType: "topic" },
+    { nodeId: "ENG_U6_SEC_A_T2", title: "When Needs Compete", unitTitle: "The Space We Share", unitNumber: 6, lessonNumber: "6.2", lessonType: "topic" },
+    { nodeId: "ENG_U6_SEC_B_T1", title: "Voices for the Voiceless", unitTitle: "The Space We Share", unitNumber: 6, lessonNumber: "6.3", lessonType: "topic" },
+    { nodeId: "ENG_U6_SEC_B_T2", title: "Global Citizens, Local Actions", unitTitle: "The Space We Share", unitNumber: 6, lessonNumber: "6.4", lessonType: "topic" },
+    { nodeId: "ENG_U7_SEC_A_T1", title: "From Hobby to Opportunity", unitTitle: "Discovering Your Passion", unitNumber: 7, lessonNumber: "7.1", lessonType: "topic" },
+    { nodeId: "ENG_U7_SEC_A_T2", title: "Building a Community Around Your Passion", unitTitle: "Discovering Your Passion", unitNumber: 7, lessonNumber: "7.2", lessonType: "topic" },
+    { nodeId: "ENG_U7_SEC_B_T1", title: "Leaving Your Mark", unitTitle: "Discovering Your Passion", unitNumber: 7, lessonNumber: "7.3", lessonType: "topic" },
+    { nodeId: "ENG_U7_SEC_B_T2", title: "Time Well Spent: Balancing Passion and Priorities", unitTitle: "Discovering Your Passion", unitNumber: 7, lessonNumber: "7.4", lessonType: "topic" },
+    { nodeId: "ENG_U8_SEC_A_T1", title: "Vocational Education in Egypt", unitTitle: "Pathways to Progress", unitNumber: 8, lessonNumber: "8.1", lessonType: "topic" },
+    { nodeId: "ENG_U8_SEC_A_T2", title: "International Vocational Voices Online", unitTitle: "Pathways to Progress", unitNumber: 8, lessonNumber: "8.2", lessonType: "topic" },
+    { nodeId: "ENG_U8_SEC_B_T1", title: "The Egyptian-Japanese Schools (EJS)", unitTitle: "Pathways to Progress", unitNumber: 8, lessonNumber: "8.3", lessonType: "topic" },
+    { nodeId: "ENG_U8_SEC_B_T2", title: "The Skills Employers Really Want", unitTitle: "Pathways to Progress", unitNumber: 8, lessonNumber: "8.4", lessonType: "topic" },
+    { nodeId: "ENG_U9_SEC_A_T1", title: "Finding My Place", unitTitle: "Circles of Belonging", unitNumber: 9, lessonNumber: "9.1", lessonType: "topic" },
+    { nodeId: "ENG_U9_SEC_A_T2", title: "Relationships That Help Us Grow", unitTitle: "Circles of Belonging", unitNumber: 9, lessonNumber: "9.2", lessonType: "topic" },
+    { nodeId: "ENG_U9_SEC_B_T1", title: "No One Left Behind", unitTitle: "Circles of Belonging", unitNumber: 9, lessonNumber: "9.3", lessonType: "topic" },
+    { nodeId: "ENG_U9_SEC_B_T2", title: "Community That Cares", unitTitle: "Circles of Belonging", unitNumber: 9, lessonNumber: "9.4", lessonType: "topic" },
+    { nodeId: "ENG_U10_SEC_A_T1", title: "Hidden Cost of a Click", unitTitle: "Behind the Buy", unitNumber: 10, lessonNumber: "10.1", lessonType: "topic" },
+    { nodeId: "ENG_U10_SEC_A_T2", title: "Chasing Validation", unitTitle: "Behind the Buy", unitNumber: 10, lessonNumber: "10.2", lessonType: "topic" },
+    { nodeId: "ENG_U10_SEC_B_T1", title: "True Price of Fast Fashion", unitTitle: "Behind the Buy", unitNumber: 10, lessonNumber: "10.3", lessonType: "topic" },
+    { nodeId: "ENG_U10_SEC_B_T2", title: "Rethinking What We Buy: A Community Response", unitTitle: "Behind the Buy", unitNumber: 10, lessonNumber: "10.4", lessonType: "topic" },
+
+    // Separate official story book, not mixed with textbook topics or teacher course streams.
+    { nodeId: "ENG_LOST_WORLD_CH1", title: "A Dream of Adventure", unitTitle: "The Lost World", lessonNumber: "1", lessonType: "story", sourceLabel: "كتاب القصة المقرر", branchId: "ENG_STORY", branchTitle: "القصة - The Lost World", branchType: "course_track" },
+    { nodeId: "ENG_LOST_WORLD_CH2", title: "Professor Challenger’s Secret", unitTitle: "The Lost World", lessonNumber: "2", lessonType: "story", sourceLabel: "كتاب القصة المقرر", branchId: "ENG_STORY", branchTitle: "القصة - The Lost World", branchType: "course_track" },
+    { nodeId: "ENG_LOST_WORLD_CH3", title: "The Expedition Is Chosen", unitTitle: "The Lost World", lessonNumber: "3", lessonType: "story", sourceLabel: "كتاب القصة المقرر", branchId: "ENG_STORY", branchTitle: "القصة - The Lost World", branchType: "course_track" },
+    { nodeId: "ENG_LOST_WORLD_CH4", title: "Into the Unknown", unitTitle: "The Lost World", lessonNumber: "4", lessonType: "story", sourceLabel: "كتاب القصة المقرر", branchId: "ENG_STORY", branchTitle: "القصة - The Lost World", branchType: "course_track" },
+    { nodeId: "ENG_LOST_WORLD_CH5", title: "Trapped in the Lost World", unitTitle: "The Lost World", lessonNumber: "5", lessonType: "story", sourceLabel: "كتاب القصة المقرر", branchId: "ENG_STORY", branchTitle: "القصة - The Lost World", branchType: "course_track" },
+    { nodeId: "ENG_LOST_WORLD_CH6", title: "Malone’s Night Adventure", unitTitle: "The Lost World", lessonNumber: "6", lessonType: "story", sourceLabel: "كتاب القصة المقرر", branchId: "ENG_STORY", branchTitle: "القصة - The Lost World", branchType: "course_track" },
+    { nodeId: "ENG_LOST_WORLD_CH7", title: "Prisoners of the Ape-Men", unitTitle: "The Lost World", lessonNumber: "7", lessonType: "story", sourceLabel: "كتاب القصة المقرر", branchId: "ENG_STORY", branchTitle: "القصة - The Lost World", branchType: "course_track" },
+    { nodeId: "ENG_LOST_WORLD_CH8", title: "The Battle for the Plateau", unitTitle: "The Lost World", lessonNumber: "8", lessonType: "story", sourceLabel: "كتاب القصة المقرر", branchId: "ENG_STORY", branchTitle: "القصة - The Lost World", branchType: "course_track" },
+    { nodeId: "ENG_LOST_WORLD_CH9", title: "The Hidden Way Home", unitTitle: "The Lost World", lessonNumber: "9", lessonType: "story", sourceLabel: "كتاب القصة المقرر", branchId: "ENG_STORY", branchTitle: "القصة - The Lost World", branchType: "course_track" },
+    { nodeId: "ENG_LOST_WORLD_CH10", title: "Proof Before the World", unitTitle: "The Lost World", lessonNumber: "10", lessonType: "story", sourceLabel: "كتاب القصة المقرر", branchId: "ENG_STORY", branchTitle: "القصة - The Lost World", branchType: "course_track" },
   ],
   HIS_G2_BAC: [
     { nodeId: "HIS_U1_L1", title: "بناء الدولة المصرية واستمرارها عبر التاريخ", unitTitle: "مصر بين الماضي والحاضر" },
@@ -840,36 +885,50 @@ export const SIE_CHECKPOINT_CHOICES: Record<string, SIECheckpointChoice[]> = {
     { nodeId: "HIS_U3_L1", title: "حركات التحرر الوطني ضد الاحتلال الفرنسي والإيطالي في العالم العربي", unitTitle: "مصر وقضايا التحرر الوطني في الوطن العربي وإفريقيا" },
     { nodeId: "HIS_U3_L2", title: "حركات التحرر الوطني ضد الاحتلال البريطاني والإسباني في العالم العربي", unitTitle: "مصر وقضايا التحرر الوطني في الوطن العربي وإفريقيا" },
     { nodeId: "HIS_U3_L3", title: "مرتكزات الدور المصري إقليميًا ودوليًا", unitTitle: "مصر وقضايا التحرر الوطني في الوطن العربي وإفريقيا" },
-    { nodeId: "HIS_U3_L4", title: "دور مصر في دعم حركات التحرر الوطني", unitTitle: "مصر وقضايا التحرر الوطني في الوطن العربي وإفريقيا" },
+    { nodeId: "HIS_U3_L4", title: "دور مصر في دعم حركات التحرر الوطني", unitTitle: "مصر وقضايا التحرر الوطني في الوطن العربي وإفريقيا", unitNumber: 3, lessonNumber: "3.4" },
+
+    // Part 2 — units 4–6; one linear course sequence, with unit metadata preserved.
+    { nodeId: "HIS_U4_L1", title: "مقدمات الحرب العالمية الأولى", unitTitle: "الحرب العالمية الأولى والثانية وتحولات النظام الدولي", unitNumber: 4, lessonNumber: "4.1", sourceLabel: "كتاب التاريخ - الجزء الثاني" },
+    { nodeId: "HIS_U4_L2", title: "الحرب العالمية الأولى: المعارك الكبرى", unitTitle: "الحرب العالمية الأولى والثانية وتحولات النظام الدولي", unitNumber: 4, lessonNumber: "4.2", sourceLabel: "كتاب التاريخ - الجزء الثاني" },
+    { nodeId: "HIS_U4_L3", title: "مقدمات الحرب العالمية الثانية", unitTitle: "الحرب العالمية الأولى والثانية وتحولات النظام الدولي", unitNumber: 4, lessonNumber: "4.3", sourceLabel: "كتاب التاريخ - الجزء الثاني" },
+    { nodeId: "HIS_U4_L4", title: "من الحرب العالمية الثانية إلى الحرب الباردة", unitTitle: "الحرب العالمية الأولى والثانية وتحولات النظام الدولي", unitNumber: 4, lessonNumber: "4.4", sourceLabel: "كتاب التاريخ - الجزء الثاني" },
+    { nodeId: "HIS_U5_L1", title: "القضية الفلسطينية والتحولات الدولية حتى عام 1948م", unitTitle: "مصر والقضية الفلسطينية", unitNumber: 5, lessonNumber: "5.1", sourceLabel: "كتاب التاريخ - الجزء الثاني" },
+    { nodeId: "HIS_U5_L2", title: "مصر والصراع العربي الإسرائيلي", unitTitle: "مصر والقضية الفلسطينية", unitNumber: 5, lessonNumber: "5.2", sourceLabel: "كتاب التاريخ - الجزء الثاني" },
+    { nodeId: "HIS_U5_L3", title: "حرب أكتوبر 1973م (ملحمة العبور والنصر)", unitTitle: "مصر والقضية الفلسطينية", unitNumber: 5, lessonNumber: "5.3", sourceLabel: "كتاب التاريخ - الجزء الثاني" },
+    { nodeId: "HIS_U5_L4", title: "مصر والقضية الفلسطينية بعد حرب أكتوبر 1973م", unitTitle: "مصر والقضية الفلسطينية", unitNumber: 5, lessonNumber: "5.4", sourceLabel: "كتاب التاريخ - الجزء الثاني" },
+    { nodeId: "HIS_U6_L1", title: "مفهوم السلام العالمي وتطوره", unitTitle: "السلام العالمي بين الواقع والمأمول", unitNumber: 6, lessonNumber: "6.1", sourceLabel: "كتاب التاريخ - الجزء الثاني" },
+    { nodeId: "HIS_U6_L2", title: "تحديات تحقيق السلام العالمي", unitTitle: "السلام العالمي بين الواقع والمأمول", unitNumber: 6, lessonNumber: "6.2", sourceLabel: "كتاب التاريخ - الجزء الثاني" },
+    { nodeId: "HIS_U6_L3", title: "المنظمات الدولية والإقليمية ودورها في حفظ السلام العالمي", unitTitle: "السلام العالمي بين الواقع والمأمول", unitNumber: 6, lessonNumber: "6.3", sourceLabel: "كتاب التاريخ - الجزء الثاني" },
+    { nodeId: "HIS_U6_L4", title: "دور مصر في دعم السلام العالمي", unitTitle: "السلام العالمي بين الواقع والمأمول", unitNumber: 6, lessonNumber: "6.4", sourceLabel: "كتاب التاريخ - الجزء الثاني" },
   ],
   SECOND_LANGUAGE_G2_BAC_PENDING: [
     { nodeId: "ITA_U1_T1", title: "Dove abiti?", unitTitle: "Unità 1: Dove abiti?" },
     { nodeId: "ITA_U2_T1", title: "Tempo libero", unitTitle: "Unità 2: Tempo libero" },
   ],
   PROG_AI_G2_BAC: [
-    { nodeId: "PROG_1_1", title: "تطور تكنولوجيا المعلومات والتحول الاجتماعي", unitTitle: "تكنولوجيا المعلومات والمجتمع" },
-    { nodeId: "PROG_1_2", title: "كيف يعمل الذكاء الاصطناعي", unitTitle: "تكنولوجيا المعلومات والمجتمع" },
-    { nodeId: "PROG_1_3", title: "الذكاء الاصطناعي في الحياة اليومية والصناعة", unitTitle: "تكنولوجيا المعلومات والمجتمع" },
-    { nodeId: "PROG_1_4", title: "القضايا الأخلاقية للذكاء الاصطناعي", unitTitle: "تكنولوجيا المعلومات والمجتمع" },
-    { nodeId: "PROG_2_1", title: "تقنيات التشفير والمصادقة", unitTitle: "الأمن السيبراني" },
-    { nodeId: "PROG_2_2", title: "تصميم أمن الشبكات", unitTitle: "الأمن السيبراني" },
-    { nodeId: "PROG_2_3", title: "الاستجابة للحوادث وإدارة المخاطر", unitTitle: "الأمن السيبراني" },
-    { nodeId: "PROG_3_1", title: "البنية العامة لتطبيقات الويب", unitTitle: "تطبيقات الويب" },
-    { nodeId: "PROG_3_2", title: "طرق الاتصال في تطبيقات الويب", unitTitle: "تطبيقات الويب" },
-    { nodeId: "PROG_3_3", title: "أساسيات تكنولوجيا الواجهة الأمامية", unitTitle: "تطبيقات الويب" },
-    { nodeId: "PROG_4_1", title: "أنواع الوسائط وخصائصها", unitTitle: "تصميم الويب والوسائط" },
-    { nodeId: "PROG_4_2", title: "تصميم المعلومات وتجربة المستخدم للمواقع", unitTitle: "تصميم الويب والوسائط" },
-    { nodeId: "PROG_4_3", title: "أساليب تقييم المواقع الإلكترونية", unitTitle: "تصميم الويب والوسائط" },
-    { nodeId: "PROG_4_4", title: "عملية التحسين التكراري للمواقع", unitTitle: "تصميم الويب والوسائط" },
-    { nodeId: "PROG_5_1", title: "طرق جمع البيانات", unitTitle: "جمع البيانات وتنقيتها" },
-    { nodeId: "PROG_5_2", title: "تنقية البيانات وتحويلها", unitTitle: "جمع البيانات وتنقيتها" },
-    { nodeId: "PROG_5_3", title: "البيانات المفتوحة وواجهات برمجة التطبيقات", unitTitle: "جمع البيانات وتنقيتها" },
-    { nodeId: "PROG_6_1", title: "الاستدلال الإحصائي", unitTitle: "التحليل والتواصل" },
-    { nodeId: "PROG_6_2", title: "استخدام تحليل الانحدار وتقييمه", unitTitle: "التحليل والتواصل" },
-    { nodeId: "PROG_6_3", title: "تمثيل البيانات المرئي والتواصل", unitTitle: "التحليل والتواصل" },
-    { nodeId: "PROG_7_1", title: "أساسيات التعلم الآلي", unitTitle: "التعلم الآلي والذكاء الاصطناعي" },
-    { nodeId: "PROG_7_2", title: "الشبكات العصبية والتعلم العميق", unitTitle: "التعلم الآلي والذكاء الاصطناعي" },
-    { nodeId: "PROG_7_3", title: "نماذج اللغة الكبيرة والذكاء الاصطناعي التوليدي", unitTitle: "التعلم الآلي والذكاء الاصطناعي" },
+    { nodeId: "PROG_1_1", title: "تطور تكنولوجيا المعلومات والتحول الاجتماعي", unitTitle: "تكنولوجيا المعلومات والمجتمع", unitNumber: 1, lessonNumber: "1.1", sourceLabel: "كتاب البرمجة - الجزء 1" },
+    { nodeId: "PROG_1_2", title: "كيف يعمل الذكاء الاصطناعي", unitTitle: "تكنولوجيا المعلومات والمجتمع", unitNumber: 1, lessonNumber: "1.2", sourceLabel: "كتاب البرمجة - الجزء 1" },
+    { nodeId: "PROG_1_3", title: "الذكاء الاصطناعي في الحياة اليومية والصناعة", unitTitle: "تكنولوجيا المعلومات والمجتمع", unitNumber: 1, lessonNumber: "1.3", sourceLabel: "كتاب البرمجة - الجزء 1" },
+    { nodeId: "PROG_1_4", title: "القضايا الأخلاقية للذكاء الاصطناعي", unitTitle: "تكنولوجيا المعلومات والمجتمع", unitNumber: 1, lessonNumber: "1.4", sourceLabel: "كتاب البرمجة - الجزء 1" },
+    { nodeId: "PROG_2_1", title: "تقنيات التشفير والمصادقة", unitTitle: "الأمن السيبراني", unitNumber: 2, lessonNumber: "2.1", sourceLabel: "كتاب البرمجة - الجزء 1" },
+    { nodeId: "PROG_2_2", title: "تصميم أمن الشبكات", unitTitle: "الأمن السيبراني", unitNumber: 2, lessonNumber: "2.2", sourceLabel: "كتاب البرمجة - الجزء 1" },
+    { nodeId: "PROG_2_3", title: "الاستجابة للحوادث وإدارة المخاطر", unitTitle: "الأمن السيبراني", unitNumber: 2, lessonNumber: "2.3", sourceLabel: "كتاب البرمجة - الجزء 1" },
+    { nodeId: "PROG_3_1", title: "البنية العامة لتطبيقات الويب", unitTitle: "تطبيقات الويب", unitNumber: 3, lessonNumber: "3.1", sourceLabel: "كتاب البرمجة - الجزء 1" },
+    { nodeId: "PROG_3_2", title: "طرق الاتصال في تطبيقات الويب", unitTitle: "تطبيقات الويب", unitNumber: 3, lessonNumber: "3.2", sourceLabel: "كتاب البرمجة - الجزء 1" },
+    { nodeId: "PROG_3_3", title: "أساسيات تكنولوجيا الواجهة الأمامية", unitTitle: "تطبيقات الويب", unitNumber: 3, lessonNumber: "3.3", sourceLabel: "كتاب البرمجة - الجزء 1" },
+    { nodeId: "PROG_4_1", title: "أنواع الوسائط وخصائصها", unitTitle: "تصميم الويب والوسائط", unitNumber: 4, lessonNumber: "4.1", sourceLabel: "كتاب البرمجة - الجزء 1" },
+    { nodeId: "PROG_4_2", title: "تصميم المعلومات وتجربة المستخدم للمواقع", unitTitle: "تصميم الويب والوسائط", unitNumber: 4, lessonNumber: "4.2", sourceLabel: "كتاب البرمجة - الجزء 1" },
+    { nodeId: "PROG_4_3", title: "أساليب تقييم المواقع الإلكترونية", unitTitle: "تصميم الويب والوسائط", unitNumber: 4, lessonNumber: "4.3", sourceLabel: "كتاب البرمجة - الجزء 1" },
+    { nodeId: "PROG_4_4", title: "عملية التحسين التكراري للمواقع", unitTitle: "تصميم الويب والوسائط", unitNumber: 4, lessonNumber: "4.4", sourceLabel: "كتاب البرمجة - الجزء 1" },
+    { nodeId: "PROG_5_1", title: "طرق جمع البيانات", unitTitle: "جمع البيانات وتنقيتها", unitNumber: 5, lessonNumber: "5.1", sourceLabel: "كتاب البرمجة - الجزء 2" },
+    { nodeId: "PROG_5_2", title: "تنقية البيانات وتحويلها", unitTitle: "جمع البيانات وتنقيتها", unitNumber: 5, lessonNumber: "5.2", sourceLabel: "كتاب البرمجة - الجزء 2" },
+    { nodeId: "PROG_5_3", title: "البيانات المفتوحة وواجهات برمجة التطبيقات", unitTitle: "جمع البيانات وتنقيتها", unitNumber: 5, lessonNumber: "5.3", sourceLabel: "كتاب البرمجة - الجزء 2" },
+    { nodeId: "PROG_6_1", title: "الاستدلال الإحصائي", unitTitle: "التحليل والتواصل", unitNumber: 6, lessonNumber: "6.1", sourceLabel: "كتاب البرمجة - الجزء 2" },
+    { nodeId: "PROG_6_2", title: "استخدام تحليل الانحدار وتقييمه", unitTitle: "التحليل والتواصل", unitNumber: 6, lessonNumber: "6.2", sourceLabel: "كتاب البرمجة - الجزء 2" },
+    { nodeId: "PROG_6_3", title: "تمثيل البيانات المرئي والتواصل", unitTitle: "التحليل والتواصل", unitNumber: 6, lessonNumber: "6.3", sourceLabel: "كتاب البرمجة - الجزء 2" },
+    { nodeId: "PROG_7_1", title: "أساسيات التعلم الآلي", unitTitle: "التعلم الآلي والذكاء الاصطناعي", unitNumber: 7, lessonNumber: "7.1", sourceLabel: "كتاب البرمجة - الجزء 2" },
+    { nodeId: "PROG_7_2", title: "الشبكات العصبية والتعلم العميق", unitTitle: "التعلم الآلي والذكاء الاصطناعي", unitNumber: 7, lessonNumber: "7.2", sourceLabel: "كتاب البرمجة - الجزء 2" },
+    { nodeId: "PROG_7_3", title: "نماذج اللغة الكبيرة والذكاء الاصطناعي التوليدي", unitTitle: "التعلم الآلي والذكاء الاصطناعي", unitNumber: 7, lessonNumber: "7.3", sourceLabel: "كتاب البرمجة - الجزء 2" },
   ],
 };
 
@@ -937,11 +996,12 @@ export function getSIECheckpointBranches(subjectId: string): SIECheckpointBranch
     }];
   }
 
-  // English has three course streams (Vocabulary, Grammar, GRE) plus the
-  // verified textbook topics. Teacher-specific entries can be added to each
-  // stream without inventing lessons in the official book index.
+  // English has separate teacher course streams, the complete 10-unit textbook,
+  // and its own official story book. Keep these catalogs independent.
   if (subjectId === "ENG1_G2_BAC") {
     const textbookBranchId = "ENG_TEXTBOOK";
+    const textbookChoices = choices.filter(choice => !choice.nodeId.startsWith("ENG_LOST_WORLD_"));
+    const storyChoices = choices.filter(choice => choice.nodeId.startsWith("ENG_LOST_WORLD_"));
     return [
       { branchId: "ENG_VOCABULARY", branchTitle: "Vocabulary", branchType: "course_track", choices: [] },
       { branchId: "ENG_GRAMMAR", branchTitle: "Grammar", branchType: "course_track", choices: [] },
@@ -950,12 +1010,18 @@ export function getSIECheckpointBranches(subjectId: string): SIECheckpointBranch
         branchId: textbookBranchId,
         branchTitle: "موضوعات الكتاب",
         branchType: "course_track",
-        choices: choices.map(choice => ({
+        choices: textbookChoices.map(choice => ({
           ...choice,
           branchId: textbookBranchId,
           branchTitle: "موضوعات الكتاب",
           branchType: "course_track",
         })),
+      },
+      {
+        branchId: "ENG_STORY",
+        branchTitle: "القصة - The Lost World",
+        branchType: "course_track",
+        choices: storyChoices,
       },
     ];
   }
