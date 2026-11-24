@@ -7,18 +7,22 @@ import { getStudentProfile, saveAiPlan } from "./db";
 import { formatTextbookEvidence, retrieveTextbookEvidence } from "./textbook-retrieval";
 
 const planSchema = z.object({
-  title: z.string().min(3).max(100),
-  summary: z.string().min(10).max(500),
-  durationLabel: z.string().min(2).max(70),
+  title: z.string().trim().min(3).max(160),
+  summary: z.string().trim().min(10).max(1_500),
+  durationLabel: z.string().trim().min(2).max(100),
   steps: z.array(z.object({
-    day: z.string().min(1).max(30),
-    title: z.string().min(2).max(120),
-    detail: z.string().min(5).max(260),
+    day: z.string().trim().min(1).max(60),
+    title: z.string().trim().min(2).max(180),
+    detail: z.string().trim().min(5).max(1_200),
     minutes: z.number().int().min(5).max(480),
-    category: z.string().min(2).max(60),
-  })).min(3).max(6),
-  habits: z.array(z.object({ title: z.string().min(2).max(120), cue: z.string().min(2).max(160) })).min(1).max(2),
-  reviewQuestion: z.string().min(5).max(250),
+    category: z.string().trim().min(2).max(80),
+    priority: z.enum(["critical", "high", "medium", "low"]).default("medium"),
+    difficulty: z.enum(["easy", "medium", "hard", "unknown"]).default("unknown"),
+    lessonSize: z.enum(["small", "medium", "large", "unknown"]).default("unknown"),
+    sourcePages: z.array(z.number().int().positive().max(5_000)).max(20).default([]),
+  })).min(3).max(30),
+  habits: z.array(z.object({ title: z.string().trim().min(2).max(160), cue: z.string().trim().min(2).max(240) })).max(5).default([]),
+  reviewQuestion: z.string().trim().min(5).max(600),
 });
 
 export type GeneratedPlan = z.infer<typeof planSchema>;
@@ -172,7 +176,7 @@ export function parseGeneratedPlan(content: string): GeneratedPlan {
   }
 
   console.error("[StudyFlow planner] No JSON object matched the plan schema:", lastSchemaIssues);
-  throw new Error("الاستجابة الذكية غير مكتملة. حاول وصف هدفك بصورة أبسط.");
+  throw new Error("وصلت استجابة من الذكاء الاصطناعي، لكنها لم تطابق بنية الخطة المطلوبة. أعد المحاولة؛ لا تحتاج إلى تبسيط وصفك.");
 }
 
 function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof getStudentProfile>>>) {
@@ -230,7 +234,13 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
       const records = branch.choices.map(choice => subjectLessonRecords[choice.nodeId]).filter(Boolean);
       const completed = records.filter((item: any) => Array.isArray(item.completedSteps) && item.completedSteps.length === 5).length;
       const underway = records.filter((item: any) => Array.isArray(item.completedSteps) && item.completedSteps.length > 0 && item.completedSteps.length < 5).length;
-      const hard = branch.choices.filter(choice => subjectLessonRecords[choice.nodeId]?.difficulty === "hard").map(choice => choice.title);
+      const lessonDifficulty = branch.choices.map(choice => {
+        const level = subjectLessonRecords[choice.nodeId]?.difficulty ?? "unknown";
+        const label = level === "hard" ? "صعب حسب الطالب"
+          : level === "easy" ? "سهل حسب الطالب"
+            : level === "medium" ? "متوسط حسب الطالب" : "لم يُقيّم بعد";
+        return choice.title + ": " + label;
+      });
 
       return [
         "الفرع الرسمي: " + branch.branchTitle,
@@ -240,7 +250,7 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
           ? "غير محسوبة لعدم اكتمال البيانات داخل الفرع"
           : gap.gapCount + " نقطة داخل الفرع؛ متقدم عن المرجع: " + (gap.aheadCount ?? 0)),
         "إنجاز SQ3R في الفرع: " + completed + " مكتمل؛ " + underway + " قيد الدراسة",
-        "نقاط صعبة: " + (hard.join("، ") || "لا توجد بيانات"),
+        "تقييم صعوبة كل درس من الطالب: " + lessonDifficulty.join("؛ "),
       ].join(" | ");
     }).join("\n");
 
@@ -287,25 +297,37 @@ export async function generatePersonalPlan(
 ): Promise<GeneratedPlan> {
   const dailyMinutes = Math.max(20, Math.min(600, Math.trunc(constraints.dailyMinutes ?? 120)));
   const profile = includeStudentProfile ? await getStudentProfile(userId) : null;
+  const curriculumTitles = profile
+    ? (profile.subjects || []).flatMap(subjectId =>
+        getSIECheckpointBranches(subjectId).flatMap(branch =>
+          [branch.branchTitle, ...branch.choices.map(choice => choice.title)]
+        )
+      ).join("؛ ")
+    : "";
+  const retrievalQuery = [prompt, curriculumTitles].filter(Boolean).join("\n");
   const textbookRetrieval = profile
-    ? retrieveTextbookEvidence(profile.subjects || [], prompt, 2)
+    ? retrieveTextbookEvidence(profile.subjects || [], retrievalQuery, Math.max(6, (profile.subjects || []).length * 3))
     : { passages: [], coverageNotes: [] };
-  const textbookContext = formatTextbookEvidence(textbookRetrieval).slice(0, 1_700);
+  const textbookContext = formatTextbookEvidence(textbookRetrieval).slice(0, 4_800);
   const context = (profile
-    ? buildLearningContext(profile) + "\n\nمصادر نصية من الكتب الرسمية مرتبطة بطلب الخطة:\n" + (textbookContext || "لم يتم استرجاع مقتطف مطابق من كتاب متاح.")
-    : "لم يطلب المستخدم تخصيص الخطة بالملف الدراسي.").slice(0, 3_600);
+    ? buildLearningContext(profile) + "\n\nمصادر نصية من كتب الجزء الأول المتاحة فعليًا:\n" + (textbookContext || "لم يُسترجع نص مطابق من الكتب المتاحة.")
+    : "لم يطلب المستخدم تخصيص الخطة بالملف الدراسي.").slice(0, 8_500);
   const system = [
     "أنت محرك التخطيط الدراسي داخل StudyFlow، ولست مساعد دردشة عام.",
     "حلّل فجوة المنهج المحسوبة تلقائيًا لكل فرع مستقل داخل المادة، وموضع الطالب وموضع التدريس المرجعي داخل الفرع نفسه، وتقدم SQ3R ونتائج التقييم وصعوبة الدروس؛ ثم ابنِ خطة عملية متوازنة.",
     "مصدر المرجع له أولوية صارمة داخل كل فرع: استخدم موضع المدرس إذا كان معروفًا، وإلا استخدم موضع الفصل في المدرسة داخل الفرع نفسه. موضع الطالب يظل مستقلًا عن الاثنين. لا تقارن أو تجمع فجوات فروع متوازية، ولا تستخدم رقم التراكم القديم كأنه فجوة مؤكدة.",
     "لا تخلط بين آخر محتوى عام للمدرس، محتوى الكورس المدفوع، موضع ما شرحه المدرس، موضع المدرسة، وما أتمه الطالب. لا تخترع أرقام محاضرات أو أسماء دروس أو مواضع غير مسجلة.",
     "إذا توفرت مقتطفات مسترجعة من كتاب رسمي، اجعلها المرجع الأول عند تحديد موضوعات الخطة واذكر صفحات PDF في التفاصيل عند الاستناد إليها. المعرفة العامة تستخدم لسد المتطلبات السابقة غير المشروحة وتوضع بوضوح كتمهيد مساند، ولا تنسب للكتاب. إذا كان فهرس مادة غير محمّل فاذكر هذا القيد ولا تخترع محتوى منهجيًا لها.",
-    "رتّب الأولويات بحسب موعد الاختبار إن ذُكر، والمتطلبات السابقة، وحجم التراكم، وصعوبة الدرس. الدرس الصعب أو التأسيسي يحتاج فهمًا وتدريبًا واسترجاعًا، وليس قراءة سريعة؛ الدرس المألوف القصير يمكن أن يأخذ مراجعة مركزة.",
+    "رتّب الأولويات لكل درس منفصلًا وفق موعد الاختبار، والفجوة بين تقدم الطالب وموضع المدرس، والمتطلبات السابقة، وحجم المحتوى، وصعوبة المفاهيم، ونتائج الطالب.",
+    "حدّد difficulty: easy/medium/hard/unknown، وlessonSize: small/medium/large/unknown، وpriority: critical/high/medium/low لكل خطوة. لا تصف الصعوبة بأنها مؤكدة من عنوان الدرس وحده؛ اعتمد على نص الكتاب والتقييمات، وإذا غابت الأدلة فاختر unknown أو اجعل التقدير واضحًا في detail.",
+    "قدّر حجم الدرس من نطاق الصفحات وكثافة المحتوى حين تتوفر بيانات الكتاب. إذا لم يتوفر نص الكتاب أو نطاق صفحاته فلا تخترع أرقام صفحات أو تقديرًا مؤكدًا.",
+    "للدروس الصعبة أو الطويلة أنشئ أكثر من خطوة مترابطة عند الحاجة: فهم، حل، ثم استرجاع. لا تحشر درسًا كبيرًا في مهمة واحدة قصيرة. ادمج المهام الصغيرة المتشابهة فقط عندما يكون ذلك منطقيًا.",
+    "أخرج خطة عملية مفصلة من 6 إلى 20 خطوة عادةً، ويمكن أن تصل إلى 30 خطوة عندما يتطلب التراكم ذلك. كل خطوة قصيرة وواضحة وقابلة للتنفيذ؛ لا تكتب فقرات طويلة.",
     "الحد الأقصى لوقت الدراسة اليومي هو " + dailyMinutes + " دقيقة. مجموع دقائق الخطوات التي تحمل اسم اليوم نفسه يجب ألا يتجاوز هذا الحد، مع ترك هامش تعويض واقعي.",
     constraints.startDate ? "تاريخ بداية التنفيذ: " + constraints.startDate + "." : "تاريخ البداية يحدده الطالب عند اعتماد الخطة.",
     "احترم سعة اليوم المحددة من الطالب. لا تتجاوزها، ووزع الخطة واقعيًا مع هامش تعويض. إذا نقصت البيانات فاختر بداية تدريجية واذكر الافتراض في الملخص.",
     "لا تعتبر غياب السجل دليلًا على الإنجاز، ولا توبّخ الطالب.",
-    "أخرج JSON صحيحًا فقط بالعربية: title, summary, durationLabel, steps (3-6 خطوات فيها day,title,detail,minutes,category), habits (1-2 فيها title,cue), reviewQuestion. اجعل التفاصيل موجزة ومحددة.",
+    "أخرج JSON صحيحًا فقط بالعربية: title, summary, durationLabel, steps (3-30 عنصرًا، وكل عنصر فيه day,title,detail,minutes,category,priority,difficulty,lessonSize,sourcePages)، habits (0-5 فيها title,cue), reviewQuestion. sourcePages أرقام صفحات PDF الفعلية المرتبطة بالخطوة، وتكون [] إذا لم تتوفر. اجعل الملخص واضحًا والتفاصيل مركزة.",
     "كل خطوة يجب أن تحدد المادة والوحدة/الفرع والدرس وطريقة مذاكرته، لا عنوانًا عامًا.",
   ].join("\n");
   const user = "طلب الطالب أو قيوده الجديدة:\n" + prompt.slice(0, 1_200) + "\n\nبيانات الملف الدراسي الحالية:\n" + context;
@@ -364,14 +386,14 @@ export async function generatePersonalPlan(
   let providerUsed: "primary" | "NVIDIA" = "primary";
   try {
     try {
-      response = await invokeCompact(invokeLLM, 1_400, false, true);
+      response = await invokeCompact(invokeLLM, 4_096, false, true);
     } catch (primaryError) {
       if (isPrimaryProviderFallbackEligible(primaryError)) {
         response = await invokeNvidiaFallback();
         providerUsed = "NVIDIA";
       } else if (isUnsupportedJsonMode(primaryError)) {
         try {
-          response = await invokeCompact(invokeLLM, 1_400, false, false);
+          response = await invokeCompact(invokeLLM, 4_096, false, false);
         } catch (retryError) {
           if (isPrimaryProviderFallbackEligible(retryError)) {
             response = await invokeNvidiaFallback();
