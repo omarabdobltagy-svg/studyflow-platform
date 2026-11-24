@@ -187,8 +187,11 @@ export function buildLearningBacklogSummary(
     const totalBranches = branches.length;
     const calculatedBranches = calculated.length;
     const uncalculatedBranches = Math.max(0, totalBranches - calculatedBranches);
-    const studentMissingBranches = resolved.filter(gap => gap.studentPosition == null).length;
-    const referenceMissingBranches = resolved.filter(gap => gap.referencePosition == null).length;
+    // Keep the two data-quality causes mutually exclusive. When both sides are
+    // unknown, calculateLearningGap reports reference_missing first; it is not
+    // counted again as a student-position failure.
+    const studentMissingBranches = resolved.filter(gap => gap.status === "student_position_missing").length;
+    const referenceMissingBranches = resolved.filter(gap => gap.status === "reference_missing").length;
 
     const legacyRaw = legacyBacklog?.[subjectId]
       ?? legacyBacklog?.[getSIESubject(subjectId)?.nameAr || ""]
