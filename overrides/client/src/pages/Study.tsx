@@ -623,8 +623,30 @@ export default function Study() {
                       transition={{ type: "spring", stiffness: 110, damping: 22 }} />
                   </div>
                   {branchChoices.length === 0 ? (
-                    <div className="rounded-xl border border-dashed border-border bg-muted/10 p-4 text-sm leading-6 text-muted-foreground">
-                      هذا الفرع موجود في بنية المسار، لكن عناوين دروسه لم تُحمّل بعد. لن يتم تخمين محتواه.
+                    <div className="rounded-xl border border-dashed border-border bg-muted/10 p-4">
+                      <div className="flex items-start gap-3">
+                        <BookOpenText className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
+                        <div className="min-w-0">
+                          <h4 className="text-sm font-bold text-foreground">فهرس الدروس لم يكتمل بعد</h4>
+                          <p className="mt-1 text-xs leading-6 text-muted-foreground">
+                            المادة موجودة في ملفك، لكن عناوين دروسها المعتمدة لم تُربط بالتطبيق بعد. لن نخترع أسماء دروس أو نسجّل تقدمًا غير مؤكد.
+                          </p>
+                          <Button type="button" variant="outline" size="sm" className="mt-3 rounded-lg"
+                            onClick={() => {
+                              const nextSubjectId = subjects[subjectIndex + 1];
+                              if (nextSubjectId) {
+                                setSubjectId(nextSubjectId);
+                                setBranchId("");
+                                setLessonId("");
+                                toast.success("تم تجاوز " + subjectName + " مؤقتًا؛ انتقلنا إلى " + (getSIESubject(nextSubjectId)?.nameAr || "المادة التالية") + ".");
+                              } else {
+                                toast.info("وصلت إلى آخر مادة في ملفك. هذه المادة ما زالت تحتاج إلى فهرس معتمد.");
+                              }
+                            }}>
+                            {subjects[subjectIndex + 1] ? "تجاوز المادة مؤقتًا واستمر" : "وصلت لآخر مادة"}
+                          </Button>
+                        </div>
+                      </div>
                     </div>
                   ) : (
                     <div className="grid grid-cols-2 items-start gap-3 sm:gap-4">
@@ -970,12 +992,12 @@ function normalizeFrontierSearch(value: string) {
   return value
     .normalize("NFKC")
     .toLocaleLowerCase()
-    .replace(/[\\u064B-\\u065F\\u0670]/g, "")
+    .replace(/[\u064B-\u065F\u0670]/g, "")
     .replace(/[أإآ]/g, "ا")
     .replace(/ة/g, "ه")
     .replace(/ى/g, "ي")
     .replace(/ـ/g, "")
-    .replace(/\\s+/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
