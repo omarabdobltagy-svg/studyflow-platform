@@ -163,6 +163,19 @@ export default function Study() {
     setStudentFrontierDrafts(current => ({ ...current, [studentFrontierDraftKey]: value }));
   };
 
+  const visibleCurriculumChoices = useMemo(() => {
+    if (!isLinearSubject || showFullCourseIndex) return branchChoices;
+    const today = new Date();
+    const currentPartChoices = getChoicesForCurrentSchoolPart(branchChoices, today);
+    const expected = estimateTermCheckpointFrontier(currentPartChoices.length, today);
+    const visibleLimit = Math.min(currentPartChoices.length, Math.max(3, expected + 2));
+    const focused = currentPartChoices.slice(0, visibleLimit);
+    const preservedIds = [teacherTeachingFrontierId, schoolClassFrontierId, lastCompletedLessonId].filter(Boolean);
+    const preserved = branchChoices.filter(choice => preservedIds.includes(choice.nodeId));
+    return [...new Map([...focused, ...preserved].map(choice => [choice.nodeId, choice])).values()]
+      .sort((left, right) => branchChoices.findIndex(choice => choice.nodeId === left.nodeId) - branchChoices.findIndex(choice => choice.nodeId === right.nodeId));
+  }, [branchChoices, isLinearSubject, showFullCourseIndex, teacherTeachingFrontierId, schoolClassFrontierId, lastCompletedLessonId]);
+
   const currentGap = calculateLearningGap(branchChoices, {
     studentFrontierId: lastCompletedLessonId || null,
     teacherTeachingFrontierId,
@@ -572,30 +585,18 @@ export default function Study() {
           {!teacherReferenceName && (
             <p className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-sm leading-6 text-muted-foreground">احفظ اسم المدرس أولًا في قسم اختيار المدرس حتى نربط موضع الشرح بالشخص الصحيح.</p>
           )}
-          {isLinearSubject && branchChoices.length > 0 && (() => {
-            const calendar = getEgyptSchoolProgress(new Date());
-            const partChoices = getChoicesForCurrentSchoolPart(branchChoices, new Date());
-            const expected = estimateTermCheckpointFrontier(partChoices.length, new Date());
-            const focusedLimit = Math.min(partChoices.length, Math.max(3, expected + 2));
-            const focused = showFullCourseIndex ? branchChoices : partChoices.slice(0, focusedLimit);
-            const preservedIds = [teacherTeachingFrontierId, lastCompletedLessonId].filter(Boolean);
-            const preserved = branchChoices.filter(choice => preservedIds.includes(choice.nodeId));
-            const display = [...new Map([...focused, ...preserved].map(choice => [choice.nodeId, choice])).values()]
-              .sort((a, b) => branchChoices.findIndex(item => item.nodeId === a.nodeId) - branchChoices.findIndex(item => item.nodeId === b.nodeId));
-            const hiddenCount = branchChoices.length - display.length;
-            return (
-              <div className="rounded-xl border border-primary/15 bg-primary/[0.035] p-3">
-                <p className="text-xs font-semibold">تركيز الفهرس حسب تقويم المدارس {calendar.academicYear}</p>
-                <p className="mt-1 text-xs leading-6 text-muted-foreground">
-                  {calendar.labelAr}: متوقع توزيع الدروس تدريجيًا خلال أسابيع الترم. المعروض اقتراح زمني تقريبي، وليس ادعاءً بأن المدرس شرح هذه الدروس بالفعل.
-                </p>
-                <button type="button" onClick={() => setShowFullCourseIndex(value => !value)} className="mt-2 text-xs font-bold text-primary underline underline-offset-4">
-                  {showFullCourseIndex ? "عرض الدروس المتوقعة حتى الآن فقط" : "عرض الفهرس الكامل"}
-                </button>
-                {hiddenCount > 0 && !showFullCourseIndex && <span className="mr-2 text-[11px] text-muted-foreground">· {hiddenCount} نقطة لاحقة مخفية مؤقتًا</span>}
-              </div>
-            );
-          })()}
+          {isLinearSubject && branchChoices.length > 0 && (
+            <div className="rounded-xl border border-primary/15 bg-primary/[0.035] p-3">
+              <p className="text-xs font-semibold">فهرس المقرر وفق تقويم المدارس 2026/2027</p>
+              <p className="mt-1 text-xs leading-6 text-muted-foreground">
+                {getEgyptSchoolProgress(new Date()).labelAr}: نعرض الجزء الجاري تدريسه وعددًا محدودًا من الدروس التالية وفق توزيع زمني تقريبي. هذا ليس ادعاءً عن المدرس؛ حدّث موضعه حسب ما شرحه بالفعل.
+              </p>
+              <button type="button" onClick={() => setShowFullCourseIndex(value => !value)} className="mt-2 text-xs font-bold text-primary underline underline-offset-4">
+                {showFullCourseIndex ? "عرض النطاق المتوقع فقط" : "عرض كل دروس المقرر"}
+              </button>
+              {!showFullCourseIndex && <span className="mr-2 text-[11px] text-muted-foreground">· {visibleCurriculumChoices.length} من {branchChoices.length} نقطة ظاهرة</span>}
+            </div>
+          )}
           {branchChoices.length > 0 ? (
             <ChoiceButtonGroup
               label={teacherReferenceName ? "آخر درس انتهى " + teacherReferenceName + " من شرحه" : "موضع شرح المدرس"}
@@ -606,7 +607,7 @@ export default function Study() {
               options={[
                 { value: "__UNKNOWN__", label: "مش متأكد من موضعه" },
                 { value: "__NOT_STARTED__", label: "لم يبدأ هذا الفرع" },
-                ...(isLinearSubject && !showFullCourseIndex ? getChoicesForCurrentSchoolPart(branchChoices, new Date()).slice(0, Math.min(getChoicesForCurrentSchoolPart(branchChoices, new Date()).length, Math.max(3, estimateTermCheckpointFrontier(getChoicesForCurrentSchoolPart(branchChoices, new Date()).length, new Date()) + 2))) : branchChoices).map((choice, index) => ({
+                ...visibleCurriculumChoices.map((choice, index) => ({
                   value: choice.nodeId,
                   label: choice.title,
                   description: choice.courseSequenceNumber
@@ -640,7 +641,7 @@ export default function Study() {
                 options={[
                   { value: "__UNKNOWN__", label: "مش متأكد من موضع المجموعة" },
                   { value: "__NOT_STARTED__", label: "لم يبدأوا هذا الفرع" },
-                  ...branchChoices.map((choice, index) => ({
+                  ...visibleCurriculumChoices.map((choice, index) => ({
                     value: choice.nodeId,
                     label: choice.title,
                     description: choice.courseSequenceNumber
@@ -707,6 +708,7 @@ export default function Study() {
                   aria-label={branch.branchTitle + (branchHasCompletedLesson ? " — تم تسجيل تقدم" : "")}
                   onClick={() => {
                     setManualBranchNavigation(true);
+                    setShowFullCourseIndex(false);
                     setBranchId(branch.branchId);
                     setShowFullCourseIndex(false);
                     setLessonId("");
@@ -747,7 +749,7 @@ export default function Study() {
               )}
               {branchChoices.length ? (
                 <div className="grid gap-2 sm:grid-cols-2">
-                  {(isLinearSubject && !showFullCourseIndex ? getChoicesForCurrentSchoolPart(branchChoices, new Date()).slice(0, Math.min(getChoicesForCurrentSchoolPart(branchChoices, new Date()).length, Math.max(3, estimateTermCheckpointFrontier(getChoicesForCurrentSchoolPart(branchChoices, new Date()).length, new Date()) + 2))) : branchChoices).map((choice, index) => {
+                  {visibleCurriculumChoices.map((choice, index) => {
                     const selected = lastCompletedLessonId === choice.nodeId;
                     const sequence = choice.courseSequenceNumber
                       ? "تسلسل الكورس " + choice.courseSequenceNumber
@@ -759,10 +761,9 @@ export default function Study() {
                           ? (subjectId === "PROG_AI_G2_BAC" ? "الفصل: " : "الوحدة: ") + choice.unitTitle
                           : "نقطة " + (index + 1);
                     return (
-                      <motion.button key={choice.nodeId} type="button" aria-pressed={selected}
+                      <button key={choice.nodeId} type="button" aria-pressed={selected}
                         disabled={saveBranchFrontier.isPending || !teacherFrontierSaved || !teacherReferenceName || teacherSelectionDirty}
                         onClick={() => submitStudentFrontier(choice.nodeId)}
-                        whileTap={{ scale: 0.985 }}
                         className={"flex min-h-[76px] items-center justify-between gap-3 rounded-xl border p-4 text-right transition " + (selected ? "border-primary bg-primary/10 ring-2 ring-primary/15" : "border-border bg-background hover:border-primary/40 hover:bg-primary/[0.03]")}>
                         <span className="min-w-0">
                           <span className="block font-bold leading-6">{choice.title}</span>
@@ -771,7 +772,7 @@ export default function Study() {
                         <span className={"flex size-7 shrink-0 items-center justify-center rounded-full border " + (selected ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground")}>
                           {selected ? <Check className="size-4" /> : <span className="text-[10px]">{index + 1}</span>}
                         </span>
-                      </motion.button>
+                      </button>
                     );
                   })}
                 </div>
@@ -780,16 +781,16 @@ export default function Study() {
               )}
 
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                <motion.button type="button" disabled={saveBranchFrontier.isPending || !teacherFrontierSaved || !teacherReferenceName || teacherSelectionDirty}
-                  onClick={() => submitStudentFrontier("__NOT_STARTED__")} whileTap={{ scale: 0.985 }}
+                <button type="button" disabled={saveBranchFrontier.isPending || !teacherFrontierSaved || !teacherReferenceName || teacherSelectionDirty}
+                  onClick={() => submitStudentFrontier("__NOT_STARTED__")}
                   className={"rounded-xl border px-4 py-3 text-sm font-semibold transition " + (lastCompletedLessonId === "__NOT_STARTED__" ? "border-primary bg-primary/10" : "border-border bg-background hover:border-primary/35")}>
                   لم أبدأ هذا الفرع
-                </motion.button>
-                <motion.button type="button" disabled={saveBranchFrontier.isPending || !teacherFrontierSaved || !teacherReferenceName || teacherSelectionDirty}
-                  onClick={() => submitStudentFrontier("__UNKNOWN__")} whileTap={{ scale: 0.985 }}
+                </button>
+                <button type="button" disabled={saveBranchFrontier.isPending || !teacherFrontierSaved || !teacherReferenceName || teacherSelectionDirty}
+                  onClick={() => submitStudentFrontier("__UNKNOWN__")}
                   className={"rounded-xl border px-4 py-3 text-sm font-semibold transition " + (lastCompletedLessonId === "__UNKNOWN__" ? "border-primary bg-primary/10" : "border-border bg-background hover:border-primary/35")}>
                   مش متأكد من موضعي
-                </motion.button>
+                </button>
               </div>
             </motion.div>
           </AnimatePresence>
