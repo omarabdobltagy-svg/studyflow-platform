@@ -29,15 +29,23 @@ The migration preserves the existing owner row and its user ID. Account deletion
 
 ## AI provider
 
-The in-app assistant uses an OpenAI-compatible API endpoint. The default provider base URL is `https://openrouter.ai/api/v1` and the default model routing is `openrouter/auto`.
+The in-app assistant continues to use the primary OpenAI-compatible provider:
 
-Set these variables on the **StudyFlow app** service:
+- \`AI_API_BASE_URL\`: defaults to \`https://openrouter.ai/api/v1\`.
+- \`AI_MODEL\`: defaults to \`openrouter/auto\`.
+- \`AI_API_KEY\`: secret key for the primary provider. General assistant calls continue to use this provider.
 
-- `AI_API_BASE_URL`: defaults to `https://openrouter.ai/api/v1`.
-- `AI_MODEL`: defaults to `openrouter/auto`.
-- `AI_API_KEY`: required secret from the selected API provider. Set this directly in Railway's secret variables; never commit it or send it in chat.
+The smart planner has a separate NVIDIA Nemotron 3 Ultra fallback:
 
-Without `AI_API_KEY`, the rest of the platform works and the assistant displays a setup message instead of pretending the integration is active.
+- \`NVIDIA_API_KEY\`: NVIDIA NIM secret key, read independently from \`AI_API_KEY\`.
+- \`NVIDIA_API_BASE_URL\`: defaults to \`https://integrate.api.nvidia.com/v1\`.
+- \`NVIDIA_MODEL\`: defaults to \`nvidia/nemotron-3-ultra-550b-a55b\`.
+
+The planner tries the primary provider first. It switches to NVIDIA only when the primary key is missing or the primary provider reports billing/credit exhaustion (including an explicit insufficient-quota response). Ordinary 5xx failures and unrelated authentication/validation errors do not trigger a silent switch. NVIDIA requests use the standard \`/chat/completions\` endpoint with \`stream: false\` and \`reasoning_effort: medium\`. Because the hosted NVIDIA model does not advertise structured-output support, the planner requests JSON in its prompt and validates the response against its Zod schema before saving. Invalid or incomplete plans are not saved.
+
+**Railway secret scope:** add \`NVIDIA_API_KEY\` directly to the \`StudyFlow Preview 360\` service's Variables page as a service-specific secret. Do not add it to Shared Variables, commit it to GitHub, or paste it in chat. This integration is for the preview planner and does not modify the \`StudyFlow app\` production service. The general assistant is not switched to NVIDIA.
+
+The NVIDIA model's official supported-language list does not currently include Arabic. The API integration can be tested, but Arabic plan quality must be checked with real responses before treating this as a fully validated Arabic planner.
 
 ## Teacher progress model
 
