@@ -67,6 +67,31 @@ describe("generated plan JSON parser", () => {
   it("does not accept an incomplete JSON object", () => {
     expect(() => parseGeneratedPlan('{"title":"خطة ناقصة"')).toThrow("تعذّر تحويل الخطة الذكية");
   });
+
+  it("accepts a complete multi-subject plan with 14 steps and detailed Arabic content", () => {
+    const expandedPlan = {
+      ...validPlan,
+      title: "خطة مراجعة شاملة للترم الأول",
+      summary: "خطة مفصلة توزع التراكم على عدة أيام، وتفصل الدروس الكبيرة إلى فهم وتطبيق واسترجاع، مع ترتيب الأولويات بحسب فجوة المنهج وصعوبة كل درس وتقدمه لدى المدرس.",
+      steps: Array.from({ length: 14 }, (_, index) => ({
+        day: "اليوم " + (Math.floor(index / 3) + 1),
+        title: "مهمة الدرس " + (index + 1),
+        detail: "ابدأ بفهم الفكرة الأساسية ومراجعة أمثلة الكتاب، ثم اكتب النقاط المهمة من الذاكرة، وحل تدريبات متنوعة، وسجل الأخطاء التي تكررت حتى تتمكن من مراجعتها في جلسة الاسترجاع التالية.",
+        minutes: 35,
+        category: "فهم وتطبيق",
+        priority: index < 3 ? "high" : "medium",
+        difficulty: index % 3 === 0 ? "hard" : "medium",
+        lessonSize: index % 4 === 0 ? "large" : "medium",
+        sourcePages: [12 + index],
+      })),
+      habits: [],
+    };
+    const parsed = parseGeneratedPlan(JSON.stringify(expandedPlan));
+    expect(parsed.steps).toHaveLength(14);
+    expect(parsed.steps[0].priority).toBe("high");
+    expect(parsed.steps[0].sourcePages).toEqual([12]);
+    expect(parsed.summary.length).toBeGreaterThan(500);
+  });
 });
 
 describe("smart planner NVIDIA fallback", () => {
