@@ -67,6 +67,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { generatePersonalPlan } from "./planGenerator";
+import { isDailyPlanStale } from "./planLifecycle";
 import { storageDelete, storagePut } from "./storage";
 import { decodeAndValidateAttachment } from "./attachments";
 import { parse as parseCookie } from "cookie";
@@ -76,6 +77,65 @@ import { invokeLLMWithNvidiaFallback } from "./_core/llmFallback";
 import { formatTextbookEvidence, retrieveTextbookEvidence } from "./textbook-retrieval";
 import { createReminderCron, getReminderPreferences, listReminderNotifications, markReminderRead, saveReminderPreferences, saveReminderSchedule } from "./reminders";
 
+
+type DailyPlanResult = {
+  plan: Awaited<ReturnType<typeof generatePersonalPlan>>;
+  generatedAt: Date;
+  generated: boolean;
+};
+
+const dailyPlanLocks = new Map<number, Promise<DailyPlanResult>>();
+
+async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): Promise<DailyPlanResult> {
+  const running = dailyPlanLocks.get(userId);
+  if (running) return running;
+
+  const task = (async (): Promise<DailyPlanResult> => {
+    const profile = await getStudentProfile(userId);
+    if (!profile || !Array.isArray(profile.subjectIds) || profile.subjectIds.length === 0) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "أكمل ملفك الدراسي وحدد موادك أولًا حتى يبني المخطط خطة دقيقة.",
+      });
+    }
+
+    const latest = (await listAiPlans(userId))[0];
+    if (latest && !isDailyPlanStale(latest.createdAt)) {
+      try {
+        const saved = JSON.parse(latest.planJson) as Awaited<ReturnType<typeof generatePersonalPlan>>;
+        if (saved && typeof saved.title === "string" && Array.isArray(saved.steps) && saved.steps.length > 0) {
+          return {
+            plan: saved,
+            generatedAt: new Date(latest.createdAt),
+            generated: false,
+          };
+        }
+      } catch {
+        // A damaged history record is never presented as an active daily plan.
+      }
+    }
+
+    const startDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
+    const plan = await generatePersonalPlan(
+      userId,
+      "حلّل ملفي الدراسي كاملًا وحدد أهم ما يجب أن أذاكره الآن. أنشئ خطة يومية واقعية تبدأ اليوم، وتعالج التراكم حسب أولوية المنهج وصعوبة كل درس وحجمه والوقت المتاح.",
+      true,
+      {
+        dailyMinutes,
+        startDate,
+        context: "هذه خطة التشغيل اليومية الافتراضية. استخدم بيانات ملف الدراسة والتراكم والتقدم ومواضع التدريس وسجل التقييمات المتاحة؛ لا تطلب من الطالب إعادة إدخال أي معلومة موجودة. اجعل أول خطوة واضحة وقابلة للبدء فورًا.",
+      },
+    );
+    return { plan, generatedAt: new Date(), generated: true };
+  })();
+
+  dailyPlanLocks.set(userId, task);
+  try {
+    return await task;
+  } finally {
+    if (dailyPlanLocks.get(userId) === task) dailyPlanLocks.delete(userId);
+  }
+}
 
 const LOCAL_AUTH_OPEN_ID = "studyflow-local-owner";
 const LOCAL_SESSION_ISSUER = "studyflow-local";
@@ -1939,6 +1999,20 @@ export const appRouter = router({
 
   plans: router({
     list: protectedProcedure.query(({ ctx }) => listAiPlans(ctx.user.id)),
+    ensureDaily: protectedProcedure
+      .input(z.object({
+        dailyMinutes: z.number().int().min(20).max(600).default(120),
+      }).optional())
+      .mutation(async ({ ctx, input }) => {
+        const result = await ensureDailyPlanForStudent(ctx.user.id, input?.dailyMinutes ?? 120);
+        if (result.generated) {
+          await logStudentActivity(ctx.user.id, "plan.daily_generated", "ai_plan", null, "أنشأ المخطط الذكي خطة اليوم تلقائيًا", {
+            title: result.plan.title,
+            stepCount: result.plan.steps.length,
+          });
+        }
+        return result;
+      }),
     generate: protectedProcedure
       .input(z.object({
         prompt: z.string().trim().min(12, "أضف تفاصيل أكثر قليلًا حتى تكون الخطة مناسبة.").max(2_000),
