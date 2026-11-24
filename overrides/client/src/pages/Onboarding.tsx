@@ -460,7 +460,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                         onChange={event => setForm(current => ({
                           ...current,
                           customTeacherNames: { ...current.customTeacherNames, [currentSetupSubjectId]: event.target.value },
-                          teacherSelections: { ...current.teacherSelections, [currentSetupSubjectId]: event.target.value.trim() ? SKIP_TEACHER : current.teacherSelections[currentSetupSubjectId] ?? "",
+                          teacherSelections: { ...current.teacherSelections, [currentSetupSubjectId]: event.target.value.trim() ? SKIP_TEACHER : (current.teacherSelections[currentSetupSubjectId] ?? "") },
                         }))}
                         placeholder="اكتب اسم المدرس"
                         maxLength={120}
