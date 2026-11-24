@@ -1269,7 +1269,9 @@ export const appRouter = router({
             const candidates = legacyRecords
               .filter(record => !teacherOnly || (selectedTeacherId !== "__SKIP__"
                 ? (!record.teacherId || record.teacherId === selectedTeacherId)
-                : (!record.teacherName || record.teacherName === selectedTeacherName)))
+                : selectedTeacherName
+                  ? (!record.teacherName || record.teacherName === selectedTeacherName)
+                  : true))
               .map(record => record[field])
               .filter(value => value === "__UNKNOWN__" || belongsToBranch(value));
             const positioned = candidates
