@@ -919,7 +919,17 @@ export function getSIECheckpointChoiceDisplayLabel(choice: SIECheckpointChoice):
 /** يعيد فروع المنهج مع إبقاء كل مسار تقدم مستقلاً. */
 export function getSIECheckpointBranches(subjectId: string): SIECheckpointBranch[] {
   const groups = new Map<string, SIECheckpointBranch>();
-  for (const choice of getSIECheckpointChoices(subjectId)) {
+  // Arabic Reading should contain named textbook texts, not sub-skills within a text.
+  const readingSkillNodeIds = new Set([
+    "ARB_C05_MAIN_IDEA",
+    "ARB_C06_VIEWPOINT",
+    "ARB_C08_IMPLICIT_MEANING",
+    "ARB_C17_TEXT_DISCOURSE",
+  ]);
+  const choices = getSIECheckpointChoices(subjectId).filter(choice =>
+    !(subjectId === "ARB_G2_BAC" && choice.branchId === "ARB_READING" && readingSkillNodeIds.has(choice.nodeId))
+  );
+  for (const choice of choices) {
     const branchId = choice.branchId ?? `${subjectId}:${choice.unitTitle}`;
     const branch = groups.get(branchId);
     if (branch) {
