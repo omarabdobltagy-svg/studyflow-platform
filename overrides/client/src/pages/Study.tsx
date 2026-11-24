@@ -534,7 +534,7 @@ export default function Study() {
             </div>
           </div>
 
-          {courseMode === "online" && (
+          {Boolean(courseMode) && (
             <div className="space-y-3">
               <div>
                 <p className="text-sm font-bold">مين المدرس اللي بتتابعه؟</p>
@@ -578,27 +578,16 @@ export default function Study() {
             </div>
           )}
 
-          {courseMode === "center" && (
-            <div className="rounded-2xl border border-border bg-card p-4">
-              <p className="text-sm font-bold">اسم مدرس السنتر</p>
-              <p className="mt-1 text-xs leading-5 text-muted-foreground">اكتب الاسم الذي تتابعه. موضع شرح المدرس ومكان المجموعة سيتسجلان كلٌّ في مكانه بقسم المنهج.</p>
-              <Input value={teacherName} onChange={event => {
-                setTeacherNameDrafts(current => ({ ...current, [subjectId]: event.target.value }));
-                setTeacherChoiceDrafts(current => ({ ...current, [subjectId]: "__NONE__" }));
-                if (event.target.value.trim()) setTeacherTeachingFrontierId("__UNKNOWN__");
-              }} placeholder="اسم مدرس السنتر" maxLength={120} className="mt-3 h-12 rounded-xl bg-background" />
-            </div>
-          )}
-
-          {courseMode === "online" && (
-            <label className="block text-sm font-semibold">مدرس آخر (لو مش موجود في القائمة)
+          {Boolean(courseMode) && (
+            <label className="block text-sm font-semibold">
+              {courseMode === "center" ? "مدرس السنتر (لو مش موجود في القائمة)" : "مدرس آخر (لو مش موجود في القائمة)"}
               <Input value={teacherName} onChange={event => {
                 setTeacherNameDrafts(current => ({ ...current, [subjectId]: event.target.value }));
                 if (event.target.value.trim()) {
                   setTeacherChoiceDrafts(current => ({ ...current, [subjectId]: "__NONE__" }));
                   setTeacherTeachingFrontierId("__UNKNOWN__");
                 }
-              }} placeholder="اكتب اسم المدرس يدويًا" maxLength={120} className="mt-2 h-12 rounded-xl bg-background" />
+              }} placeholder={courseMode === "center" ? "اكتب اسم مدرس السنتر" : "اكتب اسم المدرس يدويًا"} maxLength={120} className="mt-2 h-12 rounded-xl bg-background" />
             </label>
           )}
 
