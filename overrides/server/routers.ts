@@ -104,11 +104,12 @@ async function getDailyPlanSourceFingerprint(userId: number, dailyMinutes: numbe
       message: "أكمل ملفك الدراسي وحدد موادك أولًا حتى يبني المخطط خطة دقيقة.",
     });
   }
-  const [tasks, goals, calendar, routines] = await Promise.all([
+  const [tasks, goals, calendar, routines, books] = await Promise.all([
     listTasks(userId),
     listGoals(userId),
     listCalendarEvents(userId),
     listRoutines(userId, "Africa/Cairo"),
+    listBooks(userId),
   ]);
   const byId = <T extends { id: string | number }>(items: T[]) =>
     [...items].sort((left, right) => String(left.id).localeCompare(String(right.id)));
@@ -132,6 +133,7 @@ async function getDailyPlanSourceFingerprint(userId: number, dailyMinutes: numbe
     goals: byId(goals),
     calendar: byId(calendar),
     routines: byId(routines),
+    books: byId(books),
   });
 }
 
@@ -794,7 +796,7 @@ export const appRouter = router({
           id,
           input.teacherSelections[id] ?? "__SKIP__",
         ]));
-        return saveSIEOnboarding(ctx.user.id, {
+        const savedProfile = await saveSIEOnboarding(ctx.user.id, {
           studentName: input.studentName,
           phone: input.phone,
           educationSystem: getSIEEducationSystem(input.systemId),
@@ -857,6 +859,8 @@ export const appRouter = router({
             completedAt: new Date().toISOString(),
           },
         });
+        queueDailyPlanReconciliation(ctx.user.id);
+        return savedProfile;
       }),
   }),
 
@@ -1264,7 +1268,11 @@ export const appRouter = router({
         totalPages: z.number().int().min(0).max(100_000).optional(),
         coverColor: z.string().trim().min(1).max(20).optional(),
       }))
-      .mutation(({ ctx, input }) => createBook(ctx.user.id, input)),
+      .mutation(async ({ ctx, input }) => {
+        const result = await createBook(ctx.user.id, input);
+        queueDailyPlanReconciliation(ctx.user.id);
+        return result;
+      }),
     update: protectedProcedure
       .input(z.object({
         id: z.number().int().positive(),
@@ -1275,16 +1283,32 @@ export const appRouter = router({
         coverColor: z.string().trim().min(1).max(20),
         notes: z.string().trim().max(12_000).nullable().optional(),
       }))
-      .mutation(({ ctx, input }) => updateBook(ctx.user.id, input.id, input)),
+      .mutation(async ({ ctx, input }) => {
+        const result = await updateBook(ctx.user.id, input.id, input);
+        queueDailyPlanReconciliation(ctx.user.id);
+        return result;
+      }),
     delete: protectedProcedure
       .input(z.object({ id: z.number().int().positive() }))
-      .mutation(({ ctx, input }) => deleteBook(ctx.user.id, input.id)),
+      .mutation(async ({ ctx, input }) => {
+        const result = await deleteBook(ctx.user.id, input.id);
+        queueDailyPlanReconciliation(ctx.user.id);
+        return result;
+      }),
     addChapter: protectedProcedure
       .input(z.object({ bookId: z.number().int().positive(), title: z.string().trim().min(1).max(180), totalPages: z.number().int().min(0).max(100_000).optional() }))
-      .mutation(({ ctx, input }) => addChapter(ctx.user.id, input)),
+      .mutation(async ({ ctx, input }) => {
+        const result = await addChapter(ctx.user.id, input);
+        queueDailyPlanReconciliation(ctx.user.id);
+        return result;
+      }),
     updateChapterProgress: protectedProcedure
       .input(z.object({ chapterId: z.number().int().positive(), completedPages: z.number().int().min(0).max(100_000) }))
-      .mutation(({ ctx, input }) => updateChapterProgress(ctx.user.id, input.chapterId, input.completedPages)),
+      .mutation(async ({ ctx, input }) => {
+        const result = await updateChapterProgress(ctx.user.id, input.chapterId, input.completedPages);
+        queueDailyPlanReconciliation(ctx.user.id);
+        return result;
+      }),
     updateChapter: protectedProcedure
       .input(z.object({
         chapterId: z.number().int().positive(),
@@ -1293,10 +1317,18 @@ export const appRouter = router({
         completedPages: z.number().int().min(0).max(100_000),
         notes: z.string().trim().max(12_000).nullable().optional(),
       }))
-      .mutation(({ ctx, input }) => updateChapter(ctx.user.id, input.chapterId, input)),
+      .mutation(async ({ ctx, input }) => {
+        const result = await updateChapter(ctx.user.id, input.chapterId, input);
+        queueDailyPlanReconciliation(ctx.user.id);
+        return result;
+      }),
     deleteChapter: protectedProcedure
       .input(z.object({ chapterId: z.number().int().positive() }))
-      .mutation(({ ctx, input }) => deleteChapter(ctx.user.id, input.chapterId)),
+      .mutation(async ({ ctx, input }) => {
+        const result = await deleteChapter(ctx.user.id, input.chapterId);
+        queueDailyPlanReconciliation(ctx.user.id);
+        return result;
+      }),
     uploadAttachment: protectedProcedure
       .input(attachmentInput)
       .mutation(async ({ ctx, input }) => {
@@ -1867,6 +1899,7 @@ export const appRouter = router({
           subjectId: active.subjectId, branchId: active.branchId, durationSeconds: completedSession.durationSeconds,
           lessonMarkedCompleted: input.markLessonCompleted,
         });
+        if (input.markLessonCompleted) queueDailyPlanReconciliation(ctx.user.id);
         return {
           success: true,
           session: completedSession,
