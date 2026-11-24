@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { getSIECheckpointBranches, getSIECheckpointChoices, getSIECheckpointChoiceDisplayLabel, getSIESubject, getSIETeacher, getSIETeachersForSubject, type SIESystemId } from "@shared/sie-catalog";
 import { calculateLearningGap } from "@shared/sie-learning-progress";
-import { Activity, BookOpenText, Check, CircleHelp, Eye, Gauge, Mic2, RefreshCcw, Sparkles } from "lucide-react";
+import { Activity, BookOpenText, Check, CircleHelp, Eye, Gauge, Mic2, RefreshCcw, Search, Sparkles, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "framer-motion";
@@ -255,7 +255,7 @@ export default function Study() {
           toast.success("تم حفظ موضع " + (currentBranch?.branchTitle || "الفرع") + "؛ ننتقل إلى " + nextBranch.branchTitle + ".");
           return;
         }
-        const nextSubjectId = isLinearSubject ? undefined : subjects[subjectIndex + 1];
+        const nextSubjectId = subjects[subjectIndex + 1];
         if (nextSubjectId) {
           setSubjectId(nextSubjectId);
           setBranchId("");
@@ -635,11 +635,12 @@ export default function Study() {
                           <p className="mt-1 text-[10px] leading-5 text-muted-foreground sm:text-xs">آخر درس أنهيته بنفسك.</p>
                         </div>
                         <div className="mt-3 max-h-[430px] overflow-y-auto overscroll-contain pr-1">
-                          <ChoiceButtonGroup label="موضعك في الفرع"
+                          <SearchableFrontierPicker
+                            label="موضعك في الفرع"
+                            hint="اكتب اسم الدرس أو رقمه بدل ما تتصفح القائمة كلها."
                             value={hasStudentFrontierSelection ? lastCompletedLessonId : ""}
                             onChange={setLastCompletedLessonId}
                             disabled={!courseMode || teacherSelectionDirty || saveBranchFrontier.isPending}
-                            columns={1}
                             options={[
                               { value: "__NOT_STARTED__", label: "لم أبدأ هذا الفرع" },
                               { value: "__UNKNOWN__", label: "موضعي غير معروف" },
@@ -660,12 +661,12 @@ export default function Study() {
                           </p>
                         )}
                         <div className="mt-3 max-h-[430px] overflow-y-auto overscroll-contain pr-1">
-                          <ChoiceButtonGroup label="موضع شرح المدرس"
-                            hint={teacherFrontierSaved ? "آخر موضع محفوظ للمدرس الحالي." : "اختر موضعه إن كنت تعرفه، أو اتركه غير معروف."}
+                          <SearchableFrontierPicker
+                            label="موضع شرح المدرس"
+                            hint={teacherFrontierSaved ? "آخر موضع محفوظ للمدرس الحالي." : "اكتب اسم الدرس أو رقمه لو تعرف موضع المدرس."}
                             value={teacherTeachingFrontierId}
                             onChange={setTeacherTeachingFrontierId}
                             disabled={!teacherReferenceName || teacherSelectionDirty || !courseMode || saveBranchFrontier.isPending}
-                            columns={1}
                             options={[
                               { value: "__NOT_STARTED__", label: "لم يبدأ هذا الفرع" },
                               { value: "__UNKNOWN__", label: "موضع المدرس غير معروف" },
@@ -674,10 +675,12 @@ export default function Study() {
                           />
                           {courseMode === "center" && (
                             <div className="mt-4 border-t border-border/70 pt-3">
-                              <ChoiceButtonGroup label="موضع السنتر / المجموعة (اختياري)"
+                              <SearchableFrontierPicker
+                                label="موضع السنتر / المجموعة (اختياري)"
                                 hint="يُستخدم كمرجع بديل عند عدم معرفة موضع المدرس."
-                                value={schoolClassFrontierId} onChange={setSchoolClassFrontierId}
-                                disabled={!courseMode || saveBranchFrontier.isPending} columns={1}
+                                value={schoolClassFrontierId}
+                                onChange={setSchoolClassFrontierId}
+                                disabled={!courseMode || saveBranchFrontier.isPending}
                                 options={[
                                   { value: "__UNKNOWN__", label: "موضع المجموعة غير معروف" },
                                   { value: "__NOT_STARTED__", label: "لم تبدأ المجموعة هذا الفرع" },
@@ -961,3 +964,123 @@ function ChoiceButtonGroup({
     </div>
   );
 }
+
+
+function normalizeFrontierSearch(value: string) {
+  return value
+    .normalize("NFKC")
+    .toLocaleLowerCase()
+    .replace(/[\\u064B-\\u065F\\u0670]/g, "")
+    .replace(/[أإآ]/g, "ا")
+    .replace(/ة/g, "ه")
+    .replace(/ى/g, "ي")
+    .replace(/ـ/g, "")
+    .replace(/\\s+/g, " ")
+    .trim();
+}
+
+function SearchableFrontierPicker({
+  label,
+  hint,
+  value,
+  onChange,
+  options,
+  disabled = false,
+}: {
+  label: string;
+  hint?: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: ChoiceButtonOption[];
+  disabled?: boolean;
+}) {
+  const [query, setQuery] = useState("");
+  const selected = options.find(option => option.value === value);
+  const normalizedQuery = normalizeFrontierSearch(query);
+  const matches = normalizedQuery
+    ? options.filter(option => normalizeFrontierSearch(option.label + " " + (option.description ?? "")).includes(normalizedQuery))
+    : [];
+  const visibleMatches = matches.slice(0, 10);
+  const quickChoices = options.filter(option => option.value.startsWith("__"));
+
+  return (
+    <div className="min-w-0 space-y-2.5">
+      <div>
+        <p className="text-sm font-bold">{label}</p>
+        {hint && <p className="mt-1 text-xs leading-5 text-muted-foreground">{hint}</p>}
+      </div>
+
+      {selected && (
+        <div className="flex min-w-0 items-center gap-2 rounded-xl border border-primary/25 bg-primary/[0.06] px-3 py-2.5">
+          <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <Check className="size-3.5" />
+          </span>
+          <span className="min-w-0 flex-1 break-words text-xs font-semibold leading-5 text-foreground">{selected.label}</span>
+          <button type="button" disabled={disabled} onClick={() => onChange("__UNKNOWN__")}
+            className="shrink-0 rounded-lg px-2 py-1 text-[10px] font-semibold text-muted-foreground hover:bg-muted disabled:opacity-50">
+            تغيير
+          </button>
+        </div>
+      )}
+
+      <div className="relative">
+        <Search className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={query}
+          onChange={event => setQuery(event.target.value)}
+          disabled={disabled}
+          placeholder="ابحث باسم الدرس أو رقمه..."
+          aria-label={"البحث في " + label}
+          className="h-11 rounded-xl pr-9 pl-9 text-xs"
+        />
+        {query && (
+          <button type="button" aria-label="مسح البحث" onClick={() => setQuery("")}
+            className="absolute left-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground hover:bg-muted">
+            <X className="size-3.5" />
+          </button>
+        )}
+      </div>
+
+      {normalizedQuery ? (
+        <div className="overflow-hidden rounded-xl border border-border bg-background">
+          <div className="flex items-center justify-between border-b border-border/70 px-3 py-2">
+            <span className="text-[10px] font-semibold text-muted-foreground">{matches.length} نتيجة</span>
+            {matches.length > 10 && <span className="text-[10px] text-muted-foreground">اكتب كلمات أدق لتضييق النتائج</span>}
+          </div>
+          <div className="max-h-56 overflow-y-auto p-1.5">
+            {visibleMatches.length ? visibleMatches.map(option => (
+              <button key={option.value} type="button" disabled={disabled}
+                onClick={() => { onChange(option.value); setQuery(""); }}
+                className="flex w-full min-w-0 items-start gap-2 rounded-lg px-2.5 py-2.5 text-right transition hover:bg-primary/[0.06] disabled:opacity-50">
+                <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md border border-border text-transparent">
+                  {option.value === value && <Check className="size-3 text-primary" />}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block break-words text-xs font-semibold leading-5 text-foreground">{option.label}</span>
+                  {option.description && <span className="mt-0.5 block text-[10px] leading-4 text-muted-foreground">{option.description}</span>}
+                </span>
+              </button>
+            )) : (
+              <p className="px-3 py-4 text-center text-xs text-muted-foreground">مفيش درس مطابق للكلمة دي في فهرس الفرع.</p>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {quickChoices.map(option => {
+            const active = value === option.value;
+            return (
+              <button key={option.value} type="button" disabled={disabled} onClick={() => onChange(option.value)}
+                className={"rounded-lg border px-2.5 py-2 text-[10px] font-semibold transition disabled:opacity-50 " +
+                  (active ? "border-primary bg-primary/10 text-primary" : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground")}>
+                {option.label}
+              </button>
+            );
+          })}
+          {!selected && <span className="self-center text-[10px] text-muted-foreground">اكتب اسم الدرس للبحث.</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
