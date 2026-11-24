@@ -1137,20 +1137,47 @@ export const appRouter = router({
             typeof frontierId === "string" &&
             (frontierId === "__NOT_STARTED__" ||
               branchChoices.some(choice => choice.nodeId === frontierId));
+          const legacyLinear = subjectId === "HIS_G2_BAC" || subjectId === "PROG_AI_G2_BAC";
+          const legacyRecords = legacyLinear ? Object.values(branchRecords) as Array<Record<string, any>> : [];
+          const pickLegacyFrontier = (field: "lastCompletedLessonId" | "teacherTeachingFrontierId" | "schoolClassFrontierId", teacherOnly = false) => {
+            const candidates = legacyRecords
+              .filter(record => !teacherOnly || (selectedTeacherId !== "__SKIP__"
+                ? (!record.teacherId || record.teacherId === selectedTeacherId)
+                : (!record.teacherName || record.teacherName === selectedTeacherName)))
+              .map(record => record[field])
+              .filter(value => value === "__UNKNOWN__" || belongsToBranch(value));
+            const positioned = candidates
+              .filter(value => value !== "__UNKNOWN__")
+              .sort((left, right) => {
+                const leftIndex = left === "__NOT_STARTED__" ? -1 : branchChoices.findIndex(choice => choice.nodeId === left);
+                const rightIndex = right === "__NOT_STARTED__" ? -1 : branchChoices.findIndex(choice => choice.nodeId === right);
+                return leftIndex - rightIndex;
+              });
+            return positioned.length ? positioned[positioned.length - 1] : candidates.length ? "__UNKNOWN__" : undefined;
+          };
           const latestSq3rCompleted = [...branchChoices].reverse().find(choice => {
             const steps = subjectLessonRecords[choice.nodeId]?.completedSteps;
             return Array.isArray(steps) && steps.length === 5;
           })?.nodeId;
-          const studentFrontierId = Object.prototype.hasOwnProperty.call(saved, "lastCompletedLessonId")
+          const savedStudentFrontier = Object.prototype.hasOwnProperty.call(saved, "lastCompletedLessonId")
             ? saved.lastCompletedLessonId
+            : legacyLinear ? pickLegacyFrontier("lastCompletedLessonId") : undefined;
+          const studentFrontierId = savedStudentFrontier !== undefined
+            ? savedStudentFrontier
             : belongsToBranch(subjectRecord.lastCompletedLessonId)
               ? subjectRecord.lastCompletedLessonId
               : belongsToBranch(legacyStudentFrontier) ? legacyStudentFrontier : latestSq3rCompleted ?? "__UNKNOWN__";
-          const teacherFrontierId = Object.prototype.hasOwnProperty.call(saved, "teacherTeachingFrontierId")
+          const savedTeacherFrontier = Object.prototype.hasOwnProperty.call(saved, "teacherTeachingFrontierId")
             ? saved.teacherTeachingFrontierId
+            : legacyLinear ? pickLegacyFrontier("teacherTeachingFrontierId", true) : undefined;
+          const teacherFrontierId = savedTeacherFrontier !== undefined
+            ? savedTeacherFrontier
             : belongsToBranch(subjectRecord.teacherTeachingFrontierId) ? subjectRecord.teacherTeachingFrontierId : "__UNKNOWN__";
-          const savedSchoolFrontierId = Object.prototype.hasOwnProperty.call(saved, "schoolClassFrontierId")
+          const savedSchoolFrontier = Object.prototype.hasOwnProperty.call(saved, "schoolClassFrontierId")
             ? saved.schoolClassFrontierId
+            : legacyLinear ? pickLegacyFrontier("schoolClassFrontierId") : undefined;
+          const savedSchoolFrontierId = savedSchoolFrontier !== undefined
+            ? savedSchoolFrontier
             : belongsToBranch(subjectRecord.schoolClassFrontierId) ? subjectRecord.schoolClassFrontierId : "__UNKNOWN__";
           const schoolFrontierId = subjectCourseMode === "center" ? savedSchoolFrontierId : "__UNKNOWN__";
           return [branch.branchId, calculateLearningGap(branchChoices, {
