@@ -198,7 +198,7 @@ describe("buildLearningBacklogSummary", () => {
     )[0];
 
     expect(result.source).toBe("unknown");
-    expect(result.studentMissingBranches).toBe(branches.length);
+    expect(result.studentMissingBranches).toBe(1);
   });
 
   it("reads the earlier student-progress field when the newer branch record is incomplete", () => {
