@@ -83,11 +83,12 @@ export default function Study() {
   const belongsToCurrentBranch = (value: unknown): value is string =>
     typeof value === "string" &&
     (value === "__NOT_STARTED__" || branchChoices.some(lesson => lesson.nodeId === value));
-  const legacyStudentFrontier = belongsToCurrentBranch(currentCourseProgress.lastCompletedLessonId)
-    ? currentCourseProgress.lastCompletedLessonId
-    : belongsToCurrentBranch(legacyStudentState.studentAttendedFrontier)
-      ? legacyStudentState.studentAttendedFrontier
-      : "__UNKNOWN__";
+  const legacyStudentFrontierCandidates = [
+    currentCourseProgress.lastCompletedLessonId,
+    ((selection.teacherFrontiers || {}) as Record<string, string>)[subjectId],
+    legacyStudentState.studentAttendedFrontier,
+  ];
+  const legacyStudentFrontier = legacyStudentFrontierCandidates.find(belongsToCurrentBranch) ?? "__UNKNOWN__";
   const resolveSavedFrontier = (
     field: "lastCompletedLessonId" | "teacherTeachingFrontierId" | "schoolClassFrontierId",
     confirmationKey: "studentFrontierConfirmedAt" | "teacherFrontierConfirmedAt" | "schoolFrontierConfirmedAt",
