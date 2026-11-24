@@ -111,3 +111,54 @@ export function calculateLearningGapsByBranch(
     calculateLearningGap(branch.choices, inputs[branch.branchId] ?? {}),
   ]));
 }
+
+export type LearningFrontierDirection = "previous" | "next";
+export type LearningNavigationTarget = { subjectId: string; branchId: string | null };
+
+/**
+ * Moves a saved position one checkpoint at a time within the current branch.
+ * Unknown stays unknown when moving backward; moving forward from unknown starts
+ * at the first checkpoint. Moving backward from the first checkpoint returns
+ * the explicit "not started" sentinel.
+ */
+export function moveLearningFrontier(
+  choices: Array<{ nodeId: string }>,
+  frontierId: string | null | undefined,
+  direction: LearningFrontierDirection,
+): string {
+  const unknown = !frontierId || UNKNOWN_VALUES.has(frontierId);
+  if (choices.length === 0) return frontierId || "__UNKNOWN__";
+  if (unknown) return direction === "next" ? choices[0].nodeId : "__UNKNOWN__";
+  if (frontierId === NOT_STARTED) return direction === "next" ? choices[0].nodeId : NOT_STARTED;
+
+  const index = choices.findIndex(choice => choice.nodeId === frontierId);
+  if (index < 0) return direction === "next" ? choices[0].nodeId : NOT_STARTED;
+
+  if (direction === "previous") {
+    return index === 0 ? NOT_STARTED : choices[index - 1].nodeId;
+  }
+  return choices[Math.min(index + 1, choices.length - 1)].nodeId;
+}
+
+/**
+ * Resolves the next explicit curriculum location after a branch is completed.
+ * It advances to the next branch in the same subject, then to the first branch
+ * of the next selected subject. It never invents a branch for an empty subject.
+ */
+export function getNextLearningTarget(
+  subjectIds: string[],
+  currentSubjectId: string,
+  branches: Array<{ branchId: string }>,
+  currentBranchId: string,
+): LearningNavigationTarget | null {
+  const branchIndex = branches.findIndex(branch => branch.branchId === currentBranchId);
+  const nextBranch = branches[branchIndex + 1];
+  if (branchIndex >= 0 && nextBranch) {
+    return { subjectId: currentSubjectId, branchId: nextBranch.branchId };
+  }
+
+  const subjectIndex = subjectIds.indexOf(currentSubjectId);
+  const nextSubjectId = subjectIds[subjectIndex + 1];
+  if (subjectIndex < 0 || !nextSubjectId) return null;
+  return { subjectId: nextSubjectId, branchId: null };
+}
