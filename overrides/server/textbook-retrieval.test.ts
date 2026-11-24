@@ -51,14 +51,14 @@ describe("uploaded official textbook corpus", () => {
     const arabic = inspectTextbookIndex("ARB_G2_BAC");
     const programming = inspectTextbookIndex("PROG_AI_G2_BAC");
     expect(history.files.every(file => file.exists && file.bytes > 0)).toBe(true);
-    expect(programming.files.every(file => file.exists && file.bytes > 0)).toBe(true);
+    expect(programming.files).toHaveLength(0);
     expect(history.files.reduce((sum, file) => sum + file.markerCount, 0), JSON.stringify(history.files)).toBeGreaterThan(120);
     expect(arabic.files.every(file => file.exists && file.bytes > 0)).toBe(true);
     expect(arabic.files.reduce((sum, file) => sum + file.markerCount, 0)).toBeGreaterThan(150);
     expect(arabic.pageCount).toBeGreaterThan(150);
-    expect(programming.files.reduce((sum, file) => sum + file.markerCount, 0)).toBeGreaterThan(50);
+    expect(programming.pageCount).toBe(0);
     expect(history.pageCount).toBeGreaterThan(100);
-    expect(programming.pageCount).toBeGreaterThan(50);
+    expect(history.files.map(file => file.file)).toEqual(["history-part1.txt"]);\n    expect(arabic.files.map(file => file.file)).toEqual(["arabic-part1.txt"]);
   });
 
   it("retrieves a page from the uploaded National History Part 1 source", () => {
@@ -72,14 +72,25 @@ describe("uploaded official textbook corpus", () => {
     expect(result.passages.some(item => item.bookTitle.includes("التاريخ الوطني") && item.pdfPage > 0)).toBe(true);
   });
 
-  it("retrieves a page from Programming and AI Part 2", () => {
+  it("never retrieves Programming and AI Part 2 when the requested scope is first part", () => {
     const result = retrieveTextbookEvidence(
       ["PROG_AI_G2_BAC"],
-      "الشبكات العصبية والتعلم العميق",
+      "كيف يعمل الذكاء الاصطناعي",
       3,
     );
-    expect(result.passages.length).toBeGreaterThan(0);
-    expect(result.passages.every(item => item.sourceFile.includes("programming-part2"))).toBe(true);
+    expect(result.passages).toHaveLength(0);
+    expect(result.coverageNotes.some(note => note.includes("الجزء الأول") && note.includes("14 درسًا"))).toBe(true);
+    expect(result.coverageNotes.some(note => note.includes("الجزء الثاني"))).toBe(false);
+  });
+
+  it("reports verified Italian first-part unit index without pretending its page body is indexed", () => {
+    const result = retrieveTextbookEvidence(
+      ["SECOND_LANGUAGE_G2_BAC_PENDING"],
+      "Dove abiti?",
+      3,
+    );
+    expect(result.passages).toHaveLength(0);
+    expect(result.coverageNotes.some(note => note.includes("Dove abiti?") && note.includes("Tempo libero"))).toBe(true);
   });
 });
 
