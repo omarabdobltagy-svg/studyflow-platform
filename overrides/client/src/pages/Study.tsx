@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { getSIECheckpointBranches, getSIECheckpointChoices, getSIECheckpointChoiceDisplayLabel, getSIECheckpointChoiceTypeLabel, getSIESubject, getSIETeacher, getSIETeachersForSubject, type SIESystemId } from "@shared/sie-catalog";
 import { calculateLearningGap } from "@shared/sie-learning-progress";
-import { estimateTermCheckpointFrontier, getChoicesForCurrentSchoolPart, getEgyptSchoolProgress } from "@shared/egypt-school-calendar";
+import { getExpectedToDateChoices, getEgyptSchoolProgress } from "@shared/egypt-school-calendar";
 import { Activity, BookOpenText, Check, CircleHelp, Eye, Gauge, Mic2, RefreshCcw, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -166,10 +166,7 @@ export default function Study() {
   const visibleCurriculumChoices = useMemo(() => {
     if (!isLinearSubject || showFullCourseIndex) return branchChoices;
     const today = new Date();
-    const currentPartChoices = getChoicesForCurrentSchoolPart(branchChoices, today);
-    const expected = estimateTermCheckpointFrontier(currentPartChoices.length, today);
-    const visibleLimit = Math.min(currentPartChoices.length, Math.max(3, expected + 2));
-    const focused = currentPartChoices.slice(0, visibleLimit);
+    const focused = getExpectedToDateChoices(branchChoices, today);
     const preservedIds = [teacherTeachingFrontierId, schoolClassFrontierId, lastCompletedLessonId].filter(Boolean);
     const preserved = branchChoices.filter(choice => preservedIds.includes(choice.nodeId));
     return [...new Map([...focused, ...preserved].map(choice => [choice.nodeId, choice])).values()]
