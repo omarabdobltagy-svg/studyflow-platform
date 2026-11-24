@@ -1,7 +1,7 @@
 {
   "schemaVersion": 3,
   "ingestionDate": "2026-11-24",
-  "scope": "part1_page_body_indexing_with_full_year_catalog_metadata",
+  "scope": "first_part_first_term_only",
   "storagePolicy": "derived_curriculum_metadata_only",
   "books": {
     "ARB_G2_BAC": {
@@ -126,5 +126,6 @@
       }
     }
   },
-  "scopeNotes": "The books entries below describe the available Part 1 page-body and manifest sources, not the completeness of the full-year lesson-title catalog. Full-year curriculumCatalogCoverage records the lesson metadata coverage separately."
+  "scopeNotes": "The scope and books entries describe available Part 1 page-body and manifest sources only. They do not limit curriculumCatalogCoverage, which records full-year lesson metadata separately.",
+  "catalogScope": "full_year_lesson_metadata"
 }
