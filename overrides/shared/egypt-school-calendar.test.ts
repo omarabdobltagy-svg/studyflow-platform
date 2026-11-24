@@ -31,7 +31,7 @@ describe("Egyptian public school calendar", () => {
     expect(EGYPT_GENERAL_ASSESSMENT_CONTEXT_2026_2027.note)
       .toContain("not a universal fixed grading-weight formula");
   });
-  it("keeps the non-Baccalaureate 2026/27 school dates separate from university dates", () => {
+  it("models the 2026/27 public school calendar separately from university dates", () => {
     expect(EGYPT_SCHOOL_CALENDAR_2026_2027.schoolYearStart).toBe("2026-09-12");
     expect(EGYPT_SCHOOL_CALENDAR_2026_2027.transferFirstTermExamsStart).toBe("2027-01-09");
     expect(EGYPT_SCHOOL_CALENDAR_2026_2027.midyearBreakStart).toBe("2027-01-23");
@@ -64,6 +64,7 @@ describe("Egyptian public school calendar", () => {
     expect(november).toHaveLength(8);
     expect(november.length).toBeLessThan(12);
     expect(getExpectedToDateChoices(history, "2027-03-01").every(choice => choice.sourceLabel.includes("الجزء الثاني"))).toBe(true);
+    expect(getExpectedToDateChoices(history, "2027-06-30")).toHaveLength(12);
   });
 
   it("switches from first-term to second-term curriculum without mixing both parts", () => {
