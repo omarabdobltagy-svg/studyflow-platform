@@ -498,7 +498,7 @@ export default function Study() {
         <div>
           <p className="text-[10px] font-bold tracking-[0.12em] text-primary">المذاكرة</p>
           <h2 className="mt-1 text-lg font-bold">اختيار درس لجلسة المذاكرة</h2>
-          <p className="mt-1 text-sm leading-6 text-muted-foreground">اختر الدرس الذي ستذاكره خارج StudyFlow. هذه الجلسة ومؤقتها منفصلان عن SQ3R وعن تسجيل تقدم المنهج.</p>
+          <p className="mt-1 text-sm leading-6 text-muted-foreground">اختر الدرس الذي ستذاكره خارج StudyFlow. هذه الجلسة ومؤقتها منفصلان عن جلسة SQ3R وعن تسجيل تقدم المنهج. <a href="/sq3r" className="font-semibold text-primary underline underline-offset-4">افتح جلسة SQ3R المستقلة</a>.</p>
         </div>
         {branchChoices.length ? (
           <div className="mt-4">
@@ -511,7 +511,7 @@ export default function Study() {
       <section className="app-card mb-5 p-5 sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">CROSS-APP STUDY SESSION</p>
+            <p className="text-[10px] font-bold tracking-[0.12em] text-primary">جلسة المذاكرة الخارجية</p>
             <h2 className="mt-1 font-bold">جلسة مذاكرة خارج SIE</h2>
             {externalSession ? (
               <>
@@ -644,7 +644,7 @@ function SearchableFrontierPicker({
         })}
       </div>
       {!visibleOptions.length && <p className="rounded-xl bg-muted/30 p-3 text-center text-xs text-muted-foreground">لا توجد نتيجة مطابقة في فهرس هذا الفرع.</p>}
-      {value && <button type="button" disabled={disabled} onClick={() => onChange("")}
+      {value && <button type="button" disabled={disabled} onClick={() => onChange(options.some(option => option.value === "__UNKNOWN__") ? "__UNKNOWN__" : "")}
         className="text-xs font-semibold text-muted-foreground underline underline-offset-4 disabled:opacity-50">إلغاء الاختيار</button>}
     </div>
   );
