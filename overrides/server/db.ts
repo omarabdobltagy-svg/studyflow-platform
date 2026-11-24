@@ -664,7 +664,7 @@ export async function approvePlanAsGoalTree(
       })));
     }
 
-    return { parentGoalId, stageCount: steps.length, taskCount: steps.length, routineId };
+    return { parentGoalId, stageCount: steps.length, taskCount: steps.length, ...(routineId !== null ? { routineId } : {}) };
   });
 }
 
