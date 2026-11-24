@@ -21,7 +21,7 @@ vi.mock("./textbook-retrieval", () => ({
   retrieveTextbookEvidence: () => ({ passages: [], coverageNotes: [] }),
 }));
 
-import { generatePersonalPlan, parseGeneratedPlan } from "./planGenerator";
+import { applyPlannerProgressGuard, generatePersonalPlan, parseGeneratedPlan } from "./planGenerator";
 
 const validPlan = {
   title: "خطة مراجعة التاريخ",
@@ -105,6 +105,87 @@ describe("generated plan JSON parser", () => {
     expect(parsed.steps[0].priority).toBe("high");
     expect(parsed.steps[0].sourcePages).toEqual([12]);
     expect(parsed.summary.length).toBeGreaterThan(500);
+  });
+});
+
+describe("planner completed-curriculum guard", () => {
+  const profile = {
+    subjectIds: ["ARB_G2_BAC"],
+    selection: {
+      learningCourseProgress: {
+        ARB_G2_BAC: {
+          branches: {
+            ARB_NAHW: {
+              lastCompletedLessonId: "ARB_U2_N1",
+              teacherTeachingFrontierId: "ARB_U3_N2",
+              schoolClassFrontierId: "__UNKNOWN__",
+            },
+          },
+        },
+      },
+    },
+  } as any;
+
+  const step = (title: string, nodeId: string) => ({
+    day: "اليوم 1",
+    title,
+    detail: "افهم الفكرة ثم حل التدريبات المرتبطة بالدرس وسجل الأخطاء.",
+    minutes: 35,
+    category: "مذاكرة",
+    curriculumNodeIds: [nodeId],
+    priority: "high" as const,
+    difficulty: "medium" as const,
+    lessonSize: "medium" as const,
+    difficultyBasis: "student_report" as const,
+    difficultyConfidence: "high" as const,
+    sourcePages: [],
+  });
+
+  it("blocks the last completed lesson but permits the next distinct nahw checkpoints", () => {
+    const plan = {
+      ...validPlan,
+      steps: [
+        step("الممنوع من الصرف وعلل منعه", "ARB_U2_N1"),
+        step("تابع الممنوع من الصرف وعلل منعه", "ARB_U2_N2"),
+        step("تطبيق على الممنوع من الصرف وعلل منعه", "ARB_U2_N3"),
+      ],
+    };
+
+    const guarded = applyPlannerProgressGuard(plan as any, profile);
+
+    expect(guarded.steps.map(item => item.curriculumNodeIds)).toEqual([
+      ["ARB_U2_N2"],
+      ["ARB_U2_N3"],
+    ]);
+  });
+
+  it("blocks a completed lesson mention when a model omits curriculum IDs", () => {
+    const plan = {
+      ...validPlan,
+      steps: [
+        { ...step("مراجعة الممنوع من الصرف وعلل منعه من البداية", "ARB_U2_N1"), curriculumNodeIds: [] },
+        { ...step("حل تدريبات على درس تالٍ", "ARB_U3_N1"), curriculumNodeIds: [] },
+      ],
+    };
+
+    const guarded = applyPlannerProgressGuard(plan as any, profile);
+
+    expect(guarded.steps).toHaveLength(1);
+    expect(guarded.steps[0].title).toBe("حل تدريبات على درس تالٍ");
+  });
+
+  it("refuses to save a plan made entirely of completed curriculum tasks", () => {
+    const plan = {
+      ...validPlan,
+      steps: [
+        step("الممنوع من الصرف وعلل منعه", "ARB_U2_N1"),
+        step("إعادة مذاكرة الدرس المكتمل", "ARB_U2_N1"),
+        step("اختبار على الدرس المكتمل", "ARB_U2_N1"),
+      ],
+    };
+
+    expect(() => applyPlannerProgressGuard(plan as any, profile))
+      .toThrow("الخطة المقترحة تضمنت دروسًا مكتملة");
   });
 });
 
