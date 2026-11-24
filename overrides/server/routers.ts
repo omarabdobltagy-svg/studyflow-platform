@@ -37,7 +37,7 @@ import {
   getStudyAnalytics,
   getStudentProfile,
   getLatestAiPlanByPromptPrefix,
-  ensureDailyPlanTasks,
+  syncDailyPlanGoalTree,
   listRecentStudentActivityEvents,
   recordStudentActivityEvent,
   startStudySession,
@@ -85,6 +85,8 @@ type DailyPlanResult = {
   generatedAt: Date;
   generated: boolean;
   tasksAdded: number;
+  tasksRefreshed: number;
+  preservedCompletedTaskCount: number;
   taskCount: number;
 };
 
@@ -112,12 +114,14 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): 
       try {
         const saved = JSON.parse(latestDailyPlan.planJson) as Awaited<ReturnType<typeof generatePersonalPlan>>;
         if (saved && typeof saved.title === "string" && Array.isArray(saved.steps) && saved.steps.length > 0) {
-          const taskSync = await ensureDailyPlanTasks(userId, saved, startDate, dailyMinutes);
+          const taskSync = await syncDailyPlanGoalTree(userId, saved, { startDate, dailyMinutes });
           return {
             plan: saved,
             generatedAt: new Date(latestDailyPlan.createdAt),
             generated: false,
-            tasksAdded: taskSync.addedCount,
+            tasksAdded: taskSync.createdTaskCount,
+            tasksRefreshed: taskSync.refreshedTaskCount,
+            preservedCompletedTaskCount: taskSync.preservedCompletedTaskCount,
             taskCount: taskSync.taskCount,
           };
         }
@@ -136,12 +140,14 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): 
         context: "هذه خطة التشغيل اليومية الافتراضية. استخدم بيانات ملف الدراسة والتراكم والتقدم ومواضع التدريس وسجل التقييمات المتاحة؛ لا تطلب من الطالب إعادة إدخال أي معلومة موجودة. اجعل أول خطوة واضحة وقابلة للبدء فورًا.",
       },
     );
-    const taskSync = await ensureDailyPlanTasks(userId, plan, startDate, dailyMinutes);
+    const taskSync = await syncDailyPlanGoalTree(userId, plan, { startDate, dailyMinutes });
     return {
       plan,
       generatedAt: new Date(),
       generated: true,
-      tasksAdded: taskSync.addedCount,
+      tasksAdded: taskSync.createdTaskCount,
+      tasksRefreshed: taskSync.refreshedTaskCount,
+      preservedCompletedTaskCount: taskSync.preservedCompletedTaskCount,
       taskCount: taskSync.taskCount,
     };
   })();
@@ -2040,12 +2046,23 @@ export const appRouter = router({
         startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        const startDate = input.startDate
+          ?? new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
         const result = await generatePersonalPlan(
           ctx.user.id, input.prompt, input.includeStudentProfile,
-          { dailyMinutes: input.dailyMinutes, startDate: input.startDate }
+          { dailyMinutes: input.dailyMinutes, startDate }
         );
-        await logStudentActivity(ctx.user.id, "plan.generated", "ai_plan", null, "ولّد المخطط الذكي خطة جديدة", { title: result.title, stepCount: result.steps.length });
-        return result;
+        const taskSync = await approvePlanAsGoalTree(ctx.user.id, {
+          title: result.title,
+          summary: result.summary,
+          steps: result.steps.map((step, index) => ({ ...step, day: index + 1 })),
+        }, { startDate, dailyMinutes: input.dailyMinutes });
+        await logStudentActivity(ctx.user.id, "plan.generated", "ai_plan", null, "ولّد المخطط الذكي خطة وحوّلها تلقائيًا إلى مهام", {
+          title: result.title,
+          stepCount: result.steps.length,
+          taskCount: taskSync.taskCount,
+        });
+        return { ...result, taskSync };
       }),
     approve: protectedProcedure
       .input(z.object({
