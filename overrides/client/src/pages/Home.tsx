@@ -77,9 +77,9 @@ function WorkspaceFolder({
         className="sf-folder-trigger"
         onClick={() => onToggle(id)}
         aria-expanded={isOpen}
-        whileHover={reduceMotion ? undefined : { y: -4, rotateX: 1.5 }}
+        whileHover={reduceMotion ? undefined : { y: -2 }}
         whileTap={reduceMotion ? undefined : { scale: 0.985 }}
-        transition={{ type: "spring", stiffness: 280, damping: 19 }}
+        transition={{ type: "spring", stiffness: 240, damping: 24 }}
       >
         <div className="sf-folder-art" aria-hidden="true">
           <motion.div
@@ -115,7 +115,7 @@ function WorkspaceFolder({
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ height: { duration: reduceMotion ? 0.01 : 0.72, ease: [0.2, 0.8, 0.2, 1] }, opacity: { duration: 0.28 } }}
+            transition={{ height: { duration: reduceMotion ? 0.01 : 0.38, ease: [0.2, 0.8, 0.2, 1] }, opacity: { duration: 0.2 } }}
           >
             <motion.div
               className="sf-folder-content"
