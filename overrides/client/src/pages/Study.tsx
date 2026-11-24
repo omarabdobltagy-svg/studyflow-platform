@@ -154,18 +154,17 @@ export default function Study() {
       const clearDraft = (drafts: Record<string, string>) => { const next = { ...drafts }; delete next[studentFrontierDraftKey]; return next; };
       setStudentFrontierDrafts(clearDraft); setTeacherFrontierDrafts(clearDraft); setSchoolFrontierDrafts(clearDraft);
       if (result.savedStudent) {
-        const lastLessonId = currentBranch?.choices[currentBranch.choices.length - 1]?.nodeId;
-        const branchCompleted = Boolean(lastLessonId && result.record?.lastCompletedLessonId === lastLessonId);
-        if (!branchCompleted) { toast.success("تم حفظ مواضعك في " + (currentBranch?.branchTitle || "الفرع") + "."); return; }
         const nextTarget = getNextLearningTarget(subjects, subjectId, branches, currentBranchId);
         if (nextTarget) {
           setSubjectId(nextTarget.subjectId);
           setBranchId(nextTarget.branchId || "");
-          const nextLabel = nextTarget.branchId ? branches.find(item => item.branchId === nextTarget.branchId)?.branchTitle : getSIESubject(nextTarget.subjectId)?.nameAr;
-          toast.success("اكتمل هذا الفرع؛ انتقلنا تلقائيًا إلى " + (nextLabel || "الموضع التالي") + ".");
+          const nextLabel = nextTarget.branchId
+            ? branches.find(item => item.branchId === nextTarget.branchId)?.branchTitle
+            : getSIESubject(nextTarget.subjectId)?.nameAr;
+          toast.success("تمت مزامنة موضعك مع موضع المدرس؛ انتقلنا تلقائيًا إلى " + (nextLabel || "الموضع التالي") + ".");
           return;
         }
-        toast.success("تم حفظ موضعك واكتملت كل فروع المواد المحددة.");
+        toast.success("تمت مزامنة موضعك مع موضع المدرس، واكتملت الفروع المحددة.");
       } else if (result.savedTeacher) toast.success("تم حفظ موضع المدرس لهذا الفرع.");
       else toast.success("تم حفظ التقدم.");
     },
@@ -227,7 +226,7 @@ export default function Study() {
     subjectId, currentBranchId, branchChoices.length, hasStudentFrontierSelection,
     hasTeacherFrontierSelection, hasSchoolFrontierSelection, lastCompletedLessonId,
     teacherTeachingFrontierId, schoolClassFrontierId, courseMode,
-    studentFrontierDrafts, teacherFrontierDrafts, studentFrontierDraftKey,
+    studentFrontierDrafts, teacherFrontierDrafts, schoolFrontierDrafts, studentFrontierDraftKey,
     saveBranchFrontier.isPending, profile.isLoading,
   ]);
   const subjectName = (getSIESubject(subjectId)?.nameAr || subjectId);
