@@ -95,23 +95,25 @@ function getCurriculumIntelligenceNotes(subjectIds: string[]): string[] {
     return subjectIds.flatMap(subjectId => {
       const subject = catalogue.subjects[subjectId];
       if (!subject) return [];
-      const lines = [`ملف المنهج المشتق — ${subject.title} (${subject.coverage}):`];
+      const lines = [`المنهج المشتق — ${subject.title}:`];
       for (const unit of subject.units) {
-        const unitRange = unit.pages ? `؛ صفحات الكتاب المطبوعة ${unit.pages[0]}–${unit.pages[1]} (${unit.pageCount ?? unit.pages[1] - unit.pages[0] + 1} صفحة)` : "";
-        lines.push(`الوحدة: ${unit.title}${unitRange}${unit.size ? `؛ حجم الوحدة ${unit.size}` : ""}`);
+        const unitRange = unit.pages ? `؛ صفحات مطبوعة ${unit.pages[0]}–${unit.pages[1]} (${unit.pageCount ?? unit.pages[1] - unit.pages[0] + 1} صفحة، ${unit.size ?? "حجم غير محدد"})` : "";
+        lines.push(`الوحدة: ${unit.title}${unitRange}`);
         if (unit.lessons?.length && typeof unit.lessons[0] !== "string") {
           for (const entry of unit.lessons) {
             if (typeof entry === "string") continue;
-            const range = entry.pages ? `؛ صفحات الكتاب ${entry.pages[0]}–${entry.pages[1]} (${entry.pageCount ?? entry.pages[1] - entry.pages[0] + 1} صفحة)` : "";
+            const range = entry.pages ? `؛ ص${entry.pages[0]}–${entry.pages[1]}، ${entry.pageCount ?? entry.pages[1] - entry.pages[0] + 1} صفحة` : "";
+            const size = entry.size && entry.size !== "unknown" ? entry.size : "غير محدد";
             const difficulty = entry.difficulty && entry.difficulty !== "unknown"
-              ? `؛ صعوبة مبدئية ${entry.difficulty} (ثقة ${entry.difficultyConfidence ?? "low"})`
-              : "؛ الصعوبة غير محسومة";
-            lines.push(`- ${entry.title}${range}${entry.size ? `؛ الحجم ${entry.size}` : ""}${difficulty}${entry.basis ? `؛ سبب التقدير: ${entry.basis}` : ""}${entry.strategy ? `؛ توزيع مقترح: ${entry.strategy}` : ""}`);
+              ? `${entry.difficulty} (ثقة ${entry.difficultyConfidence ?? "low"})`
+              : "غير محسوم";
+            const rationale = entry.basis ? `; سبب: ${entry.basis.slice(0, 58)}` : "";
+            lines.push(`- ${entry.title}${range}؛ الحجم ${size}؛ الصعوبة المبدئية ${difficulty}${rationale}`);
           }
         } else if (unit.lessons?.length && typeof unit.lessons[0] === "string") {
-          lines.push(`- الموضوعات: ${unit.lessons.join("؛ ")}؛ حجم الوحدة ${unit.size ?? "غير محدد"}؛ حجم وصعوبة كل موضوع على حدة غير محسومين من الفهرس.`);
+          lines.push(`- الموضوعات: ${unit.lessons.join("؛ ")}؛ صفحات الوحدة وحجمها ${unitRange || "غير محددين"}؛ لا يوجد تقدير موثوق لصعوبة كل موضوع على حدة.`);
         } else {
-          lines.push("- أسماء الوحدات فقط؛ حجم الدروس وصعوبتها غير محسومين.");
+          lines.push("- أسماء الوحدات فقط؛ الحجم والصعوبة غير محددين حتى يتوفر الكتاب.");
         }
       }
       if (subject.limitation) lines.push("حدود المصدر: " + subject.limitation);
