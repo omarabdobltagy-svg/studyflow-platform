@@ -1,7 +1,6 @@
 /**
  * Egypt public pre-university school calendar reference.
  *
- * Deliberately excludes Baccalaureate-specific examination windows.
  * Official school dates are refreshed per academic year; the current
  * 2026/27 dates below cover public, official-language and private schools.
  */
@@ -148,17 +147,13 @@ export function getEgyptSchoolProgress(value: string | Date = new Date()): Egypt
 export function estimateTermCheckpointFrontier(totalTermCheckpoints: number, value: string | Date = new Date()): number {
   const progress = getEgyptSchoolProgress(value);
   if (progress.phase === "before_school_year") return 0;
-  if (progress.phase === "first_term_exams" || progress.phase === "midyear_break" || progress.phase === "second_term_exams" || progress.phase === "after_school_year") {
+  if (progress.phase === "first_term_exams" || progress.phase === "midyear_break" || progress.phase === "second_term_exams" || progress.phase === "general_secondary_exams" || progress.phase === "after_school_year") {
     return Math.max(0, Math.floor(totalTermCheckpoints));
   }
   if (progress.term === null) return 0;
   return Math.max(0, Math.min(totalTermCheckpoints, Math.floor(totalTermCheckpoints * progress.termProgress)));
 }
 
-/**
- * Split a linear textbook into its first- and second-term parts using the
- * part labels already attached to the official catalogue entries.
- */
 /**
  * Default selector window: the current term's expected-to-date checkpoints
  * plus one nearby checkpoint, not the whole-year catalog. Callers may preserve
@@ -177,6 +172,10 @@ export function getExpectedToDateChoices<T extends { sourceLabel?: string; unitN
   return currentPart.slice(0, visibleCount);
 }
 
+/**
+ * Split a linear textbook into its first- and second-term parts using the
+ * part labels already attached to the official catalogue entries.
+ */
 export function getChoicesForCurrentSchoolPart<T extends { sourceLabel?: string; unitNumber?: number }>(
   choices: T[],
   value: string | Date = new Date(),
