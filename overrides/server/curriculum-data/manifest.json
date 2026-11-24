@@ -1,7 +1,7 @@
 {
   "schemaVersion": 3,
   "ingestionDate": "2026-11-24",
-  "scope": "first_part_first_term_only",
+  "scope": "part1_page_body_indexing_with_full_year_catalog_metadata",
   "storagePolicy": "derived_curriculum_metadata_only",
   "books": {
     "ARB_G2_BAC": {
@@ -68,5 +68,63 @@
     "English unit page spans are verified at unit level only; individual English topic page spans and difficulty remain unknown.",
     "Italian has two unit names only until its original Part 1 PDF is provided.",
     "Arabic and History page ranges derive from the official tables of contents; exact page body content is not stored."
-  ]
+  ],
+  "curriculumCatalogCoverage": {
+    "coverage": "full_year_lesson_metadata",
+    "academicYear": "2026/2027",
+    "note": "This catalog stores derived lesson titles and curriculum relationships only. It does not store full textbook page text. Textbook page-body retrieval remains separately limited to the indexed Part 1 sources listed under books.",
+    "subjects": {
+      "ARB_G2_BAC": {
+        "parts": [
+          1,
+          2
+        ],
+        "units": 6,
+        "textbookLessons": 18,
+        "teacherCourseSequenceEntries": 21,
+        "note": "Teacher course sequence and textbook lesson index are distinct views and may overlap; do not add their counts together."
+      },
+      "ENG1_G2_BAC": {
+        "parts": [
+          1,
+          2
+        ],
+        "textbookUnits": 10,
+        "textbookTopics": 40,
+        "storyBookChapters": 10,
+        "teacherCourseStreams": [
+          "Vocabulary",
+          "Grammar",
+          "GRE"
+        ],
+        "note": "The three teacher-course streams accept teacher-specific custom lessons independently of the 40 textbook topics and 10 story chapters."
+      },
+      "HIS_G2_BAC": {
+        "parts": [
+          1,
+          2
+        ],
+        "units": 6,
+        "lessons": 24,
+        "structure": "one linear course sequence"
+      },
+      "PROG_AI_G2_BAC": {
+        "parts": [
+          1,
+          2
+        ],
+        "chapters": 7,
+        "lessons": 23,
+        "structure": "one linear course sequence"
+      },
+      "SECOND_LANGUAGE_G2_BAC_PENDING": {
+        "indexedParts": [
+          1
+        ],
+        "unitTitlesCurrentlyAvailable": 2,
+        "note": "Incomplete source catalog; keep editable and do not infer missing lesson titles."
+      }
+    }
+  },
+  "scopeNotes": "The books entries below describe the available Part 1 page-body and manifest sources, not the completeness of the full-year lesson-title catalog. Full-year curriculumCatalogCoverage records the lesson metadata coverage separately."
 }
