@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { getSIECheckpointBranches, getSIESubject, getSIETeacher } from "@shared/sie-catalog";
 import { calculateLearningGap } from "@shared/sie-learning-progress";
-import { invokeLLM } from "./_core/llm";
+import { invokeLLM, invokeNvidiaLLM } from "./_core/llm";
 import { getStudentProfile, saveAiPlan } from "./db";
 import { formatTextbookEvidence, retrieveTextbookEvidence } from "./textbook-retrieval";
 
@@ -24,28 +24,32 @@ export type GeneratedPlan = z.infer<typeof planSchema>;
 
 function plannerProviderError(error: unknown): Error {
   const message = error instanceof Error ? error.message : String(error);
-  if (/AI_API_KEY is not configured|API key is required/i.test(message)) {
-    return new Error("خدمة المخطط الذكي غير مهيأة بمفتاح مزوّد الذكاء الاصطناعي. راجع إعداد AI_API_KEY في بيئة التشغيل.");
+  const isNvidia = /NVIDIA LLM invoke failed/i.test(message);
+  if (/NVIDIA_API_KEY is not configured/i.test(message)) {
+    return new Error("تعذر استخدام المخطط: رصيد أو مفتاح المزوّد الأساسي غير متاح، ومفتاح NVIDIA الاحتياطي غير مهيأ. أضف NVIDIA_API_KEY كمتغير سرّي على خدمة StudyFlow Preview 360 في Railway، وليس كمتغير Shared.");
   }
-  const status = Number(message.match(/LLM invoke failed:\s*(\d{3})/i)?.[1] ?? 0);
+  if (/AI_API_KEY is not configured/i.test(message)) {
+    return new Error("مفتاح المزوّد الأساسي غير مهيأ، كما أن مسار NVIDIA الاحتياطي غير متاح. راجع AI_API_KEY وNVIDIA_API_KEY في إعدادات خدمة التشغيل.");
+  }
+  const status = Number(message.match(/(?:NVIDIA )?LLM invoke failed:\s*(\d{3})/i)?.[1] ?? 0);
+  const providerLabel = isNvidia ? "NVIDIA Nemotron 3 Ultra" : "المزوّد الأساسي";
   if (status === 401 || status === 403) {
-    return new Error("مزود الذكاء الاصطناعي رفض بيانات اعتماد الخدمة. راجع المفتاح وصلاحياته.");
+    return new Error("رفض " + providerLabel + " بيانات الاعتماد أو الصلاحيات. راجع المفتاح ونطاق صلاحياته.");
   }
   if (status === 402) {
-    return new Error("رصيد OpenRouter الحالي لا يكفي لتكلفة هذا الطلب. خفّضنا حجم الخطة وأعدنا المحاولة بطلب أقل تكلفة؛ إذا استمر الخطأ فستحتاج إضافة رصيد إلى حساب المزوّد.");
+    return new Error("رصيد أو إعداد الفوترة لدى " + providerLabel + " لا يسمح بتنفيذ الطلب. راجع حساب المزوّد.");
   }
   if (status === 429) {
-    return new Error("وصل مزود الذكاء الاصطناعي إلى حد الطلبات مؤقتًا. حاول بعد قليل.");
+    return new Error("وصل " + providerLabel + " إلى حد الطلبات مؤقتًا. حاول مرة أخرى بعد قليل.");
   }
   if (status >= 500) {
-    return new Error("خدمة الذكاء الاصطناعي تواجه عطلًا مؤقتًا. حاول مرة أخرى بعد قليل.");
+    return new Error("خدمة " + providerLabel + " تواجه عطلًا مؤقتًا. حاول مرة أخرى بعد قليل.");
   }
   if (/timeout|timed out|network|fetch failed|ECONN/i.test(message)) {
     return new Error("تعذر الاتصال بخدمة الذكاء الاصطناعي. تحقق من الاتصال وحاول مرة أخرى.");
   }
-  return new Error("تعذر توليد الخطة الذكية. لم يتم حفظ خطة ناقصة؛ حاول بصياغة أبسط أو أعد المحاولة.");
+  return new Error("تعذر توليد الخطة الذكية. لم يتم حفظ خطة ناقصة؛ حاول مرة أخرى.");
 }
-
 function contentAsText(content: any): string {
   return typeof content === "string" ? content : Array.isArray(content)
     ? content.filter(item => item.type === "text").map(item => item.text).join("\n")
@@ -203,7 +207,12 @@ export async function generatePersonalPlan(
   ].join("\n");
   const user = "طلب الطالب أو قيوده الجديدة:\n" + prompt.slice(0, 1_200) + "\n\nبيانات الملف الدراسي الحالية:\n" + context;
   let response;
-  const invokeCompact = async (maxTokens: number, compact = false, jsonMode = true) => invokeLLM({
+  const invokeCompact = async (
+    provider: typeof invokeLLM,
+    maxTokens: number,
+    compact = false,
+    jsonMode = true
+  ) => provider({
     maxTokens,
     ...(jsonMode ? { response_format: { type: "json_object" as const } } : {}),
     messages: [
@@ -211,32 +220,51 @@ export async function generatePersonalPlan(
       { role: "user", content: compact ? user.slice(0, 4_000) : user },
     ],
   });
+
+  const invokeNvidiaFallback = async () => {
+    console.warn("[StudyFlow planner] Primary provider billing/quota unavailable; switching to NVIDIA Nemotron 3 Ultra.");
+    // NVIDIA's hosted endpoint does not advertise structured output.
+    // Retain the full planning context and validate its JSON response with Zod.
+    return invokeCompact(invokeNvidiaLLM, 2_400, false, false);
+  };
+
+  const isBillingOrQuotaFailure = (error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    return /AI_API_KEY is not configured/i.test(message)
+      || /(?:NVIDIA )?LLM invoke failed:\s*402\b/i.test(message)
+      || /insufficient[_\s-]?(?:credits?|quota|balance)|out of credits|not enough credits|credit balance.{0,40}(?:low|insufficient|exhausted)|quota.{0,30}(?:exceeded|exhausted)|openrouter_credits|payment required/i.test(message);
+  };
+
+  const isUnsupportedJsonMode = (error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    return /response_format|json_object|structured output|unsupported|not support/i.test(message);
+  };
+
   try {
     try {
-      response = await invokeCompact(1_400);
-    } catch (firstError) {
-      const firstMessage = firstError instanceof Error ? firstError.message : String(firstError);
-      const status = Number(firstMessage.match(/LLM invoke failed:\s*(\d{3})/i)?.[1] ?? 0);
-      const unsupportedJson = /response_format|json_object|structured output|unsupported|not support/i.test(firstMessage);
-      const creditLimited = status === 402 || /insufficient_quota|openrouter_credits|more credits/i.test(firstMessage);
-      if (creditLimited) {
+      response = await invokeCompact(invokeLLM, 1_400, false, true);
+    } catch (primaryError) {
+      if (isBillingOrQuotaFailure(primaryError)) {
+        response = await invokeNvidiaFallback();
+      } else if (isUnsupportedJsonMode(primaryError)) {
         try {
-          response = await invokeCompact(850, true, true);
+          response = await invokeCompact(invokeLLM, 1_400, false, false);
         } catch (retryError) {
-          const retryMessage = retryError instanceof Error ? retryError.message : String(retryError);
-          if (!/response_format|json_object|structured output|unsupported|not support/i.test(retryMessage)) throw retryError;
-          response = await invokeCompact(850, true, false);
+          if (isBillingOrQuotaFailure(retryError)) {
+            response = await invokeNvidiaFallback();
+          } else {
+            throw retryError;
+          }
         }
-      } else if (unsupportedJson) {
-        response = await invokeCompact(1_400, false, false);
       } else {
-        throw firstError;
+        throw primaryError;
       }
     }
   } catch (error) {
-    console.error("[StudyFlow planner] Provider request failed:", error instanceof Error ? error.message : String(error));
+    console.error("[StudyFlow planner] Provider request failed:", error instanceof Error ? error.message.slice(0, 700) : "Unknown provider error");
     throw plannerProviderError(error);
   }
+
   const result = response.choices[0] && response.choices[0].message ? response.choices[0].message.content : "";
   const text = contentAsText(result);
   if (!text) throw new Error("لم تصل استجابة من المخطط الذكي. حاول مرة أخرى.");
