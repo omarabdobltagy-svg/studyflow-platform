@@ -38,7 +38,6 @@ import {
   getStudyAnalytics,
   getStudentProfile,
   getLatestAiPlanByPromptPrefix,
-  syncDailyPlanGoalTree,
   listRecentStudentActivityEvents,
   recordStudentActivityEvent,
   startStudySession,
