@@ -212,59 +212,14 @@ const normalizeToolChoice = (
   return toolChoice;
 };
 
-const resolveApiUrl = () => {
-  const configured = ENV.aiApiBaseUrl.trim() || "https://openrouter.ai/api/v1";
+const resolveApiUrl = (configuredBaseUrl: string, fallbackBaseUrl: string) => {
+  const configured = configuredBaseUrl.trim() || fallbackBaseUrl;
   if (/\/chat\/completions\/?$/.test(configured)) return configured;
-  return `${configured.replace(/\/+$/, "")}/chat/completions`;
+  return configured.replace(/\/+$/, "") + "/chat/completions";
 };
 
-const assertApiKey = () => {
-  if (!ENV.aiApiKey) throw new Error("AI_API_KEY is not configured");
-};
-
-const normalizeResponseFormat = ({
-  responseFormat,
-  response_format,
-  outputSchema,
-  output_schema,
-}: {
-  responseFormat?: ResponseFormat;
-  response_format?: ResponseFormat;
-  outputSchema?: OutputSchema;
-  output_schema?: OutputSchema;
-}):
-  | { type: "json_schema"; json_schema: JsonSchema }
-  | { type: "text" }
-  | { type: "json_object" }
-  | undefined => {
-  const explicitFormat = responseFormat || response_format;
-  if (explicitFormat) {
-    if (
-      explicitFormat.type === "json_schema" &&
-      !explicitFormat.json_schema?.schema
-    ) {
-      throw new Error(
-        "responseFormat json_schema requires a defined schema object"
-      );
-    }
-    return explicitFormat;
-  }
-
-  const schema = outputSchema || output_schema;
-  if (!schema) return undefined;
-
-  if (!schema.name || !schema.schema) {
-    throw new Error("outputSchema requires both name and schema");
-  }
-
-  return {
-    type: "json_schema",
-    json_schema: {
-      name: schema.name,
-      schema: schema.schema,
-      ...(typeof schema.strict === "boolean" ? { strict: schema.strict } : {}),
-    },
-  };
+const assertApiKey = (apiKey: string, variableName: string) => {
+  if (!apiKey) throw new Error(variableName + " is not configured");
 };
 
 const RETRY_MAX_RETRIES = 4;
@@ -310,6 +265,14 @@ const fetchWithBackoff = async (
   for (let attempt = 0; attempt <= RETRY_MAX_RETRIES; attempt++) {
     try {
       const response = await fetch(url, init);
+      // A 429 caused by exhausted billing/quota is deterministic. Do not retry
+      // it repeatedly; return it so the planner can switch providers.
+      if (response.status === 429) {
+        const errorPreview = await response.clone().text().catch(() => "");
+        if (/insufficient[_\s-]?(?:credits?|quota|balance)|out of credits|credit balance|quota.{0,30}(?:exceeded|exhausted)|payment required/i.test(errorPreview)) {
+          return response;
+        }
+      }
       // Authentication, billing, validation and unsupported-feature 4xx errors
       // are deterministic. Return them immediately so callers can react/fallback.
       if (response.ok || !isRetryableStatus(response.status) || attempt === RETRY_MAX_RETRIES) {
@@ -341,84 +304,95 @@ const fetchWithBackoff = async (
     : new Error("LLM request failed after exhausting retries");
 };
 
-export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
-  assertApiKey();
+type ProviderRequestConfig = {
+  apiBaseUrl: string;
+  fallbackBaseUrl: string;
+  apiKey: string;
+  apiKeyVariable: string;
+  defaultModel: string;
+  errorPrefix: string;
+  omitResponseFormat?: boolean;
+  additionalBody?: Record<string, unknown>;
+};
 
+async function invokeWithProvider(
+  params: InvokeParams,
+  provider: ProviderRequestConfig
+): Promise<InvokeResult> {
+  assertApiKey(provider.apiKey, provider.apiKeyVariable);
   const {
-    messages,
-    tools,
-    toolChoice,
-    tool_choice,
-    outputSchema,
-    output_schema,
-    responseFormat,
-    response_format,
-    model,
-    thinking,
-    reasoning,
-    maxTokens,
-    max_tokens,
+    messages, tools, toolChoice, tool_choice, outputSchema, output_schema,
+    responseFormat, response_format, model, thinking, reasoning, maxTokens, max_tokens,
   } = params;
 
   const payload: Record<string, unknown> = {
     messages: messages.map(normalizeMessage),
   };
-
-  const resolvedModel = model || ENV.aiModel;
+  const resolvedModel = model || provider.defaultModel;
   if (resolvedModel) payload.model = resolvedModel;
+  if (tools && tools.length > 0) payload.tools = tools;
 
-  if (tools && tools.length > 0) {
-    payload.tools = tools;
-  }
-
-  const normalizedToolChoice = normalizeToolChoice(
-    toolChoice || tool_choice,
-    tools
-  );
-  if (normalizedToolChoice) {
-    payload.tool_choice = normalizedToolChoice;
-  }
+  const normalizedToolChoice = normalizeToolChoice(toolChoice || tool_choice, tools);
+  if (normalizedToolChoice) payload.tool_choice = normalizedToolChoice;
 
   const resolvedMaxTokens = max_tokens ?? maxTokens;
-  if (typeof resolvedMaxTokens === "number") {
-    payload.max_tokens = resolvedMaxTokens;
-  }
+  if (typeof resolvedMaxTokens === "number") payload.max_tokens = resolvedMaxTokens;
+  if (thinking) payload.thinking = thinking;
+  if (reasoning) payload.reasoning = reasoning;
 
-  if (thinking) {
-    payload.thinking = thinking;
-  }
-  if (reasoning) {
-    payload.reasoning = reasoning;
-  }
+  // NVIDIA's hosted Nemotron endpoint does not advertise structured output.
+  // Planner responses are validated by its Zod schema before anything is saved.
+  const normalizedResponseFormat = provider.omitResponseFormat
+    ? undefined
+    : normalizeResponseFormat({ responseFormat, response_format, outputSchema, output_schema });
+  if (normalizedResponseFormat) payload.response_format = normalizedResponseFormat;
+  if (provider.additionalBody) Object.assign(payload, provider.additionalBody);
 
-  const normalizedResponseFormat = normalizeResponseFormat({
-    responseFormat,
-    response_format,
-    outputSchema,
-    output_schema,
-  });
-
-  if (normalizedResponseFormat) {
-    payload.response_format = normalizedResponseFormat;
-  }
-
-  const response = await fetchWithBackoff(resolveApiUrl(), {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${ENV.aiApiKey}`,
-    },
-    body: JSON.stringify(payload),
-  });
+  const response = await fetchWithBackoff(
+    resolveApiUrl(provider.apiBaseUrl, provider.fallbackBaseUrl),
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer " + provider.apiKey,
+      },
+      body: JSON.stringify(payload),
+    }
+  );
 
   if (!response.ok) {
-    const errorText = await response.text();
+    const errorText = (await response.text()).slice(0, 1_600);
     throw new Error(
-      `LLM invoke failed: ${response.status} ${response.statusText} – ${errorText}`
+      provider.errorPrefix + ": " + response.status + " " + response.statusText + " – " + errorText
     );
   }
-
   return (await response.json()) as InvokeResult;
+}
+
+export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
+  return invokeWithProvider(params, {
+    apiBaseUrl: ENV.aiApiBaseUrl,
+    fallbackBaseUrl: "https://openrouter.ai/api/v1",
+    apiKey: ENV.aiApiKey,
+    apiKeyVariable: "AI_API_KEY",
+    defaultModel: ENV.aiModel,
+    errorPrefix: "LLM invoke failed",
+  });
+}
+
+/** Dedicated NVIDIA NIM client with credentials isolated from the primary provider. */
+export async function invokeNvidiaLLM(params: InvokeParams): Promise<InvokeResult> {
+  return invokeWithProvider(params, {
+    apiBaseUrl: ENV.nvidiaApiBaseUrl,
+    fallbackBaseUrl: "https://integrate.api.nvidia.com/v1",
+    apiKey: ENV.nvidiaApiKey,
+    apiKeyVariable: "NVIDIA_API_KEY",
+    defaultModel: ENV.nvidiaModel,
+    errorPrefix: "NVIDIA LLM invoke failed",
+    omitResponseFormat: true,
+    // Return JSON instead of SSE; medium reasoning preserves some planning depth.
+    additionalBody: { reasoning_effort: "medium", stream: false },
+  });
 }
 
 export type ModelInfo = {
@@ -434,7 +408,7 @@ export type ModelsResponse = {
 };
 
 export async function listLLMModels(): Promise<ModelsResponse> {
-  assertApiKey();
+  assertApiKey(ENV.aiApiKey, "AI_API_KEY");
 
   // Model discovery must use the same OpenAI-compatible provider and API key
   // as chat completions; the old Forge endpoint belongs to the retired auth stack.
