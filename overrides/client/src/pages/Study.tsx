@@ -44,7 +44,9 @@ export default function Study() {
       .filter(record => !teacherOnly || (
         selectedTeacherId
           ? (!record.teacherId || record.teacherId === selectedTeacherId)
-          : (!record.teacherName || record.teacherName === teacherReferenceNameBase)
+          : teacherReferenceNameBase
+            ? (!record.teacherName || record.teacherName === teacherReferenceNameBase)
+            : true
       ))
       .map(record => {
         const value = record[field] as string;
