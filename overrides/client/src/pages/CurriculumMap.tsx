@@ -2,7 +2,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import CurriculumProgressScene, { type SceneBranch } from "@/components/CurriculumProgressScene";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
-import { getSIECheckpointBranches, getSIESubject, getSIETeacher } from "@shared/sie-catalog";
+import { getSIECheckpointBranches, getSIECheckpointChoiceDisplayLabel, getSIESubject, getSIETeacher, type SIECheckpointChoice } from "@shared/sie-catalog";
 import { ArrowLeft, BookOpenCheck, BookOpenText, CircleHelp, Gauge, Network, RefreshCw, Target } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
@@ -23,9 +23,9 @@ type BranchView = {
   branchTitle: string;
   branchType: string;
   pointLabel: string;
-  choices: Array<{ nodeId: string; title: string }>;
+  choices: SIECheckpointChoice[];
   gap: LearningGap | null;
-  nextLesson: { nodeId: string; title: string } | null;
+  nextLesson: SIECheckpointChoice | null;
   minutesPerLesson: number | null;
 };
 
@@ -77,7 +77,7 @@ export default function CurriculumMap() {
       branchTitle: branch.branchTitle,
       branchType: branch.branchType,
       pointLabel: branch.branchType === "official_section" ? "موضوع" : "درس",
-      choices: branch.choices.map(item => ({ nodeId: item.nodeId, title: item.title })),
+      choices: branch.choices,
       gap,
       nextLesson,
       minutesPerLesson: Number.isFinite(Number(saved.estimatedMinutesPerLesson))
@@ -147,7 +147,7 @@ export default function CurriculumMap() {
   return (
     <DashboardLayout
       title="خريطة المنهج"
-      description="تابع الدروس التي أنجزتها، وآخر درس شرحه المدرس، والفجوة المتبقية في كل وحدة."
+      description="تابع تقدمك وآخر موضع للمدرس داخل كل فرع من فروع المنهج."
       action={<span className="sf-page-action-label"><Network className="size-4" />SIE / CURRICULUM MAP</span>}
     >
       {profile.isError && <div className="app-card p-4 text-sm text-destructive">تعذّر تحميل ملفك الدراسي. أعد المحاولة بعد التحقق من الاتصال.</div>}
@@ -219,7 +219,7 @@ export default function CurriculumMap() {
             <p className="sf-map-eyebrow">PRIORITY BRANCH</p>
             <h3>أعلى فجوة نسبية معروفة</h3>
             <p>{priorityBranch.branchTitle} · {gapLabel(priorityBranch.gap, priorityBranch.pointLabel)}</p>
-            {priorityBranch.nextLesson && <small>الخطوة التالية حسب تقدمك المسجل: {priorityBranch.nextLesson.title}</small>}
+            {priorityBranch.nextLesson && <small>الخطوة التالية حسب تقدمك المسجل: {getSIECheckpointChoiceDisplayLabel(priorityBranch.nextLesson)}</small>}
           </div>
           <Button type="button" onClick={() => goToStudy(priorityBranch.branchId, priorityBranch.nextLesson?.nodeId)} className="sf-map-priority-button">
             افتح نقطة البداية <ArrowLeft className="size-4" />
@@ -228,7 +228,7 @@ export default function CurriculumMap() {
       )}
 
       <section className="sf-map-branches">
-        <div className="sf-map-section-heading"><div><p className="sf-map-eyebrow">BRANCH STATUS</p><h3>تفاصيل كل وحدة</h3></div><span>{branches.length} وحدات مستقلة</span></div>
+        <div className="sf-map-section-heading"><div><p className="sf-map-eyebrow">BRANCH STATUS</p><h3>تفاصيل فروع المنهج</h3></div><span>{branches.length} فروع مستقلة</span></div>
         {profile.isLoading || learning.isLoading ? (
           <div className="app-card p-5 text-sm text-muted-foreground">جارٍ تجميع مواضعك من الملف الدراسي...</div>
         ) : branches.length === 0 ? (
@@ -256,6 +256,9 @@ export default function CurriculumMap() {
                     <div className="sf-map-progress-rail"><i style={{ width: progress === null ? "0%" : progress + "%" }} /></div>
                     <span>{progress === null ? "موضع غير محدد" : progress + "% من نقاط الفرع"}</span>
                   </div>
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {branch.choices.map(choice => <span key={choice.nodeId} className="rounded-lg border border-border/70 bg-background px-2 py-1 text-[10px] leading-5 text-muted-foreground">{getSIECheckpointChoiceDisplayLabel(choice)}</span>)}
+                  </div>
                   <div className="sf-map-branch-details">
                     <p>آخر نقطة لك: <b>{gap?.studentFrontierTitle || (gap?.studentPosition === 0 ? "لم تبدأ بعد" : "غير محدد")}</b></p>
                     <p>مرجع التدريس: <b>{gap?.referenceFrontierTitle || (gap?.referencePosition === 0 ? "لم يبدأ بعد" : "غير متاح")}</b><small>{gap?.referenceSource === "teacher" ? "المدرس" : gap?.referenceSource === "school" ? "الفصل" : "لا يوجد مرجع موثق"}</small></p>
@@ -263,7 +266,7 @@ export default function CurriculumMap() {
                   </div>
                   <div className="sf-map-branch-actions">
                     <Button type="button" variant="outline" onClick={() => goToStudy(branch.branchId)} className="sf-map-update-button">تحديث تقدم الوحدة</Button>
-                    {branch.nextLesson && <Button type="button" onClick={() => goToStudy(branch.branchId, branch.nextLesson?.nodeId)} className="sf-map-next-button">ابدأ بالخطوة التالية</Button>}
+                    {branch.nextLesson && <Button type="button" onClick={() => goToStudy(branch.branchId, branch.nextLesson?.nodeId)} className="sf-map-next-button">ابدأ: {branch.nextLesson.lessonType === "topic" ? `Lesson ${branch.nextLesson.lessonNumber}` : `الدرس ${branch.nextLesson.lessonNumber ?? ""}`}</Button>}
                   </div>
                 </article>
               );

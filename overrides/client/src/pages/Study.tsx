@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
-import { getSIECheckpointBranches, getSIECheckpointChoices, getSIESubject, getSIETeacher, getSIETeachersForSubject, type SIESystemId } from "@shared/sie-catalog";
+import { getSIECheckpointBranches, getSIECheckpointChoices, getSIECheckpointChoiceDisplayLabel, getSIECheckpointChoiceTypeLabel, getSIESubject, getSIETeacher, getSIETeachersForSubject, type SIESystemId } from "@shared/sie-catalog";
 import { calculateLearningGap } from "@shared/sie-learning-progress";
 import { Activity, BookOpenText, Check, CircleHelp, Eye, Gauge, Mic2, RefreshCcw, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -37,10 +37,11 @@ export default function Study() {
   const [difficulty, setDifficulty] = useState<"unknown" | "easy" | "medium" | "hard">("unknown");
   const [notes, setNotes] = useState("");
   const subjects = profile.data?.subjectIds || [];
-  const lessons = useMemo(() => getSIECheckpointChoices(subjectId), [subjectId]);
+  const subjectChoices = useMemo(() => getSIECheckpointChoices(subjectId), [subjectId]);
   const branches = useMemo(() => getSIECheckpointBranches(subjectId), [subjectId]);
   const currentBranch = branches.find(branch => branch.branchId === branchId) ?? branches[0];
   const branchChoices = currentBranch?.choices ?? [];
+  const lessons = branchChoices;
   const currentBranchId = currentBranch?.branchId ?? "";
   const currentBranchPointLabel = currentBranch?.branchType === "official_section" ? "موضوع" : "درس";
   const selection = (profile.data?.selection || {}) as Record<string, unknown>;
@@ -305,15 +306,62 @@ export default function Study() {
   return (
     <DashboardLayout title="المذاكرة وذكاء التقدم" description="تابع تقدمك وتراكمك، ثم استخدم SQ3R لتحويل كل درس إلى خطوات تعلم قابلة للقياس.">
       {profile.isError && <div className="rounded-2xl border border-destructive/20 bg-destructive/5 p-4 text-sm">تعذّر تحميل ملفك الدراسي. <button className="font-bold underline" onClick={() => void profile.refetch()}>إعادة المحاولة</button></div>}
-      <section className="app-card mb-5 p-5 sm:p-6">
-        <div className="mb-4 flex items-center gap-3"><span className="flex size-10 items-center justify-center rounded-xl bg-secondary text-primary"><BookOpenText className="size-5" /></span><div><h2 className="font-bold">حدد موضع مذاكرتك</h2><p className="text-xs text-muted-foreground">المواد المضافة إلى ملفك فقط</p></div></div>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <div><label className="mb-2 block text-sm font-semibold">المادة</label><Select value={subjectId} onValueChange={setSubjectId} disabled={profile.isLoading || subjects.length === 0}><SelectTrigger className="h-12 rounded-xl bg-background"><SelectValue placeholder="اختر المادة" /></SelectTrigger><SelectContent>{subjects.map(id => <SelectItem key={id} value={id}>{getSIESubject(id)?.nameAr || id}</SelectItem>)}</SelectContent></Select></div>
-          <div><label className="mb-2 block text-sm font-semibold">فرع المنهج الرسمي</label><Select value={currentBranchId} onValueChange={setBranchId} disabled={!branches.length}><SelectTrigger className="h-12 rounded-xl bg-background"><SelectValue placeholder="اختر الفرع" /></SelectTrigger><SelectContent>{branches.map(branch => <SelectItem key={branch.branchId} value={branch.branchId}>{branch.branchTitle}</SelectItem>)}</SelectContent></Select></div>
-          <div><label className="mb-2 block text-sm font-semibold">الدرس</label><Select value={lessonId} onValueChange={value => { setLessonId(value); const selected = lessons.find(item => item.nodeId === value); if (selected?.branchId) setBranchId(selected.branchId); }} disabled={!lessons.length}><SelectTrigger className="h-12 rounded-xl bg-background"><SelectValue placeholder="اختر درسًا" /></SelectTrigger><SelectContent>{lessons.map(lesson => <SelectItem key={lesson.nodeId} value={lesson.nodeId}>{lesson.unitTitle} · {lesson.title}</SelectItem>)}</SelectContent></Select></div>
+      <section className="app-card mb-5 overflow-hidden rounded-2xl">
+        <div className="border-b border-border/70 bg-gradient-to-l from-secondary/65 to-card p-5 sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <span className="flex size-10 items-center justify-center rounded-xl bg-secondary text-primary"><BookOpenText className="size-5" /></span>
+              <div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">CURRICULUM PICKER</p><h2 className="font-bold">حدد مكانك في المنهج</h2><p className="text-xs text-muted-foreground">ثلاث خطوات واضحة: المادة، الفرع، ثم الدرس.</p></div>
+            </div>
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
+              <span className="rounded-lg bg-primary/10 px-2.5 py-1.5 text-primary">1 المادة</span><span>←</span><span className="rounded-lg bg-muted px-2.5 py-1.5">2 الفرع</span><span>←</span><span className="rounded-lg bg-muted px-2.5 py-1.5">3 الدرس</span>
+            </div>
+          </div>
         </div>
-        {subjectId && !lessons.length && <p className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-sm leading-6 text-muted-foreground">فهرس هذه المادة غير محمّل في النسخة الحالية؛ لذلك لن أعرض دروسًا مخمّنة. ستظهر هنا تلقائيًا عندما يُضاف فهرس المنهج المعتمد.</p>}
-        {!subjects.length && !profile.isLoading && <p className="mt-4 rounded-xl bg-muted/50 p-3 text-sm text-muted-foreground">لم تُضف مواد إلى ملفك الدراسي بعد. أضف المواد من الملف الشخصي أولًا.</p>}
+        <div className="grid gap-4 p-5 sm:p-6 md:grid-cols-[.78fr_.95fr_1.35fr]">
+          <div className="min-w-0">
+            <label className="mb-2 block text-xs font-bold text-muted-foreground">01 · المادة الدراسية</label>
+            <Select value={subjectId} onValueChange={value => { setSubjectId(value); setBranchId(""); setLessonId(""); }} disabled={profile.isLoading || subjects.length === 0}>
+              <SelectTrigger className="h-12 rounded-xl bg-background"><SelectValue placeholder="اختر المادة" /></SelectTrigger>
+              <SelectContent>{subjects.map(id => <SelectItem key={id} value={id}>{getSIESubject(id)?.nameAr || id}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div className="min-w-0">
+            <label className="mb-2 block text-xs font-bold text-muted-foreground">02 · فرع المادة</label>
+            <Select value={currentBranchId} onValueChange={value => { setBranchId(value); setLessonId(""); }} disabled={!branches.length}>
+              <SelectTrigger className="h-12 rounded-xl bg-background"><SelectValue placeholder="اختر الفرع" /></SelectTrigger>
+              <SelectContent>{branches.map(branch => <SelectItem key={branch.branchId} value={branch.branchId}>{branch.branchTitle}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div className="min-w-0">
+            <label className="mb-2 block text-xs font-bold text-muted-foreground">03 · الدرس داخل الفرع</label>
+            <Select value={lessonId} onValueChange={setLessonId} disabled={!branchChoices.length}>
+              <SelectTrigger className="h-12 rounded-xl bg-background"><SelectValue placeholder="اختر درسًا من الفرع المحدد" /></SelectTrigger>
+              <SelectContent className="max-h-[360px]">
+                {lessons.map(lesson => (
+                  <SelectItem key={lesson.nodeId} value={lesson.nodeId} textValue={getSIECheckpointChoiceDisplayLabel(lesson)}>
+                    <span className="flex min-w-0 flex-col gap-1 py-1 text-right" dir="rtl">
+                      <span className="text-sm font-semibold leading-5">{lesson.lessonType === "topic" ? `Lesson ${lesson.lessonNumber} — ${lesson.title}` : `الدرس ${lesson.lessonNumber ?? ""} — ${lesson.title}`}</span>
+                      <span className="text-[11px] leading-4 text-muted-foreground">{getSIECheckpointChoiceTypeLabel(lesson)} · {lesson.branchTitle ?? lesson.unitTitle}</span>
+                      <span className="text-[10px] leading-4 text-muted-foreground">{lesson.lessonType === "topic" ? `Unit ${lesson.unitNumber}: ${lesson.unitTitle}` : `الوحدة ${lesson.unitNumber ?? ""}: ${lesson.unitTitle}`}</span>
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        {selectedLesson && <div className="mx-5 mb-5 flex flex-wrap items-center gap-2 rounded-xl border border-primary/15 bg-primary/5 p-3 sm:mx-6">
+          <span className="text-xs font-bold text-foreground">{selectedLesson.lessonType === "topic" ? `Lesson ${selectedLesson.lessonNumber}` : `الدرس ${selectedLesson.lessonNumber}`}</span>
+          <span className="text-xs text-foreground">{selectedLesson.title}</span>
+          <span className="rounded-md bg-background px-2 py-1 text-[10px] font-semibold text-primary">{getSIECheckpointChoiceTypeLabel(selectedLesson)}</span>
+          <span className="text-[10px] text-muted-foreground">{selectedLesson.branchTitle}</span>
+        </div>}
+        {subjectId === "ARB_G2_BAC" && <div className="mx-5 mb-5 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-xs leading-6 text-muted-foreground sm:mx-6">
+          فروع العربي: النحو، والقراءة والنصوص. البلاغة ظاهرة كفرع في الخطة الدراسية عند تدريسها، لكن لا توجد موضوعات بلاغة مستقلة مفهرسة في الجزء الأول المتاح.
+        </div>}
+        {subjectId && !subjectChoices.length && <p className="mx-5 mb-5 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-sm leading-6 text-muted-foreground sm:mx-6">فهرس هذه المادة غير محمّل في النسخة الحالية؛ لن نعرض دروسًا مخمّنة.</p>}
+        {!subjects.length && !profile.isLoading && <p className="m-5 rounded-xl bg-muted/50 p-3 text-sm text-muted-foreground">لم تُضف مواد إلى ملفك الدراسي بعد. أضف المواد من الملف الشخصي أولًا.</p>}
       </section>
       <section className="app-card mb-5 p-5 sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -410,12 +458,12 @@ export default function Study() {
               </label>
               <label className="text-sm font-semibold">
                 آخر درس أنهيته أنت
-                <Select value={lastCompletedLessonId || "__UNKNOWN__"} onValueChange={setLastCompletedLessonId} disabled={!lessons.length}>
+                <Select value={lastCompletedLessonId || "__UNKNOWN__"} onValueChange={setLastCompletedLessonId} disabled={!branchChoices.length}>
                   <SelectTrigger className="mt-2 h-11 rounded-xl bg-background"><SelectValue placeholder="غير محدد" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__UNKNOWN__">غير محدد</SelectItem>
                     <SelectItem value="__NOT_STARTED__">لم أبدأ المنهج بعد</SelectItem>
-                    {branchChoices.map(lesson => <SelectItem key={lesson.nodeId} value={lesson.nodeId}>{lesson.title}</SelectItem>)}
+                    {branchChoices.map(lesson => <SelectItem key={lesson.nodeId} value={lesson.nodeId}>{getSIECheckpointChoiceDisplayLabel(lesson)}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 <span className="mt-1 block text-[11px] font-normal text-muted-foreground">ده موضع الطالب، وليس موضع المدرس أو المدرسة.</span>
@@ -427,19 +475,19 @@ export default function Study() {
                   <SelectContent>
                     <SelectItem value="__UNKNOWN__">لا أعرف / غير متاح</SelectItem>
                     <SelectItem value="__NOT_STARTED__">لم يبدأ التدريس بعد</SelectItem>
-                    {branchChoices.map(lesson => <SelectItem key={lesson.nodeId} value={lesson.nodeId}>{lesson.title}</SelectItem>)}
+                    {branchChoices.map(lesson => <SelectItem key={lesson.nodeId} value={lesson.nodeId}>{getSIECheckpointChoiceDisplayLabel(lesson)}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 <span className="mt-1 block text-[11px] font-normal text-muted-foreground">يُستخدم كمرجع أول فقط عندما يكون معروفًا.</span>
               </label>
               <div className="rounded-xl border border-border/70 bg-background/55 p-3">
                 <label className="block text-sm font-semibold">آخر درس انتهت المدرسة من شرحه للفصل
-                  <Select value={schoolClassFrontierId} onValueChange={setSchoolClassFrontierId} disabled={!lessons.length}>
+                  <Select value={schoolClassFrontierId} onValueChange={setSchoolClassFrontierId} disabled={!branchChoices.length}>
                     <SelectTrigger className="mt-2 h-11 rounded-xl bg-background"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__UNKNOWN__">لا أعرف حتى الآن</SelectItem>
                       <SelectItem value="__NOT_STARTED__">لم يبدأ الفصل المادة بعد</SelectItem>
-                      {branchChoices.map(lesson => <SelectItem key={lesson.nodeId} value={lesson.nodeId}>{lesson.title}</SelectItem>)}
+                      {branchChoices.map(lesson => <SelectItem key={lesson.nodeId} value={lesson.nodeId}>{getSIECheckpointChoiceDisplayLabel(lesson)}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </label>

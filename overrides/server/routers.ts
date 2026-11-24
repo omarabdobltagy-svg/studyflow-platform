@@ -951,7 +951,10 @@ export const appRouter = router({
         const subjectLessonRecords = sq3rProgress[subjectId] ?? {};
         const branches = getSIECheckpointBranches(subjectId);
         const gaps = Object.fromEntries(branches.map(branch => {
-          const saved = branchRecords[branch.branchId] ?? {};
+          const legacyArabicRecord = subjectId === "ARB_G2_BAC" && branch.branchId === "ARB_READING"
+            ? Object.values(branchRecords).find((record: any) => branch.choices.some(choice => choice.nodeId === record.lastCompletedLessonId))
+            : undefined;
+          const saved = branchRecords[branch.branchId] ?? legacyArabicRecord ?? {};
           const belongsToBranch = (frontierId: unknown) =>
             typeof frontierId === "string" &&
             (frontierId === "__NOT_STARTED__" ||

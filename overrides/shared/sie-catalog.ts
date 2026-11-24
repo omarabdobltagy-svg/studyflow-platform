@@ -696,6 +696,9 @@ export type SIECheckpointChoice = {
   title: string;
   unitTitle: string;
   note?: string;
+  unitNumber?: number;
+  lessonNumber?: string;
+  lessonType?: "reading" | "poetry" | "grammar" | "topic";
   branchId?: string;
   branchTitle?: string;
   branchType?: "official_unit" | "official_section";
@@ -728,12 +731,18 @@ const ENGLISH_SECTION_TITLES: Record<string, string> = {
  * المهارات مثل Grammar وVocabulary تبقى أبعاد إتقان، لا تسلسل دروس مخترع.
  */
 function getOfficialBranch(subjectId: string, choice: SIECheckpointChoice) {
+  if (choice.branchId && choice.branchTitle && choice.branchType) {
+    return { branchId: choice.branchId, branchTitle: choice.branchTitle, branchType: choice.branchType };
+  }
   if (subjectId === "ENG1_G2_BAC") {
     const section = choice.nodeId.match(/^(ENG_U\d+_SEC_[AB])/i)?.[1];
     if (section) {
+      const unitNumber = choice.unitNumber ?? Number(section.match(/^ENG_U(\d+)/i)?.[1] ?? 0);
+      const sectionLetter = section.endsWith("_A") ? "A" : "B";
+      const sectionTitle = ENGLISH_SECTION_TITLES[section] ?? choice.unitTitle;
       return {
         branchId: section,
-        branchTitle: ENGLISH_SECTION_TITLES[section] ?? choice.unitTitle,
+        branchTitle: `Unit ${unitNumber} · Section ${sectionLetter} — ${sectionTitle}`,
         branchType: "official_section" as const,
       };
     }
@@ -758,37 +767,48 @@ function getOfficialBranch(subjectId: string, choice: SIECheckpointChoice) {
 
 export const SIE_CHECKPOINT_CHOICES: Record<string, SIECheckpointChoice[]> = {
   ARB_G2_BAC: [
-    { nodeId: "ARB_U1_L1", title: "العلم بين القانون والضمير", unitTitle: "العلم والضمير" },
-    { nodeId: "ARB_U1_L2", title: "الخلق جوهر الفضيلة", unitTitle: "العلم والضمير" },
-    { nodeId: "ARB_U1_L3", title: "العلم نور", unitTitle: "العلم والضمير" },
-    { nodeId: "ARB_U2_L1", title: "التقنية وصناعة الرأي العام", unitTitle: "سلطان الكلمة الرقمية" },
-    { nodeId: "ARB_U2_L2", title: "بين الذوق والعقل", unitTitle: "سلطان الكلمة الرقمية" },
-    { nodeId: "ARB_U2_L3", title: "أثر الكلمة وحفظ اللسان", unitTitle: "سلطان الكلمة الرقمية" },
-    { nodeId: "ARB_U3_L1", title: "حقوق الإنسان بين العالمية والخصوصية", unitTitle: "الإنسان وكرامته" },
-    { nodeId: "ARB_U3_L2", title: "الحرية الفكرية", unitTitle: "الإنسان وكرامته" },
-    { nodeId: "ARB_U3_L3", title: "يا أخي الإنسان", unitTitle: "الإنسان وكرامته" },
+    { nodeId: "ARB_U1_L1", title: "العلم بين القانون والضمير", unitTitle: "العلم والضمير", unitNumber: 1, lessonNumber: "1", lessonType: "reading", branchId: "ARB_READING", branchTitle: "القراءة والنصوص", branchType: "official_section" },
+    { nodeId: "ARB_U1_L2", title: "الخلق جوهر الفضيلة", unitTitle: "العلم والضمير", unitNumber: 1, lessonNumber: "2", lessonType: "reading", branchId: "ARB_READING", branchTitle: "القراءة والنصوص", branchType: "official_section" },
+    { nodeId: "ARB_U1_L3", title: "العلم نور", unitTitle: "العلم والضمير", unitNumber: 1, lessonNumber: "3", lessonType: "poetry", branchId: "ARB_READING", branchTitle: "القراءة والنصوص", branchType: "official_section" },
+    { nodeId: "ARB_U2_L1", title: "التقنية وصناعة الرأي العام", unitTitle: "سلطان الكلمة الرقمية", unitNumber: 2, lessonNumber: "1", lessonType: "reading", branchId: "ARB_READING", branchTitle: "القراءة والنصوص", branchType: "official_section" },
+    { nodeId: "ARB_U2_L2", title: "بين الذوق والعقل", unitTitle: "سلطان الكلمة الرقمية", unitNumber: 2, lessonNumber: "2", lessonType: "reading", branchId: "ARB_READING", branchTitle: "القراءة والنصوص", branchType: "official_section" },
+    { nodeId: "ARB_U2_L3", title: "أثر الكلمة وحفظ اللسان", unitTitle: "سلطان الكلمة الرقمية", unitNumber: 2, lessonNumber: "3", lessonType: "poetry", branchId: "ARB_READING", branchTitle: "القراءة والنصوص", branchType: "official_section" },
+    { nodeId: "ARB_U3_L1", title: "حقوق الإنسان بين العالمية والخصوصية", unitTitle: "الإنسان وكرامته", unitNumber: 3, lessonNumber: "1", lessonType: "reading", branchId: "ARB_READING", branchTitle: "القراءة والنصوص", branchType: "official_section" },
+    { nodeId: "ARB_U3_L2", title: "الحرية الفكرية", unitTitle: "الإنسان وكرامته", unitNumber: 3, lessonNumber: "2", lessonType: "reading", branchId: "ARB_READING", branchTitle: "القراءة والنصوص", branchType: "official_section" },
+    { nodeId: "ARB_U3_L3", title: "يا أخي الإنسان", unitTitle: "الإنسان وكرامته", unitNumber: 3, lessonNumber: "3", lessonType: "poetry", branchId: "ARB_READING", branchTitle: "القراءة والنصوص", branchType: "official_section" },
+
+    { nodeId: "ARB_U1_N1", title: "الأسماء الخمسة", unitTitle: "العلم والضمير", unitNumber: 1, lessonNumber: "1", lessonType: "grammar", branchId: "ARB_NAHW", branchTitle: "النحو", branchType: "official_section" },
+    { nodeId: "ARB_U1_N2", title: "تابع الأسماء الخمسة", unitTitle: "العلم والضمير", unitNumber: 1, lessonNumber: "2", lessonType: "grammar", branchId: "ARB_NAHW", branchTitle: "النحو", branchType: "official_section" },
+    { nodeId: "ARB_U2_N1", title: "الممنوع من الصرف وعلل منعه", unitTitle: "سلطان الكلمة الرقمية", unitNumber: 2, lessonNumber: "1", lessonType: "grammar", branchId: "ARB_NAHW", branchTitle: "النحو", branchType: "official_section" },
+    { nodeId: "ARB_U2_N2", title: "تابع الممنوع من الصرف وعلل منعه", unitTitle: "سلطان الكلمة الرقمية", unitNumber: 2, lessonNumber: "2", lessonType: "grammar", branchId: "ARB_NAHW", branchTitle: "النحو", branchType: "official_section" },
+    { nodeId: "ARB_U3_N1", title: "النعت والبدل والتمييز بينهما", unitTitle: "الإنسان وكرامته", unitNumber: 3, lessonNumber: "1", lessonType: "grammar", branchId: "ARB_NAHW", branchTitle: "النحو", branchType: "official_section" },
+    { nodeId: "ARB_U3_N2", title: "العطف", unitTitle: "الإنسان وكرامته", unitNumber: 3, lessonNumber: "2", lessonType: "grammar", branchId: "ARB_NAHW", branchTitle: "النحو", branchType: "official_section" },
   ],
   ENG1_G2_BAC: [
-    { nodeId: "ENG_U1_SEC_A_T1", title: "Social Media and Self-Image", unitTitle: "Living Well in a Complex World" },
-    { nodeId: "ENG_U1_SEC_A_T2", title: "Exploring Modern Lifestyles", unitTitle: "Living Well in a Complex World" },
-    { nodeId: "ENG_U1_SEC_B_T1", title: "Whose Responsibility Is It?", unitTitle: "Living Well in a Complex World" },
-    { nodeId: "ENG_U1_SEC_B_T2", title: "Understanding Mental Health", unitTitle: "Living Well in a Complex World" },
-    { nodeId: "ENG_U2_SEC_A_T1", title: "Screen Time and Young People", unitTitle: "Leisure Time" },
-    { nodeId: "ENG_U2_SEC_A_T2", title: "Creative Arts as Leisure Activities", unitTitle: "Leisure Time" },
-    { nodeId: "ENG_U2_SEC_B_T1", title: "Sport and Physical Activity as Leisure", unitTitle: "Leisure Time" },
-    { nodeId: "ENG_U2_SEC_B_T2", title: "Not Exactly a Relaxing Day", unitTitle: "Leisure Time" },
-    { nodeId: "ENG_U3_SEC_A_T1", title: "Sites of Memory", unitTitle: "Echoes of the Past" },
-    { nodeId: "ENG_U3_SEC_A_T2", title: "The Museum as a Storyteller", unitTitle: "Echoes of the Past" },
-    { nodeId: "ENG_U3_SEC_B_T1", title: "The Viral Past", unitTitle: "Echoes of the Past" },
-    { nodeId: "ENG_U3_SEC_B_T2", title: "Social Media and Historical Events", unitTitle: "Echoes of the Past" },
-    { nodeId: "ENG_U4_SEC_A_T1", title: "Food Waste", unitTitle: "The Power of Choice" },
-    { nodeId: "ENG_U4_SEC_A_T2", title: "Beyond the Brand", unitTitle: "The Power of Choice" },
-    { nodeId: "ENG_U4_SEC_B_T1", title: "Digital Consumption", unitTitle: "The Power of Choice" },
-    { nodeId: "ENG_U4_SEC_B_T2", title: "Black Friday and Sales Culture", unitTitle: "The Power of Choice" },
-    { nodeId: "ENG_U5_SEC_A_T1", title: "The Climate Crisis", unitTitle: "The Greenhouse Effect" },
-    { nodeId: "ENG_U5_SEC_A_T2", title: "Renewable Energy – Powering a Sustainable Future", unitTitle: "The Greenhouse Effect" },
-    { nodeId: "ENG_U5_SEC_B_T1", title: "Greening Projects in Egypt", unitTitle: "The Greenhouse Effect" },
-    { nodeId: "ENG_U5_SEC_B_T2", title: "Individual and Collective Actions", unitTitle: "The Greenhouse Effect" },
+    { nodeId: "ENG_U1_SEC_A_T1", title: "Social Media and Self-Image", unitTitle: "Living Well in a Complex World", unitNumber: 1, lessonNumber: "1.1", lessonType: "topic" },
+    { nodeId: "ENG_U1_SEC_A_T2", title: "Exploring Modern Lifestyles", unitTitle: "Living Well in a Complex World", unitNumber: 1, lessonNumber: "1.2", lessonType: "topic" },
+    { nodeId: "ENG_U1_SEC_B_T1", title: "Whose Responsibility Is It?", unitTitle: "Living Well in a Complex World", unitNumber: 1, lessonNumber: "1.3", lessonType: "topic" },
+    { nodeId: "ENG_U1_SEC_B_T2", title: "Understanding Mental Health", unitTitle: "Living Well in a Complex World", unitNumber: 1, lessonNumber: "1.4", lessonType: "topic" },
+
+    { nodeId: "ENG_U2_SEC_A_T1", title: "Screen Time and Young People", unitTitle: "Leisure Time", unitNumber: 2, lessonNumber: "2.1", lessonType: "topic" },
+    { nodeId: "ENG_U2_SEC_A_T2", title: "Creative Arts as Leisure Activities", unitTitle: "Leisure Time", unitNumber: 2, lessonNumber: "2.2", lessonType: "topic" },
+    { nodeId: "ENG_U2_SEC_B_T1", title: "Sport and Physical Activity as Leisure", unitTitle: "Leisure Time", unitNumber: 2, lessonNumber: "2.3", lessonType: "topic" },
+    { nodeId: "ENG_U2_SEC_B_T2", title: "Not Exactly a Relaxing Day", unitTitle: "Leisure Time", unitNumber: 2, lessonNumber: "2.4", lessonType: "topic" },
+
+    { nodeId: "ENG_U3_SEC_A_T1", title: "Sites of Memory", unitTitle: "Echoes of the Past", unitNumber: 3, lessonNumber: "3.1", lessonType: "topic" },
+    { nodeId: "ENG_U3_SEC_A_T2", title: "The Museum as a Storyteller", unitTitle: "Echoes of the Past", unitNumber: 3, lessonNumber: "3.2", lessonType: "topic" },
+    { nodeId: "ENG_U3_SEC_B_T1", title: "The Viral Past", unitTitle: "Echoes of the Past", unitNumber: 3, lessonNumber: "3.3", lessonType: "topic" },
+    { nodeId: "ENG_U3_SEC_B_T2", title: "Social Media and Historical Events", unitTitle: "Echoes of the Past", unitNumber: 3, lessonNumber: "3.4", lessonType: "topic" },
+
+    { nodeId: "ENG_U4_SEC_A_T1", title: "Food Waste", unitTitle: "The Power of Choice", unitNumber: 4, lessonNumber: "4.1", lessonType: "topic" },
+    { nodeId: "ENG_U4_SEC_A_T2", title: "Beyond the Brand", unitTitle: "The Power of Choice", unitNumber: 4, lessonNumber: "4.2", lessonType: "topic" },
+    { nodeId: "ENG_U4_SEC_B_T1", title: "Digital Consumption", unitTitle: "The Power of Choice", unitNumber: 4, lessonNumber: "4.3", lessonType: "topic" },
+    { nodeId: "ENG_U4_SEC_B_T2", title: "Black Friday and Sales Culture", unitTitle: "The Power of Choice", unitNumber: 4, lessonNumber: "4.4", lessonType: "topic" },
+
+    { nodeId: "ENG_U5_SEC_A_T1", title: "The Climate Crisis", unitTitle: "The Greenhouse Effect", unitNumber: 5, lessonNumber: "5.1", lessonType: "topic" },
+    { nodeId: "ENG_U5_SEC_A_T2", title: "Renewable Energy – Powering a Sustainable Future", unitTitle: "The Greenhouse Effect", unitNumber: 5, lessonNumber: "5.2", lessonType: "topic" },
+    { nodeId: "ENG_U5_SEC_B_T1", title: "Greening Projects in Egypt", unitTitle: "The Greenhouse Effect", unitNumber: 5, lessonNumber: "5.3", lessonType: "topic" },
+    { nodeId: "ENG_U5_SEC_B_T2", title: "Individual and Collective Actions", unitTitle: "The Greenhouse Effect", unitNumber: 5, lessonNumber: "5.4", lessonType: "topic" },
   ],
   HIS_G2_BAC: [
     { nodeId: "HIS_U1_L1", title: "بناء الدولة المصرية واستمرارها عبر التاريخ", unitTitle: "مصر بين الماضي والحاضر" },
@@ -846,7 +866,29 @@ export function getSIECheckpointChoices(subjectId: string): SIECheckpointChoice[
   return SIE_CHECKPOINT_CHOICES_WITH_BRANCH[subjectId] ?? [];
 }
 
-/** يعيد الوحدات/الأقسام كمسارات تقدم مستقلة بدل تسلسل واحد للمادة كلها. */
+/** Display metadata needed to identify a checkpoint without hiding its number, type or branch. */
+export function getSIECheckpointChoiceTypeLabel(choice: SIECheckpointChoice): string {
+  switch (choice.lessonType) {
+    case "reading": return "قراءة";
+    case "poetry": return "نص شعري";
+    case "grammar": return "نحو";
+    case "topic": return "Topic";
+    default: return "درس";
+  }
+}
+
+export function getSIECheckpointChoiceDisplayLabel(choice: SIECheckpointChoice): string {
+  const lessonNumber = choice.lessonNumber
+    ? choice.lessonType === "topic" ? `Lesson ${choice.lessonNumber}` : `الدرس ${choice.lessonNumber}`
+    : "";
+  const unit = choice.unitNumber
+    ? choice.lessonType === "topic" ? `Unit ${choice.unitNumber}: ${choice.unitTitle}` : `الوحدة ${choice.unitNumber}: ${choice.unitTitle}`
+    : choice.unitTitle;
+  return [lessonNumber, choice.title, `النوع: ${getSIECheckpointChoiceTypeLabel(choice)}`,
+    `الفرع: ${choice.branchTitle ?? choice.unitTitle}`, unit].filter(Boolean).join(" · ");
+}
+
+/** يعيد فروع المنهج مع إبقاء كل مسار تقدم مستقلاً. */
 export function getSIECheckpointBranches(subjectId: string): SIECheckpointBranch[] {
   const groups = new Map<string, SIECheckpointBranch>();
   for (const choice of getSIECheckpointChoices(subjectId)) {
@@ -900,6 +942,7 @@ export function getSIECheckpointChoicesForTeacher(teacherId: string): SIECheckpo
     const unitTitles: Record<string, string> = { ENG_U1_NODE: "Living Well in a Complex World" };
     for (const id of unitNodeIds) if (unitTitles[id]) focusUnits.add(unitTitles[id]);
   }
+  if (mapped.length > 0) return mapped.slice(0, 5);
   if (focusUnits.size > 0) return choices.filter(choice => focusUnits.has(choice.unitTitle)).slice(0, 5);
   const firstUnit = choices[0]?.unitTitle;
   return choices.filter(choice => choice.unitTitle === firstUnit).slice(0, 5);

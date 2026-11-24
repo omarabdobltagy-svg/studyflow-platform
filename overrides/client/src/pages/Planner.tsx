@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
-import { getSIECheckpointBranches, getSIESubject, getSIETeacher } from "@shared/sie-catalog";
+import { getSIECheckpointBranches, getSIECheckpointChoiceDisplayLabel, getSIESubject, getSIETeacher } from "@shared/sie-catalog";
 import { ArrowUpRight, BrainCircuit, CheckCircle2, Clock3, Lightbulb, ListTree, Loader2, Sparkles, Target, UserRound } from "lucide-react";
 import { FormEvent, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -53,12 +53,12 @@ export default function Planner() {
            const teacherPoints = branches.map(branch => {
              const saved = course.branches?.[branch.branchId] || {};
              const item = branch.choices.find((choice: any) => choice.nodeId === saved.teacherTeachingFrontierId);
-             return item ? branch.branchTitle + ": " + item.title : null;
+             return item ? branch.branchTitle + ": " + getSIECheckpointChoiceDisplayLabel(item) : null;
            }).filter(Boolean);
            const studentPoints = branches.map(branch => {
              const saved = course.branches?.[branch.branchId] || {};
              const item = branch.choices.find((choice: any) => choice.nodeId === saved.lastCompletedLessonId);
-             return item ? branch.branchTitle + ": " + item.title : null;
+             return item ? branch.branchTitle + ": " + getSIECheckpointChoiceDisplayLabel(item) : null;
            }).filter(Boolean);
            const backlog = profile.data?.backlog?.[subjectId] || profile.data?.backlog?.[getSIESubject(subjectId)?.nameAr || ""] || 0;
            const knownLessons = branches.reduce((total, branch) => total + branch.choices.length, 0);
