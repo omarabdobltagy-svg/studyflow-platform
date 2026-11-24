@@ -16,6 +16,7 @@ const planSchema = z.object({
     detail: z.string().trim().min(5).max(1_200),
     minutes: z.number().int().min(5).max(480),
     category: z.string().trim().min(2).max(80),
+    curriculumNodeIds: z.array(z.string().trim().min(1).max(120)).max(8).default([]),
     priority: z.enum(["critical", "high", "medium", "low"]).default("medium"),
     difficulty: z.enum(["easy", "medium", "hard", "unknown"]).default("unknown"),
     lessonSize: z.enum(["small", "medium", "large", "unknown"]).default("unknown"),
@@ -46,6 +47,212 @@ function mergeSubjectLessonProgress(legacyValue: unknown, currentValue: unknown)
   return merged;
 }
 
+
+
+
+type PlannerCurriculumChoice = {
+  subjectId: string;
+  branchId: string;
+  nodeId: string;
+  title: string;
+};
+
+type PlannerBranchProgress = {
+  studentFrontierId: string | null;
+  studentFrontierTitle: string | null;
+  referenceFrontierId: string | null;
+  referenceFrontierTitle: string | null;
+  gapCount: number | null;
+  completedChoices: PlannerCurriculumChoice[];
+  eligibleChoices: PlannerCurriculumChoice[];
+};
+
+type PlannerProgressSnapshot = {
+  branches: Map<string, PlannerBranchProgress>;
+  completedNodeIds: Set<string>;
+  eligibleNodeIds: Set<string>;
+  completedChoices: PlannerCurriculumChoice[];
+};
+
+function plannerBranchKey(subjectId: string, branchId: string) {
+  return subjectId + ":" + branchId;
+}
+
+/**
+ * The saved student frontier is inclusive: every checkpoint up to and including
+ * it is complete. Fully completed SQ3R records also count as completed evidence.
+ * Only checkpoints after that frontier can be offered as new learning tasks.
+ */
+function buildPlannerProgressSnapshot(
+  profile: NonNullable<Awaited<ReturnType<typeof getStudentProfile>>>
+): PlannerProgressSnapshot {
+  const selection = (profile.selection || {}) as Record<string, any>;
+  const frontiers = (selection.teacherFrontiers || {}) as Record<string, string>;
+  const teacherStates = (selection.teacherProgressState || {}) as Record<string, Record<string, any>>;
+  const lessonProgress = mergeSubjectLessonProgress(selection.subjectLessonProgress, selection.sq3rProgress);
+  const courseProgress = (selection.learningCourseProgress || {}) as Record<string, any>;
+  const branches = new Map<string, PlannerBranchProgress>();
+  const completedNodeIds = new Set<string>();
+  const eligibleNodeIds = new Set<string>();
+  const completedChoices: PlannerCurriculumChoice[] = [];
+
+  for (const subjectId of profile.subjectIds || []) {
+    const reported = courseProgress[subjectId] || {};
+    const branchRecords = (reported.branches || {}) as Record<string, Record<string, any>>;
+    const teacherState = teacherStates[subjectId] || {};
+    const legacyFrontier = reported.lastCompletedLessonId || frontiers[subjectId] || teacherState.studentAttendedFrontier || null;
+    const subjectLessonRecords = lessonProgress[subjectId] || {};
+
+    for (const branch of getFirstPartBranches(subjectId)) {
+      const legacyArabicReadingRecord = subjectId === "ARB_G2_BAC" && branch.branchId === "ARB_READING"
+        ? Object.entries(branchRecords)
+          .filter(([key]) => /^ARB_U[123]$/.test(key))
+          .map(([, record]) => record)
+          .find((record: any) => branch.choices.some(choice =>
+            [record.lastCompletedLessonId, record.teacherTeachingFrontierId, record.schoolClassFrontierId].includes(choice.nodeId)
+          ))
+        : undefined;
+      const saved = branchRecords[branch.branchId] || legacyArabicReadingRecord || {};
+      const belongsToBranch = (value: unknown) =>
+        typeof value === "string" &&
+        (value === "__NOT_STARTED__" || branch.choices.some(choice => choice.nodeId === value));
+      const studentFrontier = Object.prototype.hasOwnProperty.call(saved, "lastCompletedLessonId")
+        ? saved.lastCompletedLessonId
+        : belongsToBranch(legacyFrontier) ? legacyFrontier : "__UNKNOWN__";
+      const teacherFrontier = Object.prototype.hasOwnProperty.call(saved, "teacherTeachingFrontierId")
+        ? saved.teacherTeachingFrontierId
+        : belongsToBranch(reported.teacherTeachingFrontierId) ? reported.teacherTeachingFrontierId : "__UNKNOWN__";
+      const schoolFrontier = Object.prototype.hasOwnProperty.call(saved, "schoolClassFrontierId")
+        ? saved.schoolClassFrontierId
+        : belongsToBranch(reported.schoolClassFrontierId) ? reported.schoolClassFrontierId : "__UNKNOWN__";
+      const gap = calculateLearningGap(branch.choices, {
+        studentFrontierId: studentFrontier,
+        teacherTeachingFrontierId: teacherFrontier,
+        schoolClassFrontierId: schoolFrontier,
+      });
+      const completedByFrontier = new Set(
+        gap.studentPosition === null ? [] : branch.choices.slice(0, gap.studentPosition).map(choice => choice.nodeId)
+      );
+      const branchCompleted: PlannerCurriculumChoice[] = [];
+      const branchEligible: PlannerCurriculumChoice[] = [];
+
+      for (const choice of branch.choices) {
+        const record = subjectLessonRecords[choice.nodeId];
+        const completedBySq3r = Array.isArray(record?.completedSteps)
+          && new Set(record.completedSteps).size === 5;
+        const item = {
+          subjectId,
+          branchId: branch.branchId,
+          nodeId: choice.nodeId,
+          title: choice.title,
+        };
+        if (completedByFrontier.has(choice.nodeId) || completedBySq3r) {
+          branchCompleted.push(item);
+          completedChoices.push(item);
+          completedNodeIds.add(choice.nodeId);
+        } else {
+          branchEligible.push(item);
+          eligibleNodeIds.add(choice.nodeId);
+        }
+      }
+
+      branches.set(plannerBranchKey(subjectId, branch.branchId), {
+        studentFrontierId: gap.studentFrontierId,
+        studentFrontierTitle: gap.studentFrontierTitle,
+        referenceFrontierId: gap.referenceFrontierId,
+        referenceFrontierTitle: gap.referenceFrontierTitle,
+        gapCount: gap.gapCount,
+        completedChoices: branchCompleted,
+        eligibleChoices: branchEligible,
+      });
+    }
+  }
+
+  // A lesson marked complete by either source must never remain eligible.
+  for (const nodeId of completedNodeIds) eligibleNodeIds.delete(nodeId);
+
+  return { branches, completedNodeIds, eligibleNodeIds, completedChoices };
+}
+
+function normalizePlannerLessonText(value: string): string {
+  const stopWords = new Set(["من", "في", "عن", "على", "الي", "الى", "مع", "ثم", "و", "او", "هذا", "هذه"]);
+  return value
+    .normalize("NFKC")
+    .toLocaleLowerCase("ar")
+    .replace(/[\\u064B-\\u065F\\u0670\\u0640]/g, "")
+    .replace(/[أإآٱ]/g, "ا")
+    .replace(/ى/g, "ي")
+    .replace(/ة/g, "ه")
+    .replace(/[^\\p{L}\\p{N}]+/gu, " ")
+    .trim()
+    .split(/\\s+/)
+    .filter(token => token && !stopWords.has(token))
+    .join(" ");
+}
+
+/** Matches meaningful two-or-more-word lesson phrases, not generic single words. */
+function mentionsCompletedLesson(text: string, lessonTitle: string): boolean {
+  const haystack = " " + normalizePlannerLessonText(text) + " ";
+  const words = normalizePlannerLessonText(lessonTitle).split(" ").filter(Boolean);
+  if (words.length < 2) return false;
+  for (let size = 2; size <= words.length; size += 1) {
+    for (let start = 0; start + size <= words.length; start += 1) {
+      const phrase = words.slice(start, start + size).join(" ");
+      if (phrase.replace(/\\s/g, "").length >= 9 && haystack.includes(" " + phrase + " ")) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Enforces curriculum completion at the server boundary after AI generation.
+ * A model-supplied curriculum ID is accepted only when the checkpoint is still
+ * eligible. Without an ID, explicit mentions of completed lesson names are blocked.
+ */
+export function applyPlannerProgressGuard(
+  plan: GeneratedPlan,
+  profile: NonNullable<Awaited<ReturnType<typeof getStudentProfile>>>
+): GeneratedPlan {
+  const snapshot = buildPlannerProgressSnapshot(profile);
+  const keptSteps: GeneratedPlan["steps"] = [];
+  let blockedStepCount = 0;
+
+  for (const step of plan.steps) {
+    const nodeIds = Array.isArray(step.curriculumNodeIds) ? step.curriculumNodeIds : [];
+    if (nodeIds.length > 0) {
+      if (nodeIds.some(nodeId => !snapshot.eligibleNodeIds.has(nodeId))) {
+        blockedStepCount += 1;
+        continue;
+      }
+      keptSteps.push(step);
+      continue;
+    }
+
+    const stepText = step.title + " " + step.detail;
+    const repeatsCompletedLesson = snapshot.completedChoices.some(choice =>
+      mentionsCompletedLesson(stepText, choice.title)
+    );
+    if (repeatsCompletedLesson) {
+      blockedStepCount += 1;
+      continue;
+    }
+    keptSteps.push(step);
+  }
+
+  if (blockedStepCount > 0) {
+    console.warn("[StudyFlow planner] Removed steps that referenced completed or ineligible curriculum checkpoints:", {
+      blockedStepCount,
+      remainingStepCount: keptSteps.length,
+    });
+  }
+  if (keptSteps.length === 0) {
+    throw new Error("الخطة المقترحة تضمنت دروسًا مكتملة أو مواضع غير مسموح بها فقط. لم يتم حفظ الخطة أو إنشاء مهام منها؛ أعد توليد الخطة بعد مراجعة مواضع التقدم.");
+  }
+
+  return { ...plan, steps: keptSteps };
+}
 
 function plannerProviderError(error: unknown): Error {
   const message = error instanceof Error ? error.message : String(error);
@@ -220,6 +427,7 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
   const assessmentHistory = Array.isArray(selection.learningAssessments)
     ? selection.learningAssessments as Array<Record<string, any>>
     : [];
+  const progressSnapshot = buildPlannerProgressSnapshot(profile);
 
   const subjectContext = (profile.subjectIds || []).map(subjectId => {
     const subject = getSIESubject(subjectId);
@@ -260,6 +468,7 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
         teacherTeachingFrontierId: teacherFrontier,
         schoolClassFrontierId: schoolFrontier,
       });
+      const branchProgress = progressSnapshot.branches.get(plannerBranchKey(subjectId, branch.branchId));
       const referenceLabel = gap.referenceSource === "teacher" ? "المدرس"
         : gap.referenceSource === "school" ? "المدرسة" : "غير متاح";
       const studentLabel = branch.choices.find(choice => choice.nodeId === studentFrontier)?.title
@@ -284,6 +493,8 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
         "الفجوة داخل هذا الفرع فقط: " + (gap.gapCount === null
           ? "غير محسوبة لعدم اكتمال البيانات داخل الفرع"
           : gap.gapCount + " نقطة داخل الفرع؛ متقدم عن المرجع: " + (gap.aheadCount ?? 0)),
+        "دروس مكتملة وممنوع إسنادها كمذاكرة جديدة: " + (branchProgress?.completedChoices.map(choice => choice.title + " [" + choice.nodeId + "]").join("، ") || "لا يوجد سجل مكتمل معروف"),
+        "دروس متاحة للتخطيط الجديد فقط: " + (branchProgress?.eligibleChoices.map(choice => choice.title + " [" + choice.nodeId + "]").join("، ") || "لا توجد نقاط منهجية متبقية في هذا الفرع"),
         "إنجاز SQ3R في الفرع: " + completed + " مكتمل؛ " + underway + " قيد الدراسة",
         "تقييم صعوبة كل درس من الطالب: " + lessonDifficulty.join("؛ "),
       ].join(" | ");
@@ -296,9 +507,11 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
         ? "؛ نقاط تحتاج تقوية: " + item.weakConcepts.join("، ") : "")
     ).join(" | ");
     const legacyBacklog = profile.backlog[subjectId] ?? (subject && profile.backlog[subject.nameAr]) ?? null;
-    const lessonList = branches.map(branch =>
-      branch.branchTitle + ": " + branch.choices.map(choice => choice.title).join("، ")
-    ).join("؛ ");
+    const lessonList = branches.map(branch => {
+      const state = progressSnapshot.branches.get(plannerBranchKey(subjectId, branch.branchId));
+      return branch.branchTitle + ": " + (state?.eligibleChoices.map(choice => choice.title + " [" + choice.nodeId + "]").join("، ")
+        || "لا توجد دروس جديدة متاحة");
+    }).join("؛ ");
 
     return [
       "المادة: " + ((subject && subject.nameAr) || subjectId),
@@ -309,6 +522,7 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
       "صعوبة المادة حسب الطالب: " + (reported.difficulty || "غير محددة"),
       "نتائج التقييمات الحديثة: " + (assessmentSummary || "لا توجد نتائج مسجلة"),
       "المدرس المختار: " + ((teacher && teacher.nameAr) || teacherId || "لم يحدد"),
+      "الدروس المتاحة للخطوات الجديدة ومعرفاتها (لا تختر غيرها): " + (lessonList || "فهرس المنهج غير محمّل"),
       "أحدث محتوى عام معروف للمدرس (ليس مرجع تقدم مدفوع): " + ((teacher && teacher.latestPublicCheckpoint) || "غير متاح"),
       "فهرس الكورس المدفوع: " + ((teacher && teacher.paidCourseCatalogFrontier) ? JSON.stringify(teacher.paidCourseCatalogFrontier) : "غير موثق"),
       "دروس المنهج بحسب الفروع: " + (lessonList || "فهرس المنهج غير محمّل"),
@@ -353,6 +567,7 @@ export async function generatePersonalPlan(
     "جودة الخطة لا تعتمد على قوة صياغة الطالب أو طول طلبه. استخرج النية حتى لو كان الطلب قصيرًا أو عاميًا أو غير مرتب، ثم استعن تلقائيًا بكل بيانات الملف الدراسي والمنهج والتراكم والتقدم والتقييمات والسياق المتاح لبناء أفضل خطة عملية ممكنة.",
     "لا تطلب من الطالب إعادة كتابة بيانات موجودة في ملفه، ولا تنتظر منه هندسة برومبت احترافي. افترض أقل قدر ممكن، واذكر الافتراضات المؤثرة فقط داخل الملخص، ولا تخترع بيانات ناقصة.",
     "حلّل فجوة المنهج المحسوبة تلقائيًا لكل فرع مستقل داخل المادة، وموضع الطالب وموضع التدريس المرجعي داخل الفرع نفسه، وتقدم SQ3R ونتائج التقييم وصعوبة الدروس؛ ثم ابنِ خطة عملية متوازنة.",
+    "قاعدة إلزامية: موضع الطالب هو آخر نقطة مكتملة بالفعل، ويبدأ التراكم من النقطة التالية. كل ما يظهر تحت (دروس مكتملة) مستبعد من مهام الدراسة الجديدة. لا تعِد شرح درس مكتمل ولا تنشئ له مهمة حل من البداية. اختر حصريًا من (دروس متاحة للتخطيط الجديد فقط)، وأرفق مع كل خطوة معرف المنهج الصحيح داخل curriculumNodeIds. لا تخترع معرفات ولا تستخدم معرف درس مكتمل.",
     "مصدر المرجع له أولوية صارمة داخل كل فرع: استخدم موضع المدرس إذا كان معروفًا، وإلا استخدم موضع الفصل في المدرسة داخل الفرع نفسه. موضع الطالب يظل مستقلًا عن الاثنين. لا تقارن أو تجمع فجوات فروع متوازية، ولا تستخدم رقم التراكم القديم كأنه فجوة مؤكدة.",
     "لا تخلط بين آخر محتوى عام للمدرس، محتوى الكورس المدفوع، موضع ما شرحه المدرس، موضع المدرسة، وما أتمه الطالب. لا تخترع أرقام محاضرات أو أسماء دروس أو مواضع غير مسجلة.",
     "إذا توفرت مقتطفات مسترجعة من كتاب رسمي، اجعلها المرجع الأول عند تحديد موضوعات الخطة واذكر صفحات PDF في التفاصيل عند الاستناد إليها. المعرفة العامة تستخدم لسد المتطلبات السابقة غير المشروحة وتوضع بوضوح كتمهيد مساند، ولا تنسب للكتاب. إذا كان فهرس مادة غير محمّل فاذكر هذا القيد ولا تخترع محتوى منهجيًا لها.",
@@ -368,7 +583,7 @@ export async function generatePersonalPlan(
     constraints.startDate ? "تاريخ بداية التنفيذ: " + constraints.startDate + "." : "تاريخ البداية يحدده الطالب عند اعتماد الخطة.",
     "احترم سعة اليوم المحددة من الطالب. لا تتجاوزها، ووزع الخطة واقعيًا مع هامش تعويض. إذا نقصت البيانات فاختر بداية تدريجية واذكر الافتراض في الملخص.",
     "لا تعتبر غياب السجل دليلًا على الإنجاز، ولا توبّخ الطالب.",
-    "أخرج JSON صحيحًا فقط بالعربية: title, summary, durationLabel, steps (3-30 عنصرًا، وكل عنصر فيه day,title,detail,minutes,category,priority,difficulty,lessonSize,difficultyBasis,difficultyConfidence,printedPageRange,sourcePages)، habits (0-5 فيها title,cue), reviewQuestion. printedPageRange نطاق صفحات الكتاب المطبوع [البداية، النهاية] عند توافره فقط؛ sourcePages مراجع PDF المسترجعة فعليًا فقط وتكون [] في غير ذلك. اجعل الملخص واضحًا والتفاصيل مركزة.",
+    "أخرج JSON صحيحًا فقط بالعربية: title, summary, durationLabel, steps (3-30 عنصرًا، وكل عنصر فيه day,title,detail,minutes,category,curriculumNodeIds,priority,difficulty,lessonSize,difficultyBasis,difficultyConfidence,printedPageRange,sourcePages)، habits (0-5 فيها title,cue), reviewQuestion. يجب أن يحتوي curriculumNodeIds على معرف واحد أو أكثر من الدروس المتاحة التي ترتبط بها الخطوة. printedPageRange نطاق صفحات الكتاب المطبوع [البداية، النهاية] عند توافره فقط؛ sourcePages مراجع PDF المسترجعة فعليًا فقط وتكون [] في غير ذلك. اجعل الملخص واضحًا والتفاصيل مركزة.",
     "كل خطوة يجب أن تحدد المادة والوحدة/الفرع والدرس وطريقة مذاكرته، لا عنوانًا عامًا.",
   ].join("\n");
   const user = [
@@ -486,6 +701,9 @@ export async function generatePersonalPlan(
   }
   if (!plan) {
     throw new Error("تعذّر إنشاء خطة دراسية صالحة. لم يتم حفظ أي بيانات ناقصة.");
+  }
+  if (profile) {
+    plan = applyPlannerProgressGuard(plan, profile);
   }
 
   // A model may suggest a page number that was not actually retrieved from an indexed
