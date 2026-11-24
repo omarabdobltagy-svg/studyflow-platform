@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
-import { getSIECheckpointBranches, getSIECheckpointChoices, getSIESubject, getSIETeacher } from "@shared/sie-catalog";
+import { getSIECheckpointBranches, getSIECheckpointChoices, getSIESubject, getSIETeacher, getSIETeachersForSubject, type SIESystemId } from "@shared/sie-catalog";
 import { calculateLearningGap } from "@shared/sie-learning-progress";
 import { Activity, BookOpenText, Check, CircleHelp, Eye, Gauge, Mic2, RefreshCcw, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -27,6 +27,7 @@ export default function Study() {
   const learning = trpc.learning.get.useQuery();
   const activeExternalSession = trpc.learning.activeExternalSession.useQuery();
   const [sessionNow, setSessionNow] = useState(Date.now());
+  const [teacherChoiceDrafts, setTeacherChoiceDrafts] = useState<Record<string, string>>({});
   const [markSessionLessonCompleted, setMarkSessionLessonCompleted] = useState(false);
   const initialStudyParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
   const [subjectId, setSubjectId] = useState(initialStudyParams?.get("subject") || "");
@@ -52,9 +53,27 @@ export default function Study() {
   const branchProgressMap = (currentCourseProgress.branches || {}) as Record<string, Record<string, any>>;
   const currentBranchProgress = currentBranchId ? branchProgressMap[currentBranchId] || {} : {};
   const branchGapMap = ((learning.data as any)?.gapByBranch?.[subjectId] || {}) as Record<string, any>;
-  const selectedTeacherId = ((selection.teacherChoices || {}) as Record<string, string>)[subjectId]
+  const savedTeacherId = ((selection.teacherChoices || {}) as Record<string, string>)[subjectId]
     || (profile.data?.teacherSelections || {})[subjectId];
+  const selectedTeacherId = Object.prototype.hasOwnProperty.call(teacherChoiceDrafts, subjectId)
+    ? (teacherChoiceDrafts[subjectId] === "__NONE__" ? undefined : teacherChoiceDrafts[subjectId])
+    : (savedTeacherId && savedTeacherId !== "__SKIP__" ? savedTeacherId : undefined);
   const selectedTeacher = selectedTeacherId ? getSIETeacher(selectedTeacherId) : undefined;
+  const systemId: SIESystemId = selection.systemId === "EG_GENERAL_SECONDARY"
+    ? "EG_GENERAL_SECONDARY"
+    : selection.systemId === "EG_BACCALAUREATE"
+      ? "EG_BACCALAUREATE"
+      : profile.data?.educationSystem === "general_secondary"
+        ? "EG_GENERAL_SECONDARY"
+        : "EG_BACCALAUREATE";
+  const teacherOptions = useMemo(() => {
+    const eligible = getSIETeachersForSubject(subjectId, systemId);
+    const selected = selectedTeacherId ? getSIETeacher(selectedTeacherId) : undefined;
+    if (selected && selected.subjectIds.includes(subjectId) && !eligible.some(item => item.teacherId === selected.teacherId)) {
+      return [selected, ...eligible];
+    }
+    return eligible;
+  }, [subjectId, systemId, selectedTeacherId]);
   const [lastCompletedLessonId, setLastCompletedLessonId] = useState("");
   const [teacherTeachingFrontierId, setTeacherTeachingFrontierId] = useState("__UNKNOWN__");
   const [schoolClassFrontierId, setSchoolClassFrontierId] = useState("__UNKNOWN__");
@@ -119,11 +138,15 @@ export default function Study() {
       : belongsToCurrentBranch(legacyStudentFrontier)
         ? legacyStudentFrontier
         : latestSq3rCompleted ?? "__UNKNOWN__";
-    const teacherFrontier = Object.prototype.hasOwnProperty.call(currentBranchProgress, "teacherTeachingFrontierId")
-      ? currentBranchProgress.teacherTeachingFrontierId
-      : belongsToCurrentBranch(currentCourseProgress.teacherTeachingFrontierId)
-        ? currentCourseProgress.teacherTeachingFrontierId
-        : "__UNKNOWN__";
+    const branchTeacherMatchesSelection = !currentBranchProgress.teacherId
+      || currentBranchProgress.teacherId === selectedTeacherId;
+    const teacherFrontier = !branchTeacherMatchesSelection
+      ? "__UNKNOWN__"
+      : Object.prototype.hasOwnProperty.call(currentBranchProgress, "teacherTeachingFrontierId")
+        ? currentBranchProgress.teacherTeachingFrontierId
+        : belongsToCurrentBranch(currentCourseProgress.teacherTeachingFrontierId)
+          ? currentCourseProgress.teacherTeachingFrontierId
+          : "__UNKNOWN__";
     const schoolFrontier = Object.prototype.hasOwnProperty.call(currentBranchProgress, "schoolClassFrontierId")
       ? currentBranchProgress.schoolClassFrontierId
       : belongsToCurrentBranch(currentCourseProgress.schoolClassFrontierId)
@@ -139,7 +162,7 @@ export default function Study() {
     setCourseDifficulty(currentCourseProgress.difficulty || "unknown");
     setCourseNotes(currentBranchProgress.notes ?? currentCourseProgress.notes ?? "");
     setLearningObstacle(currentCourseProgress.obstacle ?? profile.data?.obstacle ?? "");
-  }, [subjectId, currentBranchId, currentBranchProgress.updatedAt, currentCourseProgress.updatedAt, profile.data?.obstacle, branches, branchChoices, progressMap]);
+  }, [subjectId, currentBranchId, selectedTeacherId, currentBranchProgress.updatedAt, currentCourseProgress.updatedAt, profile.data?.obstacle, branches, branchChoices, progressMap]);
 
 
   const saveProgress = trpc.study.saveSubjectLessonProgress.useMutation({
@@ -152,6 +175,11 @@ export default function Study() {
 
   const saveCourseProgress = trpc.learning.updateCourseProgress.useMutation({
     onSuccess: async () => {
+      setTeacherChoiceDrafts(current => {
+        const next = { ...current };
+        delete next[subjectId];
+        return next;
+      });
       await Promise.all([utils.studentProfile.get.invalidate(), utils.learning.get.invalidate()]);
       toast.success("تم تحديث التراكم والتقدم الدراسي.");
     },
@@ -352,6 +380,34 @@ export default function Study() {
           </div>
           <div className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <label className="text-sm font-semibold">
+                المدرس الذي تتابعه في هذه المادة
+                <Select
+                  value={selectedTeacherId || "__NONE__"}
+                  onValueChange={value => {
+                    setTeacherChoiceDrafts(current => ({ ...current, [subjectId]: value }));
+                    setTeacherTeachingFrontierId("__UNKNOWN__");
+                    setTeacherCourseFrontier("");
+                  }}
+                  disabled={!subjectId || profile.isLoading}
+                >
+                  <SelectTrigger className="mt-2 h-11 rounded-xl bg-background"><SelectValue placeholder="اختر المدرس" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__NONE__">لم أحدد مدرسًا بعد</SelectItem>
+                    {teacherOptions.map(teacher => (
+                      <SelectItem key={teacher.teacherId} value={teacher.teacherId}>{teacher.nameAr}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <span className="mt-1 block text-[11px] font-normal text-muted-foreground">
+                  اختيار المدرس هنا يحفظه في ملفك الدراسي ويُفعّل اختيار موضع شرحه للمنهج.
+                </span>
+                {!teacherOptions.length && (
+                  <span className="mt-1 block text-[11px] font-normal text-amber-700 dark:text-amber-300">
+                    لا توجد ترشيحات مدرسين موثقة لهذه المادة والنظام حاليًا. يمكنك مراجعة اختيار المدرس من الملف الدراسي.
+                  </span>
+                )}
+              </label>
               <label className="text-sm font-semibold">
                 آخر درس أنهيته أنت
                 <Select value={lastCompletedLessonId || "__UNKNOWN__"} onValueChange={setLastCompletedLessonId} disabled={!lessons.length}>

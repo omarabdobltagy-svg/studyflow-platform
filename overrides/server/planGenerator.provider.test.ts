@@ -67,6 +67,17 @@ describe("generated plan JSON parser", () => {
     expect(parsed.steps[0].lessonSize).toBe("unknown");
   });
 
+  it("treats null printed page ranges as unavailable metadata", () => {
+    const planWithNullPageRanges = {
+      ...validPlan,
+      steps: validPlan.steps.map(step => ({ ...step, printedPageRange: null })),
+    };
+
+    const parsed = parseGeneratedPlan(JSON.stringify(planWithNullPageRanges));
+
+    expect(parsed.steps.every(step => step.printedPageRange === undefined)).toBe(true);
+  });
+
   it("does not accept an incomplete JSON object", () => {
     expect(() => parseGeneratedPlan('{"title":"خطة ناقصة"')).toThrow("تعذّر تحويل الخطة الذكية");
   });

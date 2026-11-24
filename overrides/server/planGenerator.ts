@@ -21,7 +21,7 @@ const planSchema = z.object({
     lessonSize: z.enum(["small", "medium", "large", "unknown"]).default("unknown"),
     difficultyBasis: z.enum(["student_report", "assessment_history", "curriculum_profile", "unknown"]).default("unknown"),
     difficultyConfidence: z.enum(["low", "medium", "high"]).default("low"),
-    printedPageRange: z.tuple([z.number().int().positive().max(5_000), z.number().int().positive().max(5_000)]).optional(),
+    printedPageRange: z.tuple([z.number().int().positive().max(5_000), z.number().int().positive().max(5_000)]).nullish().transform(range => range ?? undefined),
     sourcePages: z.array(z.number().int().positive().max(5_000)).max(20).default([]),
   })).min(3).max(30),
   habits: z.array(z.object({ title: z.string().trim().min(2).max(160), cue: z.string().trim().min(2).max(240) })).max(5).default([]),

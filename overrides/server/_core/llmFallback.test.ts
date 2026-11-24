@@ -54,6 +54,19 @@ describe("assistant NVIDIA fallback", () => {
     expect(mocks.invokeNvidiaLLM).toHaveBeenCalledOnce();
   });
 
+  it("uses NVIDIA's configured model instead of the primary provider model", async () => {
+    mocks.invokeLLM.mockRejectedValue(new Error("LLM invoke failed: 402 Payment Required"));
+    mocks.invokeNvidiaLLM.mockResolvedValue(nvidiaResponse);
+    const params = {
+      model: "deepseek/deepseek-v4.1-flash-1017",
+      messages: [{ role: "user" as const, content: "سؤال" }],
+    };
+
+    await invokeLLMWithNvidiaFallback(params);
+
+    expect(mocks.invokeNvidiaLLM).toHaveBeenCalledWith({ ...params, model: undefined });
+  });
+
   it("switches when primary HTTP 200 has empty or truncated content", async () => {
     mocks.invokeLLM.mockResolvedValue(primaryResponse("", "length"));
     mocks.invokeNvidiaLLM.mockResolvedValue(nvidiaResponse);

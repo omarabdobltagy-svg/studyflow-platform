@@ -20,7 +20,7 @@ export async function invokeLLMWithNvidiaFallback(params: InvokeParams): Promise
   } catch (error) {
     if (!isPrimaryProviderFallbackEligible(error)) throw error;
     console.warn("[StudyFlow AI] Primary provider credentials or quota unavailable; invoking NVIDIA fallback.");
-    return invokeNvidiaLLM(params);
+    return invokeNvidiaLLM({ ...params, model: undefined });
   }
 
   const choice = primary.choices?.[0];
@@ -32,7 +32,7 @@ export async function invokeLLMWithNvidiaFallback(params: InvokeParams): Promise
       completionTokens: primary.usage?.completion_tokens ?? null,
       contentLength: content.length,
     });
-    return invokeNvidiaLLM(params);
+    return invokeNvidiaLLM({ ...params, model: undefined });
   }
 
   return primary;

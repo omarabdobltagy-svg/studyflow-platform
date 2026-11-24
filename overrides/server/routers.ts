@@ -1043,7 +1043,9 @@ export const appRouter = router({
         }
         const selection = (profile.selection ?? {}) as Record<string, any>;
         const courseProgress = (selection.learningCourseProgress ?? {}) as Record<string, any>;
-        const teacherId = input.teacherId ?? selection.teacherChoices?.[input.subjectId] ?? profile.teacherSelections?.[input.subjectId] ?? null;
+        const teacherId = input.teacherId !== undefined
+          ? input.teacherId
+          : selection.teacherChoices?.[input.subjectId] ?? profile.teacherSelections?.[input.subjectId] ?? null;
         if (teacherId && teacherId !== "__SKIP__") {
           const teacher = getSIETeacher(teacherId);
           if (!teacher || !teacher.subjectIds.includes(input.subjectId)) {
@@ -1107,8 +1109,38 @@ export const appRouter = router({
           },
           updatedAt: now,
         } : evidenceRecord;
+        const nextTeacherChoices = { ...((latestSelection.teacherChoices ?? {}) as Record<string, string>) };
+        const nextTeacherStates = { ...((latestSelection.teacherProgressState ?? {}) as Record<string, Record<string, any>>) };
+        if (input.teacherId !== undefined) {
+          const chosenTeacher = teacherId && teacherId !== "__SKIP__" ? getSIETeacher(teacherId) : undefined;
+          const previousTeacherState = nextTeacherStates[input.subjectId] ?? {};
+          const sameTeacher = previousTeacherState.teacherId === teacherId;
+          nextTeacherChoices[input.subjectId] = chosenTeacher ? teacherId! : "__SKIP__";
+          nextTeacherStates[input.subjectId] = {
+            ...(sameTeacher ? previousTeacherState : {}),
+            teacherId: chosenTeacher ? teacherId : "__SKIP__",
+            teacherSourceId: chosenTeacher?.sourceId ?? null,
+            teacherSourceUrl: chosenTeacher?.profileUrl ?? null,
+            coursePresence: chosenTeacher?.coursePresence ?? "unknown",
+            courseVerifiedFor: chosenTeacher?.courseVerifiedFor ?? null,
+            teacherPublicContentFrontier: chosenTeacher?.latestPublicCheckpoint ?? null,
+            teacherPublicContentFrontierDate: chosenTeacher?.latestCheckpointDate ?? null,
+            teacherPublicContentSegments: chosenTeacher?.publicSegments ?? [],
+            teacherPaidCourseFrontier: chosenTeacher?.paidCourseCatalogFrontier ?? null,
+            teacherPaidCoursePositionStatus: chosenTeacher?.paidCoursePositionStatus ?? "unknown",
+            studentAttendedFrontier: sameTeacher ? previousTeacherState.studentAttendedFrontier ?? null : null,
+            status: sameTeacher ? previousTeacherState.status ?? "unknown" : chosenTeacher ? "unknown" : "not_selected",
+            evidenceSource: sameTeacher ? previousTeacherState.evidenceSource ?? "student_selection_state" : "student_selection_state",
+            confidence: sameTeacher ? previousTeacherState.confidence ?? "student_reported" : "unknown",
+            selectedAt: now,
+          };
+        }
         await updateStudentProfileSelection(ctx.user.id, {
           ...latestSelection,
+          ...(input.teacherId !== undefined ? {
+            teacherChoices: nextTeacherChoices,
+            teacherProgressState: nextTeacherStates,
+          } : {}),
           learningCourseProgress: { ...latestCourseProgress, [input.subjectId]: record },
         });
         await logStudentActivity(ctx.user.id, "learning.frontier_updated", "curriculum_branch", branch?.branchId ?? input.subjectId, "تم تحديث موضع الطالب ومرجع التدريس", {
