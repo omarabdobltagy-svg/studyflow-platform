@@ -100,7 +100,7 @@ function buildPlannerProgressSnapshot(
     const reported = courseProgress[subjectId] || {};
     const branchRecords = (reported.branches || {}) as Record<string, Record<string, any>>;
     const teacherState = teacherStates[subjectId] || {};
-    const legacyFrontier = reported.lastCompletedLessonId || frontiers[subjectId] || teacherState.studentAttendedFrontier || null;
+    const legacyFrontier = frontiers[subjectId] || teacherState.studentAttendedFrontier || null;
     const subjectLessonRecords = lessonProgress[subjectId] || {};
 
     for (const branch of getFirstPartBranches(subjectId)) {
