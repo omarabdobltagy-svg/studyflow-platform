@@ -500,7 +500,6 @@ export async function invokeNvidiaLLM(params: InvokeParams): Promise<InvokeResul
     apiKeyVariable: "NVIDIA_API_KEY",
     defaultModel: ENV.nvidiaModel,
     errorPrefix: "NVIDIA LLM invoke failed",
-    omitResponseFormat: true,
     pollPending: true,
     // Keep reasoning bounded so the completion has enough tokens for its JSON plan.
     additionalBody: { reasoning_effort: "medium", reasoning_budget: 1_024, stream: false },
