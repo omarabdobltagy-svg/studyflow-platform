@@ -350,7 +350,15 @@ export const appRouter = router({
           const branchRecords = (previousSubjectProgress.branches ?? {}) as Record<string, Record<string, any>>;
           const nextBranchRecords = Object.fromEntries(Object.entries(branchRecords).map(([branchId, record]) => {
             const branch = getSIECheckpointBranches(input.subjectId).find(item => item.branchId === branchId);
-            if (!branch) return [branchId, record];
+            if (!branch) return [branchId, {
+              ...record,
+              teacherId,
+              teacherName: nextCustomTeacherName,
+              teacherTeachingFrontierId: "__UNKNOWN__",
+              teacherFrontierConfirmedAt: null,
+              teacherTeachingFrontierEvidence: null,
+              updatedAt: new Date().toISOString(),
+            }];
             const schoolFrontier = input.courseMode === "center"
               ? record.schoolClassFrontierId ?? "__UNKNOWN__"
               : "__UNKNOWN__";
