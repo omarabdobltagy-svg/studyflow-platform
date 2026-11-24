@@ -433,7 +433,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                     <div>
                       <p className="eyebrow">إعداد مادة واحدة في كل مرة</p>
                       <h3 className="mt-1 text-xl font-bold">{currentSetupSubject.nameAr}</h3>
-                      <p className="mt-1 text-sm leading-6 text-muted-foreground">المادة {subjectSetupIndex + 1} من {selectedSubjects.length}. هنحفظ طريقة دراستك والمدرس، وبعدها ننتقل للمادة التالية.</p>
+                      <p className="mt-1 text-sm leading-6 text-muted-foreground">المادة {subjectSetupIndex + 1} من {selectedSubjects.length}. هنحفظ طريقة الدراسة هنا؛ مواضع تقدمك وموضع الشرح تُسجل بشكل مستقل لكل فرع في صفحة المذاكرة بعد الإعداد.</p>
                     </div>
                     <span className="rounded-full border border-border bg-background px-3 py-2 text-xs font-semibold">{subjectSetupIndex + 1} / {selectedSubjects.length}</span>
                   </div>
