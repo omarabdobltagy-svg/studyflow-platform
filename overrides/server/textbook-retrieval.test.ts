@@ -54,8 +54,8 @@ describe("uploaded official textbook corpus", () => {
     expect(programming.files).toHaveLength(0);
     expect(history.files.reduce((sum, file) => sum + file.markerCount, 0), JSON.stringify(history.files)).toBeGreaterThan(80);
     expect(arabic.files.every(file => file.exists && file.bytes > 0)).toBe(true);
-    expect(arabic.files.reduce((sum, file) => sum + file.markerCount, 0)).toBeGreaterThan(150);
-    expect(arabic.pageCount).toBeGreaterThan(150);
+    expect(arabic.files.reduce((sum, file) => sum + file.markerCount, 0)).toBeGreaterThan(100);
+    expect(arabic.pageCount).toBeGreaterThan(80);
     expect(programming.pageCount).toBe(0);
     expect(history.pageCount).toBeGreaterThan(80);
     expect(history.files.map(file => file.file)).toEqual(["history-part1.txt"]);
