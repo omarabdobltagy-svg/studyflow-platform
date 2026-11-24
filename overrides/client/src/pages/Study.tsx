@@ -122,7 +122,7 @@ export default function Study() {
       return;
     }
     if (!branchChoices.some(lesson => lesson.nodeId === lessonId)) {
-      setLessonId(branchChoices[0].nodeId);
+      setLessonId("");
     }
   }, [subjectId, currentBranchId, branchChoices, lessonId]);
 
@@ -683,7 +683,10 @@ export default function Study() {
             label="اختر الدرس الذي ستطبق عليه SQ3R"
             value={lessonId}
             onChange={setLessonId}
-            options={branchChoices.map((lesson, index) => ({ value: lesson.nodeId, label: (lesson.courseSequenceNumber ? "الدرس " + lesson.courseSequenceNumber : lesson.lessonNumber ? "الدرس " + lesson.lessonNumber : "عنصر " + (index + 1)) + " — " + lesson.title }))}
+            options={[
+              { value: "", label: "اختر درسًا لبدء جلسة SQ3R" },
+              ...branchChoices.map((lesson, index) => ({ value: lesson.nodeId, label: (lesson.courseSequenceNumber ? "الدرس " + lesson.courseSequenceNumber : lesson.lessonNumber ? "الدرس " + lesson.lessonNumber : "عنصر " + (index + 1)) + " — " + lesson.title })),
+            ]}
           />
         ) : <p className="mt-4 rounded-xl bg-muted/30 p-3 text-xs leading-6 text-muted-foreground">لا توجد دروس مفهرسة كافية لهذا الفرع حاليًا؛ لن نعرض اختيارًا غير موثوق.</p>}
       </section>
