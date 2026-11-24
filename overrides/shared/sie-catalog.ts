@@ -945,6 +945,24 @@ export function getSIECheckpointBranches(subjectId: string): SIECheckpointBranch
   }
   const result = [...groups.values()];
   if (subjectId === "ARB_G2_BAC") {
+    // Within each Arabic branch, order official textbook checkpoints by unit
+    // and lesson first; course-only checkpoints retain their teacher-index order.
+    for (const branch of result) {
+      branch.choices.sort((left, right) => {
+        const leftHasUnit = typeof left.unitNumber === "number";
+        const rightHasUnit = typeof right.unitNumber === "number";
+        if (leftHasUnit && rightHasUnit) {
+          const unitDifference = left.unitNumber! - right.unitNumber!;
+          if (unitDifference) return unitDifference;
+          const lessonDifference = Number(left.lessonNumber ?? 0) - Number(right.lessonNumber ?? 0);
+          if (lessonDifference) return lessonDifference;
+        } else if (leftHasUnit !== rightHasUnit) {
+          return leftHasUnit ? -1 : 1;
+        }
+        return (left.courseSequenceNumber ?? Number.MAX_SAFE_INTEGER)
+          - (right.courseSequenceNumber ?? Number.MAX_SAFE_INTEGER);
+      });
+    }
     const order: Record<string, number> = {
       ARB_NAHW: 0,
       ARB_BALAGHA: 1,
