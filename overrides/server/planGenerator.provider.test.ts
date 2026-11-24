@@ -121,7 +121,7 @@ describe("smart planner NVIDIA fallback", () => {
       model: "deepseek/test-model",
       choices: [{
         index: 0,
-        message: { role: "assistant", content: "{\\"title\\":\\"unfinished\\" " },
+        message: { role: "assistant", content: '{"title":"unfinished"' },
         finish_reason: "length",
       }],
       usage: { prompt_tokens: 500, completion_tokens: 1_400, total_tokens: 1_900 },
