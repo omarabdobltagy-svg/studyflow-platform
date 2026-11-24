@@ -91,7 +91,6 @@ describe("textbook corpus coverage diagnostics", () => {
       "مقدمة الكتاب وأهداف المنهج",
       3,
     );
-    expect(result.coverageNotes.some(note => note.includes("لا تدخل في الاسترجاع"))).toBe(true);
     expect(result.coverageNotes.some(note => note.includes("U+FFFD"))).toBe(true);
   });
 });

@@ -65,8 +65,7 @@ Uploaded attachments are stored for download; their contents are not parsed and 
 - Searchable sources include Arabic Part 1, History Part 1, and Programming & AI Part 2 (Chapters 5–7).
 - English Part 1 is currently table-of-contents only; its lesson pages are not indexed.
 - Programming & AI Part 1 (Chapters 1–4) has a page map but no indexed page text or images.
-- Arabic Part 2 and History Part 2 text fragments lack usable page markers and are not page-cited search sources yet.
-- Some Arabic and History extracted text contains Unicode replacement characters (U+FFFD), so exact wording and quotations must be checked against the original PDF pages.
+- Arabic Part 2 and History Part 2 fragments do have page markers and are searchable, but extraction quality is degraded by Unicode replacement characters (U+FFFD). Exact wording and quotations must be checked against the original PDF pages.
 
 The retrieval pipeline now reports unindexed files and extraction-quality warnings to the assistant instead of implying full coverage. It does not invent missing page boundaries.
 

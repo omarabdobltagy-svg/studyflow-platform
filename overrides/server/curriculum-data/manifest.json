@@ -44,7 +44,7 @@
     "English Part 1 is image-only in the provided PDF; only its table of contents has been verified. Do not claim that lesson body text is indexed.",
     "Programming Part 1 was not among the newly available source PDFs; the catalog may contain its lesson titles but not its full text in this corpus.",
     "The literary supplement 'من روائع الأدب العربي' is separate from the core Arabic textbook and is not included as an official syllabus source.",
-    "arabic-part2.txt and history-part2.txt are text fragments without usable PDF page markers and are not included in page-cited retrieval until re-extracted.",
+    "Arabic Part 2 and History Part 2 text fragments contain page markers and are indexed in the current retrieval pipeline, but the extracted text includes Unicode replacement characters (U+FFFD); quotations and exact wording must be checked against the original PDF.",
     "Some extracted Arabic and History text contains Unicode replacement characters (U+FFFD). Retrieval reports a quality warning; exact quotations must be checked against the original PDF page."
   ]
 }
