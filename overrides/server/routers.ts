@@ -92,8 +92,8 @@ type DailyPlanResult = {
   taskCount: number;
 };
 
-// V2 invalidates cached plans created before completed-checkpoint enforcement.
-const DAILY_PLAN_PREFIX = "SIE_DAILY_PLAN_V2:";
+// V3 invalidates cached plans created before legacy-frontier fallback was aligned with learning.get.
+const DAILY_PLAN_PREFIX = "SIE_DAILY_PLAN_V3:";
 const dailyPlanLocks = new Map<number, Promise<DailyPlanResult>>();
 const dailyPlanDirtyUsers = new Set<number>();
 
