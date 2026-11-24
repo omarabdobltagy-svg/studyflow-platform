@@ -698,16 +698,18 @@ export type SIECheckpointChoice = {
   note?: string;
   unitNumber?: number;
   lessonNumber?: string;
-  lessonType?: "reading" | "poetry" | "grammar" | "topic";
+  courseSequenceNumber?: number;
+  lessonType?: "reading" | "poetry" | "prose" | "grammar" | "rhetoric" | "expression" | "spelling" | "story" | "topic";
+  sourceLabel?: string;
   branchId?: string;
   branchTitle?: string;
-  branchType?: "official_unit" | "official_section";
+  branchType?: "official_unit" | "official_section" | "course_track";
 };
 
 export type SIECheckpointBranch = {
   branchId: string;
   branchTitle: string;
-  branchType: "official_unit" | "official_section";
+  branchType: "official_unit" | "official_section" | "course_track";
   choices: SIECheckpointChoice[];
 };
 
@@ -767,22 +769,38 @@ function getOfficialBranch(subjectId: string, choice: SIECheckpointChoice) {
 
 export const SIE_CHECKPOINT_CHOICES: Record<string, SIECheckpointChoice[]> = {
   ARB_G2_BAC: [
-    { nodeId: "ARB_U1_L1", title: "العلم بين القانون والضمير", unitTitle: "العلم والضمير", unitNumber: 1, lessonNumber: "1", lessonType: "reading", branchId: "ARB_READING", branchTitle: "القراءة والنصوص", branchType: "official_section" },
-    { nodeId: "ARB_U1_L2", title: "الخلق جوهر الفضيلة", unitTitle: "العلم والضمير", unitNumber: 1, lessonNumber: "2", lessonType: "reading", branchId: "ARB_READING", branchTitle: "القراءة والنصوص", branchType: "official_section" },
-    { nodeId: "ARB_U1_L3", title: "العلم نور", unitTitle: "العلم والضمير", unitNumber: 1, lessonNumber: "3", lessonType: "poetry", branchId: "ARB_READING", branchTitle: "القراءة والنصوص", branchType: "official_section" },
-    { nodeId: "ARB_U2_L1", title: "التقنية وصناعة الرأي العام", unitTitle: "سلطان الكلمة الرقمية", unitNumber: 2, lessonNumber: "1", lessonType: "reading", branchId: "ARB_READING", branchTitle: "القراءة والنصوص", branchType: "official_section" },
-    { nodeId: "ARB_U2_L2", title: "بين الذوق والعقل", unitTitle: "سلطان الكلمة الرقمية", unitNumber: 2, lessonNumber: "2", lessonType: "reading", branchId: "ARB_READING", branchTitle: "القراءة والنصوص", branchType: "official_section" },
-    { nodeId: "ARB_U2_L3", title: "أثر الكلمة وحفظ اللسان", unitTitle: "سلطان الكلمة الرقمية", unitNumber: 2, lessonNumber: "3", lessonType: "poetry", branchId: "ARB_READING", branchTitle: "القراءة والنصوص", branchType: "official_section" },
-    { nodeId: "ARB_U3_L1", title: "حقوق الإنسان بين العالمية والخصوصية", unitTitle: "الإنسان وكرامته", unitNumber: 3, lessonNumber: "1", lessonType: "reading", branchId: "ARB_READING", branchTitle: "القراءة والنصوص", branchType: "official_section" },
-    { nodeId: "ARB_U3_L2", title: "الحرية الفكرية", unitTitle: "الإنسان وكرامته", unitNumber: 3, lessonNumber: "2", lessonType: "reading", branchId: "ARB_READING", branchTitle: "القراءة والنصوص", branchType: "official_section" },
-    { nodeId: "ARB_U3_L3", title: "يا أخي الإنسان", unitTitle: "الإنسان وكرامته", unitNumber: 3, lessonNumber: "3", lessonType: "poetry", branchId: "ARB_READING", branchTitle: "القراءة والنصوص", branchType: "official_section" },
+    // Arabic teacher-course sequence: 21 lessons grouped by their real learning branch.
+    { nodeId: "ARB_U1_L1", title: "العلم بين القانون والضمير", unitTitle: "العلم والضمير", unitNumber: 1, lessonNumber: "1", courseSequenceNumber: 1, lessonType: "reading", sourceLabel: "فهرس الدروس وكتاب الطالب", branchId: "ARB_READING", branchTitle: "القراءة", branchType: "course_track" },
+    { nodeId: "ARB_U1_N1", title: "الأسماء الخمسة", unitTitle: "العلم والضمير", unitNumber: 1, lessonNumber: "1", courseSequenceNumber: 2, lessonType: "grammar", sourceLabel: "فهرس الدروس وكتاب الطالب", branchId: "ARB_NAHW", branchTitle: "النحو", branchType: "course_track" },
+    { nodeId: "ARB_C03_HIJJAGI", title: "الأسلوب الحجاجي", unitTitle: "الترم الأول", courseSequenceNumber: 3, lessonType: "expression", sourceLabel: "فهرس منصة الشرح", branchId: "ARB_EXPRESSION", branchTitle: "التعبير", branchType: "course_track" },
+    { nodeId: "ARB_C04_KHABARI_ENSHAEI", title: "الأسلوب الخبري والأسلوب الإنشائي", unitTitle: "الترم الأول", courseSequenceNumber: 4, lessonType: "rhetoric", sourceLabel: "فهرس منصة الشرح", branchId: "ARB_BALAGHA", branchTitle: "البلاغة", branchType: "course_track" },
+    { nodeId: "ARB_C05_MAIN_IDEA", title: "شرح الفكرة الرئيسة", unitTitle: "الترم الأول", courseSequenceNumber: 5, lessonType: "reading", sourceLabel: "فهرس منصة الشرح", branchId: "ARB_READING", branchTitle: "القراءة", branchType: "course_track" },
+    { nodeId: "ARB_C06_VIEWPOINT", title: "شرح زاوية الرؤية", unitTitle: "الترم الأول", courseSequenceNumber: 6, lessonType: "reading", sourceLabel: "فهرس منصة الشرح", branchId: "ARB_READING", branchTitle: "القراءة", branchType: "course_track" },
+    { nodeId: "ARB_U1_L2", title: "الخلق جوهر الفضيلة", unitTitle: "العلم والضمير", unitNumber: 1, lessonNumber: "2", courseSequenceNumber: 7, lessonType: "prose", sourceLabel: "فهرس الدروس وكتاب الطالب", branchId: "ARB_TEXTS", branchTitle: "النصوص", branchType: "course_track" },
+    { nodeId: "ARB_C08_IMPLICIT_MEANING", title: "شرح الدلالة الضمنية", unitTitle: "الترم الأول", courseSequenceNumber: 8, lessonType: "reading", sourceLabel: "فهرس منصة الشرح", branchId: "ARB_READING", branchTitle: "القراءة", branchType: "course_track" },
+    { nodeId: "ARB_C09_TAA_MARBUTA", title: "التاء المربوطة والهاء المربوطة", unitTitle: "الترم الأول", courseSequenceNumber: 9, lessonType: "spelling", sourceLabel: "فهرس منصة الشرح", branchId: "ARB_SPELLING", branchTitle: "الإملاء", branchType: "course_track" },
+    { nodeId: "ARB_C10_ARGUMENT_PARA", title: "كيفية كتابة فقرة حجاجية", unitTitle: "الترم الأول", courseSequenceNumber: 10, lessonType: "expression", sourceLabel: "فهرس منصة الشرح", branchId: "ARB_EXPRESSION", branchTitle: "التعبير", branchType: "course_track" },
+    { nodeId: "ARB_C11_FIGURE", title: "الصورة الخيالية", unitTitle: "الترم الأول", courseSequenceNumber: 11, lessonType: "rhetoric", sourceLabel: "فهرس منصة الشرح", branchId: "ARB_BALAGHA", branchTitle: "البلاغة", branchType: "course_track" },
+    { nodeId: "ARB_C12_STORY1", title: "القصة الأولى: حكايات الغريب", unitTitle: "كتاب روائع الأدب العربي", courseSequenceNumber: 12, lessonType: "story", sourceLabel: "فهرس منصة الشرح", branchId: "ARB_LITERATURE", branchTitle: "الأدب والقصة", branchType: "course_track" },
+    { nodeId: "ARB_U1_L3", title: "العلم نور", unitTitle: "العلم والضمير", unitNumber: 1, lessonNumber: "3", courseSequenceNumber: 13, lessonType: "poetry", sourceLabel: "فهرس الدروس وكتاب الطالب", branchId: "ARB_TEXTS", branchTitle: "النصوص", branchType: "course_track" },
+    { nodeId: "ARB_U2_L1", title: "التقنية وصناعة الرأي العام", unitTitle: "سلطان الكلمة الرقمية", unitNumber: 2, lessonNumber: "1", courseSequenceNumber: 14, lessonType: "reading", sourceLabel: "فهرس الدروس وكتاب الطالب", branchId: "ARB_READING", branchTitle: "القراءة", branchType: "course_track" },
+    { nodeId: "ARB_U2_N1", title: "الممنوع من الصرف وعلل منعه", unitTitle: "سلطان الكلمة الرقمية", unitNumber: 2, lessonNumber: "1", courseSequenceNumber: 15, lessonType: "grammar", sourceLabel: "فهرس الدروس وكتاب الطالب", branchId: "ARB_NAHW", branchTitle: "النحو", branchType: "course_track" },
+    { nodeId: "ARB_C16_STORY2", title: "القصة الثانية: عودة الروح", unitTitle: "كتاب روائع الأدب العربي", courseSequenceNumber: 16, lessonType: "story", sourceLabel: "فهرس منصة الشرح", branchId: "ARB_LITERATURE", branchTitle: "الأدب والقصة", branchType: "course_track" },
+    { nodeId: "ARB_C17_TEXT_DISCOURSE", title: "أنواع الخطاب في النص المعلوماتي", unitTitle: "الترم الأول", courseSequenceNumber: 17, lessonType: "reading", sourceLabel: "فهرس منصة الشرح", branchId: "ARB_READING", branchTitle: "القراءة", branchType: "course_track" },
+    { nodeId: "ARB_C18_IJAZ", title: "الإيجاز في البلاغة", unitTitle: "الترم الأول", courseSequenceNumber: 18, lessonType: "rhetoric", sourceLabel: "فهرس منصة الشرح", branchId: "ARB_BALAGHA", branchTitle: "البلاغة", branchType: "course_track" },
+    { nodeId: "ARB_C19_ITNAB", title: "الإطناب", unitTitle: "الترم الأول", courseSequenceNumber: 19, lessonType: "rhetoric", sourceLabel: "فهرس منصة الشرح", branchId: "ARB_BALAGHA", branchTitle: "البلاغة", branchType: "course_track" },
+    { nodeId: "ARB_C20_HAMZA", title: "همزة القطع وألف الوصل", unitTitle: "الترم الأول", courseSequenceNumber: 20, lessonType: "spelling", sourceLabel: "فهرس منصة الشرح", branchId: "ARB_SPELLING", branchTitle: "الإملاء", branchType: "course_track" },
+    { nodeId: "ARB_U2_L2", title: "بين الذوق والعقل", unitTitle: "سلطان الكلمة الرقمية", unitNumber: 2, lessonNumber: "2", courseSequenceNumber: 21, lessonType: "prose", sourceLabel: "فهرس الدروس وكتاب الطالب", branchId: "ARB_TEXTS", branchTitle: "النصوص", branchType: "course_track" },
 
-    { nodeId: "ARB_U1_N1", title: "الأسماء الخمسة", unitTitle: "العلم والضمير", unitNumber: 1, lessonNumber: "1", lessonType: "grammar", branchId: "ARB_NAHW", branchTitle: "النحو", branchType: "official_section" },
-    { nodeId: "ARB_U1_N2", title: "تابع الأسماء الخمسة", unitTitle: "العلم والضمير", unitNumber: 1, lessonNumber: "2", lessonType: "grammar", branchId: "ARB_NAHW", branchTitle: "النحو", branchType: "official_section" },
-    { nodeId: "ARB_U2_N1", title: "الممنوع من الصرف وعلل منعه", unitTitle: "سلطان الكلمة الرقمية", unitNumber: 2, lessonNumber: "1", lessonType: "grammar", branchId: "ARB_NAHW", branchTitle: "النحو", branchType: "official_section" },
-    { nodeId: "ARB_U2_N2", title: "تابع الممنوع من الصرف وعلل منعه", unitTitle: "سلطان الكلمة الرقمية", unitNumber: 2, lessonNumber: "2", lessonType: "grammar", branchId: "ARB_NAHW", branchTitle: "النحو", branchType: "official_section" },
-    { nodeId: "ARB_U3_N1", title: "النعت والبدل والتمييز بينهما", unitTitle: "الإنسان وكرامته", unitNumber: 3, lessonNumber: "1", lessonType: "grammar", branchId: "ARB_NAHW", branchTitle: "النحو", branchType: "official_section" },
-    { nodeId: "ARB_U3_N2", title: "العطف", unitTitle: "الإنسان وكرامته", unitNumber: 3, lessonNumber: "2", lessonType: "grammar", branchId: "ARB_NAHW", branchTitle: "النحو", branchType: "official_section" },
+    // Additional official textbook checkpoints remain available even when they are not in the 21-item course index.
+    { nodeId: "ARB_U1_N2", title: "تابع الأسماء الخمسة", unitTitle: "العلم والضمير", unitNumber: 1, lessonNumber: "2", lessonType: "grammar", sourceLabel: "كتاب الطالب", branchId: "ARB_NAHW", branchTitle: "النحو", branchType: "course_track" },
+    { nodeId: "ARB_U2_N2", title: "تابع الممنوع من الصرف وعلل منعه", unitTitle: "سلطان الكلمة الرقمية", unitNumber: 2, lessonNumber: "2", lessonType: "grammar", sourceLabel: "كتاب الطالب", branchId: "ARB_NAHW", branchTitle: "النحو", branchType: "course_track" },
+    { nodeId: "ARB_U3_N1", title: "النعت والبدل والتمييز بينهما", unitTitle: "الإنسان وكرامته", unitNumber: 3, lessonNumber: "1", lessonType: "grammar", sourceLabel: "كتاب الطالب", branchId: "ARB_NAHW", branchTitle: "النحو", branchType: "course_track" },
+    { nodeId: "ARB_U3_N2", title: "العطف", unitTitle: "الإنسان وكرامته", unitNumber: 3, lessonNumber: "2", lessonType: "grammar", sourceLabel: "كتاب الطالب", branchId: "ARB_NAHW", branchTitle: "النحو", branchType: "course_track" },
+    { nodeId: "ARB_U2_L3", title: "أثر الكلمة وحفظ اللسان", unitTitle: "سلطان الكلمة الرقمية", unitNumber: 2, lessonNumber: "3", lessonType: "poetry", sourceLabel: "كتاب الطالب", branchId: "ARB_TEXTS", branchTitle: "النصوص", branchType: "course_track" },
+    { nodeId: "ARB_U3_L1", title: "حقوق الإنسان بين العالمية والخصوصية", unitTitle: "الإنسان وكرامته", unitNumber: 3, lessonNumber: "1", lessonType: "reading", sourceLabel: "كتاب الطالب", branchId: "ARB_READING", branchTitle: "القراءة", branchType: "course_track" },
+    { nodeId: "ARB_U3_L2", title: "الحرية الفكرية", unitTitle: "الإنسان وكرامته", unitNumber: 3, lessonNumber: "2", lessonType: "reading", sourceLabel: "كتاب الطالب", branchId: "ARB_READING", branchTitle: "القراءة", branchType: "course_track" },
+    { nodeId: "ARB_U3_L3", title: "يا أخي الإنسان", unitTitle: "الإنسان وكرامته", unitNumber: 3, lessonNumber: "3", lessonType: "poetry", sourceLabel: "كتاب الطالب", branchId: "ARB_TEXTS", branchTitle: "النصوص", branchType: "course_track" },
   ],
   ENG1_G2_BAC: [
     { nodeId: "ENG_U1_SEC_A_T1", title: "Social Media and Self-Image", unitTitle: "Living Well in a Complex World", unitNumber: 1, lessonNumber: "1.1", lessonType: "topic" },
@@ -872,22 +890,30 @@ export function getSIECheckpointChoiceTypeLabel(choice: SIECheckpointChoice): st
     case "reading": return "قراءة";
     case "poetry": return "نص شعري";
     case "grammar": return "نحو";
+    case "rhetoric": return "بلاغة";
+    case "prose": return "نص نثري";
+    case "expression": return "تعبير";
+    case "spelling": return "إملاء";
+    case "story": return "قصة";
     case "topic": return "موضوع (Topic)";
     default: return "درس";
   }
 }
 
 export function getSIECheckpointChoiceDisplayLabel(choice: SIECheckpointChoice): string {
-  const lessonNumber = choice.lessonNumber
-    ? choice.lessonType === "topic" ? `Lesson ${choice.lessonNumber}`
-      : choice.lessonType === "grammar" ? `قاعدة نحوية ${choice.lessonNumber}`
-        : `الدرس ${choice.lessonNumber}`
-    : "";
+  const lessonNumber = choice.courseSequenceNumber
+    ? `الدرس ${choice.courseSequenceNumber} من 21`
+    : choice.lessonNumber
+      ? choice.lessonType === "topic" ? `Lesson ${choice.lessonNumber}`
+        : choice.lessonType === "grammar" ? `قاعدة نحوية ${choice.lessonNumber}`
+          : `الدرس ${choice.lessonNumber}`
+      : "";
   const unit = choice.unitNumber
     ? choice.lessonType === "topic" ? `Unit ${choice.unitNumber}: ${choice.unitTitle}` : `الوحدة ${choice.unitNumber}: ${choice.unitTitle}`
     : choice.unitTitle;
   return [lessonNumber, choice.title, `النوع: ${getSIECheckpointChoiceTypeLabel(choice)}`,
-    `الفرع: ${choice.branchTitle ?? choice.unitTitle}`, unit].filter(Boolean).join(" · ");
+    `الفرع: ${choice.branchTitle ?? choice.unitTitle}`, unit,
+    choice.sourceLabel ? `المصدر: ${choice.sourceLabel}` : ""].filter(Boolean).join(" · ");
 }
 
 /** يعيد فروع المنهج مع إبقاء كل مسار تقدم مستقلاً. */
@@ -909,7 +935,15 @@ export function getSIECheckpointBranches(subjectId: string): SIECheckpointBranch
   }
   const result = [...groups.values()];
   if (subjectId === "ARB_G2_BAC") {
-    const order: Record<string, number> = { ARB_NAHW: 0, ARB_READING: 1 };
+    const order: Record<string, number> = {
+      ARB_NAHW: 0,
+      ARB_BALAGHA: 1,
+      ARB_READING: 2,
+      ARB_TEXTS: 3,
+      ARB_EXPRESSION: 4,
+      ARB_SPELLING: 5,
+      ARB_LITERATURE: 6,
+    };
     result.sort((left, right) => (order[left.branchId] ?? 99) - (order[right.branchId] ?? 99));
   }
   return result;

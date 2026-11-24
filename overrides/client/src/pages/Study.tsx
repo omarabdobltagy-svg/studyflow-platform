@@ -332,7 +332,6 @@ export default function Study() {
               <SelectTrigger className="h-12 rounded-xl bg-background"><SelectValue placeholder="اختر الفرع" /></SelectTrigger>
               <SelectContent>
                 {branches.map(branch => <SelectItem key={branch.branchId} value={branch.branchId}>{branch.branchTitle}</SelectItem>)}
-                {subjectId === "ARB_G2_BAC" && <SelectItem value="__ARB_BALAGHA_UNINDEXED__" disabled>البلاغة · لا توجد موضوعات مفهرسة في الجزء الأول</SelectItem>}
               </SelectContent>
             </Select>
           </div>
@@ -360,10 +359,14 @@ export default function Study() {
           <span className="rounded-md bg-background px-2 py-1 text-[10px] font-semibold text-primary">{getSIECheckpointChoiceTypeLabel(selectedLesson)}</span>
           <span className="text-[10px] text-muted-foreground">{selectedLesson.branchTitle}</span>
         </div>}
-        {subjectId === "ARB_G2_BAC" && <div className="mx-5 mb-5 flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-muted/20 p-3 sm:mx-6">
-          <span className="rounded-lg bg-primary/10 px-2.5 py-1.5 text-xs font-semibold text-primary">النحو · 6 موضوعات</span>
-          <span className="rounded-lg bg-primary/10 px-2.5 py-1.5 text-xs font-semibold text-primary">القراءة والنصوص · 9 دروس</span>
-          <span className="rounded-lg border border-dashed border-border bg-background px-2.5 py-1.5 text-xs text-muted-foreground">البلاغة · غير مفهرسة في الجزء الأول</span>
+        {subjectId === "ARB_G2_BAC" && <div className="mx-5 mb-5 rounded-xl border border-border/70 bg-muted/20 p-3 sm:mx-6">
+          <p className="mb-2 text-[11px] font-semibold text-muted-foreground">فروع العربي — اختر الفرع ثم الدرس داخله</p>
+          <div className="flex flex-wrap gap-1.5">
+            {branches.map(branch => <span key={branch.branchId} className="rounded-lg bg-primary/10 px-2.5 py-1.5 text-xs font-semibold text-primary">
+              {branch.branchTitle} · {branch.choices.length}
+            </span>)}
+          </div>
+          <p className="mt-2 text-[10px] leading-5 text-muted-foreground">أرقام 1–21 تتبع فهرس منصة الشرح؛ وباقي نقاط الكتاب تظهر بمصدرها ورقم وحدتها دون اختلاق ترتيب منصة.</p>
         </div>}
         {subjectId && !subjectChoices.length && <p className="mx-5 mb-5 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-sm leading-6 text-muted-foreground sm:mx-6">فهرس هذه المادة غير محمّل في النسخة الحالية؛ لن نعرض دروسًا مخمّنة.</p>}
         {!subjects.length && !profile.isLoading && <p className="m-5 rounded-xl bg-muted/50 p-3 text-sm text-muted-foreground">لم تُضف مواد إلى ملفك الدراسي بعد. أضف المواد من الملف الشخصي أولًا.</p>}
