@@ -331,8 +331,8 @@ export async function generatePersonalPlan(
   const isBillingOrQuotaFailure = (error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
     return /AI_API_KEY is not configured/i.test(message)
-      || /(?:NVIDIA )?LLM invoke failed:\\s*402\\b/i.test(message)
-      || /insufficient[_\\s-]?(?:credits?|quota|balance)|out of credits|not enough credits|credit balance.{0,40}(?:low|insufficient|exhausted)|quota.{0,30}(?:exceeded|exhausted)|openrouter_credits|payment required/i.test(message);
+      || /(?:NVIDIA )?LLM invoke failed:\s*402\b/i.test(message)
+      || /insufficient[_\s-]?(?:credits?|quota|balance)|out of credits|not enough credits|credit balance.{0,40}(?:low|insufficient|exhausted)|quota.{0,30}(?:exceeded|exhausted)|openrouter_credits|payment required/i.test(message);
   };
 
   const isUnsupportedJsonMode = (error: unknown) => {
