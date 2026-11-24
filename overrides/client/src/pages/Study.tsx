@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
-import { getSIECheckpointBranches, getSIECheckpointChoices, getSIECheckpointChoiceDisplayLabel, getSIECheckpointChoiceTypeLabel, getSIESubject, getSIETeacher, getSIETeachersForSubject, type SIESystemId } from "@shared/sie-catalog";
+import { getSIECheckpointBranches, getSIECheckpointChoices, getSIECheckpointChoiceDisplayLabel, getSIESubject, getSIETeacher, getSIETeachersForSubject, type SIESystemId } from "@shared/sie-catalog";
 import { calculateLearningGap } from "@shared/sie-learning-progress";
 import { getExpectedToDateChoices, getEgyptSchoolProgress } from "@shared/egypt-school-calendar";
 import { Activity, BookOpenText, Check, CircleHelp, Eye, Gauge, Mic2, RefreshCcw, Sparkles } from "lucide-react";
@@ -60,8 +60,6 @@ export default function Study() {
     ? teacherNameDrafts[subjectId]
     : savedTeacherNames[subjectId] || currentCourseProgress.teacherName || "";
   const teacherReferenceNameBase = draftTeacherName.trim() || selectedTeacher?.nameAr || "";
-  const currentTeacherKey = selectedTeacherId
-    || (teacherReferenceNameBase ? `custom:${teacherReferenceNameBase.toLocaleLowerCase("en")}` : "");
   const persistedCourseMode = savedCourseModes[subjectId] || currentCourseProgress.courseMode || "";
   const persistedTeacherName = savedTeacherNames[subjectId] || currentCourseProgress.teacherName || "";
   const savedTeacherChoiceValue = savedTeacherId && savedTeacherId !== "__SKIP__" ? savedTeacherId : "__NONE__";
@@ -114,9 +112,6 @@ export default function Study() {
     || (Object.prototype.hasOwnProperty.call(currentBranchProgress, "teacherTeachingFrontierId")
       && currentBranchProgress.teacherTeachingFrontierId !== "__UNKNOWN__");
   const currentProgress = progressMap[subjectId] && progressMap[subjectId][lessonId];
-  const branchGapMap = ((learning.data as any)?.gapByBranch?.[subjectId] || {}) as Record<string, any>;
-
-  type CourseStatus = "not_started" | "in_progress" | "caught_up" | "needs_review";
   const subjectIndex = Math.max(0, subjects.indexOf(subjectId));
   const branchIndex = Math.max(0, branches.findIndex(branch => branch.branchId === currentBranchId));
   const systemId: SIESystemId = selection.systemId === "EG_GENERAL_SECONDARY"
