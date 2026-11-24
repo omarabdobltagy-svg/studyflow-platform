@@ -172,7 +172,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
       : step === 2
         ? Boolean(form.trackId)
         : step === 3
-          ? Boolean(track && (track.fixedSubjectIds || (firstElectiveGroup.length > 0 && firstElectiveGroup.some(item => item.subjectId === form.electiveSubjectId))))
+          ? Boolean(track && (track.fixedSubjectIds || firstElectiveGroup.length === 0 || firstElectiveGroup.some(item => item.subjectId === form.electiveSubjectId)))
           : Boolean(currentSetupSubject && form.courseModes[currentSetupSubject.subjectId]);
 
   const next = () => {

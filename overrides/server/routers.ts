@@ -312,7 +312,7 @@ export const appRouter = router({
       return {
         ...profile,
         subjectIds: (profile.subjectIds ?? []).filter(subjectId => !retiredSubjectIds.has(subjectId)),
-        teacherSelections: stripSubjectMap(profile.teacherSelections),
+        teacherSelections: stripSubjectMap(profile.teacherSelections) as typeof profile.teacherSelections,
         selection: {
           ...selection,
           ...(Array.isArray(selection.subjectIds)

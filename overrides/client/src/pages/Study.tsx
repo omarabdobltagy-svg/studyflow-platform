@@ -437,7 +437,6 @@ export default function Study() {
                   return (
                     <motion.button key={id} type="button" aria-pressed={active}
                       onClick={() => {
-                        setShowFullCourseIndex(false);
                         setSubjectId(id);
                         setBranchId("");
                         setLessonId("");
