@@ -66,7 +66,7 @@ describe("smart planner NVIDIA fallback", () => {
     expect(mocks.invokeLLM).toHaveBeenCalledOnce();
     expect(mocks.invokeNvidiaLLM).toHaveBeenCalledOnce();
     const nvidiaRequest = mocks.invokeNvidiaLLM.mock.calls[0][0];
-    expect(nvidiaRequest.maxTokens).toBe(2_400);
+    expect(nvidiaRequest.maxTokens).toBe(4_096);
     expect(nvidiaRequest.response_format).toBeUndefined();
     expect(result.title).toBe(validPlan.title);
     expect(mocks.saveAiPlan).toHaveBeenCalledOnce();
