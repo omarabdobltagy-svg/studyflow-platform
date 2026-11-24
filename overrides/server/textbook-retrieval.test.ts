@@ -65,8 +65,8 @@ describe("metadata-only official first-part curriculum", () => {
     expect(result.passages).toHaveLength(0);
     expect(note).toContain("9 دروس");
     expect(note).toContain("العلم بين القانون والضمير");
-    expect(note).toContain("صفحات الكتاب 8–25");
-    expect(note).toContain("صعوبة مبدئية hard");
+    expect(note).toContain("ص8–25");
+    expect(note).toContain("الصعوبة المبدئية hard");
     expect(note).toContain("ثقة low");
   });
 
@@ -75,7 +75,7 @@ describe("metadata-only official first-part curriculum", () => {
     const note = result.coverageNotes.join("\n");
     expect(note).toContain("12 درسًا");
     expect(note).toContain("بناء الدولة المصرية واستمرارها عبر التاريخ");
-    expect(note).toContain("صفحات الكتاب 9–20");
+    expect(note).toContain("ص9–20");
     expect(note).toContain("مرتكزات الدور المصري إقليميًا ودوليًا");
     expect(note).toContain("الحجم small");
   });
@@ -85,7 +85,7 @@ describe("metadata-only official first-part curriculum", () => {
     const note = result.coverageNotes.join("\n");
     expect(note).toContain("14 درسًا");
     expect(note).toContain("كيف يعمل الذكاء الاصطناعي");
-    expect(note).toContain("صفحات الكتاب 12–17");
+    expect(note).toContain("ص12–17");
     expect(note).toContain("صعوبة مبدئية hard");
     expect(note).not.toContain("جمع البيانات وتنقيتها");
     expect(note).not.toContain("الشبكات العصبية والتعلم العميق");
@@ -98,8 +98,8 @@ describe("metadata-only official first-part curriculum", () => {
     expect(note).toContain("20 موضوعًا");
     expect(note).toContain("Living Well in a Complex World");
     expect(note).toContain("Social Media and Self-Image");
-    expect(note).toContain("صفحات الكتاب المطبوعة 12–38");
-    expect(note).toContain("حجم وصعوبة كل موضوع على حدة غير محسومين");
+    expect(note).toContain("صفحات مطبوعة 12–38");
+    expect(note).toContain("لا يوجد تقدير موثوق لصعوبة كل موضوع على حدة");
   });
 
   it("reports missing Italian source accurately without guessing page ranges or difficulty", () => {
