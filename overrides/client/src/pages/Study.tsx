@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { getSIECheckpointBranches, getSIECheckpointChoices, getSIECheckpointChoiceDisplayLabel, getSIECheckpointChoiceTypeLabel, getSIESubject, getSIETeacher, getSIETeachersForSubject, type SIESystemId } from "@shared/sie-catalog";
 import { calculateLearningGap } from "@shared/sie-learning-progress";
+import { estimateTermCheckpointFrontier, getChoicesForCurrentSchoolPart, getEgyptSchoolProgress } from "@shared/egypt-school-calendar";
 import { Activity, BookOpenText, Check, CircleHelp, Eye, Gauge, Mic2, RefreshCcw, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -31,8 +32,8 @@ export default function Study() {
   const [courseModeDrafts, setCourseModeDrafts] = useState<Record<string, "center" | "online">>({});
   const [teacherNameDrafts, setTeacherNameDrafts] = useState<Record<string, string>>({});
   const [markSessionLessonCompleted, setMarkSessionLessonCompleted] = useState(false);
-  const [customCheckpointTitle, setCustomCheckpointTitle] = useState("");
   const [manualBranchNavigation, setManualBranchNavigation] = useState(false);
+  const [showFullCourseIndex, setShowFullCourseIndex] = useState(false);
   const initialStudyParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
   const [subjectId, setSubjectId] = useState(initialStudyParams?.get("subject") || "");
   const [branchId, setBranchId] = useState(initialStudyParams?.get("branch") || "");
@@ -67,21 +68,7 @@ export default function Study() {
   const teacherSelectionDirty = courseMode !== persistedCourseMode
     || (selectedTeacherId || "__NONE__") !== savedTeacherChoiceValue
     || draftTeacherName.trim() !== persistedTeacherName.trim();
-  const storedCustomCurriculumEntries = (selection.customCurriculumEntries?.[subjectId] ?? []) as Array<any>;
-  const baseBranches = useMemo(() => getSIECheckpointBranches(subjectId), [subjectId]);
-  const branches = useMemo(() => baseBranches.map(branch => ({
-    ...branch,
-    choices: [
-      ...branch.choices,
-      ...storedCustomCurriculumEntries
-        .filter(entry => entry.branchId === branch.branchId && entry.teacherKey === currentTeacherKey)
-        .map(entry => ({
-          ...entry,
-          lessonType: entry.lessonType || "topic",
-          sourceLabel: entry.sourceLabel || "محتوى مخصص",
-        })),
-    ],
-  })), [baseBranches, storedCustomCurriculumEntries, currentTeacherKey]);
+  const branches = useMemo(() => getSIECheckpointBranches(subjectId), [subjectId]);
   const currentBranch = branches.find(branch => branch.branchId === branchId) ?? branches[0];
   const branchChoices = currentBranch?.choices ?? [];
   const lessons = branchChoices;
@@ -277,14 +264,6 @@ export default function Study() {
     },
     onError: error => toast.error(error.message || "تعذّر حفظ موضع المنهج."),
   });
-  const addCustomCheckpointMutation = trpc.learning.addCustomCurriculumCheckpoint.useMutation({
-    onSuccess: async () => {
-      setCustomCheckpointTitle("");
-      await Promise.all([utils.studentProfile.get.invalidate(), utils.learning.get.invalidate()]);
-      toast.success("تمت إضافة الدرس إلى فهرس المدرس، وأصبح متاحًا لتحديد موضعه وموضعك.");
-    },
-    onError: error => toast.error(error.message || "تعذّرت إضافة الدرس المخصص."),
-  });
 
   const saveTeacherSelection = trpc.studentProfile.updateTeacherSelection.useMutation({
     onSuccess: async () => {
@@ -356,22 +335,6 @@ export default function Study() {
     });
   };
 
-  const addCustomCheckpoint = () => {
-    if (!subjectId || !currentBranchId || !currentTeacherKey || teacherSelectionDirty) {
-      toast.error("احفظ اختيار المدرس أولًا قبل إضافة محتوى خاص بكورسه.");
-      return;
-    }
-    if (!customCheckpointTitle.trim()) {
-      toast.error("اكتب اسم الدرس أو المحاضرة أولًا.");
-      return;
-    }
-    addCustomCheckpointMutation.mutate({
-      subjectId,
-      branchId: currentBranchId,
-      title: customCheckpointTitle.trim(),
-      teacherKey: currentTeacherKey,
-    });
-  };
 
   const submitTeacherFrontier = () => {
     if (!subjectId || !currentBranchId) {
@@ -502,10 +465,10 @@ export default function Study() {
                     <motion.button key={id} type="button" aria-pressed={active}
                       onClick={() => {
                         setManualBranchNavigation(false);
+                        setShowFullCourseIndex(false);
                         setSubjectId(id);
                         setBranchId("");
                         setLessonId("");
-                        setCustomCheckpointTitle("");
                       }}
                       whileTap={{ scale: 0.98 }}
                       className={"min-h-12 rounded-xl border px-3 py-3 text-sm font-semibold transition " + (active ? "border-primary bg-primary/10 text-foreground ring-2 ring-primary/15" : "border-border bg-background text-muted-foreground hover:border-primary/35")}>
@@ -516,86 +479,77 @@ export default function Study() {
               </div>
             </div>
           )}
-          <div>
-            <p className="mb-3 text-sm font-bold">طريقة دراسة المادة</p>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <button type="button" aria-pressed={courseMode === "center"} onClick={() => {
-                setCourseModeDrafts(current => ({ ...current, [subjectId]: "center" }));
-                setTeacherChoiceDrafts(current => ({ ...current, [subjectId]: "__NONE__" }));
-                setTeacherNameDrafts(current => ({ ...current, [subjectId]: "" }));
-                setTeacherTeachingFrontierId("__UNKNOWN__");
-              }} className={"rounded-2xl border p-4 text-right transition " + (courseMode === "center" ? "border-primary bg-secondary/45 ring-1 ring-primary/20" : "border-border bg-card hover:border-primary/35")}>
-                <span className="block font-bold">سنتر / مجموعة</span>
-                <span className="mt-1 block text-xs leading-5 text-muted-foreground">تحضر شرح المادة مع مدرس أو مجموعة. بيانات تقدم المجموعة ستظهر في قسم المنهج فقط.</span>
-              </button>
-              <button type="button" aria-pressed={courseMode === "online"} onClick={() => {
-                setCourseModeDrafts(current => ({ ...current, [subjectId]: "online" }));
-                setTeacherChoiceDrafts(current => ({ ...current, [subjectId]: "__NONE__" }));
-                setTeacherNameDrafts(current => ({ ...current, [subjectId]: "" }));
-                setTeacherTeachingFrontierId("__UNKNOWN__");
-              }} className={"rounded-2xl border p-4 text-right transition " + (courseMode === "online" ? "border-primary bg-secondary/45 ring-1 ring-primary/20" : "border-border bg-card hover:border-primary/35")}>
-                <span className="block font-bold">أونلاين</span>
-                <span className="mt-1 block text-xs leading-5 text-muted-foreground">تتابع الشرح من منصة أو فيديوهات. اختر المدرس من قائمة المادة أو اكتبه يدويًا.</span>
-              </button>
+          <div className="space-y-3">
+            <div>
+              <p className="text-sm font-bold">مين المدرس اللي بتتابعه في المادة دي؟</p>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">اختَر المدرس أولًا. بعد كده حدّد سنتر أو أونلاين. اختيار المدرس يظل محفوظًا عند تغيير طريقة الدراسة.</p>
             </div>
-          </div>
-
-          {Boolean(courseMode) && (
-            <div className="space-y-3">
-              <div>
-                <p className="text-sm font-bold">مين المدرس اللي بتتابعه؟</p>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">اضغط على اسم واحد لتحديده. الاختيار يظهر بوضوح ويمكن تغييره في أي وقت.</p>
+            {teacherOptions.length ? (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {teacherOptions.map(teacher => {
+                  const selected = selectedTeacherId === teacher.teacherId;
+                  return (
+                    <button key={teacher.teacherId} type="button" aria-pressed={selected}
+                      onClick={() => {
+                        setTeacherChoiceDrafts(current => ({ ...current, [subjectId]: teacher.teacherId }));
+                        setTeacherNameDrafts(current => ({ ...current, [subjectId]: "" }));
+                        setTeacherTeachingFrontierId("__UNKNOWN__");
+                      }}
+                      className={"flex min-h-16 items-center justify-between gap-3 rounded-xl border p-4 text-right transition " + (selected ? "border-primary bg-primary/5 ring-2 ring-primary/20" : "border-border bg-background hover:border-primary/40")}>
+                      <span className="min-w-0">
+                        <span className="block font-bold">{teacher.nameAr}</span>
+                        <span className="mt-1 block text-[11px] text-muted-foreground">{teacher.brandName || teacher.selectionLabel}</span>
+                      </span>
+                      <span className={"flex size-6 shrink-0 items-center justify-center rounded-full border " + (selected ? "border-primary bg-primary text-primary-foreground" : "border-border text-transparent")}>
+                        {selected && <Check className="size-4" />}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
-              {teacherOptions.length ? (
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {teacherOptions.map(teacher => {
-                    const selected = selectedTeacherId === teacher.teacherId;
-                    return (
-                      <button key={teacher.teacherId} type="button" aria-pressed={selected}
-                        onClick={() => {
-                          setTeacherChoiceDrafts(current => ({ ...current, [subjectId]: teacher.teacherId }));
-                          setTeacherNameDrafts(current => ({ ...current, [subjectId]: "" }));
-                          setTeacherTeachingFrontierId("__UNKNOWN__");
-                        }}
-                        className={"flex min-h-16 items-center justify-between gap-3 rounded-xl border p-4 text-right transition " + (selected ? "border-primary bg-primary/5 ring-2 ring-primary/20" : "border-border bg-background hover:border-primary/40")}>
-                        <span className="min-w-0">
-                          <span className="block font-bold">{teacher.nameAr}</span>
-                          <span className="mt-1 block text-[11px] text-muted-foreground">{teacher.brandName || teacher.selectionLabel}</span>
-                        </span>
-                        <span className={"flex size-6 shrink-0 items-center justify-center rounded-full border " + (selected ? "border-primary bg-primary text-primary-foreground" : "border-border text-transparent")}>
-                          {selected && <Check className="size-4" />}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="rounded-xl border border-dashed border-border bg-muted/20 p-3 text-xs leading-6 text-muted-foreground">لا توجد أسماء موثقة في القائمة لهذه المادة والنظام حاليًا. يمكنك كتابة اسم المدرس يدويًا.</p>
-              )}
-              <button type="button" aria-pressed={!selectedTeacherId && !teacherName.trim()}
-                onClick={() => {
-                  setTeacherChoiceDrafts(current => ({ ...current, [subjectId]: "__NONE__" }));
-                  setTeacherNameDrafts(current => ({ ...current, [subjectId]: "" }));
-                  setTeacherTeachingFrontierId("__UNKNOWN__");
-                }}
-                className={"rounded-lg border px-3 py-2 text-xs font-semibold transition " + (!selectedTeacherId && !teacherName.trim() ? "border-primary bg-secondary/40 text-foreground" : "border-border text-muted-foreground hover:border-primary/30")}>
-                لم أحدد مدرسًا بعد
-              </button>
-            </div>
-          )}
-
-          {Boolean(courseMode) && (
+            ) : (
+              <p className="rounded-xl border border-dashed border-border bg-muted/20 p-3 text-xs leading-6 text-muted-foreground">لا توجد أسماء مدرّسين مُدرجة لهذه المادة في القائمة بعد. يمكنك إدخال اسم المدرس، وسيظل فهرس المادة المعتمد هو مرجع الدروس.</p>
+            )}
+            <button type="button" aria-pressed={!selectedTeacherId && !teacherName.trim()}
+              onClick={() => {
+                setTeacherChoiceDrafts(current => ({ ...current, [subjectId]: "__NONE__" }));
+                setTeacherNameDrafts(current => ({ ...current, [subjectId]: "" }));
+                setTeacherTeachingFrontierId("__UNKNOWN__");
+              }}
+              className={"rounded-lg border px-3 py-2 text-xs font-semibold transition " + (!selectedTeacherId && !teacherName.trim() ? "border-primary bg-secondary/40 text-foreground" : "border-border text-muted-foreground hover:border-primary/30")}>
+              لم أحدد مدرسًا بعد
+            </button>
             <label className="block text-sm font-semibold">
-              {courseMode === "center" ? "مدرس السنتر (لو مش موجود في القائمة)" : "مدرس آخر (لو مش موجود في القائمة)"}
+              اسم مدرس آخر (لو غير موجود بالقائمة)
               <Input value={teacherName} onChange={event => {
                 setTeacherNameDrafts(current => ({ ...current, [subjectId]: event.target.value }));
                 if (event.target.value.trim()) {
                   setTeacherChoiceDrafts(current => ({ ...current, [subjectId]: "__NONE__" }));
                   setTeacherTeachingFrontierId("__UNKNOWN__");
                 }
-              }} placeholder={courseMode === "center" ? "اكتب اسم مدرس السنتر" : "اكتب اسم المدرس يدويًا"} maxLength={120} className="mt-2 h-12 rounded-xl bg-background" />
+              }} placeholder="اكتب اسم المدرس" maxLength={120} className="mt-2 h-12 rounded-xl bg-background" />
             </label>
-          )}
+          </div>
+
+          <div>
+            <p className="mb-3 text-sm font-bold">طريقة الدراسة</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <button type="button" aria-pressed={courseMode === "center"} onClick={() => {
+                setCourseModeDrafts(current => ({ ...current, [subjectId]: "center" }));
+                setTeacherTeachingFrontierId("__UNKNOWN__");
+              }} className={"rounded-2xl border p-4 text-right transition " + (courseMode === "center" ? "border-primary bg-secondary/45 ring-1 ring-primary/20" : "border-border bg-card hover:border-primary/35")}>
+                <span className="block font-bold">سنتر / مجموعة</span>
+                <span className="mt-1 block text-xs leading-5 text-muted-foreground">تحضر شرح المادة مع مدرس أو مجموعة.</span>
+              </button>
+              <button type="button" aria-pressed={courseMode === "online"} onClick={() => {
+                setCourseModeDrafts(current => ({ ...current, [subjectId]: "online" }));
+                setTeacherTeachingFrontierId("__UNKNOWN__");
+              }} className={"rounded-2xl border p-4 text-right transition " + (courseMode === "online" ? "border-primary bg-secondary/45 ring-1 ring-primary/20" : "border-border bg-card hover:border-primary/35")}>
+                <span className="block font-bold">أونلاين</span>
+                <span className="mt-1 block text-xs leading-5 text-muted-foreground">تتابع الشرح من منصة أو فيديوهات.</span>
+              </button>
+            </div>
+          </div>
 
           <div className="flex flex-col gap-3 border-t border-border/70 pt-4 sm:flex-row sm:items-center sm:justify-between">
             <p className={"text-xs leading-6 " + (teacherSelectionDirty ? "text-amber-700 dark:text-amber-300" : "text-muted-foreground")}>
@@ -618,25 +572,30 @@ export default function Study() {
           {!teacherReferenceName && (
             <p className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-sm leading-6 text-muted-foreground">احفظ اسم المدرس أولًا في قسم اختيار المدرس حتى نربط موضع الشرح بالشخص الصحيح.</p>
           )}
-          <div className="rounded-2xl border border-border/70 bg-muted/15 p-4">
-            <p className="text-sm font-bold">فيه درس أو محاضرة خاصة بالمدرس مش موجودة في الفهرس؟</p>
-            <p className="mt-1 text-xs leading-6 text-muted-foreground">أضف عنوانها هنا؛ ستظهر ضمن اختيارات موضع المدرس والطالب في هذا المسار فقط.</p>
-            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-              <Input
-                value={customCheckpointTitle}
-                onChange={event => setCustomCheckpointTitle(event.target.value)}
-                placeholder="اسم الدرس أو المحاضرة"
-                maxLength={180}
-                disabled={!currentTeacherKey || teacherSelectionDirty || addCustomCheckpointMutation.isPending}
-                className="h-11 rounded-xl bg-background"
-              />
-              <Button type="button" onClick={addCustomCheckpoint}
-                disabled={!customCheckpointTitle.trim() || !currentTeacherKey || teacherSelectionDirty || addCustomCheckpointMutation.isPending}
-                variant="outline" className="shrink-0 rounded-xl">
-                {addCustomCheckpointMutation.isPending ? "جارٍ الإضافة..." : "إضافة إلى الفهرس"}
-              </Button>
-            </div>
-          </div>
+          {isLinearSubject && branchChoices.length > 0 && (() => {
+            const calendar = getEgyptSchoolProgress(new Date());
+            const partChoices = getChoicesForCurrentSchoolPart(branchChoices, new Date());
+            const expected = estimateTermCheckpointFrontier(partChoices.length, new Date());
+            const focusedLimit = Math.min(partChoices.length, Math.max(3, expected + 2));
+            const focused = showFullCourseIndex ? branchChoices : partChoices.slice(0, focusedLimit);
+            const preservedIds = [teacherTeachingFrontierId, lastCompletedLessonId].filter(Boolean);
+            const preserved = branchChoices.filter(choice => preservedIds.includes(choice.nodeId));
+            const display = [...new Map([...focused, ...preserved].map(choice => [choice.nodeId, choice])).values()]
+              .sort((a, b) => branchChoices.findIndex(item => item.nodeId === a.nodeId) - branchChoices.findIndex(item => item.nodeId === b.nodeId));
+            const hiddenCount = branchChoices.length - display.length;
+            return (
+              <div className="rounded-xl border border-primary/15 bg-primary/[0.035] p-3">
+                <p className="text-xs font-semibold">تركيز الفهرس حسب تقويم المدارس {calendar.academicYear}</p>
+                <p className="mt-1 text-xs leading-6 text-muted-foreground">
+                  {calendar.labelAr}: متوقع توزيع الدروس تدريجيًا خلال أسابيع الترم. المعروض اقتراح زمني تقريبي، وليس ادعاءً بأن المدرس شرح هذه الدروس بالفعل.
+                </p>
+                <button type="button" onClick={() => setShowFullCourseIndex(value => !value)} className="mt-2 text-xs font-bold text-primary underline underline-offset-4">
+                  {showFullCourseIndex ? "عرض الدروس المتوقعة حتى الآن فقط" : "عرض الفهرس الكامل"}
+                </button>
+                {hiddenCount > 0 && !showFullCourseIndex && <span className="mr-2 text-[11px] text-muted-foreground">· {hiddenCount} نقطة لاحقة مخفية مؤقتًا</span>}
+              </div>
+            );
+          })()}
           {branchChoices.length > 0 ? (
             <ChoiceButtonGroup
               label={teacherReferenceName ? "آخر درس انتهى " + teacherReferenceName + " من شرحه" : "موضع شرح المدرس"}
@@ -647,7 +606,7 @@ export default function Study() {
               options={[
                 { value: "__UNKNOWN__", label: "مش متأكد من موضعه" },
                 { value: "__NOT_STARTED__", label: "لم يبدأ هذا الفرع" },
-                ...branchChoices.map((choice, index) => ({
+                ...(isLinearSubject && !showFullCourseIndex ? getChoicesForCurrentSchoolPart(branchChoices, new Date()).slice(0, Math.min(getChoicesForCurrentSchoolPart(branchChoices, new Date()).length, Math.max(3, estimateTermCheckpointFrontier(getChoicesForCurrentSchoolPart(branchChoices, new Date()).length, new Date()) + 2))) : branchChoices).map((choice, index) => ({
                   value: choice.nodeId,
                   label: choice.title,
                   description: choice.courseSequenceNumber
@@ -658,7 +617,7 @@ export default function Study() {
             />
           ) : (
             <div className="space-y-3">
-              <p className="rounded-xl border border-dashed border-border p-4 text-sm leading-6 text-muted-foreground">هذا المسار لا يحتوي على دروس مسجلة بعد. يمكنك حفظ أن المدرس لم يبدأ أو أن موضعه غير معروف، ثم إضافة عناوين الكورس تدريجيًا.</p>
+              <p className="rounded-xl border border-dashed border-border p-4 text-sm leading-6 text-muted-foreground">لا توجد نقاط منهج مسجلة لهذا المسار في الفهرس الحالي؛ لم يتم إنشاء دروس افتراضية أو اختراع عناوين بديلة.</p>
               <ChoiceButtonGroup
                 label="حالة المسار حاليًا"
                 value={teacherTeachingFrontierId}
@@ -749,6 +708,7 @@ export default function Study() {
                   onClick={() => {
                     setManualBranchNavigation(true);
                     setBranchId(branch.branchId);
+                    setShowFullCourseIndex(false);
                     setLessonId("");
                     setCustomCheckpointTitle("");
                   }}
@@ -780,9 +740,14 @@ export default function Study() {
                 {saveBranchFrontier.isPending && <span className="shrink-0 rounded-full bg-primary/10 px-3 py-2 text-[11px] font-semibold text-primary">جارٍ الحفظ...</span>}
               </div>
 
+              {isLinearSubject && branchChoices.length > 0 && (
+                <button type="button" onClick={() => setShowFullCourseIndex(value => !value)} className="mb-3 text-xs font-bold text-primary underline underline-offset-4">
+                  {showFullCourseIndex ? "إخفاء الدروس اللاحقة" : "عرض الفهرس الكامل للمقرر"}
+                </button>
+              )}
               {branchChoices.length ? (
                 <div className="grid gap-2 sm:grid-cols-2">
-                  {branchChoices.map((choice, index) => {
+                  {(isLinearSubject && !showFullCourseIndex ? getChoicesForCurrentSchoolPart(branchChoices, new Date()).slice(0, Math.min(getChoicesForCurrentSchoolPart(branchChoices, new Date()).length, Math.max(3, estimateTermCheckpointFrontier(getChoicesForCurrentSchoolPart(branchChoices, new Date()).length, new Date()) + 2))) : branchChoices).map((choice, index) => {
                     const selected = lastCompletedLessonId === choice.nodeId;
                     const sequence = choice.courseSequenceNumber
                       ? "تسلسل الكورس " + choice.courseSequenceNumber
@@ -811,7 +776,7 @@ export default function Study() {
                   })}
                 </div>
               ) : (
-                <p className="rounded-xl border border-dashed border-border bg-background p-4 text-sm leading-6 text-muted-foreground">لا توجد دروس مسجلة في هذا المسار بعد. يمكنك إضافة دروس المدرس في القسم السابق، ثم تحديد موضعك منها.</p>
+                <p className="rounded-xl border border-dashed border-border bg-background p-4 text-sm leading-6 text-muted-foreground">لا توجد نقاط منهج معتمدة في هذا المسار حاليًا.</p>
               )}
 
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -1070,10 +1035,9 @@ function ChoiceButtonGroup({
         {options.map(option => {
           const selected = value === option.value;
           return (
-            <motion.button key={option.value} type="button" aria-pressed={selected}
+            <button key={option.value} type="button" aria-pressed={selected}
               disabled={disabled}
               onClick={() => onChange(option.value)}
-              whileTap={disabled ? undefined : { scale: 0.985 }}
               className={"flex min-h-12 items-center justify-between gap-2 rounded-xl border px-3 py-3 text-right transition " + (disabled ? "cursor-not-allowed opacity-50 " : "") + (selected ? "border-primary bg-primary/10 text-foreground ring-2 ring-primary/10" : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground")}>
               <span className="min-w-0">
                 <span className="block text-sm font-semibold leading-5">{option.label}</span>
@@ -1082,7 +1046,7 @@ function ChoiceButtonGroup({
               <span className={"flex size-6 shrink-0 items-center justify-center rounded-full border " + (selected ? "border-primary bg-primary text-primary-foreground" : "border-border text-transparent")}>
                 {selected && <Check className="size-3.5" />}
               </span>
-            </motion.button>
+            </button>
           );
         })}
       </div>
