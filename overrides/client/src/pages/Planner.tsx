@@ -46,7 +46,7 @@ export default function Planner() {
     const intent = prompt.trim() || "حلّل ملفي الدراسي كاملًا وحدد أهم ما أحتاج إلى إنجازه الآن. ابنِ خطة واقعية حسب المنهج والتراكم والصعوبة والوقت المتاح.";
     const extraContext = contextText.trim();
     const request = extraContext
-      ? intent + "\\n\\nالسياق الإضافي والظروف الحالية:\\n" + extraContext
+      ? intent + "\n\nالسياق الإضافي والظروف الحالية:\n" + extraContext
       : intent;
     generate.mutate({ prompt: request, includeStudentProfile: true, dailyMinutes, startDate });
   };
