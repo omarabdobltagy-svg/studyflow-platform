@@ -452,14 +452,21 @@ export async function generatePersonalPlan(
     throw new Error("تعذّر إنشاء خطة دراسية صالحة. لم يتم حفظ أي بيانات ناقصة.");
   }
 
-  const minutesByDay = new Map<string, number>();
-  for (const step of plan.steps) {
-    minutesByDay.set(step.day, (minutesByDay.get(step.day) ?? 0) + step.minutes);
-  }
-  const overloadedDay = [...minutesByDay.entries()].find(([, minutes]) => minutes > dailyMinutes);
-  if (overloadedDay) {
-    throw new Error("الخطة المقترحة تجاوزت حدك اليومي في " + overloadedDay[0] + " (" + overloadedDay[1] + " دقيقة مقابل " + dailyMinutes + "). أعد المحاولة لتوليد توزيع أخف.");
-  }
+  // Reassign sequential tasks to real daily capacity rather than rejecting an otherwise valid plan
+  // because the model grouped too many items under the same display-day label.
+  let scheduleDay = 1;
+  let usedMinutes = 0;
+  plan = {
+    ...plan,
+    steps: plan.steps.map(step => {
+      if (usedMinutes > 0 && usedMinutes + step.minutes > dailyMinutes) {
+        scheduleDay += 1;
+        usedMinutes = 0;
+      }
+      usedMinutes += step.minutes;
+      return { ...step, day: "اليوم " + scheduleDay };
+    }),
+  };
   await saveAiPlan(userId, { prompt, title: plan.title, planJson: JSON.stringify(plan) });
   return plan;
 }
