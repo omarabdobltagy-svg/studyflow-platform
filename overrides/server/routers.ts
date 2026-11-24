@@ -635,6 +635,7 @@ export const appRouter = router({
           customTeacherName: Boolean(!teacher && input.teacherName.trim()),
         });
         queueDailyPlanReconciliation(ctx.user.id);
+        queueDailyPlanReconciliation(ctx.user.id);
         return { success: true, teacherId, courseMode: input.courseMode };
       }),
     updateTeacherProgress: protectedProcedure
@@ -1694,6 +1695,7 @@ export const appRouter = router({
           schoolFrontierId: schoolFrontierId ?? "__UNKNOWN__",
           gapCount: learningGap.gapCount,
         });
+        queueDailyPlanReconciliation(ctx.user.id);
         return { success: true, record, learningGap, branchId: branch?.branchId ?? null };
       }),
     activeExternalSession: protectedProcedure.query(async ({ ctx }) => {
