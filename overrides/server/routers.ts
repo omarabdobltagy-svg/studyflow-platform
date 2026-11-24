@@ -338,6 +338,7 @@ export const appRouter = router({
             return [branchId, {
               ...record,
               teacherId: teacherId,
+              teacherName: nextCustomTeacherName,
               teacherTeachingFrontierId: "__UNKNOWN__",
               teacherTeachingFrontierEvidence: null,
               learningGap,
