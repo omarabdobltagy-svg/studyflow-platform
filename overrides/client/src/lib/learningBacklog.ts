@@ -167,6 +167,15 @@ export function buildLearningBacklogSummary(
           referencePosition: snapshot.referencePosition ?? null,
         };
       }
+      if (snapshot && (snapshot.studentPosition != null || snapshot.referencePosition != null)) {
+        return {
+          ...snapshot,
+          gapCount: snapshot.gapCount ?? null,
+          aheadCount: snapshot.aheadCount ?? null,
+          studentPosition: snapshot.studentPosition ?? null,
+          referencePosition: snapshot.referencePosition ?? null,
+        } as LearningGapResult;
+      }
       // Reconstruct from the saved selection when a stale/legacy API snapshot
       // did not map that branch, while still preserving unknown as unknown.
       return deriveSavedBranchGap(subjectId, branch.branchId, branch.choices, subjectRecord, sources);
