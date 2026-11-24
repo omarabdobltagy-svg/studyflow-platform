@@ -13,8 +13,8 @@ describe("buildLearningBacklogSummary", () => {
       [subjectId],
       {
         [subjectId]: {
-          [first.branchId]: { status: "calculated", gapCount: 3, aheadCount: 0 },
-          [second.branchId]: { status: "student_position_missing", gapCount: null },
+          [first.branchId]: { status: "calculated", gapCount: 3, aheadCount: 0, studentPosition: 1, referencePosition: 4 },
+          [second.branchId]: { status: "student_position_missing", gapCount: null, studentPosition: null, referencePosition: 5 },
         },
       },
       { [subjectId]: 20 },
@@ -109,6 +109,26 @@ describe("buildLearningBacklogSummary", () => {
     expect(result.totalBranches).toBe(branches.length);
     expect(result.uncalculatedBranches).toBe(branches.length);
     expect(result.referenceMissingBranches).toBe(branches.length);
+  });
+
+  it("keeps the two missing-position causes separate", () => {
+    const first = branches[0];
+    const second = branches[1];
+    const result = buildLearningBacklogSummary(
+      [subjectId],
+      {
+        [subjectId]: {
+          [first.branchId]: { status: "reference_missing", gapCount: null, studentPosition: 2, referencePosition: null },
+          [second.branchId]: { status: "student_position_missing", gapCount: null, studentPosition: null, referencePosition: 4 },
+        },
+      },
+      {},
+    )[0];
+
+    expect(result.studentMissingBranches).toBe(1);
+    expect(result.referenceMissingBranches).toBe(branches.length - 1);
+    expect(result.coverageLabel).toContain("ينقصها موضعك");
+    expect(result.coverageLabel).toContain("ينقصها موضع المدرس/المجموعة");
   });
 
   it("does not report negative gaps as backlog", () => {
