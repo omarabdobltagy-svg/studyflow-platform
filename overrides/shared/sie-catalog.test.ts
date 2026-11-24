@@ -117,6 +117,17 @@ describe("subject curriculum layouts", () => {
     expect(branches.find(branch => branch.branchId === "ENG_TEXTBOOK")?.choices).toHaveLength(20);
   });
 
+  it("gives subjects without a loaded index one editable linear curriculum path", () => {
+    const branches = getSIECheckpointBranches("PHY_G2_BAC_PENDING");
+    expect(branches).toHaveLength(1);
+    expect(branches[0]).toMatchObject({
+      branchId: "PHY_G2_BAC_PENDING:FULL",
+      branchTitle: "المقرر بالكامل",
+      branchType: "course_track",
+      choices: [],
+    });
+  });
+
   it("does not truncate a teacher's available course index to the first five lessons", () => {
     const teacher = getSIETeachersForSubject("ENG1_G2_BAC", "EG_BACCALAUREATE")[0];
     expect(teacher).toBeDefined();
