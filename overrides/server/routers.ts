@@ -1284,10 +1284,8 @@ export const appRouter = router({
         const courseMode = selection.courseModes?.[input.subjectId] ?? subjectRecord.courseMode ?? previous.courseMode ?? "online";
         const teacherChoice = selection.teacherChoices?.[input.subjectId] ?? profile.teacherSelections?.[input.subjectId] ?? null;
         const customTeacherName = selection.customTeacherNames?.[input.subjectId] ?? "";
-        if (input.teacherTeachingFrontierId !== undefined && input.teacherTeachingFrontierId !== "__UNKNOWN__"
-          && (!teacherChoice || teacherChoice === "__SKIP__") && !customTeacherName.trim()) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "احفظ اختيار المدرس أو اسمه أولًا قبل تسجيل موضع شرحه." });
-        }
+        // Teacher frontier is a reported curriculum position; recording it must not require
+        // choosing a teacher identity in this progress screen.
         if ((input.teacherTeachingFrontierId !== undefined || input.schoolClassFrontierId !== undefined) && courseMode !== "center" && courseMode !== "online") {
           throw new TRPCError({ code: "BAD_REQUEST", message: "احفظ طريقة الدراسة أولًا." });
         }
