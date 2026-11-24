@@ -617,31 +617,60 @@ export async function ensureDailyPlanTasks(
 ) {
   const database = await requireDb();
   const steps = normalizeApprovedPlanSteps(plan.steps);
-  if (steps.length === 0) return { addedCount: 0, taskCount: 0 };
+  if (steps.length === 0) return { addedCount: 0, updatedCount: 0, taskCount: 0 };
 
   const dueDates = schedulePlanStepDates(startDate, steps, dailyMinutes);
   const dateBoundary = new Date(`${startDate}T00:00:00.000Z`);
   const titles = Array.from(new Set(steps.map(step => step.title)));
+  const dailyTaskMarker = "[StudyFlow:daily-plan]";
 
   return database.transaction(async tx => {
     const existing = await tx.select({
+      id: tasks.id,
       title: tasks.title,
+      notes: tasks.notes,
       status: tasks.status,
       dueAt: tasks.dueAt,
     }).from(tasks).where(and(eq(tasks.userId, userId), inArray(tasks.title, titles)));
 
-    const reusableTitles = new Set(existing
-      .filter(task => task.status === "todo" || (task.dueAt && task.dueAt >= dateBoundary))
-      .map(task => task.title));
-    const missing = steps
-      .map((step, index) => ({ step, dueAt: dueDates[index] }))
-      .filter(item => !reusableTitles.has(item.step.title));
+    const reusable = new Set<string>();
+    const updateByTitle = new Map(existing
+      .filter(task => task.status === "todo" && task.notes?.startsWith(dailyTaskMarker))
+      .map(task => [task.title, task]));
+    for (const task of existing) {
+      if (task.status === "todo" || (task.dueAt && task.dueAt >= dateBoundary)) {
+        reusable.add(task.title);
+      }
+    }
+
+    let updatedCount = 0;
+    const missing: Array<{ step: typeof steps[number]; dueAt: Date }> = [];
+    for (let index = 0; index < steps.length; index += 1) {
+      const step = steps[index];
+      const dueAt = dueDates[index];
+      if (!reusable.has(step.title)) {
+        missing.push({ step, dueAt });
+        continue;
+      }
+      const priorDailyTask = updateByTitle.get(step.title);
+      if (priorDailyTask) {
+        await tx.update(tasks).set({
+          notes: `${dailyTaskMarker} ${step.detail || `خطوة ${step.day} من خطة «${plan.title.trim()}».`}`,
+          category: step.category,
+          priority: step.priority === "critical" || step.priority === "high" ? "high"
+            : step.priority === "low" ? "low" : "medium",
+          estimatedMinutes: step.minutes,
+          dueAt,
+        }).where(and(eq(tasks.id, priorDailyTask.id), eq(tasks.userId, userId), eq(tasks.status, "todo")));
+        updatedCount += 1;
+      }
+    }
 
     if (missing.length > 0) {
       await tx.insert(tasks).values(missing.map(({ step, dueAt }) => ({
         userId,
         title: step.title,
-        notes: step.detail || `خطوة ${step.day} من خطة «${plan.title.trim()}».`,
+        notes: `${dailyTaskMarker} ${step.detail || `خطوة ${step.day} من خطة «${plan.title.trim()}».`}`,
         category: step.category,
         priority: step.priority === "critical" || step.priority === "high" ? "high" as const
           : step.priority === "low" ? "low" as const : "medium" as const,
@@ -649,7 +678,7 @@ export async function ensureDailyPlanTasks(
         dueAt,
       })));
     }
-    return { addedCount: missing.length, taskCount: steps.length };
+    return { addedCount: missing.length, updatedCount, taskCount: steps.length };
   });
 }
 
