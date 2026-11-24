@@ -161,6 +161,10 @@ export default function Home() {
   const profile = trpc.studentProfile.get.useQuery();
   const autoPlanRequested = useRef(false);
   const dailyPlan = trpc.plans.ensureDaily.useMutation({
+    onSuccess: () => {
+      void utils.dashboard.summary.invalidate();
+      void utils.tasks.list.invalidate();
+    },
     onError: error => toast.error("تعذّر تحديث خطة اليوم: " + error.message),
   });
   const toggleTask = trpc.tasks.toggle.useMutation({ onSuccess: () => void utils.dashboard.summary.invalidate() });
