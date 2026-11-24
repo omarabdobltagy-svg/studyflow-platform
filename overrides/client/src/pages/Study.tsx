@@ -186,7 +186,7 @@ export default function Study() {
         }
         toast.success("تم حفظ موضعك واكتمل المرور على فروع المادة.");
       } else {
-        toast.success("تم حفظ موضع المدرس / المجموعة فقط. موضعك أنت لم يتغير.");
+        toast.success("تم حفظ التقدم.");
       }
     },
     onError: error => toast.error(error.message || "تعذّر حفظ موضع المنهج."),
