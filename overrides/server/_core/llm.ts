@@ -381,7 +381,7 @@ async function pollNvidiaPendingResponse(
   }
 
   const statusBaseUrl = resolveApiUrl(provider.apiBaseUrl, provider.fallbackBaseUrl)
-    .replace(/\\/chat\\/completions\\/?$/i, "");
+    .replace(/\/chat\/completions\/?$/i, "");
   const statusUrl = statusBaseUrl + "/status/" + encodeURIComponent(requestId);
   const deadline = Date.now() + NVIDIA_POLL_TIMEOUT_MS;
 
