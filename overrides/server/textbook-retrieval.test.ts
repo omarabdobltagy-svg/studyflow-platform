@@ -86,7 +86,7 @@ describe("metadata-only official first-part curriculum", () => {
     expect(note).toContain("14 درسًا");
     expect(note).toContain("كيف يعمل الذكاء الاصطناعي");
     expect(note).toContain("ص12–17");
-    expect(note).toContain("صعوبة مبدئية hard");
+    expect(note).toContain("الصعوبة المبدئية hard");
     expect(note).not.toContain("جمع البيانات وتنقيتها");
     expect(note).not.toContain("الشبكات العصبية والتعلم العميق");
   });
@@ -108,7 +108,7 @@ describe("metadata-only official first-part curriculum", () => {
     expect(note).toContain("Dove abiti?");
     expect(note).toContain("Tempo libero");
     expect(note).toContain("ملف الكتاب الأصلي غير موجود");
-    expect(note).toContain("غير محسومين");
+    expect(note).toContain("يلزم ملف الكتاب لتحديد الصفحات والحجم والمحتوى");
   });
 
   it("keeps retrieved text passages empty and excludes every Part 2 source", () => {
