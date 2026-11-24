@@ -159,6 +159,24 @@ export function estimateTermCheckpointFrontier(totalTermCheckpoints: number, val
  * Split a linear textbook into its first- and second-term parts using the
  * part labels already attached to the official catalogue entries.
  */
+/**
+ * Default selector window: the current term's expected-to-date checkpoints
+ * plus one nearby checkpoint, not the whole-year catalog. Callers may preserve
+ * an already saved frontier and expose the full catalogue through an explicit
+ * "show all" control.
+ */
+export function getExpectedToDateChoices<T extends { sourceLabel?: string; unitNumber?: number }>(
+  choices: T[],
+  value: string | Date = new Date(),
+  lookAhead = 1,
+): T[] {
+  const currentPart = getChoicesForCurrentSchoolPart(choices, value);
+  const expected = estimateTermCheckpointFrontier(currentPart.length, value);
+  const safeLookAhead = Number.isFinite(lookAhead) ? Math.max(0, Math.floor(lookAhead)) : 1;
+  const visibleCount = Math.min(currentPart.length, Math.max(1, expected + safeLookAhead));
+  return currentPart.slice(0, visibleCount);
+}
+
 export function getChoicesForCurrentSchoolPart<T extends { sourceLabel?: string; unitNumber?: number }>(
   choices: T[],
   value: string | Date = new Date(),
