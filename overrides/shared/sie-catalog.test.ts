@@ -215,4 +215,21 @@ describe("retired second-language subject", () => {
   });
 });
 
+
+  it("exposes more than six full-year Arabic grammar checkpoints", () => {
+    const grammar = getSIECheckpointBranches("ARB_G2_BAC")
+      .find(branch => branch.branchId === "ARB_NAHW");
+    expect(grammar).toBeDefined();
+    expect(grammar!.choices.length).toBeGreaterThan(6);
+  });
+
+  it("does not show teacher-course sequence numbering in lesson display labels", () => {
+    const choice = getSIECheckpointChoices("ARB_G2_BAC")
+      .find(item => typeof item.courseSequenceNumber === "number");
+    expect(choice).toBeDefined();
+    const label = getSIECheckpointChoiceDisplayLabel(choice!);
+    expect(label).not.toContain("من 21");
+    expect(label).toContain(choice!.title);
+  });
+
 });
