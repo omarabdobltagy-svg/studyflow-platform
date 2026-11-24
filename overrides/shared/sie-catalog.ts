@@ -318,7 +318,7 @@ export const SIE_TEACHERS: SIETeacher[] = [
     studentAttendedFrontierStatus: "requires_student_signal_or_SIE_progress_event",
     mappedCurriculumNodeIds: [],
     evidenceLabel: "وجود منصة وقناة ومحتوى عام",
-    confidenceLabel: "موضع الكورس المدفوع يحتاج تأكيدًا من الطالب"
+    confidenceLabel: "موضع الكورس المدفوع يحتاج تأكيدًا من الطالب",
     evidenceNote: "المتاح يثبت وجود المدرس ومحتوى عام فقط؛ لا يثبت ترتيب الكورس المدفوع.",
     systemCourseVerification: { EG_BACCALAUREATE: "public_2027_course_evidence_found", EG_GENERAL_SECONDARY: "not_verified_for_2026_2027" },
     sourceId: "SRC_SHERIF",
