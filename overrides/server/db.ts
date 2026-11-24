@@ -636,7 +636,7 @@ export async function ensureDailyPlanTasks(
     const reusable = new Set<string>();
     const updateByTitle = new Map(existing
       .filter(task => task.status === "todo" && task.notes?.startsWith(dailyTaskMarker))
-      .map(task => [task.title, task]));
+      .map(task => [task.title, task] as const));
     for (const task of existing) {
       if (task.status === "todo" || (task.dueAt && task.dueAt >= dateBoundary)) {
         reusable.add(task.title);
