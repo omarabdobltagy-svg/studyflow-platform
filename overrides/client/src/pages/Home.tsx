@@ -334,15 +334,21 @@ export default function Home() {
           </section>
           <section className="sf-home-daily-plan-card">
             <div className="sf-home-intelligence-heading">
-              <div><span>STUDYFLOW / DAILY PLAN</span><h3>خطة الدراسة الحالية</h3><p>تُنشأ من ملفك تلقائيًا، ويُعاد تحديثها عند مرور 24 ساعة على آخر خطة محفوظة وفتحك للمساحة.</p></div>
+              <div><span>STUDYFLOW / DAILY PLAN</span><h3>خطة الدراسة الحالية</h3><p>تُنشأ من مواضعك والتراكم تلقائيًا، وتُضاف خطواتها إلى مهامك من غير اعتماد يدوي أو تكرار.</p></div>
               <Sparkles size={19} />
             </div>
             {dailyPlan.isPending ? <div className="sf-home-intelligence-loading">المخطط بيقرأ المنهج والتراكم ويرتب أولويات اليوم...</div>
-              : dailyPlan.data?.plan ? <><div className="sf-home-plan-status"><span className="sf-home-plan-status-dot" />{dailyPlan.data.generated ? "تم إنشاء خطة محدثة تلقائيًا" : "خطة محفوظة وجاهزة للمتابعة"}</div>
+              : dailyPlan.data?.plan ? <><div className="sf-home-plan-status"><span className="sf-home-plan-status-dot" />{dailyPlan.data.generated ? "تم إنشاء خطة اليوم تلقائيًا" : "خطة اليوم محفوظة وجاهزة للمتابعة"}</div>
                 <h4>{dailyPlan.data.plan.title}</h4>
                 <p className="sf-home-plan-summary">{dailyPlan.data.plan.summary}</p>
                 <div className="sf-home-plan-steps">{dailyPlan.data.plan.steps.slice(0, 3).map((step, index) => <div key={index}><span>{step.day}</span><strong>{step.title}</strong><small>{step.minutes} دقيقة</small></div>)}</div>
-                <div className="sf-home-plan-footer"><span>{dailyPlan.data.plan.steps.length} خطوة · {dailyPlan.data.plan.durationLabel}</span><Button type="button" onClick={() => setLocation("/planner")} className="sf-home-plan-button">مراجعة الخطة <ArrowLeft size={14} /></Button></div>
+                <div className="sf-home-plan-footer">
+                  <span>{dailyPlan.data.plan.steps.length} خطوة · أُضيفت {dailyPlan.data.tasksAdded} مهمة إلى قائمة مهامك</span>
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="button" onClick={() => setLocation("/tasks")} className="sf-home-plan-button">فتح المهام <ArrowLeft size={14} /></Button>
+                    <Button type="button" onClick={() => setLocation("/planner")} variant="ghost" className="sf-home-plan-secondary">تفاصيل الخطة</Button>
+                  </div>
+                </div>
               </> : <div className="sf-home-intelligence-empty">أكمل ملفك الدراسي وحدد المواد لبدء إنشاء خطتك التلقائية.</div>}
           </section>
         </motion.section>
