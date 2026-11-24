@@ -303,11 +303,62 @@ export const appRouter = router({
           }
         }
 
+        const previousTeacherId = selection.teacherChoices?.[input.subjectId]
+          ?? profile.teacherSelections?.[input.subjectId]
+          ?? "__SKIP__";
+        const previousCustomTeacherName = selection.customTeacherNames?.[input.subjectId] ?? "";
+        const nextCustomTeacherName = !teacher && input.teacherName.trim() ? input.teacherName.trim() : "";
+        const teacherIdentityChanged = previousTeacherId !== (teacherId ?? "__SKIP__")
+          || previousCustomTeacherName.trim() !== nextCustomTeacherName.trim();
+
         const teacherChoices = { ...((selection.teacherChoices ?? {}) as Record<string, string>), [input.subjectId]: teacherId ?? "__SKIP__" };
         const courseModes = { ...((selection.courseModes ?? {}) as Record<string, "center" | "online">), [input.subjectId]: input.courseMode };
         const customTeacherNames = { ...((selection.customTeacherNames ?? {}) as Record<string, string>) };
-        if (!teacher && input.teacherName.trim()) customTeacherNames[input.subjectId] = input.teacherName.trim();
+        if (nextCustomTeacherName) customTeacherNames[input.subjectId] = nextCustomTeacherName;
         else delete customTeacherNames[input.subjectId];
+
+        // Teacher-frontier reports belong to the selected teacher. On identity change,
+        // clear only teacher positions; keep every student position and center frontier.
+        const previousCourseProgress = (selection.learningCourseProgress ?? {}) as Record<string, any>;
+        const previousSubjectProgress = previousCourseProgress[input.subjectId] ?? {};
+        let nextCourseProgress = previousCourseProgress;
+        if (teacherIdentityChanged) {
+          const branchRecords = (previousSubjectProgress.branches ?? {}) as Record<string, Record<string, any>>;
+          const nextBranchRecords = Object.fromEntries(Object.entries(branchRecords).map(([branchId, record]) => {
+            const branch = getSIECheckpointBranches(input.subjectId).find(item => item.branchId === branchId);
+            if (!branch) return [branchId, record];
+            const schoolFrontier = input.courseMode === "center"
+              ? record.schoolClassFrontierId ?? "__UNKNOWN__"
+              : "__UNKNOWN__";
+            const learningGap = calculateLearningGap(branch.choices, {
+              studentFrontierId: record.lastCompletedLessonId ?? "__UNKNOWN__",
+              teacherTeachingFrontierId: "__UNKNOWN__",
+              schoolClassFrontierId: schoolFrontier,
+            });
+            return [branchId, {
+              ...record,
+              teacherId: teacherId,
+              teacherTeachingFrontierId: "__UNKNOWN__",
+              teacherTeachingFrontierEvidence: null,
+              learningGap,
+              backlogCount: learningGap.gapCount,
+              updatedAt: new Date().toISOString(),
+            }];
+          }));
+          nextCourseProgress = {
+            ...previousCourseProgress,
+            [input.subjectId]: {
+              ...previousSubjectProgress,
+              courseMode: input.courseMode,
+              teacherId,
+              teacherName: nextCustomTeacherName,
+              teacherTeachingFrontierId: "__UNKNOWN__",
+              teacherCourseFrontier: "",
+              branches: nextBranchRecords,
+              updatedAt: new Date().toISOString(),
+            },
+          };
+        }
 
         const teacherProgressState = { ...((selection.teacherProgressState ?? {}) as Record<string, Record<string, any>>) };
         const previousTeacherState = teacherProgressState[input.subjectId] ?? {};
@@ -337,6 +388,7 @@ export const appRouter = router({
           courseModes,
           customTeacherNames,
           teacherProgressState,
+          learningCourseProgress: nextCourseProgress,
         });
         await logStudentActivity(ctx.user.id, "student.teacher_selection_updated", "subject", input.subjectId, "تم حفظ اختيار المدرس وطريقة الدراسة", {
           subjectId: input.subjectId,
