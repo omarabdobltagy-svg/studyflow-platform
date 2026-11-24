@@ -5,6 +5,8 @@ export type BranchGapSnapshot = {
   status?: string;
   gapCount?: number | null;
   aheadCount?: number | null;
+  studentPosition?: number | null;
+  referencePosition?: number | null;
 };
 
 export type SubjectBacklogSummary = {
@@ -30,7 +32,6 @@ export type LearningBacklogSources = {
   teacherNames?: Record<string, string> | null;
 };
 
-const UNKNOWN_FRONTIERS = new Set(["", "__UNKNOWN__", "__DEFERRED__", "__NONE__"]);
 const NOT_STARTED = "__NOT_STARTED__";
 
 function validPosition(choices: Array<{ nodeId: string }>, value: unknown): value is string {
@@ -162,6 +163,8 @@ export function buildLearningBacklogSummary(
           status: "calculated",
           gapCount: Math.max(0, snapshot.gapCount),
           aheadCount: Math.max(0, Number(snapshot.aheadCount) || 0),
+          studentPosition: snapshot.studentPosition ?? null,
+          referencePosition: snapshot.referencePosition ?? null,
         };
       }
       // Reconstruct from the saved selection when a stale/legacy API snapshot
@@ -175,8 +178,8 @@ export function buildLearningBacklogSummary(
     const totalBranches = branches.length;
     const calculatedBranches = calculated.length;
     const uncalculatedBranches = Math.max(0, totalBranches - calculatedBranches);
-    const studentMissingBranches = resolved.filter(gap => gap.status === "student_position_missing").length;
-    const referenceMissingBranches = resolved.filter(gap => gap.status === "reference_missing").length;
+    const studentMissingBranches = resolved.filter(gap => gap.studentPosition == null).length;
+    const referenceMissingBranches = resolved.filter(gap => gap.referencePosition == null).length;
 
     const legacyRaw = legacyBacklog?.[subjectId]
       ?? legacyBacklog?.[getSIESubject(subjectId)?.nameAr || ""]
