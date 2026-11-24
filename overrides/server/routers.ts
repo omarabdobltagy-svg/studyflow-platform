@@ -99,26 +99,27 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): 
       });
     }
 
-    const latest = (await listAiPlans(userId))[0];
-    if (latest && !isDailyPlanStale(latest.createdAt)) {
+    const latestDailyPlan = (await listAiPlans(userId))
+      .find(record => record.prompt.startsWith("SIE_DAILY_PLAN_V1:"));
+    if (latestDailyPlan && !isDailyPlanStale(latestDailyPlan.createdAt)) {
       try {
-        const saved = JSON.parse(latest.planJson) as Awaited<ReturnType<typeof generatePersonalPlan>>;
+        const saved = JSON.parse(latestDailyPlan.planJson) as Awaited<ReturnType<typeof generatePersonalPlan>>;
         if (saved && typeof saved.title === "string" && Array.isArray(saved.steps) && saved.steps.length > 0) {
           return {
             plan: saved,
-            generatedAt: new Date(latest.createdAt),
+            generatedAt: new Date(latestDailyPlan.createdAt),
             generated: false,
           };
         }
       } catch {
-        // A damaged history record is never presented as an active daily plan.
+        // A damaged daily-plan record is never presented as active.
       }
     }
 
     const startDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
     const plan = await generatePersonalPlan(
       userId,
-      "حلّل ملفي الدراسي كاملًا وحدد أهم ما يجب أن أذاكره الآن. أنشئ خطة يومية واقعية تبدأ اليوم، وتعالج التراكم حسب أولوية المنهج وصعوبة كل درس وحجمه والوقت المتاح.",
+      "SIE_DAILY_PLAN_V1: حلّل ملفي الدراسي كاملًا وحدد أهم ما يجب أن أذاكره الآن. أنشئ خطة يومية واقعية تبدأ اليوم، وتعالج التراكم حسب أولوية المنهج وصعوبة كل درس وحجمه والوقت المتاح.",
       true,
       {
         dailyMinutes,
