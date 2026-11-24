@@ -427,42 +427,80 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                     </div>
                     <span className="rounded-full border border-border bg-background px-3 py-2 text-xs font-semibold">{subjectSetupIndex + 1} / {selectedSubjects.length}</span>
                   </div>
-                  <div>
-                    <p className="mb-3 text-sm font-bold">بتدرس {currentSetupSubject.nameAr} إزاي؟</p>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <button type="button" aria-pressed={form.courseModes[currentSetupSubjectId] === "center"}
-                        onClick={() => setForm(current => ({ ...current, courseModes: { ...current.courseModes, [currentSetupSubjectId]: "center" }, teacherSelections: { ...current.teacherSelections, [currentSetupSubjectId]: SKIP_TEACHER }, customTeacherNames: { ...current.customTeacherNames, [currentSetupSubjectId]: "" } }))}
-                        className={"rounded-2xl border p-5 text-right transition " + (form.courseModes[currentSetupSubjectId] === "center" ? "border-primary bg-secondary/45 ring-1 ring-primary/20" : "border-border bg-card hover:border-primary/40")}>
-                        <span className="block text-lg font-bold">سنتر / مجموعة</span><span className="mt-1 block text-xs leading-6 text-muted-foreground">بتحضر شرح المادة مع مدرس في مكان أو مجموعة.</span>
-                      </button>
-                      <button type="button" aria-pressed={form.courseModes[currentSetupSubjectId] === "online"}
-                        onClick={() => setForm(current => ({ ...current, courseModes: { ...current.courseModes, [currentSetupSubjectId]: "online" }, teacherSelections: { ...current.teacherSelections, [currentSetupSubjectId]: "" }, customTeacherNames: { ...current.customTeacherNames, [currentSetupSubjectId]: "" } }))}
-                        className={"rounded-2xl border p-5 text-right transition " + (form.courseModes[currentSetupSubjectId] === "online" ? "border-primary bg-secondary/45 ring-1 ring-primary/20" : "border-border bg-card hover:border-primary/40")}>
-                        <span className="block text-lg font-bold">أونلاين</span><span className="mt-1 block text-xs leading-6 text-muted-foreground">بتتابع الشرح من منصة أو فيديوهات على الإنترنت.</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {Boolean(form.courseModes[currentSetupSubjectId]) && (
-                    <div className="rounded-2xl border border-border bg-card p-4 sm:p-5">
-                      <div className="mb-4"><p className="font-bold">{form.courseModes[currentSetupSubjectId] === "center" ? "مين مدرس السنتر اللي بتتابعه؟" : "مين المدرس اللي بتتابعه أونلاين؟"}</p><p className="mt-1 text-xs leading-6 text-muted-foreground">اختار المدرس من القائمة، أو اكتب اسمه لو مش موجود. اختيار المدرس مستقل عن تسجيل موضع شرحه.</p></div>
+                  <div className="space-y-4">
+                    <div>
+                      <p className="mb-3 text-sm font-bold">اختار المدرس اللي بتتابعه في {currentSetupSubject.nameAr}</p>
+                      <p className="mb-3 text-xs leading-6 text-muted-foreground">اختيار المدرس أولًا. بعده حدد هل بتتابعه في سنتر أو أونلاين؛ تغيير طريقة الدراسة لن يمسح المدرس المحدد.</p>
                       {setupTeacherOptions.length ? (
                         <div className="grid gap-2 sm:grid-cols-2">
                           {setupTeacherOptions.map(teacher => {
                             const selected = form.teacherSelections[currentSetupSubjectId] === teacher.teacherId;
-                            return <button key={teacher.teacherId} type="button" aria-pressed={selected} onClick={() => setForm(current => ({ ...current, teacherSelections: { ...current.teacherSelections, [currentSetupSubjectId]: teacher.teacherId }, customTeacherNames: { ...current.customTeacherNames, [currentSetupSubjectId]: "" } }))} className={"flex items-center justify-between gap-3 rounded-xl border p-4 text-right transition " + (selected ? "border-primary bg-secondary/45 ring-1 ring-primary/20" : "border-border hover:border-primary/35")}>
-                              <span className="font-semibold">{teacher.nameAr}</span>{selected && <Check className="size-4 shrink-0 text-primary" />}
-                            </button>;
+                            return (
+                              <button key={teacher.teacherId} type="button" aria-pressed={selected}
+                                onClick={() => setForm(current => ({
+                                  ...current,
+                                  teacherSelections: { ...current.teacherSelections, [currentSetupSubjectId]: teacher.teacherId },
+                                  customTeacherNames: { ...current.customTeacherNames, [currentSetupSubjectId]: "" },
+                                }))}
+                                className={"flex min-h-14 items-center justify-between gap-3 rounded-xl border p-4 text-right transition " + (selected ? "border-primary bg-secondary/45 ring-1 ring-primary/20" : "border-border bg-card hover:border-primary/40")}>
+                                <span className="font-semibold">{teacher.nameAr}</span>
+                                {selected && <Check className="size-4 shrink-0 text-primary" />}
+                              </button>
+                            );
                           })}
                         </div>
-                      ) : <p className="rounded-xl border border-dashed border-border bg-muted/20 p-3 text-xs leading-6 text-muted-foreground">لا توجد أسماء موثقة لهذه المادة في القائمة حاليًا. اكتب اسم المدرس يدويًا أو اتركه فارغًا.</p>}
-                      <label className="mt-4 block text-sm font-semibold">{form.courseModes[currentSetupSubjectId] === "center" ? "مدرس السنتر (اختياري)" : "مدرس آخر (اختياري)"}
-                        <Input value={form.customTeacherNames[currentSetupSubjectId] ?? ""} onChange={event => setForm(current => ({ ...current, customTeacherNames: { ...current.customTeacherNames, [currentSetupSubjectId]: event.target.value }, teacherSelections: { ...current.teacherSelections, [currentSetupSubjectId]: event.target.value.trim() ? SKIP_TEACHER : current.teacherSelections[currentSetupSubjectId] ?? "" } }))} placeholder={form.courseModes[currentSetupSubjectId] === "center" ? "اكتب اسم مدرس السنتر لو مش موجود فوق" : "اكتب اسم المدرس لو مش موجود فوق"} maxLength={120} className="mt-2 h-12 rounded-xl bg-background" />
-                      </label>
-                      <button type="button" onClick={() => setForm(current => ({ ...current, teacherSelections: { ...current.teacherSelections, [currentSetupSubjectId]: SKIP_TEACHER }, customTeacherNames: { ...current.customTeacherNames, [currentSetupSubjectId]: "" } }))} className="mt-3 rounded-xl border border-border px-3 py-2 text-xs font-semibold text-muted-foreground hover:border-primary/30">لم أحدد مدرسًا للمادة دي</button>
+                      ) : (
+                        <p className="rounded-xl border border-dashed border-border bg-muted/20 p-3 text-xs leading-6 text-muted-foreground">لا توجد أسماء مدرسين مُدرجة لهذه المادة في القائمة حاليًا. يمكنك كتابة الاسم يدويًا؛ فهرس المنهج يظل المرجع للمحتوى.</p>
+                      )}
                     </div>
+
+                    <label className="block text-sm font-semibold">اسم مدرس آخر (لو مش موجود في القائمة)
+                      <Input
+                        value={form.customTeacherNames[currentSetupSubjectId] ?? ""}
+                        onChange={event => setForm(current => ({
+                          ...current,
+                          customTeacherNames: { ...current.customTeacherNames, [currentSetupSubjectId]: event.target.value },
+                          teacherSelections: { ...current.teacherSelections, [currentSetupSubjectId]: event.target.value.trim() ? SKIP_TEACHER : current.teacherSelections[currentSetupSubjectId] ?? "",
+                        }))}
+                        placeholder="اكتب اسم المدرس"
+                        maxLength={120}
+                        className="mt-2 h-12 rounded-xl bg-background"
+                      />
+                    </label>
+
+                    <button type="button"
+                      aria-pressed={form.teacherSelections[currentSetupSubjectId] === SKIP_TEACHER && !form.customTeacherNames[currentSetupSubjectId]?.trim()}
+                      onClick={() => setForm(current => ({
+                        ...current,
+                        teacherSelections: { ...current.teacherSelections, [currentSetupSubjectId]: SKIP_TEACHER },
+                        customTeacherNames: { ...current.customTeacherNames, [currentSetupSubjectId]: "" },
+                      }))}
+                      className={"rounded-lg border px-3 py-2 text-xs font-semibold transition " + (form.teacherSelections[currentSetupSubjectId] === SKIP_TEACHER && !form.customTeacherNames[currentSetupSubjectId]?.trim() ? "border-primary bg-secondary/40 text-foreground" : "border-border text-muted-foreground hover:border-primary/30")}>
+                      لم أحدد مدرسًا لهذه المادة بعد
+                    </button>
+                  </div>
+
+                  <div>
+                    <p className="mb-3 text-sm font-bold">بتدرس المادة دي فين؟</p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <button type="button" aria-pressed={form.courseModes[currentSetupSubjectId] === "center"}
+                        onClick={() => setForm(current => ({ ...current, courseModes: { ...current.courseModes, [currentSetupSubjectId]: "center" } }))}
+                        className={"rounded-2xl border p-5 text-right transition " + (form.courseModes[currentSetupSubjectId] === "center" ? "border-primary bg-secondary/45 ring-1 ring-primary/20" : "border-border bg-card hover:border-primary/40")}>
+                        <span className="block text-lg font-bold">سنتر / مجموعة</span>
+                        <span className="mt-1 block text-xs leading-6 text-muted-foreground">بتحضر شرح المادة مع مدرس في مكان أو مجموعة.</span>
+                      </button>
+                      <button type="button" aria-pressed={form.courseModes[currentSetupSubjectId] === "online"}
+                        onClick={() => setForm(current => ({ ...current, courseModes: { ...current.courseModes, [currentSetupSubjectId]: "online" } }))}
+                        className={"rounded-2xl border p-5 text-right transition " + (form.courseModes[currentSetupSubjectId] === "online" ? "border-primary bg-secondary/45 ring-1 ring-primary/20" : "border-border bg-card hover:border-primary/40")}>
+                        <span className="block text-lg font-bold">أونلاين</span>
+                        <span className="mt-1 block text-xs leading-6 text-muted-foreground">بتتابع الشرح من منصة أو فيديوهات على الإنترنت.</span>
+                      </button>
+                    </div>
+                  </div>
+                  {!form.courseModes[currentSetupSubjectId] && (
+                    <p className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-3 text-sm text-muted-foreground">حدد طريقة دراسة المادة لاستكمال الإعداد.</p>
                   )}
-                  {!form.courseModes[currentSetupSubjectId] && <p className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-3 text-sm text-muted-foreground">اختار «سنتر» أو «أونلاين» عشان نعرف نعرض لك الأسئلة المناسبة بعد كده.</p>}
+
                 </div>
               )}
 
