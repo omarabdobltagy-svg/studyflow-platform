@@ -212,9 +212,6 @@ export default function Study() {
   const subjectName = (getSIESubject(subjectId)?.nameAr || subjectId);
   const visibleSubjects = subjects.filter(id => normalizeFrontierSearch(getSIESubject(id)?.nameAr || id).includes(normalizeFrontierSearch(subjectSearch)));
 
-  return () => window.clearInterval(interval);
-  }, [externalSession?.sessionId, externalSession?.startedAt]);
-
   return (
     <DashboardLayout title="المذاكرة والتقدم" description="اختر المادة، وسجّل آخر نقطة وصلت إليها في المنهج.">
       {profile.isError && <div className="rounded-2xl border border-destructive/20 bg-destructive/5 p-4 text-sm">تعذّر تحميل ملفك الدراسي. <button className="font-bold underline" onClick={() => void profile.refetch()}>إعادة المحاولة</button></div>}
