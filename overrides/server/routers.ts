@@ -36,6 +36,7 @@ import {
   getLibraryAttachmentForDownload,
   getStudyAnalytics,
   getStudentProfile,
+  getLatestAiPlanByPromptPrefix,
   listRecentStudentActivityEvents,
   recordStudentActivityEvent,
   startStudySession,
@@ -99,8 +100,7 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): 
       });
     }
 
-    const latestDailyPlan = (await listAiPlans(userId))
-      .find(record => record.prompt.startsWith("SIE_DAILY_PLAN_V1:"));
+    const latestDailyPlan = await getLatestAiPlanByPromptPrefix(userId, "SIE_DAILY_PLAN_V1:");
     if (latestDailyPlan && !isDailyPlanStale(latestDailyPlan.createdAt)) {
       try {
         const saved = JSON.parse(latestDailyPlan.planJson) as Awaited<ReturnType<typeof generatePersonalPlan>>;
