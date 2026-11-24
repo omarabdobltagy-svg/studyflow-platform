@@ -70,6 +70,16 @@ describe("calculateLearningGap", () => {
     expect(result.gapCount).toBeNull();
     expect(result.status).toBe("student_position_missing");
   });
+  it("treats the selected student lesson as completed and starts backlog at the next lesson", () => {
+    const result = calculateLearningGap(curriculum, {
+      teacherTeachingFrontierId: "L5",
+      studentFrontierId: "L2",
+    });
+    expect(result.studentPosition).toBe(2);
+    expect(result.gapCount).toBe(3);
+    expect(curriculum[result.studentPosition].nodeId).toBe("L3");
+  });
+
 
   it("does not claim a zero gap when the subject curriculum is not loaded", () => {
     const result = calculateLearningGap([], {
