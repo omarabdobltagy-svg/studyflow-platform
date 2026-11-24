@@ -56,6 +56,35 @@ const COVERAGE_ONLY: Record<string, { title: string; description: string }> = {
 
 const pageCache = new Map<string, TextbookPage[]>();
 
+type ProgrammingPart1Manifest = {
+  pdfPageCount: number;
+  chapters: Array<{
+    title: string;
+    pdfPage: number;
+    lessons: Array<{ title: string; pdfPage: number }>;
+  }>;
+};
+
+function getProgrammingPart1PageMapNote(): string {
+  try {
+    const manifest = JSON.parse(
+      readFileSync(join(ROOT, "programming-part1-manifest.json"), "utf8"),
+    ) as ProgrammingPart1Manifest;
+    const lessons = manifest.chapters.flatMap((chapter, chapterIndex) =>
+      chapter.lessons.map((lesson, lessonIndex) => {
+        const nextLesson = chapter.lessons[lessonIndex + 1];
+        const nextChapter = manifest.chapters[chapterIndex + 1];
+        const nextStart = nextLesson?.pdfPage ?? nextChapter?.pdfPage ?? manifest.pdfPageCount + 1;
+        const interval = Math.max(1, nextStart - lesson.pdfPage);
+        return `${lesson.title}: بداية موثقة صفحة PDF ${lesson.pdfPage}؛ الفاصل حتى بداية الدرس التالي ${interval} صفحات (مؤشر حجم تقريبي لا يثبت كثافة المحتوى أو صعوبته).`;
+      }),
+    );
+    return "خريطة صفحات البرمجة والذكاء الاصطناعي - الجزء الأول فقط (14 درسًا): " + lessons.join(" ");
+  } catch {
+    return "خريطة صفحات الجزء الأول للبرمجة غير متاحة في بيئة التشغيل؛ لا تخترع أرقام صفحات.";
+  }
+}
+
 const ARABIC_STOP_WORDS = new Set([
   "من", "في", "على", "الى", "إلى", "عن", "ما", "ماذا", "هذا", "هذه", "ذلك", "تلك",
   "الذي", "التي", "الذين", "هو", "هي", "هم", "هن", "انا", "انت", "نحن", "كان", "كانت",
@@ -313,7 +342,12 @@ export function retrieveTextbookEvidence(
       continue;
     }
     const indexOnly = COVERAGE_ONLY[subjectId];
-    if (indexOnly) coverageNotes.push(indexOnly.title + ": " + indexOnly.description);
+    if (indexOnly) {
+      coverageNotes.push(indexOnly.title + ": " + indexOnly.description);
+      if (subjectId === "PROG_AI_G2_BAC") {
+        coverageNotes.push(getProgrammingPart1PageMapNote());
+      }
+    }
   }
   const deduped = new Map<string, TextbookPassage>();
   for (const passage of passages.sort((a, b) => b.score - a.score)) {
