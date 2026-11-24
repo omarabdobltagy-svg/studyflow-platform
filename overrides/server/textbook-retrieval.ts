@@ -26,25 +26,31 @@ const ROOT = join(process.cwd(), "server", "curriculum-data");
 const SOURCES: Record<string, BookSource> = {
   ARB_G2_BAC: {
     title: "كتاب اللغة العربية - البكالوريا المصرية - الصف الثاني - الجزء الأول",
-    files: ["arabic-part1.txt", "arabic-part2.txt"],
-    coverage: "full_text_part_1",
+    files: ["arabic-part1.txt"],
+    coverage: "part_1_full_text_with_extraction_warnings",
   },
   HIS_G2_BAC: {
     title: "كتاب التاريخ الوطني - البكالوريا المصرية - الصف الثاني - الجزء الأول",
-    files: ["history-part1.txt", "history-part2.txt"],
-    coverage: "full_text_part_1",
-  },
-  PROG_AI_G2_BAC: {
-    title: "كتاب البرمجة والذكاء الاصطناعي - البكالوريا المصرية - الصف الثاني - الجزء الثاني",
-    files: ["programming-part2.txt"],
-    coverage: "full_text_part_2_chapters_5_7",
+    files: ["history-part1.txt"],
+    coverage: "part_1_full_text_with_extraction_warnings",
   },
 };
 
+// These sources have a verified first-part curriculum index, but their complete
+// textbook page bodies are not present in the checked-in corpus. Never retrieve
+// or cite Part 2 files as a substitute for missing Part 1 content.
 const COVERAGE_ONLY: Record<string, { title: string; description: string }> = {
   ENG1_G2_BAC: {
-    title: "English - Egyptian Baccalaureate - 2nd Year - Part 1",
-    description: "تم التحقق من فهرس الوحدات والأقسام والموضوعات فقط؛ صفحات الشرح الداخلية مصورة ولم يكتمل استخراج نصها.",
+    title: "كتاب اللغة الإنجليزية الأولى - الجزء الأول",
+    description: "فهرس الجزء الأول موثق: 5 وحدات و20 موضوعًا. نصوص الصفحات الكاملة غير مفهرسة في المستودع؛ لا تنسب شرحًا أو اقتباسًا إلى صفحات غير متاحة.",
+  },
+  PROG_AI_G2_BAC: {
+    title: "كتاب البرمجة والذكاء الاصطناعي - الجزء الأول",
+    description: "فهرس الجزء الأول موثق: الفصول 1–4 و14 درسًا مع صفحات PDF في programming-part1-manifest.json. نص الصفحات غير مفهرس بعد. تم استبعاد نص الجزء الثاني بالكامل من سياق المساعد والمخطط.",
+  },
+  SECOND_LANGUAGE_G2_BAC_PENDING: {
+    title: "كتاب اللغة الإيطالية - الجزء الأول",
+    description: "فهرس وحدات الجزء الأول موثق على مستوى وحدتين: Unità 1: Dove abiti? وUnità 2: Tempo libero. نص الصفحات الداخلية غير مفهرس بعد؛ لا تدّعِ قراءة محتوى غير متاح.",
   },
 };
 
@@ -298,14 +304,11 @@ export function retrieveTextbookEvidence(
       }
       const results = rankTextbookPassages(loadPages(subjectId), query, Math.max(1, Math.ceil(limit / Math.max(1, subjectIds.length))));
       passages.push(...results);
-      if (subjectId === "PROG_AI_G2_BAC") {
-        coverageNotes.push("البرمجة والذكاء الاصطناعي: نص الجزء الثاني (الفصول 5–7) متاح للاسترجاع. الجزء الأول (الفصول 1–4) له فهرس وصفحات مرجعية مسجلة في programming-part1-manifest.json، لكن نص صفحاته وصوره لم تُضم بعد إلى فهرس الاسترجاع؛ لا تنسب إجابة إلى محتواه قبل إتاحة صفحته للمساعد.");
-      }
       if (subjectId === "ARB_G2_BAC") {
-        coverageNotes.push("اللغة العربية: نص الجزء الأول متاح للاسترجاع؛ لا تفترض أن الأجزاء الأخرى مفهرسة.");
+        coverageNotes.push("اللغة العربية: الاسترجاع مقصور على نص الجزء الأول فقط. بعض الصفحات بها عيوب استخراج؛ تعامل مع الاقتباسات الحرفية بحذر.");
       }
       if (subjectId === "HIS_G2_BAC") {
-        coverageNotes.push("التاريخ الوطني: نص الجزء الأول متاح للاسترجاع.");
+        coverageNotes.push("التاريخ الوطني: الاسترجاع مقصور على نص الجزء الأول فقط. بعض الصفحات بها عيوب استخراج؛ راجع الصفحة الأصلية عند الحاجة إلى اقتباس دقيق.");
       }
       continue;
     }
