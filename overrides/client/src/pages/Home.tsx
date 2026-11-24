@@ -342,12 +342,16 @@ export default function Home() {
               <Sparkles size={19} />
             </div>
             {dailyPlan.isPending ? <div className="sf-home-intelligence-loading">المخطط بيقرأ المنهج والتراكم ويرتب أولويات اليوم...</div>
+              : dailyPlan.isError ? <div className="sf-home-intelligence-empty">
+                  تعذّر إنشاء خطة اليوم: {dailyPlan.error.message}
+                  <Button type="button" onClick={() => dailyPlan.mutate({ dailyMinutes: 120 })} className="sf-home-plan-button mt-3">إعادة المحاولة <ArrowLeft size={14} /></Button>
+                </div>
               : dailyPlan.data?.plan ? <><div className="sf-home-plan-status"><span className="sf-home-plan-status-dot" />{dailyPlan.data.generated ? "تم إنشاء خطة اليوم تلقائيًا" : "خطة اليوم محفوظة وجاهزة للمتابعة"}</div>
                 <h4>{dailyPlan.data.plan.title}</h4>
                 <p className="sf-home-plan-summary">{dailyPlan.data.plan.summary}</p>
                 <div className="sf-home-plan-steps">{dailyPlan.data.plan.steps.slice(0, 3).map((step, index) => <div key={index}><span>{step.day}</span><strong>{step.title}</strong><small>{step.minutes} دقيقة</small></div>)}</div>
                 <div className="sf-home-plan-footer">
-                  <span>{dailyPlan.data.plan.steps.length} خطوة · أُضيفت {dailyPlan.data.tasksAdded} مهمة إلى قائمة مهامك</span>
+                  <span>{dailyPlan.data.taskCount} مهمة متزامنة · أُضيفت {dailyPlan.data.tasksAdded} جديدة</span>
                   <div className="flex flex-wrap gap-2">
                     <Button type="button" onClick={() => setLocation("/tasks")} className="sf-home-plan-button">فتح المهام <ArrowLeft size={14} /></Button>
                     <Button type="button" onClick={() => setLocation("/planner")} variant="ghost" className="sf-home-plan-secondary">تفاصيل الخطة</Button>
