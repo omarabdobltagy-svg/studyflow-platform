@@ -83,12 +83,33 @@ function WorkspaceFolder({
       >
         <div className="sf-folder-art" aria-hidden="true">
           <motion.div
+            className="sf-folder-paper sf-folder-paper-back"
+            animate={isOpen ? { y: -17, x: -5, rotate: -8 } : { y: 0, x: 0, rotate: -3 }}
+            transition={{ type: "spring", stiffness: 190, damping: 20 }}
+          />
+          <motion.div
+            className="sf-folder-paper sf-folder-paper-front"
+            animate={isOpen ? { y: -22, x: 5, rotate: 7 } : { y: 0, x: 0, rotate: 3 }}
+            transition={{ type: "spring", stiffness: 200, damping: 20, delay: isOpen ? 0.035 : 0 }}
+          />
+          <motion.div
+            className="sf-folder-back"
+            animate={isOpen ? { y: -5, rotate: -2 } : { y: 0, rotate: 0 }}
+            transition={{ type: "spring", stiffness: 190, damping: 21 }}
+          />
+          <motion.div
             className="sf-folder-front"
-            animate={isOpen ? { y: -2, scale: 1.03 } : { y: 0, scale: 1 }}
-            transition={{ type: "spring", stiffness: 220, damping: 22 }}
+            animate={isOpen ? { y: 8, rotateX: -9, skewX: -1 } : { y: 0, rotateX: 0, skewX: 0 }}
+            transition={{ type: "spring", stiffness: 185, damping: 20 }}
           >
             <span className="sf-folder-emblem">{icon}</span>
+            <span className="sf-folder-index">{id}</span>
           </motion.div>
+          <motion.span
+            className="sf-folder-spark"
+            animate={isOpen ? { opacity: 1, scale: 1, y: -7 } : { opacity: 0, scale: 0.55, y: 6 }}
+            transition={{ duration: reduceMotion ? 0.01 : 0.28 }}
+          />
         </div>
         <div className="sf-folder-copy">
           <span className="sf-folder-eyebrow">{eyebrow}</span>
