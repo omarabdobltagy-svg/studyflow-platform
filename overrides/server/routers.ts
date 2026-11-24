@@ -97,6 +97,30 @@ function toPublicAuthUser(user: NonNullable<Awaited<ReturnType<typeof getUserByU
   };
 }
 
+function getCurrentTeacherKey(selection: Record<string, any>, profile: any, subjectId: string): string {
+  const teacherId = selection.teacherChoices?.[subjectId]
+    ?? profile?.teacherSelections?.[subjectId]
+    ?? "__SKIP__";
+  if (teacherId && teacherId !== "__SKIP__") return teacherId;
+  const teacherName = String(selection.customTeacherNames?.[subjectId] ?? "").trim();
+  return teacherName ? `custom:${teacherName.toLocaleLowerCase("en")}` : "";
+}
+
+function getTeacherCustomCurriculumEntries(
+  selection: Record<string, any>,
+  profile: any,
+  subjectId: string,
+  branchId?: string,
+  teacherKeyOverride?: string,
+): any[] {
+  const teacherKey = teacherKeyOverride ?? getCurrentTeacherKey(selection, profile, subjectId);
+  if (!teacherKey) return [];
+  const entries = (selection.customCurriculumEntries?.[subjectId] ?? []) as any[];
+  return entries.filter(entry =>
+    entry.teacherKey === teacherKey && (!branchId || entry.branchId === branchId)
+  );
+}
+
 async function logStudentActivity(
   userId: number,
   eventType: string,
@@ -1528,10 +1552,13 @@ export const appRouter = router({
           throw new TRPCError({ code: "BAD_REQUEST", message: "هذه المادة ليست ضمن ملفك الدراسي." });
         }
         const branch = getSIECheckpointBranches(input.subjectId).find(item => item.branchId === input.branchId);
-        if (!branch || !branch.choices.some(item => item.nodeId === input.lessonId)) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "الدرس لا يتبع فرع المنهج المحدد." });
-        }
         const selection = (profile.selection ?? {}) as Record<string, any>;
+        const customChoices = getTeacherCustomCurriculumEntries(selection, profile, input.subjectId, input.branchId);
+        const branchChoices = [...(branch?.choices ?? []), ...customChoices];
+        const selectedLesson = branchChoices.find(item => item.nodeId === input.lessonId);
+        if (!branch || !selectedLesson) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "الدرس لا يتبع مسار المنهج والمدرس المحددين." });
+        }
         const active = selection.learningExternalSession;
         if (active?.status === "active") {
           throw new TRPCError({ code: "CONFLICT", message: "لديك جلسة خارج SIE مفتوحة بالفعل. أنهِها أولًا." });
@@ -1541,6 +1568,7 @@ export const appRouter = router({
           subjectId: input.subjectId,
           branchId: input.branchId,
           lessonId: input.lessonId,
+          teacherKey: getCurrentTeacherKey(selection, profile, input.subjectId),
           startedAt: new Date().toISOString(),
           status: "active" as const,
           source: "student_started_external_session" as const,
@@ -1601,12 +1629,20 @@ export const appRouter = router({
         const branchRecords = (subjectRecord.branches ?? {}) as Record<string, Record<string, any>>;
         const oldBranchRecord = branchRecords[active.branchId] ?? {};
         const activeBranch = getSIECheckpointBranches(active.subjectId).find(item => item.branchId === active.branchId);
-        const legacyFrontier = activeBranch?.choices.some(item => item.nodeId === subjectRecord.lastCompletedLessonId)
+        const activeCustomChoices = getTeacherCustomCurriculumEntries(
+          latestSelection,
+          latestProfile,
+          active.subjectId,
+          active.branchId,
+          active.teacherKey ?? "",
+        );
+        const activeBranchChoices = [...(activeBranch?.choices ?? []), ...activeCustomChoices];
+        const legacyFrontier = activeBranchChoices.some(item => item.nodeId === subjectRecord.lastCompletedLessonId)
           ? subjectRecord.lastCompletedLessonId
           : null;
         const previousFrontier = oldBranchRecord.lastCompletedLessonId ?? legacyFrontier;
-        const previousFrontierIndex = activeBranch?.choices.findIndex(item => item.nodeId === previousFrontier) ?? -1;
-        const finishedLessonIndex = activeBranch?.choices.findIndex(item => item.nodeId === active.lessonId) ?? -1;
+        const previousFrontierIndex = activeBranchChoices.findIndex(item => item.nodeId === previousFrontier);
+        const finishedLessonIndex = activeBranchChoices.findIndex(item => item.nodeId === active.lessonId);
         // Revising an earlier lesson must not move the student's completion frontier backwards.
         const nextFrontierId = finishedLessonIndex >= previousFrontierIndex && finishedLessonIndex >= 0
           ? active.lessonId
@@ -1668,9 +1704,12 @@ export const appRouter = router({
         if (!profile.subjectIds.includes(input.subjectId)) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "هذه المادة ليست ضمن مواد ملفك الدراسي." });
         }
-        const lesson = getSIECheckpointChoices(input.subjectId).find(item => item.nodeId === input.lessonId);
-        if (!lesson) throw new TRPCError({ code: "BAD_REQUEST", message: "الدرس غير موجود في فهرس المادة الحالي." });
         const selection = (profile.selection || {}) as Record<string, any>;
+        const staticLesson = getSIECheckpointChoices(input.subjectId).find(item => item.nodeId === input.lessonId);
+        const customLesson = getTeacherCustomCurriculumEntries(selection, profile, input.subjectId)
+          .find(item => item.nodeId === input.lessonId);
+        const lesson = staticLesson ?? customLesson;
+        if (!lesson) throw new TRPCError({ code: "BAD_REQUEST", message: "الدرس غير موجود في فهرس المادة أو كورس المدرس الحالي." });
         const progress = (selection.subjectLessonProgress || {}) as Record<string, Record<string, any>>;
         const subjectProgress = { ...(progress[input.subjectId] || {}) };
         const record = {
