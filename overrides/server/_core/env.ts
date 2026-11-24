@@ -10,4 +10,7 @@ export const ENV = {
   aiApiBaseUrl: process.env.AI_API_BASE_URL ?? "https://openrouter.ai/api/v1",
   aiApiKey: process.env.AI_API_KEY ?? "",
   aiModel: process.env.AI_MODEL ?? "openrouter/auto",
+  nvidiaApiBaseUrl: process.env.NVIDIA_API_BASE_URL ?? "https://integrate.api.nvidia.com/v1",
+  nvidiaApiKey: process.env.NVIDIA_API_KEY ?? "",
+  nvidiaModel: process.env.NVIDIA_MODEL ?? "nvidia/nemotron-3-ultra-550b-a55b",
 };
