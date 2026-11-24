@@ -45,16 +45,6 @@
       "lessonCount": 14,
       "manifestFile": "curriculum-intelligence-part1.json",
       "detailFile": "programming-part1-manifest.json"
-    },
-    "SECOND_LANGUAGE_G2_BAC_PENDING": {
-      "title": "Lingua e Cultura italiana - Seconda lingua - Parte Prima",
-      "part": 1,
-      "term": 1,
-      "coverage": "unit_titles_only",
-      "pageBodyIndexed": false,
-      "unitCount": 2,
-      "manifestFile": "italian-part1-manifest.json",
-      "limitation": "Original Italian PDF not found in Library."
     }
   },
   "exclusions": [
@@ -66,7 +56,6 @@
     "Difficulty levels in curriculum-intelligence-part1.json are provisional educational estimates from topic type and curriculum structure; they are not official Ministry difficulty labels.",
     "Student self-rating and assessment history take precedence over provisional curriculum estimates.",
     "English unit page spans are verified at unit level only; individual English topic page spans and difficulty remain unknown.",
-    "Italian has two unit names only until its original Part 1 PDF is provided.",
     "Arabic and History page ranges derive from the official tables of contents; exact page body content is not stored."
   ],
   "generalEgyptianSchoolSystem": {
@@ -92,30 +81,65 @@
       "actualSchoolDays": 183,
       "firstTermActualSchoolDays": 93,
       "secondTermActualSchoolDays": 90,
-      "firstTermTransferExams": ["2027-01-09", "2027-01-14"],
-      "preparatoryCertificateFirstTermExams": ["2027-01-16", "2027-01-21"],
-      "midyearBreak": ["2027-01-23", "2027-02-04"],
+      "firstTermTransferExams": [
+        "2027-01-09",
+        "2027-01-14"
+      ],
+      "preparatoryCertificateFirstTermExams": [
+        "2027-01-16",
+        "2027-01-21"
+      ],
+      "midyearBreak": [
+        "2027-01-23",
+        "2027-02-04"
+      ],
       "secondTermStart": "2027-02-06",
-      "secondTermTransferExams": ["2027-05-22", "2027-05-27"],
-      "preparatoryCertificateSecondTermExams": ["2027-05-29", "2027-06-03"],
-      "generalSecondaryCertificateExams": ["2027-06-26", "2027-07-21"],
-      "technicalDiplomaExams": ["2027-05-29", "2027-06-10"]
+      "secondTermTransferExams": [
+        "2027-05-22",
+        "2027-05-27"
+      ],
+      "preparatoryCertificateSecondTermExams": [
+        "2027-05-29",
+        "2027-06-03"
+      ],
+      "generalSecondaryCertificateExams": [
+        "2027-06-26",
+        "2027-07-21"
+      ],
+      "technicalDiplomaExams": [
+        "2027-05-29",
+        "2027-06-10"
+      ]
     },
     "assessment": {
-      "firstMonthlyTransferGradeExams": ["2026-10-18", "2026-10-22"],
+      "firstMonthlyTransferGradeExams": [
+        "2026-10-18",
+        "2026-10-22"
+      ],
       "firstMonthlyExamScope": "Only material taught from the start of the school year through the end of the first month",
       "prepCertificateExamsAreGovernorateSpecific": true,
-      "ongoingAssessmentComponents": ["monthly exams", "weekly assessments", "classwork", "homework", "attendance and participation"],
+      "ongoingAssessmentComponents": [
+        "monthly exams",
+        "weekly assessments",
+        "classwork",
+        "homework",
+        "attendance and participation"
+      ],
       "lastCurriculumDistributionWeekReservedForRevision": true,
       "gradeWeightsAreNotUniversalAcrossAllStages": true
     },
     "productRules": [
       "A full-year index is not evidence that a teacher has already taught every listed lesson.",
       "A monthly assessment covers taught content for that assessment period, not the full-year syllabus.",
-      "Teacher progress must be reported or verified separately; date-based pacing is only an estimate.",
-      "Preparatory certificate schedules must be treated as governorate-specific rather than nationwide-identical."
+      "Preparatory certificate schedules must be treated as governorate-specific rather than nationwide-identical.",
+      "The platform does not infer individual teacher progress from calendar dates; teacher and student frontiers are recorded separately within the selected branch.",
+      "Saving a student's and teacher's frontiers in one branch advances the learner to the next branch automatically."
     ],
-    "sourceDomains": ["sis.gov.eg", "cairo.gov.eg", "eastlaws.com"]
+    "sourceDomains": [
+      "sis.gov.eg",
+      "cairo.gov.eg",
+      "eastlaws.com"
+    ]
   },
   "curriculumCatalogCoverage": {
     "coverage": "full_year_lesson_metadata",
@@ -167,13 +191,6 @@
         "chapters": 7,
         "lessons": 23,
         "structure": "one linear course sequence"
-      },
-      "SECOND_LANGUAGE_G2_BAC_PENDING": {
-        "indexedParts": [
-          1
-        ],
-        "unitTitlesCurrentlyAvailable": 2,
-        "note": "Incomplete source catalog; show its incomplete status, do not infer missing lesson titles, and do not allow student-created substitute entries."
       }
     }
   },
