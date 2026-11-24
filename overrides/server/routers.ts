@@ -110,7 +110,8 @@ async function getDailyPlanSourceFingerprint(userId: number, dailyMinutes: numbe
     listCalendarEvents(userId),
     listRoutines(userId, "Africa/Cairo"),
   ]);
-  const byId = <T extends { id: number }>(items: T[]) => [...items].sort((left, right) => left.id - right.id);
+  const byId = <T extends { id: string | number }>(items: T[]) =>
+    [...items].sort((left, right) => String(left.id).localeCompare(String(right.id)));
   return createDailyPlanSourceFingerprint({
     catalogVersion: SIE_CATALOG_META.packageVersion,
     startDate,
