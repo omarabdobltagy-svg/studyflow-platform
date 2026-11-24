@@ -40,6 +40,15 @@ export default function Planner() {
       profile.data?.subjectIds ?? [],
       (learning.data as any)?.gapByBranch ?? {},
       profile.data?.backlog ?? {},
+      {
+        courseProgress: (learning.data as any)?.courseProgress ?? {},
+        courseModes: (profile.data as any)?.selection?.courseModes ?? {},
+        teacherIds: {
+          ...((profile.data as any)?.selection?.teacherChoices ?? {}),
+          ...(profile.data?.teacherSelections ?? {}),
+        },
+        teacherNames: (profile.data as any)?.selection?.customTeacherNames ?? {},
+      },
     ),
     [profile.data, learning.data],
   );
