@@ -1,15 +1,16 @@
-CREATE TABLE IF NOT EXISTS `studentActivityEvents` (
-  `id` INT NOT NULL AUTO_INCREMENT,
-  `userId` INT NOT NULL,
-  `eventType` VARCHAR(80) NOT NULL,
-  `entityType` VARCHAR(60) NOT NULL,
-  `entityId` VARCHAR(100) NULL,
-  `summary` VARCHAR(500) NOT NULL,
-  `metadataJson` TEXT NOT NULL,
-  `createdAt` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  KEY `student_activity_user_created_idx` (`userId`, `createdAt`),
-  KEY `student_activity_entity_idx` (`entityType`, `entityId`),
-  CONSTRAINT `student_activity_user_fk`
-    FOREIGN KEY (`userId`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE `studentActivityEvents` (
+  `id` int AUTO_INCREMENT NOT NULL,
+  `userId` int NOT NULL,
+  `eventType` varchar(80) NOT NULL,
+  `entityType` varchar(60) NOT NULL,
+  `entityId` varchar(100),
+  `summary` varchar(500) NOT NULL,
+  `metadataJson` text NOT NULL,
+  `createdAt` timestamp NOT NULL DEFAULT (now()),
+  CONSTRAINT `studentActivityEvents_id` PRIMARY KEY(`id`),
+  CONSTRAINT `studentActivityEvents_userId_users_id_fk` FOREIGN KEY (`userId`) REFERENCES `users`(`id`) ON DELETE cascade ON UPDATE no action
+);
+--> statement-breakpoint
+CREATE INDEX `student_activity_user_created_idx` ON `studentActivityEvents` (`userId`,`createdAt`);
+--> statement-breakpoint
+CREATE INDEX `student_activity_entity_idx` ON `studentActivityEvents` (`entityType`,`entityId`);
