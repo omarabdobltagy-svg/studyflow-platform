@@ -479,11 +479,13 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
               </Button>
               {step < activeSteps.length - 1 ? (
                 <Button type="button" onClick={next} disabled={!stepValid || complete.isPending} className="rounded-xl bg-primary">
-                  {step === 4 ? (subjectSetupIndex < selectedSubjects.length - 1 ? `التالي: ${selectedSubjects[subjectSetupIndex + 1]?.nameAr ?? "المادة التالية"}` : "حفظ اختيارات المواد") : "التالي"} <ArrowLeft className="size-4" />
+                  التالي <ArrowLeft className="size-4" />
                 </Button>
               ) : (
-                <Button type="button" onClick={save} disabled={complete.isPending || !track || selectedSubjects.length === 0} className="rounded-xl bg-primary">
-                  {complete.isPending ? <><Loader2 className="size-4 animate-spin" /> نحفظ اختياراتك…</> : <><Check className="size-4" /> {editMode ? "حفظ تعديلات الملف" : "إكمال إعداد الحساب"}</>}
+                <Button type="button" onClick={next} disabled={!stepValid || complete.isPending || !track || selectedSubjects.length === 0} className="rounded-xl bg-primary">
+                  {complete.isPending ? <><Loader2 className="size-4 animate-spin" /> نحفظ اختياراتك…</> : subjectSetupIndex < selectedSubjects.length - 1
+                    ? <>التالي: {selectedSubjects[subjectSetupIndex + 1]?.nameAr ?? "المادة التالية"} <ArrowLeft className="size-4" /></>
+                    : <><Check className="size-4" /> {editMode ? "حفظ تعديلات الملف" : "إكمال إعداد الحساب"}</>}
                 </Button>
               )}
             </footer>
