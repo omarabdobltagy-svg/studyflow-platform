@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, like, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { storageDelete } from "./storage";
 import { drizzle } from "drizzle-orm/mysql2";
@@ -1170,6 +1170,16 @@ export async function saveAiPlan(userId: number, data: { prompt: string; title: 
 export async function listAiPlans(userId: number) {
   const db = await requireDb();
   return db.select().from(aiPlans).where(eq(aiPlans.userId, userId)).orderBy(desc(aiPlans.createdAt)).limit(12);
+}
+
+export async function getLatestAiPlanByPromptPrefix(userId: number, prefix: string) {
+  const db = await requireDb();
+  const rows = await db.select()
+    .from(aiPlans)
+    .where(and(eq(aiPlans.userId, userId), like(aiPlans.prompt, prefix + "%")))
+    .orderBy(desc(aiPlans.createdAt), desc(aiPlans.id))
+    .limit(1);
+  return rows[0] ?? null;
 }
 
 export async function recordStudentActivityEvent(input: {
