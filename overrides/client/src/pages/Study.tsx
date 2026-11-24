@@ -549,11 +549,17 @@ function SearchableFrontierPicker({
     setQuery("");
   }, [optionsIdentity]);
   const normalizedQuery = normalizeFrontierSearch(query);
-  const matchingOptions = normalizedQuery
+  const isStatusOption = (option: ChoiceButtonOption) =>
+    option.value === "__UNKNOWN__" || option.value === "__NOT_STARTED__";
+  const statusOptions = options.filter(isStatusOption);
+  const curriculumOptions = options.filter(option => !isStatusOption(option));
+  const visibleOptions = normalizedQuery
     ? options.filter(option => normalizeFrontierSearch(option.label + " " + (option.description ?? "")).includes(normalizedQuery))
-    : options;
-  const visibleOptions = normalizedQuery || showAllOptions ? matchingOptions : matchingOptions.slice(0, 6);
-  const hiddenOptionCount = Math.max(0, options.length - 6);
+    : [
+        ...statusOptions,
+        ...(showAllOptions ? curriculumOptions : curriculumOptions.slice(0, 6)),
+      ];
+  const hiddenOptionCount = Math.max(0, curriculumOptions.length - 6);
   return (
     <div className="min-w-0 space-y-2.5">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -582,7 +588,7 @@ function SearchableFrontierPicker({
           </button>;
         })}
       </div>
-      {!normalizedQuery && hiddenOptionCount > 0 && !showAllOptions && <Button type="button" variant="outline" size="sm" className="w-full rounded-xl text-xs" onClick={() => setShowAllOptions(true)}>إظهار باقي الخيارات ({hiddenOptionCount})</Button>}
+      {!normalizedQuery && hiddenOptionCount > 0 && !showAllOptions && <Button type="button" variant="outline" size="sm" className="w-full rounded-xl text-xs" onClick={() => setShowAllOptions(true)}>إظهار باقي الدروس ({hiddenOptionCount})</Button>}
       {!normalizedQuery && showAllOptions && hiddenOptionCount > 0 && <Button type="button" variant="ghost" size="sm" className="w-full rounded-xl text-xs" onClick={() => setShowAllOptions(false)}>عرض خيارات أقل</Button>}
       {!visibleOptions.length && <p className="rounded-xl bg-muted/30 p-3 text-center text-xs text-muted-foreground">لا توجد نتيجة مطابقة في فهرس هذا الفرع.</p>}
       {value && <button type="button" disabled={disabled} onClick={() => onChange(options.some(option => option.value === "__UNKNOWN__") ? "__UNKNOWN__" : "")}
