@@ -117,7 +117,7 @@ describe("subject curriculum layouts", () => {
     expect(branches).toHaveLength(1);
     expect(branches[0].branchTitle).toBe("المقرر بالكامل");
     expect(branches[0].choices).toHaveLength(23);
-    expect(branches[0].choices[13]).toMatchObject({
+    expect(branches[0].choices[14]).toMatchObject({
       nodeId: "PROG_5_1",
       unitNumber: 5,
       lessonNumber: "5.1",
