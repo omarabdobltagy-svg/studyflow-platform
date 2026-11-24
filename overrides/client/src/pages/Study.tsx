@@ -83,23 +83,32 @@ export default function Study() {
   const belongsToCurrentBranch = (value: unknown): value is string =>
     typeof value === "string" &&
     (value === "__NOT_STARTED__" || branchChoices.some(lesson => lesson.nodeId === value));
-  const legacyStudentFrontier = currentCourseProgress.lastCompletedLessonId
-    ?? legacyStudentState.studentAttendedFrontier;
-  const savedStudentFrontierId = Object.prototype.hasOwnProperty.call(currentBranchProgress, "lastCompletedLessonId")
-    ? currentBranchProgress.lastCompletedLessonId
-    : belongsToCurrentBranch(legacyStudentFrontier)
-      ? legacyStudentFrontier
+  const legacyStudentFrontier = belongsToCurrentBranch(currentCourseProgress.lastCompletedLessonId)
+    ? currentCourseProgress.lastCompletedLessonId
+    : belongsToCurrentBranch(legacyStudentState.studentAttendedFrontier)
+      ? legacyStudentState.studentAttendedFrontier
       : "__UNKNOWN__";
-  const savedTeacherFrontierId = typeof currentBranchProgress.teacherTeachingFrontierId === "string"
-    ? currentBranchProgress.teacherTeachingFrontierId
-    : belongsToCurrentBranch(currentCourseProgress.teacherTeachingFrontierId)
-      ? currentCourseProgress.teacherTeachingFrontierId : "__UNKNOWN__";
+  const resolveSavedFrontier = (
+    field: "lastCompletedLessonId" | "teacherTeachingFrontierId" | "schoolClassFrontierId",
+    confirmationKey: "studentFrontierConfirmedAt" | "teacherFrontierConfirmedAt" | "schoolFrontierConfirmedAt",
+    legacyValue: unknown,
+  ) => {
+    const branchValue = currentBranchProgress[field];
+    if (belongsToCurrentBranch(branchValue)) return branchValue;
+    if (branchValue === "__UNKNOWN__" && currentBranchProgress[confirmationKey]) return "__UNKNOWN__";
+    return belongsToCurrentBranch(legacyValue) ? legacyValue : "__UNKNOWN__";
+  };
+  const savedStudentFrontierId = resolveSavedFrontier(
+    "lastCompletedLessonId", "studentFrontierConfirmedAt", legacyStudentFrontier,
+  );
+  const savedTeacherFrontierId = resolveSavedFrontier(
+    "teacherTeachingFrontierId", "teacherFrontierConfirmedAt", currentCourseProgress.teacherTeachingFrontierId,
+  );
   const teacherTeachingFrontierId = Object.prototype.hasOwnProperty.call(teacherFrontierDrafts, studentFrontierDraftKey)
     ? teacherFrontierDrafts[studentFrontierDraftKey] : savedTeacherFrontierId;
-  const savedSchoolFrontierId = Object.prototype.hasOwnProperty.call(currentBranchProgress, "schoolClassFrontierId")
-    ? currentBranchProgress.schoolClassFrontierId
-    : belongsToCurrentBranch(currentCourseProgress.schoolClassFrontierId)
-      ? currentCourseProgress.schoolClassFrontierId : "__UNKNOWN__";
+  const savedSchoolFrontierId = resolveSavedFrontier(
+    "schoolClassFrontierId", "schoolFrontierConfirmedAt", currentCourseProgress.schoolClassFrontierId,
+  );
   const schoolClassFrontierId = Object.prototype.hasOwnProperty.call(schoolFrontierDrafts, studentFrontierDraftKey)
     ? schoolFrontierDrafts[studentFrontierDraftKey] : savedSchoolFrontierId;
   const lastCompletedLessonId = Object.prototype.hasOwnProperty.call(studentFrontierDrafts, studentFrontierDraftKey)
@@ -395,7 +404,7 @@ export default function Study() {
                       <div className="border-b border-border/70 pb-3">
                         <p className="text-[10px] font-bold tracking-[0.12em] text-primary">تقدمك</p>
                         <h4 className="mt-1 break-words text-sm font-bold sm:text-base">آخر درس أنهيته</h4>
-                        <p className="mt-1 text-xs leading-5 text-muted-foreground">اختر آخر نقطة وصلت إليها أنت وآخر نقطة وصل إليها المدرس. يتم الحفظ تلقائيًا بعد اكتمال الاختيارين.</p>
+                        <p className="mt-1 text-xs leading-5 text-muted-foreground">اختيارك يعني أنك أنهيت هذه النقطة بالفعل. النقطة التالية بعدها هي أول ما يدخل في تراكمك. يتم الحفظ تلقائيًا بعد تحديد موضع المدرس أيضًا.</p>
                       </div>
                       <div className="mt-4 grid gap-6 md:grid-cols-2">
                         <div className="min-w-0 rounded-xl border border-border/70 bg-background/70 p-3">
