@@ -501,8 +501,15 @@ export async function invokeNvidiaLLM(params: InvokeParams): Promise<InvokeResul
     defaultModel: ENV.nvidiaModel,
     errorPrefix: "NVIDIA LLM invoke failed",
     pollPending: true,
-    // Keep reasoning bounded so the completion has enough tokens for its JSON plan.
-    additionalBody: { reasoning_effort: "medium", reasoning_budget: 1_024, stream: false },
+    // Disable hidden reasoning for this constrained JSON task so generation
+    // budget is spent on the actual plan content, not an internal reasoning trace.
+    // force_nonempty_content must be nested in chat_template_kwargs.
+    additionalBody: {
+      reasoning_effort: "none",
+      chat_template_kwargs: { force_nonempty_content: true },
+      temperature: 0.2,
+      stream: false,
+    },
   });
 }
 
