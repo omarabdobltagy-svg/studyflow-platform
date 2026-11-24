@@ -872,14 +872,16 @@ export function getSIECheckpointChoiceTypeLabel(choice: SIECheckpointChoice): st
     case "reading": return "قراءة";
     case "poetry": return "نص شعري";
     case "grammar": return "نحو";
-    case "topic": return "Topic";
+    case "topic": return "موضوع (Topic)";
     default: return "درس";
   }
 }
 
 export function getSIECheckpointChoiceDisplayLabel(choice: SIECheckpointChoice): string {
   const lessonNumber = choice.lessonNumber
-    ? choice.lessonType === "topic" ? `Lesson ${choice.lessonNumber}` : `الدرس ${choice.lessonNumber}`
+    ? choice.lessonType === "topic" ? `Lesson ${choice.lessonNumber}`
+      : choice.lessonType === "grammar" ? `قاعدة نحوية ${choice.lessonNumber}`
+        : `الدرس ${choice.lessonNumber}`
     : "";
   const unit = choice.unitNumber
     ? choice.lessonType === "topic" ? `Unit ${choice.unitNumber}: ${choice.unitTitle}` : `الوحدة ${choice.unitNumber}: ${choice.unitTitle}`
@@ -905,7 +907,12 @@ export function getSIECheckpointBranches(subjectId: string): SIECheckpointBranch
       });
     }
   }
-  return [...groups.values()];
+  const result = [...groups.values()];
+  if (subjectId === "ARB_G2_BAC") {
+    const order: Record<string, number> = { ARB_NAHW: 0, ARB_READING: 1 };
+    result.sort((left, right) => (order[left.branchId] ?? 99) - (order[right.branchId] ?? 99));
+  }
+  return result;
 }
 
 export function getSIECheckpointChoicesPreview(subjectId: string, limit = 5): SIECheckpointChoice[] {

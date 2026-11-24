@@ -216,14 +216,15 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
     const subjectLessonRecords = lessonProgress[subjectId] || {};
 
     const branchSummaries = branches.map(branch => {
-      const legacyArabicUnit = branch.branchId === "ARB_READING"
-        ? undefined
+      const legacyArabicReadingRecord = subjectId === "ARB_G2_BAC" && branch.branchId === "ARB_READING"
+        ? Object.entries(branchRecords)
+          .filter(([key]) => /^ARB_U[123]$/.test(key))
+          .map(([, record]) => record)
+          .find((record: any) => branch.choices.some(choice =>
+            [record.lastCompletedLessonId, record.teacherTeachingFrontierId, record.schoolClassFrontierId].includes(choice.nodeId)
+          ))
         : undefined;
-      const saved = branchRecords[branch.branchId]
-        || (branch.branchId === "ARB_READING"
-          ? Object.values(branchRecords).find((record: any) => branch.choices.some(choice => choice.nodeId === record.lastCompletedLessonId))
-          : undefined)
-        || {};
+      const saved = branchRecords[branch.branchId] || legacyArabicReadingRecord || {};
       const belongsToBranch = (value: unknown) =>
         typeof value === "string" &&
         (value === "__NOT_STARTED__" ||

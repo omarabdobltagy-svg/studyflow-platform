@@ -330,7 +330,10 @@ export default function Study() {
             <label className="mb-2 block text-xs font-bold text-muted-foreground">02 · فرع المادة</label>
             <Select value={currentBranchId} onValueChange={value => { setBranchId(value); setLessonId(""); }} disabled={!branches.length}>
               <SelectTrigger className="h-12 rounded-xl bg-background"><SelectValue placeholder="اختر الفرع" /></SelectTrigger>
-              <SelectContent>{branches.map(branch => <SelectItem key={branch.branchId} value={branch.branchId}>{branch.branchTitle}</SelectItem>)}</SelectContent>
+              <SelectContent>
+                {branches.map(branch => <SelectItem key={branch.branchId} value={branch.branchId}>{branch.branchTitle}</SelectItem>)}
+                {subjectId === "ARB_G2_BAC" && <SelectItem value="__ARB_BALAGHA_UNINDEXED__" disabled>البلاغة · لا توجد موضوعات مفهرسة في الجزء الأول</SelectItem>}
+              </SelectContent>
             </Select>
           </div>
           <div className="min-w-0">
@@ -341,7 +344,7 @@ export default function Study() {
                 {lessons.map(lesson => (
                   <SelectItem key={lesson.nodeId} value={lesson.nodeId} textValue={getSIECheckpointChoiceDisplayLabel(lesson)}>
                     <span className="flex min-w-0 flex-col gap-1 py-1 text-right" dir="rtl">
-                      <span className="text-sm font-semibold leading-5">{lesson.lessonType === "topic" ? `Lesson ${lesson.lessonNumber} — ${lesson.title}` : `الدرس ${lesson.lessonNumber ?? ""} — ${lesson.title}`}</span>
+                      <span className="text-sm font-semibold leading-5">{lesson.lessonType === "topic" ? `Lesson ${lesson.lessonNumber} — ${lesson.title}` : lesson.lessonType === "grammar" ? `قاعدة نحوية ${lesson.lessonNumber} — ${lesson.title}` : lesson.lessonNumber ? `الدرس ${lesson.lessonNumber} — ${lesson.title}` : lesson.title}</span>
                       <span className="text-[11px] leading-4 text-muted-foreground">{getSIECheckpointChoiceTypeLabel(lesson)} · {lesson.branchTitle ?? lesson.unitTitle}</span>
                       <span className="text-[10px] leading-4 text-muted-foreground">{lesson.lessonType === "topic" ? `Unit ${lesson.unitNumber}: ${lesson.unitTitle}` : `الوحدة ${lesson.unitNumber ?? ""}: ${lesson.unitTitle}`}</span>
                     </span>
@@ -357,8 +360,10 @@ export default function Study() {
           <span className="rounded-md bg-background px-2 py-1 text-[10px] font-semibold text-primary">{getSIECheckpointChoiceTypeLabel(selectedLesson)}</span>
           <span className="text-[10px] text-muted-foreground">{selectedLesson.branchTitle}</span>
         </div>}
-        {subjectId === "ARB_G2_BAC" && <div className="mx-5 mb-5 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-xs leading-6 text-muted-foreground sm:mx-6">
-          فروع العربي: النحو، والقراءة والنصوص. البلاغة ظاهرة كفرع في الخطة الدراسية عند تدريسها، لكن لا توجد موضوعات بلاغة مستقلة مفهرسة في الجزء الأول المتاح.
+        {subjectId === "ARB_G2_BAC" && <div className="mx-5 mb-5 flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-muted/20 p-3 sm:mx-6">
+          <span className="rounded-lg bg-primary/10 px-2.5 py-1.5 text-xs font-semibold text-primary">النحو · 6 موضوعات</span>
+          <span className="rounded-lg bg-primary/10 px-2.5 py-1.5 text-xs font-semibold text-primary">القراءة والنصوص · 9 دروس</span>
+          <span className="rounded-lg border border-dashed border-border bg-background px-2.5 py-1.5 text-xs text-muted-foreground">البلاغة · غير مفهرسة في الجزء الأول</span>
         </div>}
         {subjectId && !subjectChoices.length && <p className="mx-5 mb-5 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-sm leading-6 text-muted-foreground sm:mx-6">فهرس هذه المادة غير محمّل في النسخة الحالية؛ لن نعرض دروسًا مخمّنة.</p>}
         {!subjects.length && !profile.isLoading && <p className="m-5 rounded-xl bg-muted/50 p-3 text-sm text-muted-foreground">لم تُضف مواد إلى ملفك الدراسي بعد. أضف المواد من الملف الشخصي أولًا.</p>}
