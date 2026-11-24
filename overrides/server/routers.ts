@@ -709,7 +709,11 @@ export const appRouter = router({
         backlog: z.record(z.string(), z.number().int().min(0).max(999)).default({}),
         obstacle: z.string().trim().min(2).max(600),
       }))
-      .mutation(({ ctx, input }) => saveStudentProfile(ctx.user.id, input)),
+      .mutation(async ({ ctx, input }) => {
+        const result = await saveStudentProfile(ctx.user.id, input);
+        queueDailyPlanReconciliation(ctx.user.id);
+        return result;
+      }),
     complete: protectedProcedure
       .input(z.object({
         studentName: z.string().trim().min(2).max(120),
@@ -1206,10 +1210,18 @@ export const appRouter = router({
           estimatedMinutes: z.number().int().min(1).max(300),
         })).max(20).optional(),
       }))
-      .mutation(({ ctx, input }) => createGoal(ctx.user.id, input)),
+      .mutation(async ({ ctx, input }) => {
+        const result = await createGoal(ctx.user.id, input);
+        queueDailyPlanReconciliation(ctx.user.id);
+        return result;
+      }),
     setStatus: protectedProcedure
       .input(z.object({ id: z.number().int().positive(), status: z.enum(["active", "completed", "paused"]) }))
-      .mutation(({ ctx, input }) => setGoalStatus(ctx.user.id, input.id, input.status)),
+      .mutation(async ({ ctx, input }) => {
+        const result = await setGoalStatus(ctx.user.id, input.id, input.status);
+        queueDailyPlanReconciliation(ctx.user.id);
+        return result;
+      }),
     update: protectedProcedure
       .input(z.object({
         id: z.number().int().positive(),
@@ -1221,10 +1233,18 @@ export const appRouter = router({
         targetDate: dateInput,
         status: z.enum(["active", "completed", "paused"]),
       }))
-      .mutation(({ ctx, input }) => updateGoal(ctx.user.id, input.id, input)),
+      .mutation(async ({ ctx, input }) => {
+        const result = await updateGoal(ctx.user.id, input.id, input);
+        queueDailyPlanReconciliation(ctx.user.id);
+        return result;
+      }),
     delete: protectedProcedure
       .input(z.object({ id: z.number().int().positive() }))
-      .mutation(({ ctx, input }) => deleteGoal(ctx.user.id, input.id)),
+      .mutation(async ({ ctx, input }) => {
+        const result = await deleteGoal(ctx.user.id, input.id);
+        queueDailyPlanReconciliation(ctx.user.id);
+        return result;
+      }),
   }),
 
   books: router({
@@ -1931,6 +1951,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const result = await createRoutine(ctx.user.id, input);
         await logStudentActivity(ctx.user.id, "routine.created", "routine", result ?? null, "أُنشئ روتين جديد", { name: input.name, period: input.period, itemCount: input.items.length });
+        queueDailyPlanReconciliation(ctx.user.id);
         return result;
       }),
     toggleItem: protectedProcedure
@@ -1938,6 +1959,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const result = await toggleRoutineItem(ctx.user.id, input.id, input.done, input.timeZone ?? "UTC");
         await logStudentActivity(ctx.user.id, input.done ? "routine.step_completed" : "routine.step_reopened", "routine_item", input.id, input.done ? "اكتملت خطوة من الروتين" : "أُعيد فتح خطوة من الروتين");
+        queueDailyPlanReconciliation(ctx.user.id);
         return result;
       }),
     update: protectedProcedure
@@ -1955,6 +1977,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const result = await updateRoutine(ctx.user.id, input.id, input);
         await logStudentActivity(ctx.user.id, "routine.updated", "routine", input.id, "تم تعديل روتين", { name: input.name, period: input.period, active: input.isActive });
+        queueDailyPlanReconciliation(ctx.user.id);
         return result;
       }),
     delete: protectedProcedure
@@ -1962,6 +1985,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const result = await deleteRoutine(ctx.user.id, input.id);
         await logStudentActivity(ctx.user.id, "routine.deleted", "routine", input.id, "حُذف روتين");
+        queueDailyPlanReconciliation(ctx.user.id);
         return result;
       }),
   }),
