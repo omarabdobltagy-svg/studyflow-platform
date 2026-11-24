@@ -699,7 +699,7 @@ export type SIECheckpointChoice = {
   unitNumber?: number;
   lessonNumber?: string;
   courseSequenceNumber?: number;
-  lessonType?: "reading" | "poetry" | "prose" | "grammar" | "rhetoric" | "expression" | "spelling" | "story" | "topic";
+  lessonType?: "reading" | "poetry" | "prose" | "grammar" | "vocabulary" | "rhetoric" | "expression" | "spelling" | "story" | "topic";
   sourceLabel?: string;
   branchId?: string;
   branchTitle?: string;
@@ -958,7 +958,8 @@ export function getSIECheckpointChoiceTypeLabel(choice: SIECheckpointChoice): st
   switch (choice.lessonType) {
     case "reading": return "قراءة";
     case "poetry": return "نص شعري";
-    case "grammar": return "نحو";
+    case "grammar": return "قواعد (Grammar)";
+    case "vocabulary": return "مفردات (Vocabulary)";
     case "rhetoric": return "بلاغة";
     case "prose": return "نص نثري";
     case "expression": return "تعبير";
@@ -1012,10 +1013,48 @@ export function getSIECheckpointBranches(subjectId: string): SIECheckpointBranch
     const textbookBranchId = "ENG_TEXTBOOK";
     const textbookChoices = choices.filter(choice => !choice.nodeId.startsWith("ENG_LOST_WORLD_"));
     const storyChoices = choices.filter(choice => choice.nodeId.startsWith("ENG_LOST_WORLD_"));
+    const unitCatalog = [...new Map(textbookChoices
+      .filter(choice => typeof choice.unitNumber === "number" && choice.unitTitle)
+      .map(choice => [choice.unitNumber!, { unitNumber: choice.unitNumber!, unitTitle: choice.unitTitle! }]))
+      .values()]
+      .sort((left, right) => left.unitNumber - right.unitNumber);
+    const streamChoices = (
+      streamId: "ENG_VOCABULARY" | "ENG_GRAMMAR",
+      streamTitle: string,
+      lessonType: "vocabulary" | "grammar",
+    ) => unitCatalog.map(unit => ({
+      nodeId: `${streamId}_U${unit.unitNumber}`,
+      title: `${streamTitle} — Unit ${unit.unitNumber}`,
+      unitTitle: unit.unitTitle,
+      unitNumber: unit.unitNumber,
+      lessonNumber: `${unit.unitNumber}.1`,
+      lessonType,
+      sourceLabel: unit.unitNumber <= 5 ? "منهج اللغة الإنجليزية - الجزء الأول" : "منهج اللغة الإنجليزية - الجزء الثاني",
+      branchId: streamId,
+      branchTitle: streamTitle === "Vocabulary" ? "المفردات (Vocabulary)" : "القواعد (Grammar)",
+      branchType: "course_track" as const,
+    }));
+    const greTitles = [
+      "المفردات الأكاديمية وفهمها من السياق",
+      "إكمال النصوص (Text Completion)",
+      "تكافؤ الجمل (Sentence Equivalence)",
+      "فهم المقروء والاستدلال (Reading Comprehension)",
+    ];
+    const greChoices = greTitles.map((title, index) => ({
+      nodeId: `ENG_GRE_${index + 1}`,
+      title,
+      unitTitle: "مسار GRE التكميلي",
+      courseSequenceNumber: index + 1,
+      lessonType: "topic" as const,
+      sourceLabel: "مسار إثرائي مستقل عن المنهج الوزاري",
+      branchId: "ENG_GRE",
+      branchTitle: "GRE — مسار تكميلي",
+      branchType: "course_track" as const,
+    }));
     return [
-      { branchId: "ENG_VOCABULARY", branchTitle: "Vocabulary", branchType: "course_track", choices: [] },
-      { branchId: "ENG_GRAMMAR", branchTitle: "Grammar", branchType: "course_track", choices: [] },
-      { branchId: "ENG_GRE", branchTitle: "GRE", branchType: "course_track", choices: [] },
+      { branchId: "ENG_VOCABULARY", branchTitle: "المفردات (Vocabulary)", branchType: "course_track", choices: streamChoices("ENG_VOCABULARY", "Vocabulary", "vocabulary") },
+      { branchId: "ENG_GRAMMAR", branchTitle: "القواعد (Grammar)", branchType: "course_track", choices: streamChoices("ENG_GRAMMAR", "Grammar", "grammar") },
+      { branchId: "ENG_GRE", branchTitle: "GRE — مسار تكميلي", branchType: "course_track", choices: greChoices },
       {
         branchId: textbookBranchId,
         branchTitle: "موضوعات الكتاب",
