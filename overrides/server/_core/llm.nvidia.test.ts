@@ -34,7 +34,7 @@ describe("NVIDIA Nemotron provider", () => {
       response_format: { type: "json_object" },
     });
 
-    expect(result.choices[0].message.content).toBe(expectedContent);
+    expect(result.choices[0].message.content).toBe(completionContent);
     expect(fetchMock).toHaveBeenCalledOnce();
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("https://integrate.api.nvidia.com/v1/chat/completions");
@@ -54,13 +54,14 @@ describe("NVIDIA Nemotron provider", () => {
     vi.stubEnv("NVIDIA_API_BASE_URL", "https://integrate.api.nvidia.com/v1");
     vi.stubEnv("NVIDIA_MODEL", "nvidia/nemotron-3-ultra-550b-a55b");
 
+    const completionContent = JSON.stringify({ ok: true });
     const completion = {
       id: "completed-response",
       created: 1,
       model: "nvidia/nemotron-3-ultra-550b-a55b",
       choices: [{
         index: 0,
-        message: { role: "assistant", content: "{\\"ok\\":true}" },
+        message: { role: "assistant", content: completionContent },
         finish_reason: "stop",
       }],
     };
