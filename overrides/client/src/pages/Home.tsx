@@ -228,8 +228,14 @@ export default function Home() {
     ),
     [profile.data, learning.data],
   );
-  // Count affected subjects, not lesson points summed across incompatible subjects.
-  const totalBacklog = backlogBySubject.filter(item =>
+  // Report the total number of known overdue curriculum points, not the
+  // number of subjects. Unknown branches are excluded, never treated as zero.
+  const totalBacklog = backlogBySubject.reduce((total, item) => total + (
+    item.source === "frontier" ? item.gapCount
+      : item.source === "legacy" ? item.legacyCount
+        : 0
+  ), 0);
+  const backlogSubjectCount = backlogBySubject.filter(item =>
     item.source === "frontier" ? item.gapCount > 0 : item.source === "legacy" && item.legacyCount > 0
   ).length;
   const hasBacklogEvidence = backlogBySubject.some(item => item.source !== "unknown");
@@ -367,7 +373,7 @@ export default function Home() {
             </div>
             {profile.isLoading || learning.isLoading ? <div className="sf-home-intelligence-loading">جارٍ قراءة مواضعك ومقارنتها بموضع المدرس أو المجموعة...</div>
               : profile.isError || learning.isError ? <p className="sf-home-intelligence-empty">تعذّر تحميل مواضع الدراسة والتراكم. أعد المحاولة من صفحة الدراسة.</p>
-              : <><div className="sf-home-backlog-total"><strong>{hasBacklogEvidence ? totalBacklog : "—"}</strong><span>مواد بها تراكم مؤكد</span></div>
+              : <><div className="sf-home-backlog-total"><strong>{hasBacklogEvidence ? totalBacklog : "—"}</strong><span>{hasBacklogEvidence ? `نقطة / عنصر متأخر عبر ${backlogSubjectCount} مادة` : "يظهر الإجمالي بعد حساب مواضعك"}</span></div>
                 <div className="sf-home-backlog-list">
                   {backlogBySubject.map(item => <div key={item.subjectId}>
                     <span>{item.subjectName}</span>
