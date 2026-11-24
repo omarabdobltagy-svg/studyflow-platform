@@ -374,10 +374,10 @@ export async function generatePersonalPlan(
   const user = [
     "طلب الطالب أو هدفه الحالي:",
     prompt.slice(0, 1_200),
-    additionalContext ? "\\nالسياق الإضافي الذي يجب دمجه في القرار:\\n" + additionalContext : "",
-    "\\nبيانات الملف الدراسي الحالية:",
+    additionalContext ? "\nالسياق الإضافي الذي يجب دمجه في القرار:\n" + additionalContext : "",
+    "\nبيانات الملف الدراسي الحالية:",
     context,
-  ].join("\\n");
+  ].join("\n");
   let response: Awaited<ReturnType<typeof invokeLLM>>;
   const invokeCompact = async (
     provider: typeof invokeLLM,
