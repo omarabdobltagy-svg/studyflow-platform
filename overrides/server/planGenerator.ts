@@ -198,7 +198,7 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
   const choices = (selection.teacherChoices || profile.teacherSelections || {}) as Record<string, string>;
   const frontiers = (selection.teacherFrontiers || {}) as Record<string, string>;
   const teacherStates = (selection.teacherProgressState || {}) as Record<string, Record<string, any>>;
-  const lessonProgress = (selection.subjectLessonProgress || {}) as Record<string, Record<string, any>>;
+  const lessonProgress = (selection.sq3rProgress ?? selection.subjectLessonProgress ?? {}) as Record<string, Record<string, any>>;
   const courseProgress = (selection.learningCourseProgress || {}) as Record<string, any>;
   const assessmentHistory = Array.isArray(selection.learningAssessments)
     ? selection.learningAssessments as Array<Record<string, any>>
@@ -229,13 +229,9 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
         typeof value === "string" &&
         (value === "__NOT_STARTED__" ||
           branch.choices.some(choice => choice.nodeId === value));
-      const latestSq3rCompleted = [...branch.choices].reverse().find(choice => {
-        const completedSteps = subjectLessonRecords[choice.nodeId]?.completedSteps;
-        return Array.isArray(completedSteps) && completedSteps.length === 5;
-      })?.nodeId;
       const studentFrontier = Object.prototype.hasOwnProperty.call(saved, "lastCompletedLessonId")
         ? saved.lastCompletedLessonId
-        : belongsToBranch(studentLegacyFrontier) ? studentLegacyFrontier : latestSq3rCompleted ?? "__UNKNOWN__";
+        : belongsToBranch(studentLegacyFrontier) ? studentLegacyFrontier : "__UNKNOWN__";
       const teacherFrontier = Object.prototype.hasOwnProperty.call(saved, "teacherTeachingFrontierId")
         ? saved.teacherTeachingFrontierId
         : belongsToBranch(reported.teacherTeachingFrontierId) ? reported.teacherTeachingFrontierId : "__UNKNOWN__";
