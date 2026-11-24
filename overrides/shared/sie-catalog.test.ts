@@ -131,9 +131,23 @@ describe("subject curriculum layouts", () => {
     expect(branches.map(branch => branch.branchId)).toEqual([
       "ENG_VOCABULARY", "ENG_GRAMMAR", "ENG_GRE", "ENG_TEXTBOOK", "ENG_STORY",
     ]);
+    expect(branches.find(branch => branch.branchId === "ENG_VOCABULARY")?.choices).toHaveLength(10);
+    expect(branches.find(branch => branch.branchId === "ENG_GRAMMAR")?.choices).toHaveLength(10);
+    expect(branches.find(branch => branch.branchId === "ENG_GRE")?.choices).toHaveLength(4);
     expect(branches.find(branch => branch.branchId === "ENG_TEXTBOOK")?.choices).toHaveLength(40);
     expect(branches.find(branch => branch.branchId === "ENG_STORY")?.choices).toHaveLength(10);
     expect(branches.find(branch => branch.branchId === "ENG_STORY")?.choices[0].title).toBe("A Dream of Adventure");
+    expect(branches.find(branch => branch.branchId === "ENG_VOCABULARY")?.choices[0]).toMatchObject({
+      nodeId: "ENG_VOCABULARY_U1",
+      lessonType: "vocabulary",
+      unitNumber: 1,
+    });
+    expect(branches.find(branch => branch.branchId === "ENG_GRAMMAR")?.choices[9]).toMatchObject({
+      nodeId: "ENG_GRAMMAR_U10",
+      lessonType: "grammar",
+      unitNumber: 10,
+    });
+    expect(branches.find(branch => branch.branchId === "ENG_GRE")?.choices[0].sourceLabel).toContain("خارج المقرر الوزاري");
   });
 
   it("gives subjects without a loaded index one editable linear curriculum path", () => {
