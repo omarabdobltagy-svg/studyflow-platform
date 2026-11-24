@@ -325,6 +325,7 @@ export const appRouter = router({
           teacherFrontiers: stripSubjectMap(selection.teacherFrontiers),
           learningCourseProgress: stripSubjectMap(selection.learningCourseProgress),
           subjectLessonProgress: stripSubjectMap(selection.subjectLessonProgress),
+          sq3rProgress: stripSubjectMap(selection.sq3rProgress ?? selection.subjectLessonProgress),
         },
       };
     }),
@@ -818,7 +819,7 @@ export const appRouter = router({
         const curriculumContext = (profile?.subjectIds || []).map(subjectId => {
           const subjectName = getSIESubject(subjectId)?.nameAr || subjectId;
           const branches = firstPartBranches(subjectId);
-          const progress = (selection.subjectLessonProgress || {}) as Record<string, Record<string, any>>;
+          const progress = (selection.sq3rProgress ?? selection.subjectLessonProgress ?? {}) as Record<string, Record<string, any>>;
           const records = progress[subjectId] || {};
           const branchSummary = branches.map(branch => {
             const done = branch.choices.filter(item => Array.isArray(records[item.nodeId]?.completedSteps) && records[item.nodeId].completedSteps.length === 5).length;
@@ -836,8 +837,8 @@ export const appRouter = router({
           const branchRecords = (record.branches ?? {}) as Record<string, Record<string, any>>;
           const legacyTeacherState = teacherProgressState[subjectId] ?? {};
           const legacyStudentFrontier = teacherFrontiers[subjectId] || legacyTeacherState.studentAttendedFrontier || null;
-          const subjectLessonProgress = (selection.subjectLessonProgress ?? {}) as Record<string, Record<string, any>>;
-          const subjectLessonRecords = subjectLessonProgress[subjectId] ?? {};
+          const sq3rLessonProgress = (selection.sq3rProgress ?? selection.subjectLessonProgress ?? {}) as Record<string, Record<string, any>>;
+          const subjectLessonRecords = sq3rLessonProgress[subjectId] ?? {};
           const branches = firstPartBranches(subjectId);
           const branchContext = branches.map(branch => {
             const saved = branchRecords[branch.branchId] ?? {};
@@ -845,15 +846,11 @@ export const appRouter = router({
               typeof value === "string" &&
               (value === "__UNKNOWN__" || value === "__NOT_STARTED__" ||
                 branch.choices.some(choice => choice.nodeId === value));
-            const latestSq3rCompleted = [...branch.choices].reverse().find(choice => {
-              const steps = subjectLessonRecords[choice.nodeId]?.completedSteps;
-              return Array.isArray(steps) && steps.length === 5;
-            })?.nodeId;
             const studentFrontierId = Object.prototype.hasOwnProperty.call(saved, "lastCompletedLessonId")
               ? saved.lastCompletedLessonId
               : belongsToBranch(record.lastCompletedLessonId)
                 ? record.lastCompletedLessonId
-                : belongsToBranch(legacyStudentFrontier) ? legacyStudentFrontier : latestSq3rCompleted ?? "__UNKNOWN__";
+                : belongsToBranch(legacyStudentFrontier) ? legacyStudentFrontier : "__UNKNOWN__";
             const teacherFrontierId = Object.prototype.hasOwnProperty.call(saved, "teacherTeachingFrontierId")
               ? saved.teacherTeachingFrontierId
               : belongsToBranch(record.teacherTeachingFrontierId) ? record.teacherTeachingFrontierId : "__UNKNOWN__";
@@ -1141,14 +1138,13 @@ export const appRouter = router({
       const courseProgress = (selection.learningCourseProgress ?? {}) as Record<string, any>;
       const legacyTeacherFrontiers = (selection.teacherFrontiers ?? {}) as Record<string, string>;
       const legacyTeacherState = (selection.teacherProgressState ?? {}) as Record<string, Record<string, any>>;
-      const sq3rProgress = (selection.subjectLessonProgress ?? {}) as Record<string, Record<string, any>>;
+      const sq3rProgress = (selection.sq3rProgress ?? selection.subjectLessonProgress ?? {}) as Record<string, Record<string, any>>;
       const activeSubjectIds = profile.subjectIds.filter(subjectId => subjectId !== "SECOND_LANGUAGE_G2_BAC_PENDING");
       const gapByBranch = Object.fromEntries(activeSubjectIds.map(subjectId => {
         const subjectRecord = courseProgress[subjectId] ?? {};
         const subjectCourseMode = selection.courseModes?.[subjectId] ?? subjectRecord.courseMode ?? "online";
         const branchRecords = subjectRecord.branches ?? {};
         const legacyStudentFrontier = legacyTeacherFrontiers[subjectId] || legacyTeacherState[subjectId]?.studentAttendedFrontier;
-        const subjectLessonRecords = sq3rProgress[subjectId] ?? {};
         const branches = getSIECheckpointBranches(subjectId);
         const selectedTeacherId = selection.teacherChoices?.[subjectId] ?? profile.teacherSelections?.[subjectId] ?? "__SKIP__";
         const selectedTeacherName = selection.customTeacherNames?.[subjectId] ?? "";
@@ -1185,10 +1181,6 @@ export const appRouter = router({
               });
             return positioned.length ? positioned[positioned.length - 1] : candidates.length ? "__UNKNOWN__" : undefined;
           };
-          const latestSq3rCompleted = [...branchChoices].reverse().find(choice => {
-            const steps = subjectLessonRecords[choice.nodeId]?.completedSteps;
-            return Array.isArray(steps) && steps.length === 5;
-          })?.nodeId;
           const savedStudentFrontier = Object.prototype.hasOwnProperty.call(saved, "lastCompletedLessonId")
             ? saved.lastCompletedLessonId
             : legacyLinear ? pickLegacyFrontier("lastCompletedLessonId") : undefined;
@@ -1196,7 +1188,7 @@ export const appRouter = router({
             ? savedStudentFrontier
             : belongsToBranch(subjectRecord.lastCompletedLessonId)
               ? subjectRecord.lastCompletedLessonId
-              : belongsToBranch(legacyStudentFrontier) ? legacyStudentFrontier : latestSq3rCompleted ?? "__UNKNOWN__";
+              : belongsToBranch(legacyStudentFrontier) ? legacyStudentFrontier : "__UNKNOWN__";
           const savedTeacherFrontier = Object.prototype.hasOwnProperty.call(saved, "teacherTeachingFrontierId")
             ? saved.teacherTeachingFrontierId
             : legacyLinear ? pickLegacyFrontier("teacherTeachingFrontierId", true) : undefined;
@@ -1234,7 +1226,7 @@ export const appRouter = router({
         gapBySubject,
         gapByBranch,
         activeExternalSession: selection.learningExternalSession ?? null,
-        sq3rProgress: selection.subjectLessonProgress ?? {},
+        sq3rProgress: selection.sq3rProgress ?? selection.subjectLessonProgress ?? {},
         memoryUpdatedAt: selection.assistantMemoryUpdatedAt ?? null,
       };
     }),
@@ -1697,7 +1689,7 @@ export const appRouter = router({
           .find(item => item.nodeId === input.lessonId);
         const lesson = staticLesson ?? customLesson;
         if (!lesson) throw new TRPCError({ code: "BAD_REQUEST", message: "الدرس غير موجود في فهرس المادة أو كورس المدرس الحالي." });
-        const progress = (selection.subjectLessonProgress || {}) as Record<string, Record<string, any>>;
+        const progress = (selection.sq3rProgress ?? selection.subjectLessonProgress ?? {}) as Record<string, Record<string, any>>;
         const subjectProgress = { ...(progress[input.subjectId] || {}) };
         const record = {
           completedSteps: [...new Set(input.completedSteps)],
@@ -1710,9 +1702,9 @@ export const appRouter = router({
         subjectProgress[input.lessonId] = record;
         await updateStudentProfileSelection(ctx.user.id, {
           ...selection,
-          subjectLessonProgress: { ...progress, [input.subjectId]: subjectProgress },
+          sq3rProgress: { ...progress, [input.subjectId]: subjectProgress },
         });
-        await logStudentActivity(ctx.user.id, "study.lesson_progress_updated", "curriculum_lesson", input.lessonId, "تم تحديث تقدم درس", {
+        await logStudentActivity(ctx.user.id, "study.sq3r_progress_updated", "curriculum_lesson", input.lessonId, "تم تحديث تقدم جلسة SQ3R", {
           subjectId: input.subjectId, completedStepCount: record.completedSteps.length, difficulty: record.difficulty,
         });
         return { success: true, progress: record, lessonTitle: lesson.title };
