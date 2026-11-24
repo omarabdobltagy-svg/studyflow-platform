@@ -357,8 +357,70 @@ type ProviderRequestConfig = {
   defaultModel: string;
   errorPrefix: string;
   omitResponseFormat?: boolean;
+  pollPending?: boolean;
   additionalBody?: Record<string, unknown>;
 };
+
+const NVIDIA_POLL_INTERVAL_MS = 1_000;
+const NVIDIA_POLL_TIMEOUT_MS = 90_000;
+
+async function pollNvidiaPendingResponse(
+  initialResponse: Response,
+  provider: ProviderRequestConfig
+): Promise<InvokeResult> {
+  const initialPayload = await initialResponse.json().catch(() => ({})) as Record<string, unknown>;
+  const requestId = [
+    initialPayload.requestId,
+    initialPayload.request_id,
+    initialResponse.headers.get("NVCF-REQID"),
+    initialResponse.headers.get("NVCF-REQUEST-ID"),
+  ].find(value => typeof value === "string" && value.length > 0) as string | undefined;
+
+  if (!requestId) {
+    throw new Error(provider.errorPrefix + ": HTTP 202 returned without a requestId");
+  }
+
+  const statusBaseUrl = resolveApiUrl(provider.apiBaseUrl, provider.fallbackBaseUrl)
+    .replace(/\\/chat\\/completions\\/?$/i, "");
+  const statusUrl = statusBaseUrl + "/status/" + encodeURIComponent(requestId);
+  const deadline = Date.now() + NVIDIA_POLL_TIMEOUT_MS;
+
+  while (Date.now() < deadline) {
+    await sleep(NVIDIA_POLL_INTERVAL_MS);
+    const pollResponse = await fetchWithBackoff(statusUrl, {
+      method: "GET",
+      headers: {
+        accept: "application/json",
+        authorization: "Bearer " + provider.apiKey,
+      },
+    });
+
+    if (pollResponse.status === 202) {
+      try {
+        await pollResponse.body?.cancel();
+      } catch {
+        // The response body may already be consumed or closed.
+      }
+      continue;
+    }
+
+    if (!pollResponse.ok) {
+      const errorText = (await pollResponse.text()).slice(0, 1_600);
+      throw new Error(
+        provider.errorPrefix + " status polling failed: " +
+        pollResponse.status + " " + pollResponse.statusText + " – " + errorText
+      );
+    }
+
+    const result = await pollResponse.json() as InvokeResult;
+    if (!result || !Array.isArray(result.choices)) {
+      throw new Error(provider.errorPrefix + ": status polling returned an invalid completion payload");
+    }
+    return result;
+  }
+
+  throw new Error(provider.errorPrefix + ": timed out while waiting for the pending request");
+}
 
 async function invokeWithProvider(
   params: InvokeParams,
@@ -398,6 +460,7 @@ async function invokeWithProvider(
     {
       method: "POST",
       headers: {
+        accept: "application/json",
         "content-type": "application/json",
         authorization: "Bearer " + provider.apiKey,
       },
@@ -405,6 +468,9 @@ async function invokeWithProvider(
     }
   );
 
+  if (response.status === 202 && provider.pollPending) {
+    return pollNvidiaPendingResponse(response, provider);
+  }
   if (!response.ok) {
     const errorText = (await response.text()).slice(0, 1_600);
     throw new Error(
@@ -435,8 +501,9 @@ export async function invokeNvidiaLLM(params: InvokeParams): Promise<InvokeResul
     defaultModel: ENV.nvidiaModel,
     errorPrefix: "NVIDIA LLM invoke failed",
     omitResponseFormat: true,
-    // Return JSON instead of SSE; medium reasoning preserves some planning depth.
-    additionalBody: { reasoning_effort: "medium", stream: false },
+    pollPending: true,
+    // Keep reasoning bounded so the completion has enough tokens for its JSON plan.
+    additionalBody: { reasoning_effort: "medium", reasoning_budget: 1_024, stream: false },
   });
 }
 
