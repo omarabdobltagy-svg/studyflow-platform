@@ -787,7 +787,9 @@ export default function Study() {
                     const sequence = choice.courseSequenceNumber
                       ? "تسلسل الكورس " + choice.courseSequenceNumber
                       : choice.lessonNumber
-                        ? "رقم الدرس " + choice.lessonNumber
+                        ? choice.unitNumber && (subjectId === "HIS_G2_BAC" || subjectId === "PROG_AI_G2_BAC")
+                          ? "الوحدة " + choice.unitNumber + " · الدرس " + choice.lessonNumber
+                          : "رقم الدرس " + choice.lessonNumber
                         : choice.unitTitle
                           ? (subjectId === "PROG_AI_G2_BAC" ? "الفصل: " : "الوحدة: ") + choice.unitTitle
                           : "نقطة " + (index + 1);
