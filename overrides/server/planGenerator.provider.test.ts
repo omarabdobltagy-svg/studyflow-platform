@@ -59,7 +59,7 @@ describe("generated plan JSON parser", () => {
       })),
     };
     const jsonWithTrailingComma = JSON.stringify(planWithBraces).replace(/}$/, ",}");
-    const response = "إليك الخطة المطلوبة:\n\n\`\`\`json\n" + jsonWithTrailingComma + "\n\`\`\`";
+    const response = "مثال غير صالح: {\\"hint\\":\\"ignore this object\\"}\\nإليك الخطة المطلوبة:\\n\\n```json\\n" + jsonWithTrailingComma + "\\n```";
     expect(parseGeneratedPlan(response)).toEqual(planWithBraces);
   });
 
