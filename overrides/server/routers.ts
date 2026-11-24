@@ -38,6 +38,7 @@ import {
   getStudyAnalytics,
   getStudentProfile,
   getLatestAiPlanByPromptPrefix,
+  updateAiPlanPrompt,
   listRecentStudentActivityEvents,
   recordStudentActivityEvent,
   startStudySession,
@@ -70,6 +71,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { generatePersonalPlan } from "./planGenerator";
 import { isDailyPlanStale } from "./planLifecycle";
+import { createDailyPlanSourceFingerprint } from "./dailyPlanFingerprint";
 import { storageDelete, storagePut } from "./storage";
 import { decodeAndValidateAttachment } from "./attachments";
 import { parse as parseCookie } from "cookie";
@@ -90,7 +92,47 @@ type DailyPlanResult = {
   taskCount: number;
 };
 
+const DAILY_PLAN_PREFIX = "SIE_DAILY_PLAN_V1:";
 const dailyPlanLocks = new Map<number, Promise<DailyPlanResult>>();
+const dailyPlanDirtyUsers = new Set<number>();
+
+async function getDailyPlanSourceFingerprint(userId: number, dailyMinutes: number, startDate: string) {
+  const profile = await getStudentProfile(userId);
+  if (!profile || !Array.isArray(profile.subjectIds) || profile.subjectIds.length === 0) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "أكمل ملفك الدراسي وحدد موادك أولًا حتى يبني المخطط خطة دقيقة.",
+    });
+  }
+  const [tasks, goals, calendar, routines] = await Promise.all([
+    listTasks(userId),
+    listGoals(userId),
+    listCalendarEvents(userId),
+    listRoutines(userId, "Africa/Cairo"),
+  ]);
+  const byId = <T extends { id: number }>(items: T[]) => [...items].sort((left, right) => left.id - right.id);
+  return createDailyPlanSourceFingerprint({
+    catalogVersion: SIE_CATALOG_META.packageVersion,
+    startDate,
+    dailyMinutes,
+    profile: {
+      studentName: profile.studentName,
+      educationSystem: profile.educationSystem,
+      gradeYear: profile.gradeYear,
+      track: profile.track,
+      subjectIds: profile.subjectIds,
+      subjects: profile.subjects,
+      teacherSelections: profile.teacherSelections,
+      backlog: profile.backlog,
+      obstacle: profile.obstacle,
+      selection: profile.selection,
+    },
+    tasks: byId(tasks),
+    goals: byId(goals),
+    calendar: byId(calendar),
+    routines: byId(routines),
+  });
+}
 
 async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): Promise<DailyPlanResult> {
   const running = dailyPlanLocks.get(userId);
@@ -106,15 +148,23 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): 
     }
 
     const startDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
-    const latestDailyPlan = await getLatestAiPlanByPromptPrefix(userId, "SIE_DAILY_PLAN_V1:");
+    const sourceFingerprint = await getDailyPlanSourceFingerprint(userId, dailyMinutes, startDate);
+    const expectedPromptPrefix = DAILY_PLAN_PREFIX + sourceFingerprint + ":";
+    const latestDailyPlan = await getLatestAiPlanByPromptPrefix(userId, DAILY_PLAN_PREFIX);
     const latestPlanDay = latestDailyPlan
       ? new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date(latestDailyPlan.createdAt))
       : null;
-    if (latestDailyPlan && latestPlanDay === startDate && !isDailyPlanStale(latestDailyPlan.createdAt)) {
+
+    if (latestDailyPlan && latestDailyPlan.prompt.startsWith(expectedPromptPrefix)
+      && latestPlanDay === startDate && !isDailyPlanStale(latestDailyPlan.createdAt)) {
       try {
         const saved = JSON.parse(latestDailyPlan.planJson) as Awaited<ReturnType<typeof generatePersonalPlan>>;
         if (saved && typeof saved.title === "string" && Array.isArray(saved.steps) && saved.steps.length > 0) {
           const taskSync = await syncDailyPlanGoalTree(userId, saved, { startDate, dailyMinutes });
+          const refreshedFingerprint = await getDailyPlanSourceFingerprint(userId, dailyMinutes, startDate);
+          if (refreshedFingerprint !== sourceFingerprint) {
+            await updateAiPlanPrompt(userId, latestDailyPlan.id, DAILY_PLAN_PREFIX + refreshedFingerprint + ":");
+          }
           return {
             plan: saved,
             generatedAt: new Date(latestDailyPlan.createdAt),
@@ -130,17 +180,23 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): 
       }
     }
 
+    const dailyPrompt = DAILY_PLAN_PREFIX + sourceFingerprint + ": حلّل ملفي الدراسي كاملًا وحدد أهم ما يجب أن أذاكره الآن. أنشئ خطة يومية واقعية تبدأ اليوم، وتعالج التراكم حسب أولوية المنهج وصعوبة كل درس وحجمه والوقت المتاح.";
     const plan = await generatePersonalPlan(
       userId,
-      "SIE_DAILY_PLAN_V1: حلّل ملفي الدراسي كاملًا وحدد أهم ما يجب أن أذاكره الآن. أنشئ خطة يومية واقعية تبدأ اليوم، وتعالج التراكم حسب أولوية المنهج وصعوبة كل درس وحجمه والوقت المتاح.",
+      dailyPrompt,
       true,
       {
         dailyMinutes,
         startDate,
-        context: "هذه خطة التشغيل اليومية الافتراضية. استخدم بيانات ملف الدراسة والتراكم والتقدم ومواضع التدريس وسجل التقييمات المتاحة؛ لا تطلب من الطالب إعادة إدخال أي معلومة موجودة. اجعل أول خطوة واضحة وقابلة للبدء فورًا.",
+        context: "هذه خطة التشغيل اليومية الافتراضية. استخدم بيانات ملف الدراسة والتراكم والتقدم ومواضع التدريس وسجل التقييمات والمهام والمواعيد والروتين المتاحة؛ لا تطلب من الطالب إعادة إدخال أي معلومة موجودة. أعد توزيع الخطوات غير المكتملة عند تغير أي مصدر، واحتفظ بما أنجزه الطالب. اجعل أول خطوة واضحة وقابلة للبدء فورًا.",
       },
     );
     const taskSync = await syncDailyPlanGoalTree(userId, plan, { startDate, dailyMinutes });
+    const latestGeneratedPlan = await getLatestAiPlanByPromptPrefix(userId, DAILY_PLAN_PREFIX);
+    const refreshedFingerprint = await getDailyPlanSourceFingerprint(userId, dailyMinutes, startDate);
+    if (latestGeneratedPlan) {
+      await updateAiPlanPrompt(userId, latestGeneratedPlan.id, DAILY_PLAN_PREFIX + refreshedFingerprint + ":");
+    }
     return {
       plan,
       generatedAt: new Date(),
@@ -153,11 +209,30 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): 
   })();
 
   dailyPlanLocks.set(userId, task);
+  let result: DailyPlanResult;
   try {
-    return await task;
+    result = await task;
   } finally {
     if (dailyPlanLocks.get(userId) === task) dailyPlanLocks.delete(userId);
   }
+  if (dailyPlanDirtyUsers.delete(userId)) return ensureDailyPlanForStudent(userId, dailyMinutes);
+  return result;
+}
+
+async function reconcileDailyPlanAfterChange(userId: number) {
+  const existingDailyPlan = await getLatestAiPlanByPromptPrefix(userId, DAILY_PLAN_PREFIX);
+  if (!existingDailyPlan) return;
+  if (dailyPlanLocks.has(userId)) {
+    dailyPlanDirtyUsers.add(userId);
+    return;
+  }
+  await ensureDailyPlanForStudent(userId, 120);
+}
+
+function queueDailyPlanReconciliation(userId: number) {
+  void reconcileDailyPlanAfterChange(userId).catch(error => {
+    console.error("[StudyFlow daily plan] Automatic reconciliation failed:", error instanceof Error ? error.message : String(error));
+  });
 }
 
 const LOCAL_AUTH_OPEN_ID = "studyflow-local-owner";
