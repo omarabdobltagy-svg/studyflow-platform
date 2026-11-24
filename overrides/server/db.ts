@@ -568,6 +568,7 @@ export type ApprovedPlanStep = {
   detail: string;
   minutes: number;
   category: string;
+  priority?: "critical" | "high" | "medium" | "low";
 };
 
 export function normalizeApprovedPlanSteps(steps: ApprovedPlanStep[]) {
@@ -600,6 +601,55 @@ export function schedulePlanStepDates(startDate: string, steps: Array<{ minutes:
     dueAt.setUTCDate(dueAt.getUTCDate() + dayOffset);
     usedMinutes += duration;
     return dueAt;
+  });
+}
+
+/**
+ * Inserts the actionable steps of the daily plan into the student's task list.
+ * Existing unfinished tasks and tasks already scheduled for today/future are
+ * reused instead of duplicated. Completed past tasks may be scheduled again.
+ */
+export async function ensureDailyPlanTasks(
+  userId: number,
+  plan: { title: string; steps: ApprovedPlanStep[] },
+  startDate: string,
+  dailyMinutes: number,
+) {
+  const database = await requireDb();
+  const steps = normalizeApprovedPlanSteps(plan.steps);
+  if (steps.length === 0) return { addedCount: 0, taskCount: 0 };
+
+  const dueDates = schedulePlanStepDates(startDate, steps, dailyMinutes);
+  const dateBoundary = new Date(`${startDate}T00:00:00.000Z`);
+  const titles = Array.from(new Set(steps.map(step => step.title)));
+
+  return database.transaction(async tx => {
+    const existing = await tx.select({
+      title: tasks.title,
+      status: tasks.status,
+      dueAt: tasks.dueAt,
+    }).from(tasks).where(and(eq(tasks.userId, userId), inArray(tasks.title, titles)));
+
+    const reusableTitles = new Set(existing
+      .filter(task => task.status === "todo" || (task.dueAt && task.dueAt >= dateBoundary))
+      .map(task => task.title));
+    const missing = steps
+      .map((step, index) => ({ step, dueAt: dueDates[index] }))
+      .filter(item => !reusableTitles.has(item.step.title));
+
+    if (missing.length > 0) {
+      await tx.insert(tasks).values(missing.map(({ step, dueAt }) => ({
+        userId,
+        title: step.title,
+        notes: step.detail || `خطوة ${step.day} من خطة «${plan.title.trim()}».`,
+        category: step.category,
+        priority: step.priority === "critical" || step.priority === "high" ? "high" as const
+          : step.priority === "low" ? "low" as const : "medium" as const,
+        estimatedMinutes: step.minutes,
+        dueAt,
+      })));
+    }
+    return { addedCount: missing.length, taskCount: steps.length };
   });
 }
 
