@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateLearningGap, calculateLearningGapsByBranch } from "./sie-learning-progress";
-import { getSIECheckpointBranches } from "./sie-catalog";
+import { calculateLearningGap, calculateLearningGapsByBranch, getNextLearningTarget, moveLearningFrontier } from "./sie-learning-progress";
 
 const curriculum = [
   { nodeId: "L1", title: "Lesson 1" },
@@ -131,33 +130,54 @@ describe("calculateLearningGapsByBranch", () => {
 });
 
 
-describe("official SIE curriculum branch catalog", () => {
-  const cases: Array<{ subjectId: string; expectedCount: number; expectedLessonCounts: number[] }> = [
-    { subjectId: "ARB_G2_BAC", expectedCount: 3, expectedLessonCounts: [3, 3, 3] },
-    { subjectId: "ENG1_G2_BAC", expectedCount: 10, expectedLessonCounts: Array(10).fill(2) },
-    { subjectId: "HIS_G2_BAC", expectedCount: 3, expectedLessonCounts: [4, 4, 4] },
-    { subjectId: "PROG_AI_G2_BAC", expectedCount: 7, expectedLessonCounts: [4, 3, 3, 4, 3, 3, 3] },
+describe("learning frontier navigation", () => {
+  const orderedChoices = [
+    { nodeId: "L1", title: "Lesson 1" },
+    { nodeId: "L2", title: "Lesson 2" },
+    { nodeId: "L3", title: "Lesson 3" },
   ];
 
-  it("keeps every subject in its official independent branches", () => {
-    for (const item of cases) {
-      const branches = getSIECheckpointBranches(item.subjectId);
-      expect(branches).toHaveLength(item.expectedCount);
-      expect(branches.map(branch => branch.choices.length)).toEqual(item.expectedLessonCounts);
-      expect(new Set(branches.flatMap(branch => branch.choices.map(choice => choice.nodeId))).size)
-        .toBe(branches.reduce((total, branch) => total + branch.choices.length, 0));
-    }
+  it("moves forward and backward one checkpoint at a time", () => {
+    expect(moveLearningFrontier(orderedChoices, "L1", "next")).toBe("L2");
+    expect(moveLearningFrontier(orderedChoices, "L2", "next")).toBe("L3");
+    expect(moveLearningFrontier(orderedChoices, "L2", "previous")).toBe("L1");
   });
 
-  it("uses the official English A/B sections, not whole-unit cross-comparisons", () => {
-    const branches = getSIECheckpointBranches("ENG1_G2_BAC");
-    expect(branches.map(branch => branch.branchId)).toEqual([
-      "ENG_U1_SEC_A", "ENG_U1_SEC_B",
-      "ENG_U2_SEC_A", "ENG_U2_SEC_B",
-      "ENG_U3_SEC_A", "ENG_U3_SEC_B",
-      "ENG_U4_SEC_A", "ENG_U4_SEC_B",
-      "ENG_U5_SEC_A", "ENG_U5_SEC_B",
-    ]);
-    expect(branches.every(branch => branch.branchType === "official_section")).toBe(true);
+  it("keeps unknown positions unknown when moving backward and starts at the first checkpoint when moving forward", () => {
+    expect(moveLearningFrontier(orderedChoices, "__UNKNOWN__", "previous")).toBe("__UNKNOWN__");
+    expect(moveLearningFrontier(orderedChoices, "__UNKNOWN__", "next")).toBe("L1");
+  });
+
+  it("supports the not-started boundary and never moves past the final checkpoint", () => {
+    expect(moveLearningFrontier(orderedChoices, "L1", "previous")).toBe("__NOT_STARTED__");
+    expect(moveLearningFrontier(orderedChoices, "__NOT_STARTED__", "next")).toBe("L1");
+    expect(moveLearningFrontier(orderedChoices, "L3", "next")).toBe("L3");
+    expect(moveLearningFrontier([], "__UNKNOWN__", "next")).toBe("__UNKNOWN__");
+  });
+});
+
+describe("automatic curriculum advancement", () => {
+  const subjects = ["ARB_G2_BAC", "ENG1_G2_BAC", "HIS_G2_BAC"];
+  const branches = [{ branchId: "unit-a" }, { branchId: "unit-b" }];
+
+  it("advances to the next branch within the current subject", () => {
+    expect(getNextLearningTarget(subjects, "ARB_G2_BAC", branches, "unit-a"))
+      .toEqual({ subjectId: "ARB_G2_BAC", branchId: "unit-b" });
+  });
+
+  it("advances to the next selected subject after the final branch", () => {
+    expect(getNextLearningTarget(subjects, "ARB_G2_BAC", branches, "unit-b"))
+      .toEqual({ subjectId: "ENG1_G2_BAC", branchId: null });
+  });
+
+  it("returns no target after the final selected subject", () => {
+    expect(getNextLearningTarget(subjects, "HIS_G2_BAC", branches, "unit-b")).toBeNull();
+  });
+
+  it("does not advance from an unknown branch or an unselected subject", () => {
+    expect(getNextLearningTarget(subjects, "ARB_G2_BAC", branches, "missing")).toEqual({
+      subjectId: "ENG1_G2_BAC", branchId: null,
+    });
+    expect(getNextLearningTarget(subjects, "not-selected", branches, "unit-a")).toBeNull();
   });
 });
