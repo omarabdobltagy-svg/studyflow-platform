@@ -204,3 +204,45 @@
 .sf-shell-v3 .sf-main .sf-planner-result .loading-shimmer{
   background:linear-gradient(90deg,rgba(255,255,255,.035),rgba(255,255,255,.10),rgba(255,255,255,.035))!important;
 }
+
+/* Mobile folder proportion correction: keep the folder silhouette, not a tiny icon tile. */
+@media(max-width:760px){
+  .sf-shell-v3 .sf-main .sf-folder-trigger{
+    grid-template-columns:90px minmax(0,1fr) auto!important;
+    min-height:126px!important;
+    gap:10px!important;
+    padding:14px 12px 24px!important;
+  }
+  .sf-shell-v3 .sf-main .sf-folder-art{
+    width:84px!important;
+    height:94px!important;
+    margin-inline:auto!important;
+  }
+  .sf-shell-v3 .sf-main .sf-folder-paper{
+    top:13px!important;
+    right:8px!important;
+    left:8px!important;
+    height:59px!important;
+    border-radius:8px!important;
+  }
+  .sf-shell-v3 .sf-main .sf-folder-paper-front{top:17px!important}
+  .sf-shell-v3 .sf-main .sf-folder-back{
+    inset:11px 0 0!important;
+    border-radius:12px 15px 10px 10px!important;
+  }
+  .sf-shell-v3 .sf-main .sf-folder-back::before{
+    top:-9px!important;
+    right:8px!important;
+    width:48px!important;
+    height:13px!important;
+  }
+  .sf-shell-v3 .sf-main .sf-folder-front{
+    inset:34px 0 0!important;
+    width:auto!important;
+    height:auto!important;
+    padding:8px!important;
+    border-radius:11px!important;
+  }
+  .sf-shell-v3 .sf-main .sf-folder-emblem{width:31px!important;height:31px!important}
+  .sf-shell-v3 .sf-main .sf-folder-index{font-size:6px!important}
+}
