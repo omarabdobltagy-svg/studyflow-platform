@@ -36,7 +36,7 @@ export default function Study() {
   const [completedSteps, setCompletedSteps] = useState<StepId[]>([]);
   const [difficulty, setDifficulty] = useState<"unknown" | "easy" | "medium" | "hard">("unknown");
   const [notes, setNotes] = useState("");
-  const subjects = profile.data?.subjects || [];
+  const subjects = profile.data?.subjectIds || [];
   const lessons = useMemo(() => getSIECheckpointChoices(subjectId), [subjectId]);
   const branches = useMemo(() => getSIECheckpointBranches(subjectId), [subjectId]);
   const currentBranch = branches.find(branch => branch.branchId === branchId) ?? branches[0];
@@ -156,7 +156,7 @@ export default function Study() {
     setTeacherTeachingFrontierId(teacherFrontier || "__UNKNOWN__");
     setSchoolClassFrontierId(schoolFrontier || "__UNKNOWN__");
     setSchoolClassEvidenceSource(currentBranchProgress.schoolClassFrontierEvidenceSource || "unknown");
-    setTeacherCourseFrontier(currentCourseProgress.teacherCourseFrontier || "");
+    setTeacherCourseFrontier(branchTeacherMatchesSelection ? currentCourseProgress.teacherCourseFrontier || "" : "");
     setCourseStatus(currentCourseProgress.status || "not_started");
     setEstimatedMinutes(Number(currentCourseProgress.estimatedMinutesPerLesson ?? 45));
     setCourseDifficulty(currentCourseProgress.difficulty || "unknown");

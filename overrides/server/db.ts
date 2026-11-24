@@ -21,6 +21,7 @@ import {
   users,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
+import { resolveStudentSubjectIds } from "./student-subjects";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 let testDbOverride: ReturnType<typeof drizzle> | null | undefined;
@@ -290,11 +291,19 @@ export async function getStudentProfile(userId: number) {
   const rows = await db.select().from(studentProfiles).where(eq(studentProfiles.userId, userId)).limit(1);
   const profile = rows[0];
   if (!profile) return null;
+  const subjects = parseJson<string[]>(profile.subjectsJson, []);
+  const selection = parseJson<Record<string, unknown>>(profile.selectionJson ?? "{}", {});
+  const subjectIds = resolveStudentSubjectIds(
+    subjects,
+    selection,
+    profile.educationSystem as "baccalaureate" | "general_secondary" | "other",
+  );
   return {
     ...profile,
-    subjects: parseJson<string[]>(profile.subjectsJson, []),
+    subjects,
+    subjectIds,
     teacherSelections: parseJson<Record<string, string>>(profile.teacherSelectionsJson, {}),
-    selection: parseJson<Record<string, unknown>>(profile.selectionJson ?? "{}", {}),
+    selection,
     backlog: parseJson<Record<string, number>>(profile.backlogJson, {}),
   };
 }

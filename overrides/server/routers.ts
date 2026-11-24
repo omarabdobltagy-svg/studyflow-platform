@@ -485,7 +485,7 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         const profile = await getStudentProfile(ctx.user.id);
-        if (!profile || !profile.subjects.includes(input.subjectId)) {
+        if (!profile || !profile.subjectIds.includes(input.subjectId)) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "اختر مادة موجودة في ملفك الدراسي." });
         }
         const subject = getSIESubject(input.subjectId);
@@ -617,7 +617,7 @@ export const appRouter = router({
         const profileContext = profile
           ? `اسم الطالب: ${profile.studentName}\nالنظام: ${profile.educationSystem}\nالصف/السنة: ${profile.gradeYear}\nالمسار: ${profile.track}\nالمواد: ${profile.subjects.join("، ")}\nالتراكم المسجل: ${Object.entries(profile.backlog).map(([subject, count]) => `${subject}: ${count}`).join("، ") || "لا يوجد مسجل"}\nالعائق المعلن: ${profile.obstacle}`
           : "لم يكتمل ملف الطالب بعد.";
-        const curriculumContext = (profile?.subjects || []).map(subjectId => {
+        const curriculumContext = (profile?.subjectIds || []).map(subjectId => {
           const subjectName = getSIESubject(subjectId)?.nameAr || subjectId;
           const branches = firstPartBranches(subjectId);
           const progress = (selection.subjectLessonProgress || {}) as Record<string, Record<string, any>>;
@@ -633,7 +633,7 @@ export const appRouter = router({
           return subjectName + ":\\n" + (branchSummary || "فهرس الفروع غير محمّل");
         }).join("\\n");
         const learningCourseProgress = (selection.learningCourseProgress ?? {}) as Record<string, Record<string, any>>;
-        const learningEvidenceContext = (profile?.subjects || []).map(subjectId => {
+        const learningEvidenceContext = (profile?.subjectIds || []).map(subjectId => {
           const record = learningCourseProgress[subjectId] ?? {};
           const branchRecords = (record.branches ?? {}) as Record<string, Record<string, any>>;
           const legacyTeacherState = teacherProgressState[subjectId] ?? {};
@@ -944,7 +944,7 @@ export const appRouter = router({
       const legacyTeacherFrontiers = (selection.teacherFrontiers ?? {}) as Record<string, string>;
       const legacyTeacherState = (selection.teacherProgressState ?? {}) as Record<string, Record<string, any>>;
       const sq3rProgress = (selection.subjectLessonProgress ?? {}) as Record<string, Record<string, any>>;
-      const gapByBranch = Object.fromEntries(profile.subjects.map(subjectId => {
+      const gapByBranch = Object.fromEntries(profile.subjectIds.map(subjectId => {
         const subjectRecord = courseProgress[subjectId] ?? {};
         const branchRecords = subjectRecord.branches ?? {};
         const legacyStudentFrontier = legacyTeacherFrontiers[subjectId] || legacyTeacherState[subjectId]?.studentAttendedFrontier;
@@ -979,7 +979,7 @@ export const appRouter = router({
         }));
         return [subjectId, gaps];
       }));
-      const gapBySubject = Object.fromEntries(profile.subjects.map(subjectId => {
+      const gapBySubject = Object.fromEntries(profile.subjectIds.map(subjectId => {
         const record = courseProgress[subjectId] ?? {};
         const legacyStudentFrontier = legacyTeacherFrontiers[subjectId] || legacyTeacherState[subjectId]?.studentAttendedFrontier;
         return [subjectId, calculateLearningGap(getSIECheckpointChoices(subjectId), {
@@ -1018,7 +1018,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const profile = await getStudentProfile(ctx.user.id);
         if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "أكمل ملفك الدراسي أولًا." });
-        if (!profile.subjects.includes(input.subjectId)) {
+        if (!profile.subjectIds.includes(input.subjectId)) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "هذه المادة ليست ضمن ملفك الدراسي." });
         }
         const branch = input.branchId
@@ -1167,7 +1167,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const profile = await getStudentProfile(ctx.user.id);
         if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "أكمل ملفك الدراسي أولًا." });
-        if (!profile.subjects.includes(input.subjectId)) {
+        if (!profile.subjectIds.includes(input.subjectId)) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "هذه المادة ليست ضمن ملفك الدراسي." });
         }
         const branch = getSIECheckpointBranches(input.subjectId).find(item => item.branchId === input.branchId);
@@ -1308,7 +1308,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const profile = await getStudentProfile(ctx.user.id);
         if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "أكمل ملفك الدراسي أولًا." });
-        if (!profile.subjects.includes(input.subjectId)) {
+        if (!profile.subjectIds.includes(input.subjectId)) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "هذه المادة ليست ضمن مواد ملفك الدراسي." });
         }
         const lesson = getSIECheckpointChoices(input.subjectId).find(item => item.nodeId === input.lessonId);

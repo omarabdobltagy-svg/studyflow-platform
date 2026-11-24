@@ -44,7 +44,7 @@ export default function CurriculumMap() {
   const [selectedBranchId, setSelectedBranchId] = useState("");
   const [viewMode, setViewMode] = useState<"3d" | "list">("3d");
 
-  const subjects = profile.data?.subjects ?? [];
+  const subjects = profile.data?.subjectIds ?? [];
   useEffect(() => {
     if (!subjectId && subjects.length) setSubjectId(subjects[0]);
   }, [subjectId, subjects]);

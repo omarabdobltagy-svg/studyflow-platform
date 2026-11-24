@@ -204,7 +204,7 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
     ? selection.learningAssessments as Array<Record<string, any>>
     : [];
 
-  const subjectContext = (profile.subjects || []).map(subjectId => {
+  const subjectContext = (profile.subjectIds || []).map(subjectId => {
     const subject = getSIESubject(subjectId);
     const teacherId = choices[subjectId];
     const teacher = teacherId ? getSIETeacher(teacherId) : undefined;
@@ -312,7 +312,7 @@ export async function generatePersonalPlan(
   const dailyMinutes = Math.max(20, Math.min(600, Math.trunc(constraints.dailyMinutes ?? 120)));
   const profile = includeStudentProfile ? await getStudentProfile(userId) : null;
   const curriculumTitles = profile
-    ? (profile.subjects || []).flatMap(subjectId =>
+    ? (profile.subjectIds || []).flatMap(subjectId =>
         getFirstPartBranches(subjectId).flatMap(branch =>
           [branch.branchTitle, ...branch.choices.map(choice => choice.title)]
         )
@@ -320,7 +320,7 @@ export async function generatePersonalPlan(
     : "";
   const retrievalQuery = [prompt, curriculumTitles].filter(Boolean).join("\n");
   const textbookRetrieval = profile
-    ? retrieveTextbookEvidence(profile.subjects || [], retrievalQuery, Math.max(6, (profile.subjects || []).length * 3))
+    ? retrieveTextbookEvidence(profile.subjectIds || [], retrievalQuery, Math.max(6, (profile.subjectIds || []).length * 3))
     : { passages: [], coverageNotes: [] };
   const textbookContext = formatTextbookEvidence(textbookRetrieval).slice(0, 7_200);
   const context = (profile
