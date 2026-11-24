@@ -179,6 +179,17 @@ export function parseGeneratedPlan(content: string): GeneratedPlan {
   throw new Error("وصلت استجابة من الذكاء الاصطناعي، لكنها لم تطابق بنية الخطة المطلوبة. أعد المحاولة؛ لا تحتاج إلى تبسيط وصفك.");
 }
 
+function getFirstPartBranches(subjectId: string) {
+  const branches = getSIECheckpointBranches(subjectId);
+  if (subjectId !== "PROG_AI_G2_BAC") return branches;
+  return branches
+    .map(branch => ({
+      ...branch,
+      choices: branch.choices.filter(choice => /^PROG_[1-4]_/.test(choice.nodeId)),
+    }))
+    .filter(branch => branch.choices.length > 0);
+}
+
 function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof getStudentProfile>>>) {
   const selection = (profile.selection || {}) as Record<string, any>;
   const choices = (selection.teacherChoices || profile.teacherSelections || {}) as Record<string, string>;
@@ -197,7 +208,7 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
     const state = teacherStates[subjectId] || {};
     const reported = courseProgress[subjectId] || {};
     const branchRecords = (reported.branches || {}) as Record<string, Record<string, any>>;
-    const branches = getSIECheckpointBranches(subjectId);
+    const branches = getFirstPartBranches(subjectId);
     const studentLegacyFrontier = reported.lastCompletedLessonId || frontiers[subjectId] || state.studentAttendedFrontier || null;
     const subjectLessonRecords = lessonProgress[subjectId] || {};
 
@@ -299,7 +310,7 @@ export async function generatePersonalPlan(
   const profile = includeStudentProfile ? await getStudentProfile(userId) : null;
   const curriculumTitles = profile
     ? (profile.subjects || []).flatMap(subjectId =>
-        getSIECheckpointBranches(subjectId).flatMap(branch =>
+        getFirstPartBranches(subjectId).flatMap(branch =>
           [branch.branchTitle, ...branch.choices.map(choice => choice.title)]
         )
       ).join("؛ ")
