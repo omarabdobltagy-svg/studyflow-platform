@@ -261,7 +261,7 @@ export default function Study() {
           toast.success("تم حفظ موضع " + (currentBranch?.branchTitle || "الفرع") + "؛ ننتقل إلى " + nextBranch.branchTitle + ".");
           return;
         }
-        const nextSubjectId = subjects[subjectIndex + 1];
+        const nextSubjectId = isLinearSubject ? undefined : subjects[subjectIndex + 1];
         if (nextSubjectId) {
           setSubjectId(nextSubjectId);
           setBranchId("");
