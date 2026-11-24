@@ -145,3 +145,62 @@
   .sf-shell-v3 .sf-main .sf-folder-art{width:66px!important;height:76px!important}
   .sf-shell-v3 .sf-main .sf-folder-front{inset:27px 0 0!important;width:auto!important;height:auto!important;padding:8px!important}
 }
+
+
+/* Planner surfaces use the same graphite / cocoa system as the home intelligence cards. */
+.sf-shell-v3 .sf-main .sf-feature-hero{
+  border:1px solid rgba(219,199,178,.16)!important;
+  background:
+    radial-gradient(ellipse at 8% 8%,rgba(182,145,111,.18),transparent 35%),
+    radial-gradient(ellipse at 92% 100%,rgba(208,190,171,.08),transparent 30%),
+    linear-gradient(140deg,#1d1d1f 0%,#2b211c 58%,#242628 100%)!important;
+  color:#f4eee8!important;
+  box-shadow:0 22px 50px -36px rgba(0,0,0,.78),inset 0 1px rgba(255,255,255,.07)!important;
+}
+.sf-shell-v3 .sf-main .sf-feature-hero h2{color:#f5eee7!important}
+.sf-shell-v3 .sf-main .sf-feature-hero p{color:#bcb1a5!important}
+.sf-shell-v3 .sf-main .sf-feature-hero .eyebrow{color:#c4a382!important}
+.sf-shell-v3 .sf-main .sf-feature-hero .text-violet-200{color:#d7b895!important}
+.sf-shell-v3 .sf-main .sf-feature-hero .backdrop-blur-sm{
+  border-color:rgba(219,199,178,.15)!important;
+  background:linear-gradient(145deg,rgba(255,255,255,.075),rgba(255,255,255,.035))!important;
+}
+.sf-shell-v3 .sf-main .sf-feature-hero .rounded-full.border{
+  border-color:rgba(219,199,178,.18)!important;
+  background:rgba(255,255,255,.045)!important;
+  color:#d2c4b6!important;
+}
+.sf-shell-v3 .sf-main .sf-planner-surface{
+  border-color:rgba(219,199,178,.15)!important;
+  background:linear-gradient(145deg,#2c2d2e 0%,#252729 68%,#222528 100%)!important;
+  color:#eee9e3!important;
+  box-shadow:0 18px 40px -34px rgba(0,0,0,.72),inset 0 1px rgba(255,255,255,.045)!important;
+}
+.sf-shell-v3 .sf-main .sf-planner-surface :is(h2,h3,h4,label,strong){color:#eee9e3}
+.sf-shell-v3 .sf-main .sf-planner-surface :is(p,small,.text-muted-foreground){color:#b4aaa0}
+.sf-shell-v3 .sf-main .sf-planner-surface :is(textarea,select,input:not([type="checkbox"]):not([type="radio"])){
+  border-color:rgba(219,199,178,.20)!important;
+  background:#202326!important;
+  color:#f3ece4!important;
+  box-shadow:none!important;
+}
+.sf-shell-v3 .sf-main .sf-planner-surface :is(textarea,select,input)::placeholder{color:#978c81!important}
+.sf-shell-v3 .sf-main .sf-planner-surface :is(textarea,select,input):focus-visible{
+  border-color:#a98a6d!important;
+  box-shadow:0 0 0 3px rgba(169,138,109,.16)!important;
+}
+.sf-shell-v3 .sf-main .sf-planner-surface .bg-secondary{
+  border-color:rgba(219,199,178,.13)!important;
+  background:rgba(255,255,255,.055)!important;
+  color:#d6c4b1!important;
+}
+.sf-shell-v3 .sf-main .sf-planner-surface .border-border{
+  border-color:rgba(219,199,178,.15)!important;
+}
+.sf-shell-v3 .sf-main .sf-planner-result>div:first-child{
+  border-color:rgba(219,199,178,.14)!important;
+  background:linear-gradient(145deg,#332d27,#252729)!important;
+}
+.sf-shell-v3 .sf-main .sf-planner-result .loading-shimmer{
+  background:linear-gradient(90deg,rgba(255,255,255,.035),rgba(255,255,255,.10),rgba(255,255,255,.035))!important;
+}
