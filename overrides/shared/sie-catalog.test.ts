@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { getExpectedToDateChoices } from "./egypt-school-calendar";
 import {
   getSIECheckpointBranches,
   getSIECheckpointChoiceDisplayLabel,
@@ -85,6 +86,23 @@ describe("English curriculum selector metadata", () => {
     expect(choices.find(choice => choice.nodeId === "ENG_U6_SEC_A_T1")?.lessonNumber).toBe("6.1");
     expect(choices.find(choice => choice.nodeId === "ENG_U10_SEC_B_T2")?.lessonNumber).toBe("10.4");
     expect(choices.find(choice => choice.nodeId === "ENG_U8_SEC_B_T1")?.branchTitle).toContain("Building Future Professionals");
+  });
+
+  it("limits English textbook, Vocabulary and Grammar choices to the expected term window", () => {
+    const branches = getSIECheckpointBranches("ENG1_G2_BAC");
+    const textbook = branches.find(branch => branch.branchId === "ENG_TEXTBOOK")!;
+    const vocabulary = branches.find(branch => branch.branchId === "ENG_VOCABULARY")!;
+    const grammar = branches.find(branch => branch.branchId === "ENG_GRAMMAR")!;
+
+    const octoberTopics = getExpectedToDateChoices(textbook.choices, "2026-10-18");
+    const novemberTopics = getExpectedToDateChoices(textbook.choices, "2026-11-24");
+    expect(octoberTopics).toHaveLength(7);
+    expect(octoberTopics.every(choice => (choice.unitNumber ?? 0) <= 5)).toBe(true);
+    expect(novemberTopics).toHaveLength(13);
+    expect(novemberTopics.every(choice => (choice.unitNumber ?? 0) <= 5)).toBe(true);
+
+    expect(getExpectedToDateChoices(vocabulary.choices, "2026-11-24")).toHaveLength(4);
+    expect(getExpectedToDateChoices(grammar.choices, "2026-11-24")).toHaveLength(4);
   });
 
   it("shows lesson number, name, type and section in the visible English label", () => {
