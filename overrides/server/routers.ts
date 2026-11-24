@@ -1088,12 +1088,22 @@ export const appRouter = router({
         const legacyStudentFrontier = legacyTeacherFrontiers[subjectId] || legacyTeacherState[subjectId]?.studentAttendedFrontier;
         const subjectLessonRecords = sq3rProgress[subjectId] ?? {};
         const branches = getSIECheckpointBranches(subjectId);
+        const selectedTeacherId = selection.teacherChoices?.[subjectId] ?? profile.teacherSelections?.[subjectId] ?? "__SKIP__";
+        const selectedTeacherName = selection.customTeacherNames?.[subjectId] ?? "";
+        const teacherKey = selectedTeacherId && selectedTeacherId !== "__SKIP__"
+          ? selectedTeacherId
+          : selectedTeacherName.trim() ? `custom:${selectedTeacherName.trim().toLocaleLowerCase("en")}` : "";
+        const subjectCustomEntries = (selection.customCurriculumEntries?.[subjectId] ?? []) as Array<any>;
         const gaps = Object.fromEntries(branches.map(branch => {
+          const customChoices = subjectCustomEntries.filter(entry =>
+            entry.branchId === branch.branchId && entry.teacherKey === teacherKey
+          );
+          const branchChoices = [...branch.choices, ...customChoices];
           const legacyArabicRecord = subjectId === "ARB_G2_BAC" && branch.branchId === "ARB_READING"
             ? Object.entries(branchRecords)
               .filter(([key]) => /^ARB_U[123]$/.test(key))
               .map(([, record]) => record)
-              .find((record: any) => branch.choices.some(choice =>
+              .find((record: any) => branchChoices.some(choice =>
                 [record.lastCompletedLessonId, record.teacherTeachingFrontierId, record.schoolClassFrontierId].includes(choice.nodeId)
               ))
             : undefined;
@@ -1101,8 +1111,8 @@ export const appRouter = router({
           const belongsToBranch = (frontierId: unknown) =>
             typeof frontierId === "string" &&
             (frontierId === "__NOT_STARTED__" ||
-              branch.choices.some(choice => choice.nodeId === frontierId));
-          const latestSq3rCompleted = [...branch.choices].reverse().find(choice => {
+              branchChoices.some(choice => choice.nodeId === frontierId));
+          const latestSq3rCompleted = [...branchChoices].reverse().find(choice => {
             const steps = subjectLessonRecords[choice.nodeId]?.completedSteps;
             return Array.isArray(steps) && steps.length === 5;
           })?.nodeId;
@@ -1118,7 +1128,7 @@ export const appRouter = router({
             ? saved.schoolClassFrontierId
             : belongsToBranch(subjectRecord.schoolClassFrontierId) ? subjectRecord.schoolClassFrontierId : "__UNKNOWN__";
           const schoolFrontierId = subjectCourseMode === "center" ? savedSchoolFrontierId : "__UNKNOWN__";
-          return [branch.branchId, calculateLearningGap(branch.choices, {
+          return [branch.branchId, calculateLearningGap(branchChoices, {
             studentFrontierId,
             teacherTeachingFrontierId: teacherFrontierId,
             schoolClassFrontierId: schoolFrontierId,
@@ -1165,16 +1175,24 @@ export const appRouter = router({
         }
 
         const branch = getSIECheckpointBranches(input.subjectId).find(item => item.branchId === input.branchId);
-        if (!branch) throw new TRPCError({ code: "BAD_REQUEST", message: "فرع المنهج غير موجود في فهرس المادة." });
-        const allowed = new Set(branch.choices.map(choice => choice.nodeId));
+        if (!branch) throw new TRPCError({ code: "BAD_REQUEST", message: "مسار المنهج غير موجود في فهرس المادة." });
+        const selection = (profile.selection ?? {}) as Record<string, any>;
+        const selectedTeacherId = selection.teacherChoices?.[input.subjectId] ?? profile.teacherSelections?.[input.subjectId] ?? "__SKIP__";
+        const selectedTeacherName = selection.customTeacherNames?.[input.subjectId] ?? "";
+        const teacherKey = selectedTeacherId && selectedTeacherId !== "__SKIP__"
+          ? selectedTeacherId
+          : selectedTeacherName.trim() ? `custom:${selectedTeacherName.trim().toLocaleLowerCase("en")}` : "";
+        const customChoices = ((selection.customCurriculumEntries?.[input.subjectId] ?? []) as Array<any>)
+          .filter(entry => entry.branchId === input.branchId && entry.teacherKey === teacherKey);
+        const branchChoices = [...branch.choices, ...customChoices];
+        const allowed = new Set(branchChoices.map(choice => choice.nodeId));
         const validFrontier = (value: string) => value === "__UNKNOWN__" || value === "__NOT_STARTED__" || allowed.has(value);
         for (const value of [input.studentFrontierId, input.teacherTeachingFrontierId, input.schoolClassFrontierId]) {
           if (value !== undefined && !validFrontier(value)) {
-            throw new TRPCError({ code: "BAD_REQUEST", message: "النقطة المختارة لا تنتمي إلى فرع المنهج الحالي." });
+            throw new TRPCError({ code: "BAD_REQUEST", message: "النقطة المختارة لا تنتمي إلى المسار الحالي." });
           }
         }
 
-        const selection = (profile.selection ?? {}) as Record<string, any>;
         const courseProgress = (selection.learningCourseProgress ?? {}) as Record<string, any>;
         const subjectRecord = courseProgress[input.subjectId] ?? {};
         const branchRecords = (subjectRecord.branches ?? {}) as Record<string, Record<string, any>>;
@@ -1196,7 +1214,7 @@ export const appRouter = router({
         const nextSchoolFrontier = courseMode === "center"
           ? input.schoolClassFrontierId ?? previous.schoolClassFrontierId ?? "__UNKNOWN__"
           : "__UNKNOWN__";
-        const learningGap = calculateLearningGap(branch.choices, {
+        const learningGap = calculateLearningGap(branchChoices, {
           studentFrontierId: nextStudentFrontier,
           teacherTeachingFrontierId: nextTeacherFrontier,
           schoolClassFrontierId: nextSchoolFrontier,
@@ -1250,6 +1268,70 @@ export const appRouter = router({
             backlogCount: learningGap.gapCount,
           });
         return { success: true, record: nextBranchRecord, learningGap, savedStudent, savedTeacher };
+      }),
+    addCustomCurriculumCheckpoint: protectedProcedure
+      .input(z.object({
+        subjectId: z.string().trim().min(1).max(80),
+        branchId: z.string().trim().min(1).max(120),
+        title: z.string().trim().min(1).max(180),
+        teacherKey: z.string().trim().min(1).max(160),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const profile = await getStudentProfile(ctx.user.id);
+        if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "أكمل ملفك الدراسي أولًا." });
+        if (!profile.subjectIds.includes(input.subjectId)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "هذه المادة ليست ضمن مواد ملفك الدراسي." });
+        }
+        const branch = getSIECheckpointBranches(input.subjectId).find(item => item.branchId === input.branchId);
+        if (!branch) throw new TRPCError({ code: "BAD_REQUEST", message: "مسار المنهج غير موجود في فهرس المادة." });
+
+        const selection = (profile.selection ?? {}) as Record<string, any>;
+        const selectedTeacherId = selection.teacherChoices?.[input.subjectId] ?? profile.teacherSelections?.[input.subjectId] ?? "__SKIP__";
+        const selectedTeacherName = selection.customTeacherNames?.[input.subjectId] ?? "";
+        const currentTeacherKey = selectedTeacherId && selectedTeacherId !== "__SKIP__"
+          ? selectedTeacherId
+          : selectedTeacherName.trim() ? `custom:${selectedTeacherName.trim().toLocaleLowerCase("en")}` : "";
+        if (!currentTeacherKey || input.teacherKey !== currentTeacherKey) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "احفظ اختيار المدرس أولًا قبل إضافة محتوى خاص بكورسه." });
+        }
+
+        const customBySubject = (selection.customCurriculumEntries ?? {}) as Record<string, any[]>;
+        const existing = customBySubject[input.subjectId] ?? [];
+        if (existing.some(entry =>
+          entry.branchId === input.branchId &&
+          entry.teacherKey === currentTeacherKey &&
+          String(entry.title).trim().toLocaleLowerCase("ar") === input.title.trim().toLocaleLowerCase("ar")
+        )) {
+          throw new TRPCError({ code: "CONFLICT", message: "هذا الدرس موجود بالفعل في فهرس المدرس." });
+        }
+        const now = new Date().toISOString();
+        const entry = {
+          nodeId: `CUSTOM_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`,
+          title: input.title.trim(),
+          unitTitle: branch.branchTitle,
+          branchId: branch.branchId,
+          branchTitle: branch.branchTitle,
+          branchType: branch.branchType,
+          sourceLabel: "محتوى مخصص أضافه الطالب",
+          teacherKey: currentTeacherKey,
+          custom: true,
+          createdAt: now,
+        };
+        await updateStudentProfileSelection(ctx.user.id, {
+          ...selection,
+          customCurriculumEntries: {
+            ...customBySubject,
+            [input.subjectId]: [...existing, entry],
+          },
+        });
+        await logStudentActivity(ctx.user.id, "learning.custom_curriculum_checkpoint_added",
+          "curriculum_branch", input.branchId, "إضافة درس مخصص إلى فهرس المدرس", {
+            subjectId: input.subjectId,
+            branchId: input.branchId,
+            nodeId: entry.nodeId,
+            teacherKey: currentTeacherKey,
+          });
+        return { success: true, entry };
       }),
     updateCourseProgress: protectedProcedure
       .input(z.object({
