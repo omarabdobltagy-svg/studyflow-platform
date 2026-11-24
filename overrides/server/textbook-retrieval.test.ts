@@ -81,7 +81,8 @@ describe("uploaded official textbook corpus", () => {
     );
     expect(result.passages).toHaveLength(0);
     expect(result.coverageNotes.some(note => note.includes("الجزء الأول") && note.includes("14 درسًا"))).toBe(true);
-    expect(result.coverageNotes.some(note => note.includes("الجزء الثاني"))).toBe(false);
+    expect(result.coverageNotes.some(note => note.includes("صفحة PDF") && note.includes("بداية الدرس التالي"))).toBe(true);
+    expect(result.coverageNotes.some(note => note.includes("الجزء الثاني") && note.includes("استبعاد"))).toBe(true);
   });
 
   it("reports verified Italian first-part unit index without pretending its page body is indexed", () => {
