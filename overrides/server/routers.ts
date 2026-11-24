@@ -634,6 +634,7 @@ export const appRouter = router({
           courseMode: input.courseMode,
           customTeacherName: Boolean(!teacher && input.teacherName.trim()),
         });
+        queueDailyPlanReconciliation(ctx.user.id);
         return { success: true, teacherId, courseMode: input.courseMode };
       }),
     updateTeacherProgress: protectedProcedure
@@ -1139,13 +1140,17 @@ export const appRouter = router({
         await logStudentActivity(ctx.user.id, "task.created", "task", null, "أُضيفت مهمة جديدة", {
           title: input.title, category: input.category ?? "عام", priority: input.priority ?? "medium", dueAt: input.dueAt?.toISOString() ?? null,
         });
+        queueDailyPlanReconciliation(ctx.user.id);
         return result;
       }),
     toggle: protectedProcedure
       .input(z.object({ id: z.number().int().positive(), done: z.boolean() }))
       .mutation(async ({ ctx, input }) => {
         const result = await toggleTask(ctx.user.id, input.id, input.done);
-        if (result) await logStudentActivity(ctx.user.id, input.done ? "task.completed" : "task.reopened", "task", input.id, input.done ? "اكتملت مهمة" : "أُعيد فتح مهمة");
+        if (result) {
+          await logStudentActivity(ctx.user.id, input.done ? "task.completed" : "task.reopened", "task", input.id, input.done ? "اكتملت مهمة" : "أُعيد فتح مهمة");
+          queueDailyPlanReconciliation(ctx.user.id);
+        }
         return result;
       }),
     undo: protectedProcedure
@@ -1153,6 +1158,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const result = await undoTaskChange(ctx.user.id, input.changeId);
         await logStudentActivity(ctx.user.id, "task.change_undone", "task_change", input.changeId, "تم التراجع عن تغيير في مهمة");
+        queueDailyPlanReconciliation(ctx.user.id);
         return result;
       }),
     update: protectedProcedure
@@ -1171,6 +1177,7 @@ export const appRouter = router({
         await logStudentActivity(ctx.user.id, "task.updated", "task", input.id, "تم تعديل مهمة", {
           title: input.title, category: input.category, priority: input.priority, dueAt: input.dueAt?.toISOString() ?? null,
         });
+        queueDailyPlanReconciliation(ctx.user.id);
         return result;
       }),
     delete: protectedProcedure
@@ -1178,6 +1185,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const result = await deleteTask(ctx.user.id, input.id);
         await logStudentActivity(ctx.user.id, "task.deleted", "task", input.id, "حُذفت مهمة");
+        queueDailyPlanReconciliation(ctx.user.id);
         return result;
       }),
   }),
@@ -1511,6 +1519,7 @@ export const appRouter = router({
             schoolFrontierUpdated: input.schoolClassFrontierId !== undefined,
             backlogCount: learningGap.gapCount,
           });
+        queueDailyPlanReconciliation(ctx.user.id);
         return { success: true, record: nextBranchRecord, learningGap, savedStudent, savedTeacher };
       }),
     updateCourseProgress: protectedProcedure
@@ -1882,6 +1891,7 @@ export const appRouter = router({
         await logStudentActivity(ctx.user.id, "study.sq3r_progress_updated", "curriculum_lesson", input.lessonId, "تم تحديث تقدم جلسة SQ3R", {
           subjectId: input.subjectId, completedStepCount: record.completedSteps.length, difficulty: record.difficulty,
         });
+        queueDailyPlanReconciliation(ctx.user.id);
         return { success: true, progress: record, lessonTitle: lesson.title };
       }),
     activeSession: protectedProcedure.query(({ ctx }) => getActiveStudySession(ctx.user.id)),
@@ -1970,6 +1980,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const result = await createCalendarEvent(ctx.user.id, input);
         await logStudentActivity(ctx.user.id, "calendar.event_created", "calendar_event", null, "أُضيف موعد إلى التقويم", { title: input.title, startAt: input.startAt.toISOString() });
+        queueDailyPlanReconciliation(ctx.user.id);
         return result;
       }),
     update: protectedProcedure
@@ -1977,6 +1988,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const result = await updateCalendarEvent(ctx.user.id, input.id, input);
         await logStudentActivity(ctx.user.id, "calendar.event_updated", "calendar_event", input.id, "تم تعديل موعد في التقويم", { title: input.title, startAt: input.startAt.toISOString() });
+        queueDailyPlanReconciliation(ctx.user.id);
         return result;
       }),
     delete: protectedProcedure
@@ -1984,6 +1996,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const result = await deleteCalendarEvent(ctx.user.id, input.id);
         await logStudentActivity(ctx.user.id, "calendar.event_deleted", "calendar_event", input.id, "حُذف موعد من التقويم");
+        queueDailyPlanReconciliation(ctx.user.id);
         return result;
       }),
   }),
