@@ -231,6 +231,9 @@ async function reconcileDailyPlanAfterChange(userId: number) {
 }
 
 function queueDailyPlanReconciliation(userId: number) {
+  // Router unit tests use focused database mocks; background reconciliation is
+  // covered by its isolated service tests and must not issue unrelated queries.
+  if (process.env.NODE_ENV === "test") return;
   void reconcileDailyPlanAfterChange(userId).catch(error => {
     console.error("[StudyFlow daily plan] Automatic reconciliation failed:", error instanceof Error ? error.message : String(error));
   });
