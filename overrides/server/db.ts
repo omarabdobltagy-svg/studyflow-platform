@@ -727,7 +727,8 @@ export async function approvePlanAsGoalTree(
         title: step.title,
         notes: step.detail || `جلسة اليوم ${step.day} من خطة «${plan.title.trim()}».`,
         category: step.category,
-        priority: "medium",
+        priority: step.priority === "critical" || step.priority === "high" ? "high" as const
+          : step.priority === "low" ? "low" as const : "medium" as const,
         estimatedMinutes: step.minutes,
         dueAt: dueDates[index] ?? null,
       });
@@ -776,8 +777,11 @@ export async function syncDailyPlanGoalTree(
     }>;
   },
   schedule: { startDate: string; dailyMinutes: number },
+  identity: { goalTitle?: string; goalCategory?: string } = {},
 ) {
   const db = await requireDb();
+  const goalTitle = identity.goalTitle?.trim() || "خطة StudyFlow اليومية";
+  const goalCategory = identity.goalCategory?.trim() || "خطة يومية";
   const steps = normalizeApprovedPlanSteps(plan.steps.map((step, index) => ({
     ...step,
     day: index + 1,
@@ -791,8 +795,8 @@ export async function syncDailyPlanGoalTree(
   return db.transaction(async tx => {
     const existingParents = await tx.select().from(goals).where(and(
       eq(goals.userId, userId),
-      eq(goals.title, "خطة StudyFlow اليومية"),
-      eq(goals.category, "خطة يومية"),
+      eq(goals.title, goalTitle),
+      eq(goals.category, goalCategory),
       isNull(goals.parentGoalId),
     )).limit(1);
 
@@ -808,10 +812,10 @@ export async function syncDailyPlanGoalTree(
     } else {
       const parentInsert = await tx.insert(goals).values({
         userId,
-        title: "خطة StudyFlow اليومية",
-        description: plan.summary.trim() || "خطة يومية مبنية على ملف الدراسة والتراكم.",
+        title: goalTitle,
+        description: plan.summary.trim() || "خطة دراسية مبنية على ملف الدراسة والتراكم.",
         kind: "long",
-        category: "خطة يومية",
+        category: goalCategory,
         color: "amber",
         targetDate: startDate,
         status: "active",
