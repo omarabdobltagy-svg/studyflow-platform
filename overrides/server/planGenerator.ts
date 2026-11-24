@@ -225,7 +225,7 @@ export async function generatePersonalPlan(
     console.warn("[StudyFlow planner] Primary provider billing/quota unavailable; switching to NVIDIA Nemotron 3 Ultra.");
     // NVIDIA's hosted endpoint does not advertise structured output.
     // Retain the full planning context and validate its JSON response with Zod.
-    return invokeCompact(invokeNvidiaLLM, 2_400, false, false);
+    return invokeCompact(invokeNvidiaLLM, 4_096, false, false);
   };
 
   const isBillingOrQuotaFailure = (error: unknown) => {
@@ -265,9 +265,18 @@ export async function generatePersonalPlan(
     throw plannerProviderError(error);
   }
 
-  const result = response.choices[0] && response.choices[0].message ? response.choices[0].message.content : "";
+  const firstChoice = response.choices?.[0];
+  const result = firstChoice?.message?.content ?? "";
   const text = contentAsText(result);
-  if (!text) throw new Error("لم تصل استجابة من المخطط الذكي. حاول مرة أخرى.");
+  if (!text) {
+    console.error("[StudyFlow planner] Provider returned no final content:", {
+      model: response.model || null,
+      choiceCount: Array.isArray(response.choices) ? response.choices.length : 0,
+      finishReason: firstChoice?.finish_reason ?? null,
+      completionTokens: response.usage?.completion_tokens ?? null,
+    });
+    throw new Error("لم تصل استجابة من المخطط الذكي. حاول مرة أخرى.");
+  }
   const plan = parseGeneratedPlan(text);
   const minutesByDay = new Map<string, number>();
   for (const step of plan.steps) {
