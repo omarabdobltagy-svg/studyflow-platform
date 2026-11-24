@@ -58,7 +58,8 @@ describe("uploaded official textbook corpus", () => {
     expect(arabic.pageCount).toBeGreaterThan(150);
     expect(programming.pageCount).toBe(0);
     expect(history.pageCount).toBeGreaterThan(100);
-    expect(history.files.map(file => file.file)).toEqual(["history-part1.txt"]);\n    expect(arabic.files.map(file => file.file)).toEqual(["arabic-part1.txt"]);
+    expect(history.files.map(file => file.file)).toEqual(["history-part1.txt"]);
+    expect(arabic.files.map(file => file.file)).toEqual(["arabic-part1.txt"]);
   });
 
   it("retrieves a page from the uploaded National History Part 1 source", () => {
