@@ -30,6 +30,23 @@ const planSchema = z.object({
 
 export type GeneratedPlan = z.infer<typeof planSchema>;
 
+function mergeSubjectLessonProgress(legacyValue: unknown, currentValue: unknown): Record<string, Record<string, any>> {
+  const legacy = legacyValue && typeof legacyValue === "object" && !Array.isArray(legacyValue)
+    ? legacyValue as Record<string, Record<string, any>>
+    : {};
+  const current = currentValue && typeof currentValue === "object" && !Array.isArray(currentValue)
+    ? currentValue as Record<string, Record<string, any>>
+    : {};
+  const merged: Record<string, Record<string, any>> = {};
+  for (const subjectId of new Set([...Object.keys(legacy), ...Object.keys(current)])) {
+    const legacyRecords = legacy[subjectId] && typeof legacy[subjectId] === "object" ? legacy[subjectId] : {};
+    const currentRecords = current[subjectId] && typeof current[subjectId] === "object" ? current[subjectId] : {};
+    merged[subjectId] = { ...legacyRecords, ...currentRecords };
+  }
+  return merged;
+}
+
+
 function plannerProviderError(error: unknown): Error {
   const message = error instanceof Error ? error.message : String(error);
   const isNvidia = /NVIDIA LLM invoke failed/i.test(message);
@@ -198,7 +215,7 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
   const choices = (selection.teacherChoices || profile.teacherSelections || {}) as Record<string, string>;
   const frontiers = (selection.teacherFrontiers || {}) as Record<string, string>;
   const teacherStates = (selection.teacherProgressState || {}) as Record<string, Record<string, any>>;
-  const lessonProgress = (selection.sq3rProgress ?? selection.subjectLessonProgress ?? {}) as Record<string, Record<string, any>>;
+  const lessonProgress = mergeSubjectLessonProgress(selection.subjectLessonProgress, selection.sq3rProgress);
   const courseProgress = (selection.learningCourseProgress || {}) as Record<string, any>;
   const assessmentHistory = Array.isArray(selection.learningAssessments)
     ? selection.learningAssessments as Array<Record<string, any>>
