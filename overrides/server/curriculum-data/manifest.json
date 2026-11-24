@@ -145,7 +145,10 @@
           "Grammar",
           "GRE"
         ],
-        "note": "Vocabulary and Grammar are separate progress views grouped by the 10 textbook units; GRE is a supplementary skills track, not part of the Ministry textbook. Student-entered out-of-index lesson creation is disabled."
+        "vocabularyUnitViews": 10,
+        "grammarUnitViews": 10,
+        "greSupplementalCheckpoints": 4,
+        "note": "Vocabulary and Grammar are separate unit-level progress views derived from the 10 textbook units; they are not claimed to be individual teacher lecture titles. GRE is a supplementary skills track, not part of the Ministry textbook. Student-entered out-of-index lesson creation is disabled."
       },
       "HIS_G2_BAC": {
         "parts": [
@@ -170,7 +173,7 @@
           1
         ],
         "unitTitlesCurrentlyAvailable": 2,
-        "note": "Incomplete source catalog; keep editable and do not infer missing lesson titles."
+        "note": "Incomplete source catalog; show its incomplete status, do not infer missing lesson titles, and do not allow student-created substitute entries."
       }
     }
   },
