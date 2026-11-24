@@ -34,7 +34,7 @@ describe("NVIDIA Nemotron provider", () => {
       response_format: { type: "json_object" },
     });
 
-    expect(result.choices[0].message.content).toBe(completionContent);
+    expect(result.choices[0].message.content).toBe(expectedContent);
     expect(fetchMock).toHaveBeenCalledOnce();
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("https://integrate.api.nvidia.com/v1/chat/completions");
@@ -45,7 +45,7 @@ describe("NVIDIA Nemotron provider", () => {
     expect(body.reasoning_effort).toBe("medium");
     expect(body.reasoning_budget).toBe(1_024);
     expect(body.stream).toBe(false);
-    expect(body.response_format).toBeUndefined();
+    expect(body.response_format).toEqual({ type: "json_object" });
   });
 
   it("polls the NVIDIA status endpoint after an asynchronous 202 response", async () => {
@@ -78,12 +78,12 @@ describe("NVIDIA Nemotron provider", () => {
     const { invokeNvidiaLLM } = await import("./llm");
     const pending = invokeNvidiaLLM({
       messages: [{ role: "user", content: "Return a JSON plan." }],
-      maxTokens: 4_096,
+      maxTokens: 6_144,
     });
     await vi.runAllTimersAsync();
     const result = await pending;
 
-    expect(result.choices[0].message.content).toBe("{\\"ok\\":true}");
+    expect(result.choices[0].message.content).toBe(completionContent);
     expect(fetchMock).toHaveBeenCalledTimes(2);
     const [pollUrl, pollInit] = fetchMock.mock.calls[1] as [string, RequestInit];
     expect(pollUrl).toBe("https://integrate.api.nvidia.com/v1/status/" + requestId);
