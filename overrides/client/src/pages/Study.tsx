@@ -123,7 +123,9 @@ export default function Study() {
     : {};
   const teacherName = draftTeacherName || currentBranchProgress.teacherName || "";
   const teacherReferenceName = teacherReferenceNameBase || currentBranchProgress.teacherName || "";
-  const teacherFrontierSaved = Object.prototype.hasOwnProperty.call(currentBranchProgress, "teacherTeachingFrontierId");
+  const teacherFrontierSaved = Boolean(currentBranchProgress.teacherFrontierConfirmedAt)
+    || (Object.prototype.hasOwnProperty.call(currentBranchProgress, "teacherTeachingFrontierId")
+      && currentBranchProgress.teacherTeachingFrontierId !== "__UNKNOWN__");
   const currentProgress = progressMap[subjectId] && progressMap[subjectId][lessonId];
   const branchGapMap = ((learning.data as any)?.gapByBranch?.[subjectId] || {}) as Record<string, any>;
 
