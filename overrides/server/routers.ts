@@ -716,7 +716,7 @@ export const appRouter = router({
             ...input.messages.slice(-20),
           ],
           model: process.env.AI_MODEL || undefined,
-          maxTokens: 900,
+          maxTokens: 2_200,
           });
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
@@ -1527,15 +1527,19 @@ export const appRouter = router({
     approve: protectedProcedure
       .input(z.object({
         plan: z.object({
-          title: z.string().trim().min(3).max(100),
-          summary: z.string().trim().max(500),
+          title: z.string().trim().min(3).max(160),
+          summary: z.string().trim().max(1_500),
           steps: z.array(z.object({
-            day: z.string().trim().min(1).max(30),
-            title: z.string().trim().min(2).max(120),
-            detail: z.string().trim().max(350),
+            day: z.string().trim().min(1).max(60),
+            title: z.string().trim().min(2).max(180),
+            detail: z.string().trim().max(1_200),
             minutes: z.number().int().min(5).max(480),
-            category: z.string().trim().min(2).max(60),
-          })).min(1).max(10),
+            category: z.string().trim().min(2).max(80),
+            priority: z.enum(["critical", "high", "medium", "low"]).optional(),
+            difficulty: z.enum(["easy", "medium", "hard", "unknown"]).optional(),
+            lessonSize: z.enum(["small", "medium", "large", "unknown"]).optional(),
+            sourcePages: z.array(z.number().int().positive().max(5_000)).max(20).optional(),
+          })).min(1).max(30),
         }),
         schedule: z.object({
           startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
