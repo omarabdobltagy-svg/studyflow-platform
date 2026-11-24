@@ -3,9 +3,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 import { trpc } from "@/lib/trpc";
-import { getSIECheckpointBranches, getSIECheckpointChoices, getSIESubject, getSIETeacher } from "@shared/sie-catalog";
-import { calculateLearningGap } from "@shared/sie-learning-progress";
-import { BookOpenText, Check, Search, X } from "lucide-react";
+import { getSIECheckpointBranches, getSIESubject, getSIETeacher, getSIETeachersForSubject } from "@shared/sie-catalog";
+import { calculateLearningGap, getNextLearningTarget, moveLearningFrontier } from "@shared/sie-learning-progress";
+import { BookOpenText, Check, ChevronLeft, ChevronRight, Search, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "framer-motion";
@@ -13,13 +13,9 @@ import { AnimatePresence, motion } from "framer-motion";
 export default function Study() {
   const utils = trpc.useUtils();
   const profile = trpc.studentProfile.get.useQuery();
-  const activeExternalSession = trpc.learning.activeExternalSession.useQuery();
-  const [sessionNow, setSessionNow] = useState(Date.now());
-  const [markSessionLessonCompleted, setMarkSessionLessonCompleted] = useState(false);
   const initialStudyParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
   const [subjectId, setSubjectId] = useState(initialStudyParams?.get("subject") || "");
   const [branchId, setBranchId] = useState(initialStudyParams?.get("branch") || "");
-  const [lessonId, setLessonId] = useState(initialStudyParams?.get("lesson") || "");
   const [subjectSearch, setSubjectSearch] = useState("");
   const subjects = profile.data?.subjectIds || [];
   const selection = (profile.data?.selection || {}) as Record<string, any>;
@@ -30,14 +26,20 @@ export default function Study() {
     || (profile.data?.teacherSelections || {})[subjectId];
   const selectedTeacherId = savedTeacherId && savedTeacherId !== "__SKIP__" ? savedTeacherId : undefined;
   const selectedTeacher = selectedTeacherId ? getSIETeacher(selectedTeacherId) : undefined;
+  const systemId: "EG_BACCALAUREATE" | "EG_GENERAL_SECONDARY" =
+    selection.systemId === "EG_GENERAL_SECONDARY" || profile.data?.educationSystem === "general_secondary"
+      ? "EG_GENERAL_SECONDARY" : "EG_BACCALAUREATE";
+  const teacherOptions = useMemo(() => subjectId ? getSIETeachersForSubject(subjectId, systemId) : [], [subjectId, systemId]);
   const savedCourseModes = (selection.courseModes || {}) as Record<string, "center" | "online">;
-  const courseMode = savedCourseModes[subjectId] || currentCourseProgress.courseMode || "";
+  const courseMode = savedCourseModes[subjectId] || currentCourseProgress.courseMode || "online";
   const savedTeacherNames = (selection.customTeacherNames || {}) as Record<string, string>;
   const teacherReferenceNameBase = (savedTeacherNames[subjectId] || selectedTeacher?.nameAr || "").trim();
+  const [customTeacherNameDrafts, setCustomTeacherNameDrafts] = useState<Record<string, string>>({});
+  const customTeacherNameDraft = Object.prototype.hasOwnProperty.call(customTeacherNameDrafts, subjectId)
+    ? customTeacherNameDrafts[subjectId] : (savedTeacherNames[subjectId] || "");
   const branches = useMemo(() => getSIECheckpointBranches(subjectId), [subjectId]);
   const currentBranch = branches.find(branch => branch.branchId === branchId) ?? branches[0];
   const branchChoices = currentBranch?.choices ?? [];
-  const lessons = branchChoices;
   const currentBranchId = currentBranch?.branchId ?? "";
   const currentBranchPointLabel = currentBranch?.branchType === "official_section" ? "موضوع" : "درس";
   const isLinearSubject = subjectId === "HIS_G2_BAC" || subjectId === "PROG_AI_G2_BAC";
@@ -77,6 +79,8 @@ export default function Study() {
   const subjectIndex = Math.max(0, subjects.indexOf(subjectId));
   const branchIndex = Math.max(0, branches.findIndex(branch => branch.branchId === currentBranchId));
   const [studentFrontierDrafts, setStudentFrontierDrafts] = useState<Record<string, string>>({});
+  const [teacherFrontierDrafts, setTeacherFrontierDrafts] = useState<Record<string, string>>({});
+  const [schoolFrontierDrafts, setSchoolFrontierDrafts] = useState<Record<string, string>>({});
 
   const studentFrontierDraftKey = subjectId + "::" + currentBranchId;
   const legacyStudentState = ((selection.teacherProgressState || {}) as Record<string, Record<string, any>>)[subjectId] || {};
@@ -92,18 +96,20 @@ export default function Study() {
       : "__UNKNOWN__";
   const currentBranchTeacherMatchesSelection = !currentBranchProgress.teacherId
     || currentBranchProgress.teacherId === selectedTeacherId;
-  const teacherTeachingFrontierId = selectedTeacherId && currentBranchTeacherMatchesSelection
+  const savedTeacherFrontierId = (selectedTeacherId || teacherReferenceNameBase) && currentBranchTeacherMatchesSelection
     ? (typeof currentBranchProgress.teacherTeachingFrontierId === "string"
       ? currentBranchProgress.teacherTeachingFrontierId
       : belongsToCurrentBranch(currentCourseProgress.teacherTeachingFrontierId)
-        ? currentCourseProgress.teacherTeachingFrontierId
-        : "__UNKNOWN__")
+        ? currentCourseProgress.teacherTeachingFrontierId : "__UNKNOWN__")
     : "__UNKNOWN__";
-  const schoolClassFrontierId = Object.prototype.hasOwnProperty.call(currentBranchProgress, "schoolClassFrontierId")
+  const teacherTeachingFrontierId = Object.prototype.hasOwnProperty.call(teacherFrontierDrafts, studentFrontierDraftKey)
+    ? teacherFrontierDrafts[studentFrontierDraftKey] : savedTeacherFrontierId;
+  const savedSchoolFrontierId = Object.prototype.hasOwnProperty.call(currentBranchProgress, "schoolClassFrontierId")
     ? currentBranchProgress.schoolClassFrontierId
     : belongsToCurrentBranch(currentCourseProgress.schoolClassFrontierId)
-      ? currentCourseProgress.schoolClassFrontierId
-      : "__UNKNOWN__";
+      ? currentCourseProgress.schoolClassFrontierId : "__UNKNOWN__";
+  const schoolClassFrontierId = Object.prototype.hasOwnProperty.call(schoolFrontierDrafts, studentFrontierDraftKey)
+    ? schoolFrontierDrafts[studentFrontierDraftKey] : savedSchoolFrontierId;
   const lastCompletedLessonId = Object.prototype.hasOwnProperty.call(studentFrontierDrafts, studentFrontierDraftKey)
     ? studentFrontierDrafts[studentFrontierDraftKey]
     : savedStudentFrontierId;
@@ -144,182 +150,122 @@ export default function Study() {
     if (!branches.some(branch => branch.branchId === branchId)) setBranchId(branches[0].branchId);
   }, [subjectId, branches, branchId]);
 
-  useEffect(() => {
-    if (!branchChoices.length) {
-      setLessonId("");
-      return;
-    }
-    if (!branchChoices.some(lesson => lesson.nodeId === lessonId)) {
-      setLessonId("");
-    }
-  }, [subjectId, currentBranchId, branchChoices, lessonId]);
-
   const saveBranchFrontier = trpc.learning.updateBranchFrontier.useMutation({
     onSuccess: async result => {
       await Promise.all([utils.studentProfile.get.invalidate(), utils.learning.get.invalidate()]);
+      const clearDraft = (drafts: Record<string, string>) => { const next = { ...drafts }; delete next[studentFrontierDraftKey]; return next; };
+      setStudentFrontierDrafts(clearDraft); setTeacherFrontierDrafts(clearDraft); setSchoolFrontierDrafts(clearDraft);
       if (result.savedStudent) {
-        setStudentFrontierDrafts(current => {
-          const next = { ...current };
-          delete next[studentFrontierDraftKey];
-          return next;
-        });
         const lastLessonId = currentBranch?.choices[currentBranch.choices.length - 1]?.nodeId;
         const branchCompleted = Boolean(lastLessonId && result.record?.lastCompletedLessonId === lastLessonId);
-        if (!branchCompleted) {
-          toast.success("تم حفظ تقدمك في " + (currentBranch?.branchTitle || "الفرع") + ". ستبقى هنا حتى تسجل إكمال آخر درس.");
+        if (!branchCompleted) { toast.success("تم حفظ مواضعك في " + (currentBranch?.branchTitle || "الفرع") + "."); return; }
+        const nextTarget = getNextLearningTarget(subjects, subjectId, branches, currentBranchId);
+        if (nextTarget) {
+          setSubjectId(nextTarget.subjectId);
+          setBranchId(nextTarget.branchId || "");
+          const nextLabel = nextTarget.branchId ? branches.find(item => item.branchId === nextTarget.branchId)?.branchTitle : getSIESubject(nextTarget.subjectId)?.nameAr;
+          toast.success("اكتمل هذا الفرع؛ انتقلنا تلقائيًا إلى " + (nextLabel || "الموضع التالي") + ".");
           return;
         }
-        const nextBranch = branches[branchIndex + 1];
-        if (nextBranch) {
-          setBranchId(nextBranch.branchId);
-          setLessonId("");
-          toast.success("تم حفظ موضع " + (currentBranch?.branchTitle || "الفرع") + "؛ ننتقل إلى " + nextBranch.branchTitle + ".");
-          return;
-        }
-        const nextSubjectId = subjects[subjectIndex + 1];
-        if (nextSubjectId) {
-          setSubjectId(nextSubjectId);
-          setBranchId("");
-          setLessonId("");
-          toast.success("اكتملت فروع " + subjectName + "؛ ننتقل إلى " + (getSIESubject(nextSubjectId)?.nameAr || "المادة التالية") + ".");
-          return;
-        }
-        toast.success("تم حفظ موضعك واكتمل المرور على فروع المادة.");
-      } else {
-        toast.success("تم حفظ التقدم.");
-      }
+        toast.success("تم حفظ موضعك واكتملت كل فروع المواد المحددة.");
+      } else if (result.savedTeacher) toast.success("تم حفظ موضع المدرس والسنتر / المجموعة لهذا الفرع.");
+      else toast.success("تم حفظ التقدم.");
     },
     onError: error => toast.error(error.message || "تعذّر حفظ موضع المنهج."),
   });
-
-  const startExternalSession = trpc.learning.startExternalSession.useMutation({
+  const updateTeacherSelection = trpc.studentProfile.updateTeacherSelection.useMutation({
     onSuccess: async () => {
-      setMarkSessionLessonCompleted(false);
-      await utils.learning.activeExternalSession.invalidate();
-      await utils.studentProfile.get.invalidate();
-      toast.success("بدأت جلسة المذاكرة الخارجية. يمكنك الانتقال إلى تطبيق المدرس أو ملف PDF.");
-    },
-    onError: error => toast.error(error.message),
-  });
-
-  const reviewRecommendations = trpc.teachers.recommendReviews.useMutation({
-    onError: error => toast.error(error.message || "تعذّر البحث عن مراجعات لهذا الفرع."),
-  });
-  const finishExternalSession = trpc.learning.finishExternalSession.useMutation({
-    onSuccess: async result => {
-      await utils.learning.activeExternalSession.invalidate();
       await Promise.all([utils.studentProfile.get.invalidate(), utils.learning.get.invalidate()]);
-      const minutes = Math.floor(result.durationSeconds / 60);
-      toast.success(result.lessonMarkedCompleted
-        ? `انتهت الجلسة: ${minutes} دقيقة، وتم تحديث موضعك في المنهج.`
-        : `انتهت الجلسة: ${minutes} دقيقة. لم يتم تغيير موضع المنهج.`);
-      if (result.requiresTimeReview) toast.warning("الجلسة تجاوزت 12 ساعة؛ تم تسجيل الحد الأعلى فقط.");
+      setTeacherFrontierDrafts(current => { const next = { ...current }; delete next[studentFrontierDraftKey]; return next; });
+      toast.success("تم حفظ المدرس المرتبط بالمادة.");
     },
-    onError: error => toast.error(error.message),
+    onError: error => toast.error(error.message || "تعذّر تحديث المدرس."),
   });
-
+  const changeTeacher = (teacherId: string) => {
+    if (!subjectId || updateTeacherSelection.isPending) return;
+    setCustomTeacherNameDrafts(current => ({ ...current, [subjectId]: "" }));
+    updateTeacherSelection.mutate({ subjectId, courseMode, teacherId: teacherId === "__SKIP__" ? null : teacherId, teacherName: "" });
+  };
+  const saveCustomTeacher = () => {
+    const teacherName = customTeacherNameDraft.trim();
+    if (!subjectId || !teacherName || updateTeacherSelection.isPending) return;
+    updateTeacherSelection.mutate({ subjectId, courseMode, teacherId: null, teacherName });
+  };
+  const setTeacherFrontier = (value: string) => setTeacherFrontierDrafts(current => ({ ...current, [studentFrontierDraftKey]: value }));
+  const setSchoolFrontier = (value: string) => setSchoolFrontierDrafts(current => ({ ...current, [studentFrontierDraftKey]: value }));
+  const stepFrontier = (value: string, direction: "previous" | "next") => moveLearningFrontier(branchChoices, value, direction);
+  const frontierIndex = (value: string) => branchChoices.findIndex(choice => choice.nodeId === value);
+  const canMovePrevious = (value: string) => frontierIndex(value) >= 0;
+  const canMoveNext = (value: string) => branchChoices.length > 0 && value !== branchChoices[branchChoices.length - 1]?.nodeId;
   const submitBranchProgress = () => {
-    if (!subjectId || !currentBranchId || !branchChoices.length) {
-      toast.error("اختَر فرعًا له فهرس دروس متاح أولًا.");
-      return;
-    }
-    if (!hasStudentFrontierSelection) {
-      toast.error("حدد آخر درس أنهيته، أو اختر «موضعي غير معروف».");
-      return;
-    }
-    const validFrontier = (value: string) =>
-      value === "__UNKNOWN__" || value === "__NOT_STARTED__" || branchChoices.some(choice => choice.nodeId === value);
-    const studentFrontier = validFrontier(lastCompletedLessonId) ? lastCompletedLessonId : "__UNKNOWN__";
-    saveBranchFrontier.mutate({ subjectId, branchId: currentBranchId, studentFrontierId: studentFrontier });
-  };
-
-  const beginExternalStudy = () => {
-    if (!subjectId || !currentBranchId || !lessonId) {
-      toast.error("اختر المادة والفرع والدرس أولًا.");
-      return;
-    }
-    startExternalSession.mutate({
-      subjectId,
-      branchId: currentBranchId,
-      lessonId,
-    });
-  };
-
-  const endExternalStudy = () => {
-    const session = activeExternalSession.data;
-    if (!session?.sessionId) return;
-    finishExternalSession.mutate({
-      sessionId: session.sessionId,
-      markLessonCompleted: markSessionLessonCompleted,
+    if (!subjectId || !currentBranchId || !branchChoices.length) { toast.error("اختَر فرعًا له فهرس دروس متاح أولًا."); return; }
+    if (!hasStudentFrontierSelection) { toast.error("حدد آخر درس أنهيته، أو اختر «موضعي غير معروف»."); return; }
+    const validFrontier = (value: string) => value === "__UNKNOWN__" || value === "__NOT_STARTED__" || branchChoices.some(choice => choice.nodeId === value);
+    saveBranchFrontier.mutate({
+      subjectId, branchId: currentBranchId,
+      studentFrontierId: validFrontier(lastCompletedLessonId) ? lastCompletedLessonId : "__UNKNOWN__",
+      teacherTeachingFrontierId: validFrontier(teacherTeachingFrontierId) ? teacherTeachingFrontierId : "__UNKNOWN__",
+      schoolClassFrontierId: courseMode === "center" && validFrontier(schoolClassFrontierId) ? schoolClassFrontierId : "__UNKNOWN__",
     });
   };
 
   const subjectName = (getSIESubject(subjectId)?.nameAr || subjectId);
-  const visibleSubjects = subjects.filter(id =>
-    normalizeFrontierSearch(getSIESubject(id)?.nameAr || id).includes(normalizeFrontierSearch(subjectSearch))
-  );
-  const selectedLesson = lessons.find(item => item.nodeId === lessonId);
-  const externalSession = activeExternalSession.data;
-  const externalSessionElapsed = externalSession?.startedAt
-    ? Math.max(0, Math.floor((sessionNow - Date.parse(externalSession.startedAt)) / 1_000))
-    : 0;
-  const formatSessionDuration = (totalSeconds: number) => {
-    const hours = Math.floor(totalSeconds / 3_600);
-    const minutes = Math.floor((totalSeconds % 3_600) / 60);
-    const seconds = totalSeconds % 60;
-    return [hours, minutes, seconds].map((value, index) =>
-      index === 0 && value === 0 ? null : String(value).padStart(2, "0")
-    ).filter(Boolean).join(":") || "00:00";
-  };
-  const externalSessionSubjectName = externalSession ? getSIESubject(externalSession.subjectId)?.nameAr || externalSession.subjectId : "";
-  const externalSessionLessonTitle = externalSession
-    ? getSIECheckpointChoices(externalSession.subjectId).find(item => item.nodeId === externalSession.lessonId)?.title || "درس غير معروف"
-    : "";
+  const visibleSubjects = subjects.filter(id => normalizeFrontierSearch(getSIESubject(id)?.nameAr || id).includes(normalizeFrontierSearch(subjectSearch)));
 
-  useEffect(() => {
-    if (!externalSession?.startedAt) {
-      setSessionNow(Date.now());
-      return;
-    }
-    const update = () => setSessionNow(Date.now());
-    update();
-    const interval = window.setInterval(update, 1_000);
-    return () => window.clearInterval(interval);
+  return () => window.clearInterval(interval);
   }, [externalSession?.sessionId, externalSession?.startedAt]);
 
   return (
     <DashboardLayout title="المذاكرة والتقدم" description="اختر المادة، وسجّل آخر نقطة وصلت إليها في المنهج.">
       {profile.isError && <div className="rounded-2xl border border-destructive/20 bg-destructive/5 p-4 text-sm">تعذّر تحميل ملفك الدراسي. <button className="font-bold underline" onClick={() => void profile.refetch()}>إعادة المحاولة</button></div>}
-      <section className="app-card mb-5 overflow-hidden rounded-2xl">
-        <header className="border-b border-border/70 bg-gradient-to-l from-secondary/65 to-card p-5 sm:p-6">
-          <p className="text-[10px] font-bold tracking-[0.12em] text-primary">المادة</p>
-          <h2 className="mt-1 text-xl font-bold">اختيار المادة</h2>
-          <p className="mt-1 text-sm leading-6 text-muted-foreground">اختر المادة التي تريد متابعة تقدمك فيها. بيانات المدرّس وطريقة الدراسة محفوظة في ملف حسابك.</p>
-        </header>
-        <div className="space-y-3 p-5 sm:p-6">
-          <div className="relative">
-            <Search className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input value={subjectSearch} onChange={event => setSubjectSearch(event.target.value)}
-              placeholder="ابحث عن مادة..." aria-label="البحث عن مادة" className="h-11 rounded-xl pr-9 text-sm" />
-            {subjectSearch && <button type="button" aria-label="مسح البحث" onClick={() => setSubjectSearch("")}
-              className="absolute left-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground hover:bg-muted"><X className="size-3.5" /></button>}
+      <section className="grid gap-4 lg:grid-cols-2">
+        <article className="app-card min-w-0 overflow-hidden rounded-2xl">
+          <header className="border-b border-border/70 bg-gradient-to-l from-secondary/65 to-card p-5">
+            <p className="text-[10px] font-bold tracking-[0.12em] text-primary">المادة</p><h2 className="mt-1 text-xl font-bold">اختر المادة</h2>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">كل مواد ملفك ظاهرة، والبحث يساعدك على الوصول للمادة فقط.</p>
+          </header>
+          <div className="space-y-3 p-4 sm:p-5">
+            <div className="relative"><Search className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input value={subjectSearch} onChange={event => setSubjectSearch(event.target.value)} placeholder="ابحث عن مادة..." aria-label="البحث عن مادة" className="h-11 rounded-xl pr-9 text-sm" />
+              {subjectSearch && <button type="button" aria-label="مسح البحث" onClick={() => setSubjectSearch("")} className="absolute left-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground hover:bg-muted"><X className="size-3.5" /></button>}
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {visibleSubjects.map(id => { const active = id === subjectId; return <motion.button key={id} type="button" aria-pressed={active} onClick={() => { setSubjectId(id); setBranchId(""); }} whileTap={{ scale: 0.98 }}
+                className={"min-h-12 rounded-xl border px-3 py-3 text-sm font-semibold transition " + (active ? "border-primary bg-primary/10 text-foreground ring-2 ring-primary/15" : "border-border bg-background text-muted-foreground hover:border-primary/35")}>{getSIESubject(id)?.nameAr || id}</motion.button>; })}
+            </div>
+            {!visibleSubjects.length && <p className="rounded-xl bg-muted/30 p-4 text-center text-sm text-muted-foreground">لا توجد مادة مطابقة لبحثك.</p>}
           </div>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {visibleSubjects.map(id => {
-              const active = id === subjectId;
-              return <motion.button key={id} type="button" aria-pressed={active}
-                onClick={() => { setSubjectId(id); setBranchId(""); setLessonId(""); }}
-                whileTap={{ scale: 0.98 }}
-                className={"min-h-12 rounded-xl border px-3 py-3 text-sm font-semibold transition " + (active ? "border-primary bg-primary/10 text-foreground ring-2 ring-primary/15" : "border-border bg-background text-muted-foreground hover:border-primary/35")}>
-                {getSIESubject(id)?.nameAr || id}
-              </motion.button>;
-            })}
+        </article>
+        <article className="app-card min-w-0 overflow-hidden rounded-2xl">
+          <header className="border-b border-border/70 bg-gradient-to-l from-secondary/55 to-card p-5">
+            <p className="text-[10px] font-bold tracking-[0.12em] text-primary">المدرس</p><h2 className="mt-1 text-xl font-bold">اختر مدرس المادة</h2>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">{subjectName} · الاختيار هنا يتزامن مع ملف حسابك ويُستخدم لتحديد موضع الشرح.</p>
+          </header>
+          <div className="space-y-3 p-4 sm:p-5">
+            {profile.isLoading ? <p className="rounded-xl bg-muted/25 p-4 text-sm text-muted-foreground">تحميل قائمة المدرسين…</p> : <>
+              {teacherReferenceNameBase && <p className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm font-semibold">المدرس المسجل حاليًا: {teacherReferenceNameBase}</p>}
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {teacherOptions.map(teacher => { const active = selectedTeacherId === teacher.teacherId; return <button key={teacher.teacherId} type="button" aria-pressed={active} disabled={updateTeacherSelection.isPending} onClick={() => changeTeacher(teacher.teacherId)}
+                  className={"flex min-h-12 min-w-0 items-center justify-between gap-2 rounded-xl border px-3 py-3 text-right text-sm font-semibold transition disabled:opacity-50 " + (active ? "border-primary bg-primary/10 text-foreground ring-2 ring-primary/15" : "border-border bg-background text-muted-foreground hover:border-primary/35 hover:text-foreground")}>
+                  <span className="min-w-0 break-words">{teacher.nameAr}</span>{active && <Check className="size-4 shrink-0 text-primary" />}</button>; })}
+              </div>
+              <div className="space-y-2 rounded-xl border border-border/70 bg-background/60 p-3">
+                <label className="block text-sm font-semibold" htmlFor="study-custom-teacher">مدرس غير موجود في القائمة</label>
+                <Input id="study-custom-teacher" value={customTeacherNameDraft} onChange={event => setCustomTeacherNameDrafts(current => ({ ...current, [subjectId]: event.target.value }))} maxLength={120} placeholder="اكتب اسم المدرس" className="h-10 rounded-lg" />
+                <Button type="button" size="sm" variant="outline" disabled={!customTeacherNameDraft.trim() || updateTeacherSelection.isPending} onClick={saveCustomTeacher} className="w-full rounded-lg">حفظ اسم المدرس</Button>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs text-muted-foreground">طريقة الدراسة: {courseMode === "center" ? "سنتر / مجموعة" : "أونلاين"}</span>
+                <button type="button" disabled={updateTeacherSelection.isPending || (!selectedTeacherId && !teacherReferenceNameBase)} onClick={() => changeTeacher("__SKIP__")} className="text-xs font-semibold text-muted-foreground underline underline-offset-4 disabled:opacity-40">إزالة اختيار المدرس</button>
+              </div>
+              {!teacherOptions.length && !teacherReferenceNameBase && <p className="rounded-xl border border-dashed border-border bg-muted/20 p-3 text-xs leading-6 text-muted-foreground">لا توجد أسماء مدرسين معتمدة لهذه المادة في القائمة الحالية؛ يمكنك تسجيل اسم مدرسك يدويًا.</p>}
+            </>}
           </div>
-          {!visibleSubjects.length && <p className="rounded-xl bg-muted/30 p-4 text-center text-sm text-muted-foreground">لا توجد مادة مطابقة لبحثك.</p>}
-        </div>
+        </article>
       </section>
 
       <section className="app-card mb-5 overflow-hidden rounded-2xl">
+        <header className="border-b border-border/70 bg-gradient-to-l from-secondary/55 to-card p-5 sm:p-6">      <section className="app-card mb-5 overflow-hidden rounded-2xl">
         <header className="border-b border-border/70 bg-gradient-to-l from-secondary/55 to-card p-5 sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
@@ -366,7 +312,6 @@ export default function Study() {
                         <button key={branch.branchId} type="button" aria-pressed={active} aria-current={active ? "step" : undefined}
                           onClick={() => {
                             setBranchId(branch.branchId);
-                            setLessonId("");
                           }}
                           className={"flex min-h-14 min-w-0 items-center gap-2 rounded-xl border px-3 py-2.5 text-right text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 " +
                             (active ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary/20" : isComplete ? "border-emerald-500/25 bg-emerald-500/[0.05] text-foreground" : hasProgress ? "border-primary/25 bg-primary/[0.035] text-foreground" : "border-border bg-background text-muted-foreground hover:border-primary/35 hover:text-foreground")}>
@@ -414,7 +359,6 @@ export default function Study() {
                               if (nextSubjectId) {
                                 setSubjectId(nextSubjectId);
                                 setBranchId("");
-                                setLessonId("");
                                 toast.success("تم تجاوز " + subjectName + " مؤقتًا؛ انتقلنا إلى " + (getSIESubject(nextSubjectId)?.nameAr || "المادة التالية") + ".");
                               } else {
                                 toast.info("وصلت إلى آخر مادة في ملفك. هذه المادة ما زالت تحتاج إلى فهرس معتمد.");
@@ -432,16 +376,36 @@ export default function Study() {
                         <h4 className="mt-1 break-words text-sm font-bold sm:text-base">آخر درس أنهيته</h4>
                         <p className="mt-1 text-xs leading-5 text-muted-foreground">اختَر موضعك من قائمة الدروس؛ ويمكنك البحث لتصفية الاختيارات فقط.</p>
                       </div>
-                      <div className="mt-3">
-                        <SearchableFrontierPicker label="موضعك في هذا الفرع"
-                          hint="كل الدروس متاحة للاختيار، والبحث يضيّق النتائج فقط."
-                          value={hasStudentFrontierSelection ? lastCompletedLessonId : ""}
-                          onChange={setLastCompletedLessonId} disabled={saveBranchFrontier.isPending}
-                          options={[
-                            { value: "__NOT_STARTED__", label: "لم أبدأ هذا الفرع" },
-                            { value: "__UNKNOWN__", label: "موضعي غير معروف" },
-                            ...branchChoiceOptions,
-                          ]} />
+                      <div className="mt-3 grid gap-4 xl:grid-cols-3">
+                        <div className="min-w-0 rounded-xl border border-border/70 bg-background/70 p-3">
+                          <SearchableFrontierPicker label="موضعك أنت في هذا الفرع" hint="آخر درس أنهيته بنفسك."
+                            value={hasStudentFrontierSelection ? lastCompletedLessonId : ""} onChange={setLastCompletedLessonId} disabled={saveBranchFrontier.isPending}
+                            onPrevious={() => setLastCompletedLessonId(stepFrontier(lastCompletedLessonId, "previous"))}
+                            onNext={() => setLastCompletedLessonId(stepFrontier(lastCompletedLessonId || "__UNKNOWN__", "next"))}
+                            previousDisabled={!canMovePrevious(lastCompletedLessonId)} nextDisabled={!canMoveNext(lastCompletedLessonId)}
+                            options={[{ value: "__NOT_STARTED__", label: "لم أبدأ هذا الفرع" },{ value: "__UNKNOWN__", label: "موضعي غير معروف" },...branchChoiceOptions]} />
+                        </div>
+                        <div className="min-w-0 rounded-xl border border-border/70 bg-background/70 p-3">
+                          <SearchableFrontierPicker label="موضع المدرس في هذا الفرع"
+                            hint={selectedTeacher ? "آخر درس شرحه " + selectedTeacher.nameAr + " فعليًا." : teacherReferenceNameBase ? "آخر درس شرحه المدرس المسجل في حسابك." : "اختر المدرس أو سجّل اسمه أولًا."}
+                            value={teacherTeachingFrontierId} onChange={setTeacherFrontier}
+                            disabled={saveBranchFrontier.isPending || (!selectedTeacherId && !teacherReferenceNameBase)}
+                            onPrevious={() => setTeacherFrontier(stepFrontier(teacherTeachingFrontierId, "previous"))}
+                            onNext={() => setTeacherFrontier(stepFrontier(teacherTeachingFrontierId, "next"))}
+                            previousDisabled={!canMovePrevious(teacherTeachingFrontierId) || (!selectedTeacherId && !teacherReferenceNameBase)}
+                            nextDisabled={!canMoveNext(teacherTeachingFrontierId) || (!selectedTeacherId && !teacherReferenceNameBase)}
+                            options={[{ value: "__UNKNOWN__", label: "لا أعرف / غير متاح" },{ value: "__NOT_STARTED__", label: "لم يبدأ التدريس بعد" },...branchChoiceOptions]} />
+                        </div>
+                        {courseMode === "center" ? (
+                          <div className="min-w-0 rounded-xl border border-border/70 bg-background/70 p-3">
+                            <SearchableFrontierPicker label="موضع السنتر / المجموعة" hint="آخر درس انتهت المجموعة من شرحه."
+                              value={schoolClassFrontierId} onChange={setSchoolFrontier} disabled={saveBranchFrontier.isPending}
+                              onPrevious={() => setSchoolFrontier(stepFrontier(schoolClassFrontierId, "previous"))}
+                              onNext={() => setSchoolFrontier(stepFrontier(schoolClassFrontierId, "next"))}
+                              previousDisabled={!canMovePrevious(schoolClassFrontierId)} nextDisabled={!canMoveNext(schoolClassFrontierId)}
+                              options={[{ value: "__UNKNOWN__", label: "لا أعرف حتى الآن" },{ value: "__NOT_STARTED__", label: "لم يبدأ السنتر / المجموعة" },...branchChoiceOptions]} />
+                          </div>
+                        ) : <div className="flex min-h-28 flex-col justify-center rounded-xl border border-dashed border-border bg-muted/15 p-4 text-sm leading-6 text-muted-foreground">طريقة الدراسة أونلاين؛ موضع السنتر / المجموعة غير مطلوب.</div>}
                       </div>
                     </div>
                   )}
@@ -494,102 +458,6 @@ export default function Study() {
         </div>
       </section>
 
-      <section className="app-card mb-5 p-5 sm:p-6">
-        <div>
-          <p className="text-[10px] font-bold tracking-[0.12em] text-primary">المذاكرة</p>
-          <h2 className="mt-1 text-lg font-bold">اختيار درس لجلسة المذاكرة</h2>
-          <p className="mt-1 text-sm leading-6 text-muted-foreground">اختر الدرس الذي ستذاكره خارج StudyFlow. هذه الجلسة ومؤقتها منفصلان عن جلسة SQ3R وعن تسجيل تقدم المنهج. <a href="/sq3r" className="font-semibold text-primary underline underline-offset-4">افتح جلسة SQ3R المستقلة</a>.</p>
-        </div>
-        {branchChoices.length ? (
-          <div className="mt-4">
-            <SearchableFrontierPicker label="الدرس" hint="تظهر كل دروس الفرع، ويمكنك البحث بينها دون استبدال الاختيارات."
-              value={lessonId} onChange={setLessonId} options={branchChoiceOptions} />
-          </div>
-        ) : <p className="mt-4 rounded-xl bg-muted/30 p-3 text-xs leading-6 text-muted-foreground">لا توجد دروس مفهرسة لهذا الفرع بعد.</p>}
-      </section>
-
-      <section className="app-card mb-5 p-5 sm:p-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <p className="text-[10px] font-bold tracking-[0.12em] text-primary">جلسة المذاكرة الخارجية</p>
-            <h2 className="mt-1 font-bold">جلسة مذاكرة خارج SIE</h2>
-            {externalSession ? (
-              <>
-                <p className="mt-1 text-sm text-muted-foreground">{externalSessionSubjectName} · {externalSessionLessonTitle}</p>
-                <p className="mt-2 text-xs leading-6 text-muted-foreground">الجلسة محفوظة على الخادم وتستمر عند انتقالك إلى منصة المدرس أو قارئ PDF. ارجع إلى SIE واضغط إنهاء عند الانتهاء.</p>
-              </>
-            ) : (
-              <p className="mt-1 text-xs leading-6 text-muted-foreground">ابدأ المؤقت قبل فتح منصة المدرس أو ملف PDF. عند رجوعك، أوقفه وسجّل ما إذا كنت أنهيت الدرس.</p>
-            )}
-          </div>
-          {externalSession ? (
-            <div className="flex shrink-0 flex-col items-center gap-2 rounded-2xl border border-primary/20 bg-primary/5 px-5 py-3">
-              <p className="text-[10px] font-semibold text-muted-foreground">الوقت المسجل</p>
-              <p className="text-3xl font-bold tabular-nums text-primary">{formatSessionDuration(externalSessionElapsed)}</p>
-              <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">جلسة نشطة</span>
-            </div>
-          ) : (
-            <Button type="button" onClick={beginExternalStudy} disabled={startExternalSession.isPending || activeExternalSession.isLoading || !subjectId || !currentBranchId || !lessonId} className="shrink-0 rounded-xl bg-primary">
-              {startExternalSession.isPending ? "جارٍ بدء الجلسة..." : "ابدأ جلسة خارج SIE"}
-            </Button>
-          )}
-        </div>
-        {externalSession && (
-          <div className="mt-4 flex flex-col gap-3 rounded-xl border border-border/70 bg-muted/25 p-4 sm:flex-row sm:items-center sm:justify-between">
-            <label className="flex items-start gap-2 text-sm leading-6">
-              <input type="checkbox" checked={markSessionLessonCompleted} onChange={event => setMarkSessionLessonCompleted(event.target.checked)} className="mt-1 size-4 accent-primary" />
-              <span>أنهيت دراسة هذا الدرس؛ حدّث موضعي في فرع المنهج عند إنهاء الجلسة.</span>
-            </label>
-            <Button type="button" variant="outline" onClick={endExternalStudy} disabled={finishExternalSession.isPending} className="shrink-0 rounded-xl">
-              {finishExternalSession.isPending ? "جارٍ إنهاء الجلسة..." : "إنهاء الجلسة وحفظ الوقت"}
-            </Button>
-          </div>
-        )}
-      </section>
-
-
-      <section className="app-card mt-6 p-5 sm:p-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <p className="text-[10px] font-bold tracking-[0.12em] text-primary">اقتراحات المراجعة</p>
-            <h2 className="mt-1 font-bold">مراجعات مقترحة لهذا الفرع</h2>
-            <p className="mt-1 text-xs leading-6 text-muted-foreground">يبحث عن مراجعات بالاستناد إلى المادة والفرع والمدرس المسجل في ملف حسابك. راجع محتوى الفيديو قبل الاعتماد عليه.</p>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={reviewRecommendations.isPending || !subjectId || !currentBranchId}
-            onClick={() => reviewRecommendations.mutate({ subjectId, branchId: currentBranchId, teacherId: selectedTeacherId || undefined })}
-            className="shrink-0 rounded-xl"
-          >
-            {reviewRecommendations.isPending ? "جارٍ البحث..." : "ابحث عن مراجعات"}
-          </Button>
-        </div>
-        {reviewRecommendations.isError && <p role="alert" className="mt-3 rounded-xl bg-destructive/5 p-3 text-sm text-destructive">تعذّر تحميل النتائج. يمكنك المحاولة مرة أخرى.</p>}
-        {reviewRecommendations.data && (
-          <div className="mt-4 space-y-3">
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <span>المادة: {reviewRecommendations.data.subject}</span>
-              <span>·</span>
-              <span>الفرع: {reviewRecommendations.data.branch}</span>
-              {reviewRecommendations.data.teacher && <><span>·</span><span>المدرس: {reviewRecommendations.data.teacher}</span></>}
-            </div>
-            {reviewRecommendations.data.items.length ? reviewRecommendations.data.items.map((item, index) => (
-              <article key={item.url + index} className="rounded-xl border border-border/70 bg-muted/15 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <a href={item.url} target="_blank" rel="noopener noreferrer" className="font-semibold leading-6 text-primary underline-offset-4 hover:underline">{item.title}</a>
-                    <p className="mt-1 text-xs text-muted-foreground">{item.channelTitle}{item.publishedAt ? " · " + item.publishedAt : ""}</p>
-                  </div>
-                  <span className="shrink-0 rounded-lg bg-secondary px-2 py-1 text-[10px] font-medium text-muted-foreground">{item.relevance}</span>
-                </div>
-                {item.description && <p className="mt-2 line-clamp-3 text-xs leading-6 text-muted-foreground">{item.description}</p>}
-              </article>
-            )) : <p className="rounded-xl bg-muted/30 p-4 text-sm text-muted-foreground">لم يُعثر على نتائج مطابقة كافية لهذا البحث. جرّب البحث مرة أخرى لاحقًا.</p>}
-            <p className="text-[11px] leading-5 text-muted-foreground">{reviewRecommendations.data.note}</p>
-          </div>
-        )}
-      </section>
     </DashboardLayout>
   );
 }
@@ -612,9 +480,12 @@ function normalizeFrontierSearch(value: string) {
 
 function SearchableFrontierPicker({
   label, hint, value, onChange, options, disabled = false,
+  onPrevious, onNext, previousDisabled = false, nextDisabled = false,
 }: {
   label: string; hint?: string; value: string; onChange: (value: string) => void;
   options: ChoiceButtonOption[]; disabled?: boolean;
+  onPrevious?: () => void; onNext?: () => void;
+  previousDisabled?: boolean; nextDisabled?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const normalizedQuery = normalizeFrontierSearch(query);
@@ -623,7 +494,13 @@ function SearchableFrontierPicker({
     : options;
   return (
     <div className="min-w-0 space-y-2.5">
-      <div><p className="text-sm font-bold">{label}</p>{hint && <p className="mt-1 text-xs leading-5 text-muted-foreground">{hint}</p>}</div>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div><p className="text-sm font-bold">{label}</p>{hint && <p className="mt-1 text-xs leading-5 text-muted-foreground">{hint}</p>}</div>
+        {(onPrevious || onNext) && <div className="flex shrink-0 gap-1">
+          {onPrevious && <Button type="button" size="sm" variant="outline" disabled={disabled || previousDisabled} onClick={onPrevious} className="h-8 rounded-lg px-2 text-[11px]"><ChevronRight className="ml-1 size-3.5" />السابق</Button>}
+          {onNext && <Button type="button" size="sm" variant="outline" disabled={disabled || nextDisabled} onClick={onNext} className="h-8 rounded-lg px-2 text-[11px]">التالي<ChevronLeft className="mr-1 size-3.5" /></Button>}
+        </div>}
+      </div>
       <div className="relative">
         <Search className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input value={query} onChange={event => setQuery(event.target.value)} disabled={disabled}
