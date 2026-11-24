@@ -299,7 +299,35 @@ export const appRouter = router({
   }),
 
   studentProfile: router({
-    get: protectedProcedure.query(({ ctx }) => getStudentProfile(ctx.user.id)),
+    get: protectedProcedure.query(async ({ ctx }) => {
+      const profile = await getStudentProfile(ctx.user.id);
+      if (!profile) return profile;
+      const retiredSubjectIds = new Set(["SECOND_LANGUAGE_G2_BAC_PENDING"]);
+      const stripSubjectMap = (value: unknown) => {
+        if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+        return Object.fromEntries(Object.entries(value as Record<string, unknown>)
+          .filter(([subjectId]) => !retiredSubjectIds.has(subjectId)));
+      };
+      const selection = (profile.selection ?? {}) as Record<string, any>;
+      return {
+        ...profile,
+        subjectIds: (profile.subjectIds ?? []).filter(subjectId => !retiredSubjectIds.has(subjectId)),
+        teacherSelections: stripSubjectMap(profile.teacherSelections),
+        selection: {
+          ...selection,
+          ...(Array.isArray(selection.subjectIds)
+            ? { subjectIds: selection.subjectIds.filter((subjectId: string) => !retiredSubjectIds.has(subjectId)) }
+            : {}),
+          teacherChoices: stripSubjectMap(selection.teacherChoices),
+          courseModes: stripSubjectMap(selection.courseModes),
+          customTeacherNames: stripSubjectMap(selection.customTeacherNames),
+          teacherProgressState: stripSubjectMap(selection.teacherProgressState),
+          teacherFrontiers: stripSubjectMap(selection.teacherFrontiers),
+          learningCourseProgress: stripSubjectMap(selection.learningCourseProgress),
+          subjectLessonProgress: stripSubjectMap(selection.subjectLessonProgress),
+        },
+      };
+    }),
     updateTeacherSelection: protectedProcedure
       .input(z.object({
         subjectId: z.string().trim().min(1).max(80),
@@ -1114,7 +1142,8 @@ export const appRouter = router({
       const legacyTeacherFrontiers = (selection.teacherFrontiers ?? {}) as Record<string, string>;
       const legacyTeacherState = (selection.teacherProgressState ?? {}) as Record<string, Record<string, any>>;
       const sq3rProgress = (selection.subjectLessonProgress ?? {}) as Record<string, Record<string, any>>;
-      const gapByBranch = Object.fromEntries(profile.subjectIds.map(subjectId => {
+      const activeSubjectIds = profile.subjectIds.filter(subjectId => subjectId !== "SECOND_LANGUAGE_G2_BAC_PENDING");
+      const gapByBranch = Object.fromEntries(activeSubjectIds.map(subjectId => {
         const subjectRecord = courseProgress[subjectId] ?? {};
         const subjectCourseMode = selection.courseModes?.[subjectId] ?? subjectRecord.courseMode ?? "online";
         const branchRecords = subjectRecord.branches ?? {};
@@ -1189,7 +1218,7 @@ export const appRouter = router({
         }));
         return [subjectId, gaps];
       }));
-      const gapBySubject = Object.fromEntries(profile.subjectIds.map(subjectId => {
+      const gapBySubject = Object.fromEntries(activeSubjectIds.map(subjectId => {
         const record = courseProgress[subjectId] ?? {};
         const legacyStudentFrontier = legacyTeacherFrontiers[subjectId] || legacyTeacherState[subjectId]?.studentAttendedFrontier;
         return [subjectId, calculateLearningGap(getSIECheckpointChoices(subjectId), {
@@ -1271,6 +1300,7 @@ export const appRouter = router({
           courseMode,
           teacherId: teacherChoice && teacherChoice !== "__SKIP__" ? teacherChoice : null,
           lastCompletedLessonId: nextStudentFrontier,
+          ...(input.studentFrontierId !== undefined ? { studentFrontierConfirmedAt: now } : {}),
           teacherTeachingFrontierId: nextTeacherFrontier,
           ...(input.teacherTeachingFrontierId !== undefined ? { teacherFrontierConfirmedAt: now } : {}),
           schoolClassFrontierId: nextSchoolFrontier,
