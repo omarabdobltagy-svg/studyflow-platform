@@ -183,6 +183,15 @@ export default function Home() {
       profile.data?.subjectIds ?? [],
       (learning.data as any)?.gapByBranch ?? {},
       profile.data?.backlog ?? {},
+      {
+        courseProgress: (learning.data as any)?.courseProgress ?? {},
+        courseModes: (profile.data as any)?.selection?.courseModes ?? {},
+        teacherIds: {
+          ...((profile.data as any)?.selection?.teacherChoices ?? {}),
+          ...(profile.data?.teacherSelections ?? {}),
+        },
+        teacherNames: (profile.data as any)?.selection?.customTeacherNames ?? {},
+      },
     ),
     [profile.data, learning.data],
   );
@@ -335,7 +344,8 @@ export default function Home() {
                 </div>
                 <p className="sf-home-intelligence-note">{hasBacklogEvidence
                   ? `الفجوات محسوبة داخل كل فرع على حدة. ${uncalculatedBacklogBranches} فرعًا لم تكتمل بياناته ولا نعتبره صفرًا.`
-                  : "لا توجد مقارنة مكتملة بعد. سجّل موضعك وموضع المدرس أو المجموعة لكل فرع لاحتساب التراكم الحقيقي."}</p>
+                  : "ملف المواد وطريقة الدراسة محفوظان، لكن لا توجد مواضع تقدم محفوظة كافية داخل فروع المنهج حتى الآن. عدد دروس الفهرس لا يُعتبر تراكمًا."}</p>
+                {uncalculatedBacklogBranches > 0 && <Button type="button" onClick={() => setLocation("/study")} className="sf-home-backlog-action">استكمال مواضع التقدم <ArrowLeft size={14} /></Button>}
               </>}
           </section>
           <section className="sf-home-daily-plan-card">
