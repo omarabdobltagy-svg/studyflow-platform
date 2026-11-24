@@ -188,8 +188,18 @@ export default function Home() {
     },
     onError: error => toast.error("تعذّر تحديث خطة اليوم: " + error.message),
   });
-  const toggleTask = trpc.tasks.toggle.useMutation({ onSuccess: () => void utils.dashboard.summary.invalidate() });
-  const toggleRoutine = trpc.routines.toggleItem.useMutation({ onSuccess: () => void utils.dashboard.summary.invalidate() });
+  const toggleTask = trpc.tasks.toggle.useMutation({
+    onSuccess: () => {
+      void utils.dashboard.summary.invalidate();
+      dailyPlan.mutate({ dailyMinutes: 120 });
+    },
+  });
+  const toggleRoutine = trpc.routines.toggleItem.useMutation({
+    onSuccess: () => {
+      void utils.dashboard.summary.invalidate();
+      dailyPlan.mutate({ dailyMinutes: 120 });
+    },
+  });
   const [openFolder, setOpenFolder] = useState<string | null>(null);
   const data = summary.data;
   const requestDailyPlan = dailyPlan.mutate;
