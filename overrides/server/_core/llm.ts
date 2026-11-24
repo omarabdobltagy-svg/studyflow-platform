@@ -447,8 +447,8 @@ async function invokeWithProvider(
   if (thinking) payload.thinking = thinking;
   if (reasoning) payload.reasoning = reasoning;
 
-  // NVIDIA's hosted Nemotron endpoint does not advertise structured output.
-  // Planner responses are validated by its Zod schema before anything is saved.
+  // Nemotron supports JSON-object response mode. The planner additionally
+  // validates the returned object against its Zod schema before saving.
   const normalizedResponseFormat = provider.omitResponseFormat
     ? undefined
     : normalizeResponseFormat({ responseFormat, response_format, outputSchema, output_schema });
