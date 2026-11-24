@@ -143,4 +143,84 @@ describe("buildLearningBacklogSummary", () => {
     expect(result.aheadCount).toBe(2);
     expect(result.countLabel).toBe("لا توجد فجوة محسوبة");
   });
+
+
+  it("falls back from an unconfirmed unknown branch marker to the saved subject frontier", () => {
+    const branch = branches.find(item => item.choices.length >= 3);
+    expect(branch).toBeDefined();
+    const result = buildLearningBacklogSummary(
+      [subjectId],
+      {},
+      {},
+      {
+        courseProgress: {
+          [subjectId]: {
+            lastCompletedLessonId: branch!.choices[0].nodeId,
+            teacherTeachingFrontierId: branch!.choices[2].nodeId,
+            branches: {
+              [branch!.branchId]: {
+                lastCompletedLessonId: "__UNKNOWN__",
+                teacherTeachingFrontierId: "__UNKNOWN__",
+              },
+            },
+          },
+        },
+      },
+    )[0];
+
+    expect(result.source).toBe("frontier");
+    expect(result.gapCount).toBe(2);
+    expect(result.calculatedBranches).toBe(1);
+  });
+
+  it("respects an explicitly confirmed unknown position instead of replacing it with stale progress", () => {
+    const branch = branches.find(item => item.choices.length >= 3);
+    expect(branch).toBeDefined();
+    const result = buildLearningBacklogSummary(
+      [subjectId],
+      {},
+      {},
+      {
+        courseProgress: {
+          [subjectId]: {
+            lastCompletedLessonId: branch!.choices[0].nodeId,
+            teacherTeachingFrontierId: branch!.choices[2].nodeId,
+            branches: {
+              [branch!.branchId]: {
+                lastCompletedLessonId: "__UNKNOWN__",
+                studentFrontierConfirmedAt: "2026-11-24T12:00:00.000Z",
+                teacherTeachingFrontierId: branch!.choices[2].nodeId,
+              },
+            },
+          },
+        },
+      },
+    )[0];
+
+    expect(result.source).toBe("unknown");
+    expect(result.studentMissingBranches).toBe(branches.length);
+  });
+
+  it("reads the earlier student-progress field when the newer branch record is incomplete", () => {
+    const branch = branches.find(item => item.choices.length >= 3);
+    expect(branch).toBeDefined();
+    const result = buildLearningBacklogSummary(
+      [subjectId],
+      {},
+      {},
+      {
+        courseProgress: {
+          [subjectId]: {
+            teacherTeachingFrontierId: branch!.choices[2].nodeId,
+            branches: { [branch!.branchId]: { teacherTeachingFrontierId: branch!.choices[2].nodeId } },
+          },
+        },
+        legacyStudentFrontiers: { [subjectId]: branch!.choices[0].nodeId },
+      },
+    )[0];
+
+    expect(result.source).toBe("frontier");
+    expect(result.gapCount).toBe(2);
+  });
+
 });
