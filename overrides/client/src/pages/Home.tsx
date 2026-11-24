@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
+import { buildLearningBacklogSummary } from "@/lib/learningBacklog";
 import { getSIECheckpointBranches, getSIESubject } from "@shared/sie-catalog";
 import {
   ArrowLeft, ArrowUpLeft, BookOpenText, CalendarDays, Check, CheckCircle2,
@@ -81,20 +82,13 @@ function WorkspaceFolder({
         transition={{ type: "spring", stiffness: 280, damping: 19 }}
       >
         <div className="sf-folder-art" aria-hidden="true">
-          <motion.div className="sf-folder-paper sf-folder-paper-back"
-            animate={isOpen ? { y: -18, rotate: -8, x: -6 } : { y: 0, rotate: -2, x: 0 }}
-            transition={{ type: "spring", stiffness: 180, damping: 17 }}
-          />
-          <motion.div className="sf-folder-paper sf-folder-paper-front"
-            animate={isOpen ? { y: -25, rotate: 7, x: 7 } : { y: 0, rotate: 2, x: 0 }}
-            transition={{ type: "spring", stiffness: 190, damping: 17, delay: isOpen ? 0.045 : 0 }}
-          />
-          <motion.div className="sf-folder-back" animate={isOpen ? { rotate: -2, y: -5 } : { rotate: 0, y: 0 }} transition={{ type: "spring", stiffness: 190, damping: 18 }} />
-          <motion.div className="sf-folder-front" animate={isOpen ? { rotateX: -9, y: 9, skewX: -1 } : { rotateX: 0, y: 0, skewX: 0 }} transition={{ type: "spring", stiffness: 175, damping: 17 }}>
+          <motion.div
+            className="sf-folder-front"
+            animate={isOpen ? { y: -2, scale: 1.03 } : { y: 0, scale: 1 }}
+            transition={{ type: "spring", stiffness: 220, damping: 22 }}
+          >
             <span className="sf-folder-emblem">{icon}</span>
-            <span className="sf-folder-index">{id}</span>
           </motion.div>
-          <motion.span className="sf-folder-spark" animate={isOpen ? { opacity: 1, scale: 1, y: -6 } : { opacity: 0, scale: 0.5, y: 7 }} transition={{ duration: 0.35 }} />
         </div>
         <div className="sf-folder-copy">
           <span className="sf-folder-eyebrow">{eyebrow}</span>
@@ -180,12 +174,18 @@ export default function Home() {
     requestDailyPlan({ dailyMinutes: 120 });
   }, [profile.isSuccess, profile.data, requestDailyPlan]);
 
-  const backlogBySubject = useMemo(() => (profile.data?.subjectIds ?? []).map((subjectId: string) => {
-    const subjectName = getSIESubject(subjectId)?.nameAr || subjectId;
-    const value = profile.data?.backlog?.[subjectId] ?? profile.data?.backlog?.[subjectName] ?? 0;
-    return { subjectId, subjectName, count: Math.max(0, Number(value) || 0) };
-  }), [profile.data]);
-  const totalBacklog = backlogBySubject.reduce((total, item) => total + item.count, 0);
+  const backlogBySubject = useMemo(
+    () => buildLearningBacklogSummary(
+      profile.data?.subjectIds ?? [],
+      (learning.data as any)?.gapByBranch ?? {},
+      profile.data?.backlog ?? {},
+    ),
+    [profile.data, learning.data],
+  );
+  const totalBacklog = backlogBySubject.reduce((total, item) => total
+    + (item.source === "frontier" ? item.gapCount : item.legacyCount), 0);
+  const hasBacklogEvidence = backlogBySubject.some(item => item.source !== "unknown");
+  const uncalculatedBacklogBranches = backlogBySubject.reduce((total, item) => total + item.uncalculatedBranches, 0);
   const routineRate = data ? (data.routineStats.total ? Math.round((data.routineStats.completed / data.routineStats.total) * 100) : 0) : null;
   const learningPriority = useMemo(() => {
     const gapsBySubject = ((learning.data as any)?.gapByBranch ?? {}) as Record<string, Record<string, any>>;
@@ -317,13 +317,19 @@ export default function Home() {
               <div><span>STUDY / BACKLOG</span><h3>التراكم الدراسي</h3><p>ملخص سريع من ملف الدراسة والتراكم المحفوظ.</p></div>
               <BookOpenText size={19} />
             </div>
-            {profile.isLoading ? <div className="sf-home-intelligence-loading">جارٍ قراءة ملفك الدراسي...</div>
-              : profile.isError ? <p className="sf-home-intelligence-empty">تعذّر تحميل بيانات التراكم.</p>
-              : <><div className="sf-home-backlog-total"><strong>{totalBacklog}</strong><span>إجمالي العناصر المسجلة كتراكم</span></div>
+            {profile.isLoading || learning.isLoading ? <div className="sf-home-intelligence-loading">جارٍ قراءة مواضعك ومقارنتها بموضع المدرس أو المجموعة...</div>
+              : profile.isError || learning.isError ? <p className="sf-home-intelligence-empty">تعذّر تحميل مواضع الدراسة والتراكم. أعد المحاولة من صفحة الدراسة.</p>
+              : <><div className="sf-home-backlog-total"><strong>{hasBacklogEvidence ? totalBacklog : "—"}</strong><span>نقاط متأخرة محسوبة من مواضع المنهج</span></div>
                 <div className="sf-home-backlog-list">
-                  {backlogBySubject.map(item => <div key={item.subjectId}><span>{item.subjectName}</span><b>{item.count}</b></div>)}
+                  {backlogBySubject.map(item => <div key={item.subjectId}>
+                    <span>{item.subjectName}</span>
+                    <b>{item.countLabel}</b>
+                    <small>{item.coverageLabel}</small>
+                  </div>)}
                 </div>
-                <p className="sf-home-intelligence-note">الأرقام هنا هي القيم المحفوظة في ملفك، وليست تقديرًا آليًا من عدد وحدات المنهج.</p>
+                <p className="sf-home-intelligence-note">{hasBacklogEvidence
+                  ? `الفجوات محسوبة داخل كل فرع على حدة. ${uncalculatedBacklogBranches} فرعًا لم تكتمل بياناته ولا نعتبره صفرًا.`
+                  : "لا توجد مقارنة مكتملة بعد. سجّل موضعك وموضع المدرس أو المجموعة لكل فرع لاحتساب التراكم الحقيقي."}</p>
               </>}
           </section>
           <section className="sf-home-daily-plan-card">
