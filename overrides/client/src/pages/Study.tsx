@@ -30,7 +30,6 @@ export default function Study() {
   const [teacherChoiceDrafts, setTeacherChoiceDrafts] = useState<Record<string, string>>({});
   const [courseModeDrafts, setCourseModeDrafts] = useState<Record<string, "center" | "online">>({});
   const [teacherNameDrafts, setTeacherNameDrafts] = useState<Record<string, string>>({});
-  const [advanceAfterSave, setAdvanceAfterSave] = useState(false);
   const [markSessionLessonCompleted, setMarkSessionLessonCompleted] = useState(false);
   const initialStudyParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
   const [subjectId, setSubjectId] = useState(initialStudyParams?.get("subject") || "");
@@ -97,12 +96,6 @@ export default function Study() {
   const [teacherTeachingFrontierId, setTeacherTeachingFrontierId] = useState("__UNKNOWN__");
   const [schoolClassFrontierId, setSchoolClassFrontierId] = useState("__UNKNOWN__");
   const [schoolClassEvidenceSource, setSchoolClassEvidenceSource] = useState<"unknown" | "teacher_confirmed" | "classmate_confirmed" | "class_notes" | "class_group">("unknown");
-  const [teacherCourseFrontier, setTeacherCourseFrontier] = useState("");
-  const [courseStatus, setCourseStatus] = useState<CourseStatus>("not_started");
-  const [estimatedMinutes, setEstimatedMinutes] = useState(45);
-  const [courseDifficulty, setCourseDifficulty] = useState<"unknown" | "easy" | "medium" | "hard">("unknown");
-  const [courseNotes, setCourseNotes] = useState("");
-  const [learningObstacle, setLearningObstacle] = useState("");
 
   const currentGap = calculateLearningGap(branchChoices, {
     studentFrontierId: lastCompletedLessonId || null,
@@ -175,12 +168,6 @@ export default function Study() {
     setTeacherTeachingFrontierId(teacherFrontier || "__UNKNOWN__");
     setSchoolClassFrontierId(schoolFrontier || "__UNKNOWN__");
     setSchoolClassEvidenceSource(currentBranchProgress.schoolClassFrontierEvidenceSource || "unknown");
-    setTeacherCourseFrontier(branchTeacherMatchesSelection ? currentCourseProgress.teacherCourseFrontier || "" : "");
-    setCourseStatus(currentCourseProgress.status || "not_started");
-    setEstimatedMinutes(Number(currentCourseProgress.estimatedMinutesPerLesson ?? 45));
-    setCourseDifficulty(currentCourseProgress.difficulty || "unknown");
-    setCourseNotes(currentBranchProgress.notes ?? currentCourseProgress.notes ?? "");
-    setLearningObstacle(currentCourseProgress.obstacle ?? profile.data?.obstacle ?? "");
   }, [subjectId, currentBranchId, selectedTeacherId, currentBranchProgress.updatedAt, currentCourseProgress.updatedAt, profile.data?.obstacle, branches, branchChoices, progressMap]);
 
 
@@ -192,33 +179,14 @@ export default function Study() {
     onError: error => toast.error(error.message),
   });
 
-  const saveCourseProgress = trpc.learning.updateCourseProgress.useMutation({
-    onSuccess: async () => {
+  const saveBranchFrontier = trpc.learning.updateBranchFrontier.useMutation({
+    onSuccess: async result => {
       await Promise.all([utils.studentProfile.get.invalidate(), utils.learning.get.invalidate()]);
-      const shouldAdvance = advanceAfterSave;
-      setAdvanceAfterSave(false);
-      if (shouldAdvance) {
-        const nextBranch = branches[branchIndex + 1];
-        if (nextBranch) {
-          setBranchId(nextBranch.branchId);
-          setLessonId("");
-          toast.success("تم حفظ " + (currentBranch?.branchTitle || "الفرع") + "؛ ننتقل للفرع التالي.");
-        } else {
-          const nextSubjectId = subjects[subjectIndex + 1];
-          if (nextSubjectId) {
-            setSubjectId(nextSubjectId);
-            setBranchId("");
-            setLessonId("");
-            toast.success("اكتملت فروع " + subjectName + "؛ ننتقل إلى " + (getSIESubject(nextSubjectId)?.nameAr || "المادة التالية") + ".");
-          } else {
-            toast.success("تم حفظ آخر فرع. اكتمل تحديث تقدم موادك.");
-          }
-        }
-      } else {
-        toast.success("تم حفظ تقدم هذا الفرع.");
-      }
+      toast.success(result.savedStudent
+        ? "تم حفظ موضعك أنت فقط. موضع المدرس لم يتغير."
+        : "تم حفظ موضع المدرس / المجموعة فقط. موضعك أنت لم يتغير.");
     },
-    onError: error => { setAdvanceAfterSave(false); toast.error(error.message); },
+    onError: error => toast.error(error.message || "تعذّر حفظ موضع المنهج."),
   });
   const saveTeacherSelection = trpc.studentProfile.updateTeacherSelection.useMutation({
     onSuccess: async () => {
@@ -269,39 +237,52 @@ export default function Study() {
     });
   };
 
-  const submitCourseProgress = (advance = false) => {
-    if (!subjectId) return;
-    if (!courseMode) {
-      toast.error("حدد طريقة الدراسة أولًا من قسم المدرس.");
+  const submitStudentFrontier = () => {
+    if (!subjectId || !currentBranchId) {
+      toast.error("اختر المادة والفرع أولًا.");
       return;
     }
-    if (teacherSelectionDirty) {
-      toast.error("احفظ بيانات المدرس أولًا من قسم اختيار المدرس، ثم سجّل موضعك في المنهج.");
+    if (!courseMode || teacherSelectionDirty) {
+      toast.error("احفظ طريقة الدراسة واختيار المدرس أولًا من القسم المستقل.");
       return;
     }
-    if (!currentBranchId) {
-      toast.error("لا يوجد فرع منهج محدد لهذه المادة.");
-      return;
-    }
-    if (teacherTeachingFrontierId !== "__UNKNOWN__" && !teacherReferenceName) {
-      toast.error("حدد المدرس أولًا من قسم اختيار المدرس.");
-      return;
-    }
-    setAdvanceAfterSave(advance);
-    saveCourseProgress.mutate({
+    saveBranchFrontier.mutate({
       subjectId,
       branchId: currentBranchId,
-      lastCompletedLessonId: lastCompletedLessonId || "__UNKNOWN__",
-      teacherTeachingFrontierId,
-      schoolClassFrontierId: courseMode === "center" ? schoolClassFrontierId : "__UNKNOWN__",
-      schoolClassFrontierEvidenceSource: schoolClassEvidenceSource,
-      teacherCourseFrontier: teacherCourseFrontier.trim(),
-      status: courseStatus,
-      estimatedMinutesPerLesson: Math.max(5, Math.min(480, estimatedMinutes)),
-      difficulty: courseDifficulty,
-      notes: courseNotes,
-      obstacle: learningObstacle,
+      studentFrontierId: lastCompletedLessonId || "__UNKNOWN__",
     });
+  };
+
+  const submitTeacherFrontier = () => {
+    if (!subjectId || !currentBranchId) {
+      toast.error("اختر المادة والفرع أولًا.");
+      return;
+    }
+    if (!courseMode || teacherSelectionDirty) {
+      toast.error("احفظ طريقة الدراسة واختيار المدرس أولًا من القسم المستقل.");
+      return;
+    }
+    if (!teacherReferenceName && courseMode !== "center") {
+      toast.error("اختر المدرس أو اكتب اسمه قبل تسجيل موضع شرحه.");
+      return;
+    }
+    const payload: {
+      subjectId: string;
+      branchId: string;
+      teacherTeachingFrontierId?: string;
+      schoolClassFrontierId?: string;
+      schoolClassFrontierEvidenceSource?: typeof schoolClassEvidenceSource;
+    } = { subjectId, branchId: currentBranchId };
+    if (teacherReferenceName) payload.teacherTeachingFrontierId = teacherTeachingFrontierId;
+    if (courseMode === "center") {
+      payload.schoolClassFrontierId = schoolClassFrontierId;
+      payload.schoolClassFrontierEvidenceSource = schoolClassEvidenceSource;
+    }
+    if (payload.teacherTeachingFrontierId === undefined && payload.schoolClassFrontierId === undefined) {
+      toast.error("لا توجد بيانات مدرس أو مجموعة لحفظها.");
+      return;
+    }
+    saveBranchFrontier.mutate(payload);
   };
 
   const beginExternalStudy = () => {
@@ -543,8 +524,8 @@ export default function Study() {
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs leading-6 text-muted-foreground">احفظ موضعك في هذا الفرع فقط. مواضع الفروع الأخرى تظل مستقلة.</p>
-            <Button type="button" onClick={() => submitCourseProgress(true)} disabled={saveCourseProgress.isPending || !courseMode || teacherSelectionDirty || !currentBranchId} className="rounded-xl bg-primary">
-              {saveCourseProgress.isPending ? "جارٍ الحفظ..." : branchIndex < branches.length - 1 ? "حفظ موضعي والفرع التالي" : subjectIndex < subjects.length - 1 ? "حفظ موضعي والانتقال للمادة التالية" : "حفظ موضعي"}
+            <Button type="button" onClick={submitStudentFrontier} disabled={saveBranchFrontier.isPending || !courseMode || teacherSelectionDirty || !currentBranchId} className="rounded-xl bg-primary">
+              {saveBranchFrontier.isPending ? "جارٍ الحفظ..." : "حفظ موضعك فقط"}
             </Button>
           </div>
         </div>
@@ -604,7 +585,7 @@ export default function Study() {
             </div>
           )}
           <div className="flex justify-end">
-            <Button type="button" onClick={() => submitCourseProgress(false)} disabled={saveCourseProgress.isPending || !courseMode || teacherSelectionDirty || !currentBranchId} variant="outline" className="rounded-xl">
+            <Button type="button" onClick={submitTeacherFrontier} disabled={saveBranchFrontier.isPending || !courseMode || teacherSelectionDirty || !currentBranchId} variant="outline" className="rounded-xl">
               حفظ موضع المدرس
             </Button>
           </div>
@@ -720,10 +701,19 @@ export default function Study() {
             <aside className="app-card h-fit p-5">
               <h3 className="font-bold">صعوبة الدرس</h3>
               <p className="mt-1 text-xs leading-5 text-muted-foreground">تساعد هذه المعلومة المخطط على تقدير الوقت المناسب.</p>
-              <Select value={difficulty} onValueChange={value => { const next = value as typeof difficulty; setDifficulty(next); updateProgress(completedSteps, next); }}>
-                <SelectTrigger className="mt-3 h-10 rounded-xl bg-background"><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="unknown">لم أحدد بعد</SelectItem><SelectItem value="easy">سهل</SelectItem><SelectItem value="medium">متوسط</SelectItem><SelectItem value="hard">صعب ويحتاج وقتًا</SelectItem></SelectContent>
-              </Select>
+              <div className="mt-3">
+                <NativeSelectField
+                  label="مستوى الصعوبة"
+                  value={difficulty}
+                  onChange={value => { const next = value as typeof difficulty; setDifficulty(next); updateProgress(completedSteps, next); }}
+                  options={[
+                    { value: "unknown", label: "لم أحدد بعد" },
+                    { value: "easy", label: "سهل" },
+                    { value: "medium", label: "متوسط" },
+                    { value: "hard", label: "صعب ويحتاج وقتًا" },
+                  ]}
+                />
+              </div>
               <h3 className="mt-6 font-bold">ملاحظاتك</h3>
               <Textarea value={notes} onChange={event => setNotes(event.target.value)} placeholder="اكتب سؤالًا أو فكرة تريد الرجوع إليها..." className="mt-2 min-h-28 rounded-xl bg-background leading-7" maxLength={2_000} />
               <Button type="button" onClick={() => updateProgress(completedSteps, difficulty, notes)} disabled={saveProgress.isPending} className="mt-3 w-full rounded-xl bg-primary">{saveProgress.isPending ? "جارٍ الحفظ..." : "حفظ الملاحظة والتقدم"}</Button>
