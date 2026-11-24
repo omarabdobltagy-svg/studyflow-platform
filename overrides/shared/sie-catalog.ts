@@ -918,18 +918,60 @@ export function getSIECheckpointChoiceDisplayLabel(choice: SIECheckpointChoice):
 
 /** يعيد فروع المنهج مع إبقاء كل مسار تقدم مستقلاً. */
 export function getSIECheckpointBranches(subjectId: string): SIECheckpointBranch[] {
-  const groups = new Map<string, SIECheckpointBranch>();
-  // Arabic Reading should contain named textbook texts, not sub-skills within a text.
+  const choices = getSIECheckpointChoices(subjectId);
+
+  // History and Programming are single sequential curricula, not separate
+  // progress branches for every textbook unit/chapter.
+  if (subjectId === "HIS_G2_BAC" || subjectId === "PROG_AI_G2_BAC") {
+    const branchId = `${subjectId}:FULL`;
+    return [{
+      branchId,
+      branchTitle: "المقرر بالكامل",
+      branchType: "course_track",
+      choices: choices.map(choice => ({
+        ...choice,
+        branchId,
+        branchTitle: "المقرر بالكامل",
+        branchType: "course_track",
+      })),
+    }];
+  }
+
+  // English has three course streams (Vocabulary, Grammar, GRE) plus the
+  // verified textbook topics. Teacher-specific entries can be added to each
+  // stream without inventing lessons in the official book index.
+  if (subjectId === "ENG1_G2_BAC") {
+    const textbookBranchId = "ENG_TEXTBOOK";
+    return [
+      { branchId: "ENG_VOCABULARY", branchTitle: "Vocabulary", branchType: "course_track", choices: [] },
+      { branchId: "ENG_GRAMMAR", branchTitle: "Grammar", branchType: "course_track", choices: [] },
+      { branchId: "ENG_GRE", branchTitle: "GRE", branchType: "course_track", choices: [] },
+      {
+        branchId: textbookBranchId,
+        branchTitle: "موضوعات الكتاب",
+        branchType: "course_track",
+        choices: choices.map(choice => ({
+          ...choice,
+          branchId: textbookBranchId,
+          branchTitle: "موضوعات الكتاب",
+          branchType: "course_track",
+        })),
+      },
+    ];
+  }
+
+  // Arabic Reading is the list of named texts, not analysis skills within a text.
   const readingSkillNodeIds = new Set([
     "ARB_C05_MAIN_IDEA",
     "ARB_C06_VIEWPOINT",
     "ARB_C08_IMPLICIT_MEANING",
     "ARB_C17_TEXT_DISCOURSE",
   ]);
-  const choices = getSIECheckpointChoices(subjectId).filter(choice =>
+  const filteredChoices = choices.filter(choice =>
     !(subjectId === "ARB_G2_BAC" && choice.branchId === "ARB_READING" && readingSkillNodeIds.has(choice.nodeId))
   );
-  for (const choice of choices) {
+  const groups = new Map<string, SIECheckpointBranch>();
+  for (const choice of filteredChoices) {
     const branchId = choice.branchId ?? `${subjectId}:${choice.unitTitle}`;
     const branch = groups.get(branchId);
     if (branch) {
@@ -945,8 +987,6 @@ export function getSIECheckpointBranches(subjectId: string): SIECheckpointBranch
   }
   const result = [...groups.values()];
   if (subjectId === "ARB_G2_BAC") {
-    // Within each Arabic branch, order official textbook checkpoints by unit
-    // and lesson first; course-only checkpoints retain their teacher-index order.
     for (const branch of result) {
       branch.choices.sort((left, right) => {
         const leftHasUnit = typeof left.unitNumber === "number";
@@ -999,22 +1039,10 @@ export function getSIECheckpointChoicesForTeacher(teacherId: string): SIECheckpo
   const teacher = getSIETeacher(teacherId);
   if (!teacher) return [];
   const subjectId = teacher.subjectIds[0];
-  const choices = getSIECheckpointChoices(subjectId);
-  const segments = teacher.publicSegments ?? [];
-  const mappedIds = new Set(segments.flatMap(segment => segment.curriculumNodeIds));
-  const mapped = choices.filter(choice => mappedIds.has(choice.nodeId));
-  const focusUnits = new Set(mapped.map(choice => choice.unitTitle));
-  // A public mapping to a whole unit (as with English reviews) narrows the
-  // first student choices to that official unit without guessing subtopics.
-  if (focusUnits.size === 0) {
-    const unitNodeIds = new Set(segments.flatMap(segment => segment.curriculumNodeIds));
-    const unitTitles: Record<string, string> = { ENG_U1_NODE: "Living Well in a Complex World" };
-    for (const id of unitNodeIds) if (unitTitles[id]) focusUnits.add(unitTitles[id]);
-  }
-  if (mapped.length > 0) return mapped.slice(0, 5);
-  if (focusUnits.size > 0) return choices.filter(choice => focusUnits.has(choice.unitTitle)).slice(0, 5);
-  const firstUnit = choices[0]?.unitTitle;
-  return choices.filter(choice => choice.unitTitle === firstUnit).slice(0, 5);
+  // Publicly mapped segments are evidence hints, not a filter on the course
+  // catalog. The learner must be able to report progress anywhere in the
+  // complete subject index, including lessons not yet observed publicly.
+  return getSIECheckpointChoices(subjectId);
 }
 
 
