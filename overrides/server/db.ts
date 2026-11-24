@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, like, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, like, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { storageDelete } from "./storage";
 import { drizzle } from "drizzle-orm/mysql2";
@@ -724,6 +724,208 @@ export async function approvePlanAsGoalTree(
     }
 
     return { parentGoalId, stageCount: steps.length, taskCount: steps.length, ...(routineId !== null ? { routineId } : {}) };
+  });
+}
+
+/**
+ * Keeps one persistent daily-plan goal tree for each student.
+ * Completed matching steps are preserved; unfinished steps are refreshed in place,
+ * so reopening the home page never clones the same day's tasks.
+ */
+export async function syncDailyPlanGoalTree(
+  userId: number,
+  plan: {
+    title: string;
+    summary: string;
+    steps: Array<{
+      day: string;
+      title: string;
+      detail: string;
+      minutes: number;
+      category: string;
+      priority?: "critical" | "high" | "medium" | "low";
+    }>;
+  },
+  schedule: { startDate: string; dailyMinutes: number },
+) {
+  const db = await requireDb();
+  const steps = normalizeApprovedPlanSteps(plan.steps.map((step, index) => ({
+    ...step,
+    day: index + 1,
+  })));
+  if (!plan.title.trim() || steps.length === 0) {
+    throw new Error("لا يمكن إنشاء مهام يومية من خطة بلا خطوات عملية.");
+  }
+  const dueDates = schedulePlanStepDates(schedule.startDate, steps, schedule.dailyMinutes);
+  const startDate = new Date(`${schedule.startDate}T12:00:00.000Z`);
+
+  return db.transaction(async tx => {
+    const existingParents = await tx.select().from(goals).where(and(
+      eq(goals.userId, userId),
+      eq(goals.title, "خطة StudyFlow اليومية"),
+      eq(goals.category, "خطة يومية"),
+      isNull(goals.parentGoalId),
+    )).limit(1);
+
+    let parentGoalId: number;
+    if (existingParents[0]) {
+      parentGoalId = existingParents[0].id;
+      await tx.update(goals).set({
+        description: plan.summary.trim() || "خطة يومية مبنية على ملف الدراسة والتراكم.",
+        targetDate: startDate,
+        status: "active",
+        color: "amber",
+      }).where(and(eq(goals.id, parentGoalId), eq(goals.userId, userId)));
+    } else {
+      const parentInsert = await tx.insert(goals).values({
+        userId,
+        title: "خطة StudyFlow اليومية",
+        description: plan.summary.trim() || "خطة يومية مبنية على ملف الدراسة والتراكم.",
+        kind: "long",
+        category: "خطة يومية",
+        color: "amber",
+        targetDate: startDate,
+        status: "active",
+        sortOrder: -100,
+      });
+      parentGoalId = Number(parentInsert[0].insertId);
+    }
+
+    const stageRows = await tx.select().from(goals).where(and(
+      eq(goals.userId, userId),
+      eq(goals.parentGoalId, parentGoalId),
+    )).orderBy(asc(goals.sortOrder), asc(goals.createdAt));
+    const stageIds = stageRows.map(stage => stage.id);
+    const taskRows = stageIds.length
+      ? await tx.select().from(tasks).where(and(
+          eq(tasks.userId, userId),
+          inArray(tasks.goalId, stageIds),
+        )).orderBy(asc(tasks.createdAt))
+      : [];
+    const tasksByStage = new Map<number, typeof taskRows>();
+    for (const task of taskRows) {
+      if (task.goalId === null) continue;
+      const current = tasksByStage.get(task.goalId) ?? [];
+      current.push(task);
+      tasksByStage.set(task.goalId, current);
+    }
+
+    const completedTasks = taskRows.filter(task => task.status === "done");
+    const consumedCompletedIds = new Set<number>();
+    const pendingSteps = steps.map((step, index) => ({ step, index }))
+      .filter(({ step }) => {
+        const match = completedTasks.find(task =>
+          !consumedCompletedIds.has(task.id)
+          && task.title.trim().toLocaleLowerCase() === step.title.trim().toLocaleLowerCase()
+        );
+        if (!match) return true;
+        consumedCompletedIds.add(match.id);
+        return false;
+      });
+
+    const completedStageIds = new Set(stageRows.filter(stage =>
+      (tasksByStage.get(stage.id) ?? []).some(task => task.status === "done")
+    ).map(stage => stage.id));
+    const pendingStages = stageRows.filter(stage => !completedStageIds.has(stage.id));
+
+    // Remove obsolete unfinished stages only. Completed work remains as history.
+    for (const obsolete of pendingStages.slice(pendingSteps.length)) {
+      await tx.delete(tasks).where(and(
+        eq(tasks.userId, userId),
+        eq(tasks.goalId, obsolete.id),
+        eq(tasks.status, "todo"),
+      ));
+      await tx.delete(goals).where(and(eq(goals.id, obsolete.id), eq(goals.userId, userId)));
+    }
+
+    let refreshedTaskCount = 0;
+    let createdTaskCount = 0;
+    for (let index = 0; index < pendingSteps.length; index += 1) {
+      const { step, index: sourceIndex } = pendingSteps[index];
+      const dueAt = dueDates[sourceIndex] ?? null;
+      const priority = step.priority === "critical" || step.priority === "high"
+        ? "high" as const
+        : step.priority === "low" ? "low" as const : "medium" as const;
+      const stage = pendingStages[index];
+
+      if (stage) {
+        await tx.update(goals).set({
+          title: `جلسة: ${step.title}`,
+          description: step.detail,
+          targetDate: dueAt,
+          status: "active",
+          sortOrder: 100 + index,
+          color: "amber",
+        }).where(and(eq(goals.id, stage.id), eq(goals.userId, userId)));
+
+        const task = (tasksByStage.get(stage.id) ?? []).find(item => item.status === "todo");
+        if (task) {
+          await tx.update(tasks).set({
+            title: step.title,
+            notes: step.detail,
+            category: step.category || "دراسة",
+            priority,
+            estimatedMinutes: step.minutes,
+            dueAt,
+          }).where(and(eq(tasks.id, task.id), eq(tasks.userId, userId)));
+          refreshedTaskCount += 1;
+          continue;
+        }
+
+        await tx.insert(tasks).values({
+          userId,
+          goalId: stage.id,
+          title: step.title,
+          notes: step.detail,
+          category: step.category || "دراسة",
+          priority,
+          estimatedMinutes: step.minutes,
+          dueAt,
+        });
+        createdTaskCount += 1;
+        continue;
+      }
+
+      const stageInsert = await tx.insert(goals).values({
+        userId,
+        parentGoalId,
+        title: `جلسة: ${step.title}`,
+        description: step.detail,
+        kind: "short",
+        category: "جلسة يومية",
+        color: "amber",
+        targetDate: dueAt,
+        status: "active",
+        sortOrder: 100 + index,
+      });
+      const stageGoalId = Number(stageInsert[0].insertId);
+      await tx.insert(tasks).values({
+        userId,
+        goalId: stageGoalId,
+        title: step.title,
+        notes: step.detail,
+        category: step.category || "دراسة",
+        priority,
+        estimatedMinutes: step.minutes,
+        dueAt,
+      });
+      createdTaskCount += 1;
+    }
+
+    for (const stageId of completedStageIds) {
+      await tx.update(goals).set({ status: "completed" }).where(and(
+        eq(goals.id, stageId),
+        eq(goals.userId, userId),
+      ));
+    }
+
+    return {
+      parentGoalId,
+      taskCount: pendingSteps.length,
+      createdTaskCount,
+      refreshedTaskCount,
+      preservedCompletedTaskCount: consumedCompletedIds.size,
+    };
   });
 }
 
