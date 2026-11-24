@@ -322,10 +322,10 @@ export async function generatePersonalPlan(
   const textbookRetrieval = profile
     ? retrieveTextbookEvidence(profile.subjects || [], retrievalQuery, Math.max(6, (profile.subjects || []).length * 3))
     : { passages: [], coverageNotes: [] };
-  const textbookContext = formatTextbookEvidence(textbookRetrieval).slice(0, 4_800);
+  const textbookContext = formatTextbookEvidence(textbookRetrieval).slice(0, 7_200);
   const context = (profile
     ? buildLearningContext(profile) + "\n\nمصادر نصية من كتب الجزء الأول المتاحة فعليًا:\n" + (textbookContext || "لم يُسترجع نص مطابق من الكتب المتاحة.")
-    : "لم يطلب المستخدم تخصيص الخطة بالملف الدراسي.").slice(0, 8_500);
+    : "لم يطلب المستخدم تخصيص الخطة بالملف الدراسي.").slice(0, 13_000);
   const system = [
     "أنت محرك التخطيط الدراسي داخل StudyFlow، ولست مساعد دردشة عام.",
     "حلّل فجوة المنهج المحسوبة تلقائيًا لكل فرع مستقل داخل المادة، وموضع الطالب وموضع التدريس المرجعي داخل الفرع نفسه، وتقدم SQ3R ونتائج التقييم وصعوبة الدروس؛ ثم ابنِ خطة عملية متوازنة.",
