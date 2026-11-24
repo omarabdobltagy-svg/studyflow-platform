@@ -346,14 +346,14 @@ export default function Study() {
 
         <div className="grid gap-5 p-5 sm:p-6 xl:grid-cols-[1.2fr_.8fr]">
           <div className="rounded-2xl border border-accent/25 bg-accent/5 p-4 text-sm leading-7 text-muted-foreground xl:col-span-2">
-            <p className="font-bold text-foreground">تحديث موضع الفصل في المدرسة — إدخال يدوي، وليس ربطًا آليًا</p>
-            <p className="mt-1">افتح كشكول المادة أو اسأل المدرس أو زميلًا موثوقًا: ما آخر درس انتهت الحصة من شرحه بالفعل؟ اختر هذا الدرس أدناه. لا تختَر الدرس التالي أو الدرس الموجود فقط في جدول المنهج.</p>
+            <p className="font-bold text-foreground">حدّث موضع المدرس بنفسك</p>
+            <p className="mt-1">اختر آخر درس شرح المدرس محتواه بالفعل، وليس الدرس التالي في الخطة أو جدول المنهج. هذه المعلومة التي يبلغك بها الطالب هي مرجع المخطط لحساب التراكم.</p>
             <p className="mt-1">لكي تُحسب الفجوة، حدّد أيضًا آخر درس أنهيته أنت. موضع المدرس له الأولوية؛ وموضع الفصل يُستخدم بديلًا فقط عندما لا يكون موضع المدرس معروفًا.</p>
           </div>
           <div className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               <label className="text-sm font-semibold">
-                آخر درس أتمه الطالب في المنهج
+                آخر درس أنهيته أنت
                 <Select value={lastCompletedLessonId || "__UNKNOWN__"} onValueChange={setLastCompletedLessonId} disabled={!lessons.length}>
                   <SelectTrigger className="mt-2 h-11 rounded-xl bg-background"><SelectValue placeholder="غير محدد" /></SelectTrigger>
                   <SelectContent>
@@ -365,7 +365,7 @@ export default function Study() {
                 <span className="mt-1 block text-[11px] font-normal text-muted-foreground">ده موضع الطالب، وليس موضع المدرس أو المدرسة.</span>
               </label>
               <label className="text-sm font-semibold">
-                آخر درس شرحه المدرس فعليًا
+                المدرس وصل لحد أنهي درس؟
                 <Select value={teacherTeachingFrontierId} onValueChange={setTeacherTeachingFrontierId} disabled={!selectedTeacher || !lessons.length}>
                   <SelectTrigger className="mt-2 h-11 rounded-xl bg-background"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -446,9 +446,9 @@ export default function Study() {
               <Textarea value={learningObstacle} onChange={event => setLearningObstacle(event.target.value)} placeholder="مثال: صعوبة البدء، تشتت، وقت قليل، أو تراكم كبير" maxLength={600} className="mt-2 min-h-20 rounded-xl bg-background leading-7" />
             </label>
             <div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-muted/25 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-xs leading-6 text-muted-foreground">سيُحفظ موضعك وموضع المدرس وموضع الفصل داخل فرع «{currentBranch?.branchTitle || "غير محدد"}» فقط. إذا لم تحدد آخر درس أنهيته أنت، فستظل الفجوة غير محسوبة حتى لو حفظت موضع المدرسة.</p>
+              <p className="text-xs leading-6 text-muted-foreground">سيُحفظ موضعك وموضع المدرس وموضع الفصل كلٌّ على حدة داخل فرع «{currentBranch?.branchTitle || "غير محدد"}» فقط. إذا لم تحدد آخر درس أنهيته أنت، فستظل الفجوة غير محسوبة حتى لو حفظت موضع المدرسة.</p>
               <Button type="button" onClick={submitCourseProgress} disabled={saveCourseProgress.isPending || !subjectId} className="pressable shrink-0 rounded-xl bg-primary">
-                {saveCourseProgress.isPending ? "جارٍ حفظ التقدم..." : "حفظ التقدم وموضع الفصل"}
+                {saveCourseProgress.isPending ? "جارٍ حفظ التقدم..." : "حفظ موضع المدرس وتقدمك"}
               </Button>
             </div>
           </div>
