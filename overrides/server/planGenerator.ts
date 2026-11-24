@@ -172,6 +172,7 @@ export function parseGeneratedPlan(content: string): GeneratedPlan {
 
   console.error("[StudyFlow planner] No JSON object matched the plan schema:", lastSchemaIssues);
   throw new Error("الاستجابة الذكية غير مكتملة. حاول وصف هدفك بصورة أبسط.");
+}
 
 function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof getStudentProfile>>>) {
   const selection = (profile.selection || {}) as Record<string, any>;
