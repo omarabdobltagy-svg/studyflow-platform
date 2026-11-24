@@ -136,23 +136,31 @@ export function parseGeneratedPlan(content: string): GeneratedPlan {
     throw new Error("تعذّر تحويل الخطة الذكية إلى صيغة صالحة. حاول مرة أخرى.");
   }
 
-  let value: unknown;
   let lastParseError: unknown;
-  let parsedJson = false;
+  let parsedAnyJson = false;
+  let lastSchemaIssues: unknown;
+
   for (const candidate of candidates) {
     for (const jsonCandidate of [candidate, removeTrailingCommasOutsideStrings(candidate)]) {
+      let value: unknown;
       try {
         value = JSON.parse(jsonCandidate);
-        parsedJson = true;
-        break;
+        parsedAnyJson = true;
       } catch (error) {
         lastParseError = error;
+        continue;
       }
+
+      const parsed = planSchema.safeParse(value);
+      if (parsed.success) return parsed.data;
+      lastSchemaIssues = parsed.error.issues;
+      // A preceding explanatory JSON object may not be the plan. Continue
+      // scanning for a later object that satisfies the complete plan schema.
+      break;
     }
-    if (parsedJson) break;
   }
 
-  if (!parsedJson) {
+  if (!parsedAnyJson) {
     const parseMessage = lastParseError instanceof Error ? lastParseError.message.slice(0, 180) : "invalid JSON";
     console.error("[StudyFlow planner] Model output is not valid JSON:", {
       contentLength: content.length,
@@ -162,13 +170,8 @@ export function parseGeneratedPlan(content: string): GeneratedPlan {
     throw new Error("تعذّر قراءة بيانات الخطة. حاول مرة أخرى.");
   }
 
-  const parsed = planSchema.safeParse(value);
-  if (!parsed.success) {
-    console.error("[StudyFlow planner] Invalid plan structure:", parsed.error.issues);
-    throw new Error("الاستجابة الذكية غير مكتملة. حاول وصف هدفك بصورة أبسط.");
-  }
-  return parsed.data;
-}
+  console.error("[StudyFlow planner] No JSON object matched the plan schema:", lastSchemaIssues);
+  throw new Error("الاستجابة الذكية غير مكتملة. حاول وصف هدفك بصورة أبسط.");
 
 function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof getStudentProfile>>>) {
   const selection = (profile.selection || {}) as Record<string, any>;
