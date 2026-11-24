@@ -25,7 +25,64 @@ describe("buildLearningBacklogSummary", () => {
     expect(result.calculatedBranches).toBe(1);
     expect(result.uncalculatedBranches).toBe(branches.length - 1);
     expect(result.countLabel).toBe("3 نقطة متأخرة");
-    expect(result.coverageLabel).toContain("تحتاج استكمال المواضع");
+    expect(result.coverageLabel).toContain("فروع");
+  });
+
+  it("reconstructs a missing API snapshot from the saved positions for that same branch", () => {
+    const branch = branches.find(item => item.choices.length >= 3);
+    expect(branch).toBeDefined();
+    const result = buildLearningBacklogSummary(
+      [subjectId],
+      {},
+      {},
+      {
+        courseProgress: {
+          [subjectId]: {
+            courseMode: "online",
+            branches: {
+              [branch!.branchId]: {
+                lastCompletedLessonId: branch!.choices[0].nodeId,
+                teacherTeachingFrontierId: branch!.choices[2].nodeId,
+              },
+            },
+          },
+        },
+      },
+    )[0];
+
+    expect(result.source).toBe("frontier");
+    expect(result.gapCount).toBe(2);
+    expect(result.calculatedBranches).toBe(1);
+    expect(result.uncalculatedBranches).toBe(branches.length - 1);
+  });
+
+  it("uses legacy linear progress records when no teacher identity is selected", () => {
+    const subject = "PROG_AI_G2_BAC";
+    const linear = getSIECheckpointBranches(subject)[0];
+    expect(linear.choices.length).toBeGreaterThan(2);
+    const result = buildLearningBacklogSummary(
+      [subject],
+      {},
+      {},
+      {
+        courseProgress: {
+          [subject]: {
+            courseMode: "online",
+            branches: {
+              oldUnit1: {
+                lastCompletedLessonId: linear.choices[0].nodeId,
+                teacherTeachingFrontierId: linear.choices[3].nodeId,
+                teacherName: "مدرس محفوظ سابقًا",
+              },
+            },
+          },
+        },
+      },
+    )[0];
+
+    expect(result.source).toBe("frontier");
+    expect(result.gapCount).toBe(3);
+    expect(result.calculatedBranches).toBe(1);
   });
 
   it("uses legacy backlog only when no branch comparison is calculated", () => {
@@ -42,7 +99,7 @@ describe("buildLearningBacklogSummary", () => {
     expect(result.legacyCount).toBe(5);
     expect(result.gapCount).toBe(0);
     expect(result.countLabel).toBe("5 عنصر يدوي");
-    expect(result.coverageLabel).toContain("لم تكتمل مقارنة المواضع");
+    expect(result.coverageLabel).toContain("موضع المدرس/المجموعة");
   });
 
   it("shows unknown when there is neither a calculated gap nor legacy backlog", () => {
@@ -51,6 +108,7 @@ describe("buildLearningBacklogSummary", () => {
     expect(result.countLabel).toBe("لم يُحسب بعد");
     expect(result.totalBranches).toBe(branches.length);
     expect(result.uncalculatedBranches).toBe(branches.length);
+    expect(result.referenceMissingBranches).toBe(branches.length);
   });
 
   it("does not report negative gaps as backlog", () => {
