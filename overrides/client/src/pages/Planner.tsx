@@ -129,6 +129,7 @@ export default function Planner() {
   const [usePersonalDeadline, setUsePersonalDeadline] = useState(false);
   const [personalDeadline, setPersonalDeadline] = useState("");
   const [approved, setApproved] = useState(false);
+  const [loadedSavedDraft, setLoadedSavedDraft] = useState(false);
   const historyInitialized = useRef(false);
 
   const history = trpc.plans.list.useQuery();
@@ -154,6 +155,7 @@ export default function Planner() {
         reviewQuestion: "",
       });
       setApproved(false);
+      setLoadedSavedDraft(false);
       void utils.plans.list.invalidate();
       toast.success("المسودة جاهزة. راجعها واضبطها قبل اعتماد المهام.");
     },
@@ -202,6 +204,7 @@ export default function Planner() {
     onSuccess: async result => {
       setPlan(null);
       setApproved(false);
+      setLoadedSavedDraft(false);
       historyInitialized.current = true;
       await Promise.all([
         utils.plans.list.invalidate(),
@@ -236,7 +239,10 @@ export default function Planner() {
     historyInitialized.current = true;
     // Open the most recent saved annual draft instead of silently generating
     // and storing another copy every time the student visits this page.
-    if (savedPlans.length > 0) setPlan(savedPlans[0].plan);
+    if (savedPlans.length > 0) {
+      setPlan(savedPlans[0].plan);
+      setLoadedSavedDraft(true);
+    }
   }, [history.isLoading, history.isError, savedPlans]);
 
   const updatePlan = (next: PlanView) => {
@@ -365,9 +371,26 @@ export default function Planner() {
 
         {plan && (
           <>
+            {loadedSavedDraft && !approved && (
+              <section className="app-card flex flex-col gap-3 rounded-2xl border border-amber-500/20 bg-amber-500/[0.04] p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <h3 className="text-sm font-bold">أنت تعرض مسودة محفوظة من زيارة سابقة</h3>
+                  <p className="mt-1 text-xs leading-6 text-muted-foreground">قد لا تعكس آخر تقدم سجلته في الفروع. حدّثها الآن ليُعاد حساب الدروس المتبقية وترتيب الأولويات من ملفك الحالي.</p>
+                </div>
+                <Button
+                  type="button"
+                  className="shrink-0 rounded-xl"
+                  onClick={() => runGeneration(pace, paceLevel, dailyMinutes, usePersonalDeadline ? personalDeadline : null)}
+                  disabled={generate.isPending}
+                >
+                  {generate.isPending ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+                  تحديث حسب تقدمي الحالي
+                </Button>
+              </section>
+            )}
             <PlanCard
               plan={plan}
-              title={approved ? "الخطة المعتمدة" : "المسودة التي أنشأها المخطط"}
+              title={approved ? "الخطة المعتمدة" : loadedSavedDraft ? "آخر مسودة محفوظة — لم تُحدّث تلقائيًا" : "المسودة الجديدة التي أنشأها المخطط"}
               studentName={profile.data?.studentName}
               editable={!approved}
               onChange={updatePlan}
@@ -505,7 +528,7 @@ export default function Planner() {
                 <article key={item.id} className="rounded-xl border border-border/70 bg-muted/15 p-3">
                   <button
                     type="button"
-                    onClick={() => { setPlan(item.plan); setApproved(false); }}
+                    onClick={() => { setPlan(item.plan); setApproved(false); setLoadedSavedDraft(true); }}
                     className="w-full text-right"
                   >
                     <span className="flex items-center gap-2 text-sm font-semibold"><BrainCircuit className="size-4 text-primary" />{item.plan.title}</span>
