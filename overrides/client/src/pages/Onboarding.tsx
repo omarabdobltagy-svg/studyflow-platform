@@ -138,6 +138,10 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
         : (saved?.teacherFrontiers ?? {}),
       courseModes: Object.keys(current.courseModes).length ? current.courseModes : (saved?.courseModes ?? {}),
       customTeacherNames: Object.keys(current.customTeacherNames).length ? current.customTeacherNames : (saved?.customTeacherNames ?? {}),
+      teacherSchedules: Object.keys(current.teacherSchedules).length ? current.teacherSchedules : (saved?.teacherSchedules ?? {}),
+      teacherScheduleUnfixed: Object.keys(current.teacherScheduleUnfixed).length
+        ? current.teacherScheduleUnfixed
+        : Object.fromEntries((saved?.teacherScheduleUnfixedSubjectIds ?? []).map((subjectId: string) => [subjectId, true])),
     }));
   }, [auth.data, profile.data]);
 
