@@ -69,7 +69,7 @@ export function parseYoutubeAtomFeed(
 }
 
 export function parseYoutubeDurationMinutes(duration: string): number | undefined {
-  const match = duration.match(/^PT(?:(\\d+)H)?(?:(\\d+)M)?(?:(\\d+)S)?$/i);
+  const match = duration.match(/^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/i);
   if (!match) return undefined;
   const totalSeconds = Number(match[1] ?? 0) * 3_600 + Number(match[2] ?? 0) * 60 + Number(match[3] ?? 0);
   return totalSeconds > 0 ? Math.ceil(totalSeconds / 60) : undefined;
@@ -159,7 +159,7 @@ export async function scanSelectedTeacherSources(
           const channelItems = Array.isArray(channelResponse.items) ? channelResponse.items : [];
           channelId = typeof channelItems[0]?.id === "string" ? String(channelItems[0].id) : undefined;
         }
-        if (!channelId) return null;
+        if (!channelId) return { key: youtubeKey, updates: [] };
         const xml = await fetchText("https://www.youtube.com/feeds/videos.xml?channel_id=" + encodeURIComponent(channelId));
         return { key: youtubeKey, updates: parseYoutubeAtomFeed(xml, { teacherId, teacherName }, now) };
       })().catch(() => null));
