@@ -50,7 +50,9 @@ export default function Study() {
     const timer = window.setTimeout(() => setBranchTransition(null), 3_200);
     return () => window.clearTimeout(timer);
   }, [branchTransition]);
-  const currentBranch = branches.find(branch => branch.branchId === branchId) ?? branches[0];
+  const currentBranch = branches.find(branch => branch.branchId === branchId)
+    ?? allBranches.find(branch => branch.branchId === branchId)
+    ?? branches[0];
   const branchChoices = currentBranch?.choices ?? [];
   const currentBranchId = currentBranch?.branchId ?? "";
   const currentBranchPointLabel = currentBranch?.branchType === "official_section" ? "موضوع" : "درس";
@@ -91,7 +93,15 @@ export default function Study() {
     ? branchProgressMap[currentBranchId] || legacyLinearProgress
     : {};
   const subjectIndex = Math.max(0, subjects.indexOf(subjectId));
-  const branchIndex = Math.max(0, branches.findIndex(branch => branch.branchId === currentBranchId));
+  const allBranchIndex = Math.max(0, allBranches.findIndex(branch => branch.branchId === currentBranchId));
+  const visibleBranchPosition = branches.filter(branch =>
+    allBranches.findIndex(item => item.branchId === branch.branchId) <= allBranchIndex
+  ).length;
+  const nextVisibleBranch = allBranches.slice(allBranchIndex + 1)
+    .find(candidate => branches.some(branch => branch.branchId === candidate.branchId));
+  const branchDisplayTitle = subjectId === "ARB_G2_BAC" && currentBranchId === "ARB_READING"
+    ? "نصوص الوحدة"
+    : currentBranch?.branchTitle || "الفرع الحالي";
   const [studentFrontierDrafts, setStudentFrontierDrafts] = useState<Record<string, string>>({});
   const [teacherFrontierDrafts, setTeacherFrontierDrafts] = useState<Record<string, string>>({});
   const [schoolFrontierDrafts, setSchoolFrontierDrafts] = useState<Record<string, string>>({});
@@ -207,13 +217,20 @@ export default function Study() {
       setSchoolFrontierDrafts(clearSchoolDraft);
       if (result.savedStudent && variables.subjectId === "ARB_G2_BAC"
         && Object.prototype.hasOwnProperty.call(variables, "studentFrontierId")) {
-        const savedBranchIndex = branches.findIndex(item => item.branchId === variables.branchId);
-        const nextBranch = savedBranchIndex >= 0 ? branches[savedBranchIndex + 1] : undefined;
+        const savedBranchIndex = allBranches.findIndex(item => item.branchId === variables.branchId);
+        const nextBranch = savedBranchIndex >= 0
+          ? allBranches.slice(savedBranchIndex + 1).find(candidate =>
+              branches.some(visible => visible.branchId === candidate.branchId)
+            )
+          : branches[0];
         if (nextBranch) {
-          const fromLabel = branches[savedBranchIndex]?.branchTitle ?? "الفرع الحالي";
-          setBranchTransition({ from: fromLabel, to: nextBranch.branchTitle });
+          const fromLabel = variables.branchId === "ARB_READING"
+            ? "نصوص الوحدة"
+            : allBranches[savedBranchIndex]?.branchTitle ?? "الفرع الحالي";
+          const toLabel = nextBranch.branchTitle;
+          setBranchTransition({ from: fromLabel, to: toLabel });
           setBranchId(nextBranch.branchId);
-          toast.success("تم حفظ موضعك — ننتقل الآن إلى فرع " + nextBranch.branchTitle + ".");
+          toast.success("تم حفظ موضعك — ننتقل الآن إلى " + toLabel + ".");
           return;
         }
         const nextTarget = getNextLearningTarget(subjects, subjectId, branches, currentBranchId);
@@ -294,7 +311,7 @@ export default function Study() {
   };
   const openUnitLessons = (unit: ReturnType<typeof getSIECheckpointUnits>[number]) => {
     const nextBranch = unit.branches.find(unitBranch => {
-      const branch = branches.find(item => item.branchId === unitBranch.branchId);
+      const branch = allBranches.find(item => item.branchId === unitBranch.branchId);
       if (!branch || !unitBranch.choices.length) return false;
       const last = unitBranch.choices[unitBranch.choices.length - 1];
       const saved = branchProgressMap[branch.branchId]?.lastCompletedLessonId;
@@ -449,7 +466,7 @@ export default function Study() {
           <div className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5 xl:grid-cols-3">
             {units.map((unit, unitIndex) => {
               const unitBranchState = unit.branches.map(unitBranch => {
-                const branch = branches.find(item => item.branchId === unitBranch.branchId);
+                const branch = allBranches.find(item => item.branchId === unitBranch.branchId);
                 const saved = branchProgressMap[unitBranch.branchId]?.lastCompletedLessonId;
                 const normalized = typeof saved === "string" && branch
                   ? normalizeSIECheckpointFrontier(subjectId, unitBranch.branchId, saved)
@@ -600,16 +617,16 @@ export default function Study() {
                   <div className="flex flex-wrap items-end justify-between gap-3">
                     <div>
                       <p className="text-[10px] font-bold tracking-[0.12em] text-primary">الفرع الحالي · {branchIndex + 1}</p>
-                      <h3 className="mt-1 text-lg font-bold">{currentBranch?.branchTitle || "الفرع الحالي"}</h3>
+                      <h3 className="mt-1 text-lg font-bold">{branchDisplayTitle}</h3>
                       <p className="mt-1 text-xs leading-5 text-muted-foreground">{branchChoiceOptions.length} {currentBranchPointLabel} في فهرس هذا الفرع.</p>
                     </div>
                     <span className="rounded-lg border border-border bg-background px-3 py-2 text-[11px] font-semibold text-muted-foreground">
-                      {branches[branchIndex + 1] ? "التالي: " + branches[branchIndex + 1].branchTitle : "آخر فرع في المادة"}
+                      {nextVisibleBranch ? "التالي: " + nextVisibleBranch.branchTitle : currentBranchId === "ARB_READING" ? "نصوص الوحدة داخل وحداتها" : "آخر فرع في المادة"}
                     </span>
                   </div>
                   <div className="h-1.5 overflow-hidden rounded-full bg-muted">
                     <motion.div className="h-full rounded-full bg-primary" initial={false}
-                      animate={{ width: ((branchIndex + 1) / Math.max(branches.length, 1) * 100) + "%" }}
+                      animate={{ width: (visibleBranchPosition / Math.max(branches.length, 1) * 100) + "%" }}
                       transition={{ type: "spring", stiffness: 110, damping: 22 }} />
                   </div>
                   {branchChoices.length === 0 ? (
@@ -704,7 +721,7 @@ export default function Study() {
                           </div>
                           <p className="mt-1 pr-8 text-xs leading-5 text-muted-foreground">
                             {isCurrentBranchComplete
-                              ? branches[branchIndex + 1] ? "اكتمل الفرع؛ يتم الانتقال تلقائيًا إلى الفرع التالي." : "اكتمل هذا الفرع، ولا توجد فروع أخرى في المادة."
+                              ? nextVisibleBranch ? "اكتمل الفرع؛ يتم الانتقال تلقائيًا إلى الفرع التالي." : "اكتملت الفروع الظاهرة في هذه المادة."
                               : "يمكنك تعديل أي موضع في أي وقت، وسيُحفظ التحديث تلقائيًا."}
                           </p>
                         </motion.div>
