@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 
 import { trpc } from "@/lib/trpc";
 import {
-  getSIECheckpointBranches,
+  getSIECheckpointProgressBranches,
   getSIECheckpointProgressOptions,
   getSIESubject,
   normalizeSIECheckpointFrontier,
@@ -36,7 +36,7 @@ export default function Study() {
   const persistedCourseMode = savedCourseModes[subjectId] || currentCourseProgress.courseMode || "online";
   const [courseModeOverrides, setCourseModeOverrides] = useState<Record<string, "center" | "online">>({});
   const courseMode = courseModeOverrides[subjectId] ?? persistedCourseMode;
-  const branches = useMemo(() => getSIECheckpointBranches(subjectId), [subjectId]);
+  const branches = useMemo(() => getSIECheckpointProgressBranches(subjectId), [subjectId]);
   const currentBranch = branches.find(branch => branch.branchId === branchId) ?? branches[0];
   const branchChoices = currentBranch?.choices ?? [];
   const currentBranchId = currentBranch?.branchId ?? "";
