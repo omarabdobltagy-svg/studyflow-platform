@@ -74,7 +74,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { generatePersonalPlan, getPlanGenerationProgress, markPlanGenerationFailed } from "./planGenerator";
-import { classifyTeacherPublicUpdate, isSecondYearBaccalaureateUpdate, parseYoutubeAtomFeed, scanSelectedTeacherSources, selectedTeacherIds } from "./teacher-content-monitor";
+import { classifyTeacherPublicUpdate, isHighConfidenceScheduleAnnouncement, isSecondYearBaccalaureateUpdate, parseYoutubeAtomFeed, scanSelectedTeacherSources, selectedTeacherIds } from "./teacher-content-monitor";
 import { isDailyPlanStale } from "./planLifecycle";
 import { createDailyPlanSourceFingerprint } from "./dailyPlanFingerprint";
 import { storageDelete, storagePut } from "./storage";
@@ -171,14 +171,14 @@ async function scanTeacherSourcesForStudent(userId: number): Promise<boolean> {
         : [];
       const previousUpdates = rawPreviousUpdates.filter(update =>
         typeof update.teacherId === "string" && allowedTeacherIds.has(update.teacherId)
-        && isSecondYearBaccalaureateUpdate(update)
+        && (isSecondYearBaccalaureateUpdate(update) || isHighConfidenceScheduleAnnouncement(update))
       );
       const knownIds = new Set(previousUpdates.map(update => String(update.externalId ?? "")).filter(Boolean));
       const newUpdates = result.updates
         .map(classifyTeacherPublicUpdate)
         .filter(update =>
           allowedTeacherIds.has(update.teacherId)
-          && isSecondYearBaccalaureateUpdate(update)
+          && (isSecondYearBaccalaureateUpdate(update) || isHighConfidenceScheduleAnnouncement(update))
           && !knownIds.has(update.externalId)
         );
       const previousScanState = (latestSelection.teacherPublicScanState ?? {}) as Record<string, string>;
