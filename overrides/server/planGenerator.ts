@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getSIECheckpointProgressBranches, getSIEStudentVisibleBranches, getSIESubject, getSIETeacher, normalizeSIECheckpointFrontier, type SIECheckpointTaskMatch } from "@shared/sie-catalog";
+import { getSIECheckpointProgressBranches, getSIESubject, getSIETeacher, normalizeSIECheckpointFrontier, type SIECheckpointTaskMatch } from "@shared/sie-catalog";
 import { calculateLearningGap } from "@shared/sie-learning-progress";
 import { invokeLLM, invokeNvidiaLLM } from "./_core/llm";
 import { isPrimaryProviderFallbackEligible } from "./_core/llmFallback";
