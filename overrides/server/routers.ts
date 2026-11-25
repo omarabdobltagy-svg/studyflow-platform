@@ -73,7 +73,7 @@ import {
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
-import { generatePersonalPlan } from "./planGenerator";
+import { generatePersonalPlan, getPlanGenerationProgress, markPlanGenerationFailed } from "./planGenerator";
 import { isSecondYearBaccalaureateUpdate, parseYoutubeAtomFeed, scanSelectedTeacherSources, selectedTeacherIds } from "./teacher-content-monitor";
 import { isDailyPlanStale } from "./planLifecycle";
 import { createDailyPlanSourceFingerprint } from "./dailyPlanFingerprint";
@@ -2488,6 +2488,7 @@ export const appRouter = router({
 
   plans: router({
     list: protectedProcedure.query(({ ctx }) => listAiPlans(ctx.user.id)),
+    generationProgress: protectedProcedure.query(({ ctx }) => getPlanGenerationProgress(ctx.user.id)),
     delete: protectedProcedure
       .input(z.object({ id: z.number().int().positive() }))
       .mutation(async ({ ctx, input }) => {
@@ -2573,6 +2574,7 @@ export const appRouter = router({
         dailyMinutes: z.number().int().min(20).max(600).default(120),
         startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
         pace: z.enum(["intensive", "balanced", "relaxed"]).default("balanced"),
+        paceLevel: z.number().int().min(1).max(3).default(2),
         deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().default(null),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -2581,30 +2583,39 @@ export const appRouter = router({
         if (input.deadline && input.deadline < startDate) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "الموعد الشخصي لا يمكن أن يكون قبل تاريخ اليوم." });
         }
-        if (input.deadline && input.deadline > "2027-06-12") {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "الموعد الشخصي يجب أن يكون في أو قبل امتحان 12 يونيو 2027." });
+        if (input.deadline && input.deadline > "2027-06-11") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "الموعد الشخصي يجب أن يكون في أو قبل هدف الجاهزية 11 يونيو 2027." });
         }
-        const result = await generatePersonalPlan(
-          ctx.user.id,
-          input.prompt,
-          input.includeStudentProfile,
-          {
-            dailyMinutes: input.dailyMinutes,
-            startDate,
+        try {
+          const result = await generatePersonalPlan(
+            ctx.user.id,
+            input.prompt,
+            input.includeStudentProfile,
+            {
+              dailyMinutes: input.dailyMinutes,
+              startDate,
+              pace: input.pace,
+              paceLevel: input.paceLevel as 1 | 2 | 3,
+              deadline: input.deadline,
+            },
+          );
+          await logStudentActivity(ctx.user.id, "plan.draft_generated", "ai_plan", null, "أنشأ المخطط الذكي مسودة للمراجعة قبل الاعتماد", {
+            title: result.title,
+            stepCount: result.steps.length,
             pace: input.pace,
-            deadline: input.deadline,
-          },
-        );
-        await logStudentActivity(ctx.user.id, "plan.draft_generated", "ai_plan", null, "أنشأ المخطط الذكي مسودة للمراجعة قبل الاعتماد", {
-          title: result.title,
-          stepCount: result.steps.length,
-          pace: input.pace,
-          dailyMinutes: input.dailyMinutes,
-          officialExamDate: "2027-06-12",
-          personalDeadline: input.deadline,
-        });
-        // A draft is stored as an AI plan, but does not change the task list.
-        return result;
+            paceLevel: input.paceLevel,
+            dailyMinutes: input.dailyMinutes,
+            examWindowStart: "2027-06-12",
+            examWindowEnd: "2027-06-22",
+            examReadinessTarget: "2027-06-11",
+            personalDeadline: input.deadline,
+          });
+          // A draft is stored as an AI plan, but does not change the task list.
+          return result;
+        } catch (error) {
+          markPlanGenerationFailed(ctx.user.id);
+          throw error;
+        }
       }),
     approve: protectedProcedure
       .input(z.object({
@@ -2616,7 +2627,6 @@ export const appRouter = router({
             title: z.string().trim().min(1).max(160),
             cue: z.string().trim().min(1).max(240),
           })).max(5).default([]),
-          reviewQuestion: z.string().trim().min(1).max(600).optional(),
           steps: z.array(z.object({
             day: z.string().trim().min(1).max(60),
             title: z.string().trim().min(2).max(180),
@@ -2627,14 +2637,11 @@ export const appRouter = router({
             priority: z.enum(["critical", "high", "medium", "low"]).optional(),
             difficulty: z.enum(["easy", "medium", "hard", "unknown"]).optional(),
             lessonSize: z.enum(["small", "medium", "large", "unknown"]).optional(),
-            difficultyBasis: z.enum(["student_report", "assessment_history", "curriculum_profile", "unknown"]).optional(),
+            difficultyBasis: z.enum(["student_report", "curriculum_profile", "unknown"]).optional(),
             difficultyConfidence: z.enum(["low", "medium", "high"]).optional(),
             priorityScore: z.number().min(0).max(100).optional(),
             priorityReason: z.string().trim().max(500).optional(),
             priorityEvidenceConfidence: z.enum(["low", "medium", "high"]).optional(),
-            examComponentLabel: z.string().trim().max(120).optional(),
-            examComponentMarks: z.number().int().min(0).max(100).optional(),
-            examPaperMarks: z.number().int().min(1).max(100).optional(),
             resourceRecommendation: z.object({
               title: z.string().trim().min(2).max(240),
               url: z.string().url().max(1_000).refine(value => value.startsWith("https://")),
@@ -2671,7 +2678,6 @@ export const appRouter = router({
           ...input.plan,
           durationLabel: input.plan.durationLabel || "حتى امتحان نهاية السنة",
           habits: input.plan.habits,
-          reviewQuestion: input.plan.reviewQuestion || "ما أهم فكرة تستطيع شرحها دون الرجوع إلى الكتاب؟",
           steps: input.plan.steps.map((step, index) => ({
             ...step,
             day: step.day || `اليوم ${index + 1}`,
