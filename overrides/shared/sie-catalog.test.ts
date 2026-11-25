@@ -284,19 +284,25 @@ describe("subject curriculum layouts", () => {
     expect(choices.some(choice => choice.lessonType === "grammar")).toBe(true);
   });
 
-  it("exposes all ten English units with their four real lessons and separate Vocabulary and Grammar entries", () => {
+  it("groups Vocabulary and variable-count Grammar lessons inside each official English unit", () => {
     const units = getSIECheckpointUnits("ENG1_G2_BAC").filter(unit => unit.isOfficialUnit);
+    const expectedGrammarCounts = [2, 2, 3, 3, 3, 1, 1, 2, 2, 2];
     expect(units).toHaveLength(10);
     for (let unitNumber = 1; unitNumber <= 10; unitNumber += 1) {
       const unit = units.find(item => item.unitNumber === unitNumber);
       expect(unit).toBeDefined();
       const choices = unit!.branches.flatMap(item => item.choices);
       const topics = choices.filter(choice => choice.lessonType === "topic");
+      const vocabulary = choices.filter(choice => choice.lessonType === "vocabulary");
+      const grammar = choices.filter(choice => choice.lessonType === "grammar");
       expect(topics).toHaveLength(4);
       expect(topics.map(choice => choice.lessonNumber)).toEqual([unitNumber + ".1", unitNumber + ".2", unitNumber + ".3", unitNumber + ".4"]);
       expect(topics.every(choice => Boolean(choice.title.trim()))).toBe(true);
-      expect(choices.filter(choice => choice.lessonType === "vocabulary")).toHaveLength(1);
-      expect(choices.filter(choice => choice.lessonType === "grammar")).toHaveLength(1);
+      expect(vocabulary).toHaveLength(1);
+      expect(vocabulary[0]).toMatchObject({ title: "Vocabulary", lessonNumber: "1", unitNumber });
+      expect(grammar).toHaveLength(expectedGrammarCounts[unitNumber - 1]);
+      expect(grammar.map(choice => choice.lessonNumber)).toEqual(grammar.map((_choice, index) => String(index + 2)));
+      expect(grammar.every(choice => Boolean(choice.title.trim()))).toBe(true);
     }
   });
   it("keeps History as one complete linear list rather than chapter branches", () => {
@@ -326,28 +332,36 @@ describe("subject curriculum layouts", () => {
     expect(branches[0].choices[22].nodeId).toBe("PROG_7_3");
   });
 
-  it("models English Vocabulary, Grammar and GRE separately from all textbook topics", () => {
+  it("organizes English lessons under the ten textbook units, with one Vocabulary lesson and the curriculum Grammar lessons inside each unit", () => {
     const branches = getSIECheckpointBranches("ENG1_G2_BAC");
     expect(branches.map(branch => branch.branchId)).toEqual([
-      "ENG_VOCABULARY", "ENG_GRAMMAR", "ENG_GRE", "ENG_TEXTBOOK", "ENG_STORY",
+      "ENG_TEXTBOOK", "ENG_VOCABULARY", "ENG_GRAMMAR", "ENG_GRE", "ENG_STORY",
     ]);
     expect(branches.find(branch => branch.branchId === "ENG_VOCABULARY")?.choices).toHaveLength(10);
-    expect(branches.find(branch => branch.branchId === "ENG_GRAMMAR")?.choices).toHaveLength(10);
+    expect(branches.find(branch => branch.branchId === "ENG_GRAMMAR")?.choices).toHaveLength(21);
     expect(branches.find(branch => branch.branchId === "ENG_GRE")?.choices).toHaveLength(4);
     expect(branches.find(branch => branch.branchId === "ENG_TEXTBOOK")?.choices).toHaveLength(40);
+    expect(branches.find(branch => branch.branchId === "ENG_TEXTBOOK")?.branchTitle).toBe("الوحدات (Units)");
     expect(branches.find(branch => branch.branchId === "ENG_STORY")?.choices).toHaveLength(10);
     expect(branches.find(branch => branch.branchId === "ENG_STORY")?.choices[0].title).toBe("A Dream of Adventure");
     expect(branches.find(branch => branch.branchId === "ENG_VOCABULARY")?.choices[0]).toMatchObject({
-      nodeId: "ENG_VOCABULARY_U1",
-      lessonType: "vocabulary",
-      unitNumber: 1,
+      nodeId: "ENG_VOCABULARY_U1", title: "Vocabulary", lessonNumber: "1", lessonType: "vocabulary", unitNumber: 1,
     });
-    expect(branches.find(branch => branch.branchId === "ENG_GRAMMAR")?.choices[9]).toMatchObject({
-      nodeId: "ENG_GRAMMAR_U10",
-      lessonType: "grammar",
-      unitNumber: 10,
+    expect(branches.find(branch => branch.branchId === "ENG_GRAMMAR")?.choices.slice(0, 3).map(choice => ({
+      nodeId: choice.nodeId, title: choice.title, lessonNumber: choice.lessonNumber, unitNumber: choice.unitNumber,
+    }))).toEqual([
+      { nodeId: "ENG_GRAMMAR_U1", title: "Participial Phrases and Relative Clauses", lessonNumber: "2", unitNumber: 1 },
+      { nodeId: "ENG_GRAMMAR_U1_2", title: "Conditional Structures", lessonNumber: "3", unitNumber: 1 },
+      { nodeId: "ENG_GRAMMAR_U2", title: "Gerunds and Infinitives", lessonNumber: "2", unitNumber: 2 },
+    ]);
+    expect(branches.find(branch => branch.branchId === "ENG_GRAMMAR")?.choices.at(-1)).toMatchObject({
+      nodeId: "ENG_GRAMMAR_U10_2", title: "Quantifiers", lessonNumber: "3", unitNumber: 10,
     });
     expect(branches.find(branch => branch.branchId === "ENG_GRE")?.choices[0].sourceLabel).toContain("خارج المقرر الوزاري");
+
+    const visible = getSIEStudentVisibleBranches("ENG1_G2_BAC");
+    expect(visible.map(branch => branch.branchId)).toEqual(["ENG_TEXTBOOK", "ENG_GRE", "ENG_STORY"]);
+    expect(visible[0].branchTitle).toBe("الوحدات (Units)");
   });
 
   it("gives subjects without a loaded index one editable linear curriculum path", () => {
