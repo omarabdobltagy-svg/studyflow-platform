@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
-import { getSIECheckpointBranches, getSIESubject } from "@shared/sie-catalog";
+import { getSIECheckpointProgressBranches, getSIESubject, matchSIECheckpointTask } from "@shared/sie-catalog";
 import {
   ArrowLeft, BarChart3, BookOpenText, CalendarDays, Check, CheckCircle2,
   Clock3, Compass, GraduationCap, ListChecks, Loader2, MessageCircle,
@@ -23,6 +23,8 @@ type Priority = {
   priorityScore?: number;
   priorityReason?: string;
   detail?: string;
+  taskId?: number;
+  taskTitle?: string;
 };
 type ExternalSession = {
   sessionId: string; subjectId: string; branchId: string; lessonId: string;
@@ -48,7 +50,7 @@ function dueLabel(value: Date | string | null | undefined) {
 
 function sessionLesson(session: ExternalSession | null) {
   if (!session) return null;
-  const branch = getSIECheckpointBranches(session.subjectId).find(item => item.branchId === session.branchId);
+  const branch = getSIECheckpointProgressBranches(session.subjectId).find(item => item.branchId === session.branchId);
   const lesson = branch?.choices.find(item => item.nodeId === session.lessonId);
   return {
     subject: getSIESubject(session.subjectId)?.nameAr ?? session.subjectId,
@@ -62,6 +64,7 @@ export default function Home() {
   const [, setLocation] = useLocation();
   const utils = trpc.useUtils();
   const summary = trpc.dashboard.summary.useQuery({ timeZone: "Africa/Cairo" });
+  const tasksQuery = trpc.tasks.list.useQuery();
   const learning = trpc.learning.get.useQuery();
   const profile = trpc.studentProfile.get.useQuery();
   const dailyPlan = trpc.plans.currentDaily.useQuery(undefined, {
@@ -123,7 +126,7 @@ export default function Home() {
   const priority = useMemo<Priority | null>(() => {
     const gaps = ((learning.data as any)?.gapByBranch ?? {}) as Record<string, Record<string, any>>;
     const candidates = Object.entries(gaps).flatMap(([subjectId, subjectGaps]) =>
-      getSIECheckpointBranches(subjectId).flatMap(branch => {
+      getSIECheckpointProgressBranches(subjectId).flatMap(branch => {
         const gap = subjectGaps[branch.branchId];
         if (gap?.status !== "calculated" || gap.gapCount === null || gap.gapCount <= 0 || gap.referencePosition === null) return [];
         const next = typeof gap.studentPosition === "number" ? branch.choices[gap.studentPosition] : undefined;
@@ -145,38 +148,95 @@ export default function Home() {
     } : null;
   }, [learning.data]);
 
+  const mappedOpenTasks = useMemo(() => {
+    const subjectIds = profile.data?.subjectIds ?? [];
+    return (tasksQuery.data ?? [])
+      .filter((task: any) => task.status === "todo")
+      .flatMap((task: any) => {
+        const match = matchSIECheckpointTask(subjectIds, [task.title, task.notes || ""].join(" "));
+        if (!match) return [];
+        const branch = getSIECheckpointProgressBranches(match.subjectId)
+          .find(item => item.branchId === match.branchId);
+        const gap = (learning.data as any)?.gapByBranch?.[match.subjectId]?.[match.branchId];
+        if (!branch || typeof gap?.studentPosition !== "number") return [];
+        const topicIndex = branch.choices.findIndex(item => item.nodeId === match.nodeId);
+        if (topicIndex < 0) return [];
+        return [{
+          task,
+          match,
+          branch,
+          gap,
+          topicIndex,
+          isNext: topicIndex === gap.studentPosition,
+          isAlreadyCompleted: topicIndex < gap.studentPosition,
+        }];
+      });
+  }, [tasksQuery.data, profile.data?.subjectIds, learning.data]);
+
+  const taskPriority = useMemo<Priority | null>(() => {
+    const candidates = mappedOpenTasks.filter(item => item.isNext);
+    candidates.sort((left, right) => {
+      const urgency = (value: string) => value === "high" ? 3 : value === "medium" ? 2 : 1;
+      const byPriority = urgency(right.task.priority || "medium") - urgency(left.task.priority || "medium");
+      if (byPriority) return byPriority;
+      const leftDue = left.task.dueAt ? new Date(left.task.dueAt).getTime() : Number.POSITIVE_INFINITY;
+      const rightDue = right.task.dueAt ? new Date(right.task.dueAt).getTime() : Number.POSITIVE_INFINITY;
+      return leftDue - rightDue;
+    });
+    const item = candidates[0];
+    if (!item) return null;
+    return {
+      subjectId: item.match.subjectId,
+      subjectName: getSIESubject(item.match.subjectId)?.nameAr ?? item.match.subjectId,
+      branchId: item.match.branchId,
+      branchTitle: item.match.branchTitle,
+      gapCount: item.gap.gapCount ?? 0,
+      pointLabel: item.branch.branchType === "official_section" ? "موضوع" : "درس",
+      nextLesson: { nodeId: item.match.nodeId, title: item.match.title },
+      source: "task",
+      priority: item.task.priority ?? "medium",
+      taskId: item.task.id,
+      taskTitle: item.task.title,
+      priorityReason: "مهمة موجودة بالفعل في قائمة مهامك ومرتبطة بالموضوع التالي في هذا الفرع.",
+    };
+  }, [mappedOpenTasks]);
+
   const dailyPlanPriority = useMemo<Priority | null>(() => {
     const steps = dailyPlan.data?.plan?.steps ?? [];
     const subjectIds = profile.data?.subjectIds ?? [];
     for (const step of steps as any[]) {
       const curriculumNodeIds = Array.isArray(step.curriculumNodeIds) ? step.curriculumNodeIds : [];
       for (const subjectId of subjectIds) {
-        for (const branch of getSIECheckpointBranches(subjectId)) {
-          const choice = branch.choices.find(item => curriculumNodeIds.includes(item.nodeId));
-          if (!choice) continue;
+        for (const branch of getSIECheckpointProgressBranches(subjectId)) {
+          const gap = (learning.data as any)?.gapByBranch?.[subjectId]?.[branch.branchId];
+          if (typeof gap?.studentPosition !== "number" || gap.referencePosition === null
+            || gap.referencePosition <= gap.studentPosition) continue;
+          const nextChoice = branch.choices[gap.studentPosition];
+          if (!nextChoice || !curriculumNodeIds.includes(nextChoice.nodeId)) continue;
           return {
             subjectId,
             subjectName: getSIESubject(subjectId)?.nameAr ?? subjectId,
             branchId: branch.branchId,
             branchTitle: branch.branchTitle,
-            gapCount: 0,
+            gapCount: gap.gapCount ?? 0,
             pointLabel: branch.branchType === "official_section" ? "موضوع" : "درس",
-            nextLesson: { nodeId: choice.nodeId, title: step.title || choice.title },
+            nextLesson: { nodeId: nextChoice.nodeId, title: nextChoice.title },
             source: "daily_plan",
             priority: step.priority ?? "medium",
             priorityScore: typeof step.priorityScore === "number" ? step.priorityScore : undefined,
             priorityReason: step.priorityReason,
-            detail: step.detail,
+            detail: undefined,
           };
         }
       }
     }
     return null;
-  }, [dailyPlan.data, profile.data?.subjectIds]);
+  }, [dailyPlan.data, profile.data?.subjectIds, learning.data]);
 
-  const activePriority = dailyPlan.data?.needsRefresh
+  const activePriority = taskPriority ?? (dailyPlan.data?.needsRefresh
     ? priority ?? dailyPlanPriority
-    : dailyPlanPriority ?? priority;
+    : dailyPlanPriority ?? priority);
+  const completedTaskProgressConflicts = mappedOpenTasks.filter(item => item.isAlreadyCompleted);
 
   const plan = dailyPlan.data?.plan;
   const tasks = summary.data?.tasks ?? [];
@@ -217,6 +277,18 @@ export default function Home() {
         {summary.isError && <QueryErrorNotice onRetry={() => void summary.refetch()} label="تعذّر تحميل مهامك. أعد المحاولة؛ بياناتك لم تُحذف." />}
         {learning.isError && <QueryErrorNotice onRetry={() => void learning.refetch()} label="تعذّر تحميل تقدم المنهج. يمكنك متابعة مهامك أثناء إعادة المحاولة." />}
         {dailyPlan.isError && <QueryErrorNotice onRetry={() => void dailyPlan.refetch()} label="تعذّر تحميل خطة اليوم." />}
+        {completedTaskProgressConflicts.length > 0 && (
+          <section className="rounded-2xl border border-amber-500/25 bg-amber-500/[0.045] p-4">
+            <h3 className="text-sm font-bold">فيه مهام مرتبطة بموضوعات مسجلة كمكتملة</h3>
+            <p className="mt-1 text-xs leading-6 text-muted-foreground">المهمة المفتوحة لا تعني أن الموضوع مكتمل، وموضع التقدم لا يتغير بمجرد وجود مهمة. راجع الموضع أو حالة المهمة حتى لا تتعارض البيانات.</p>
+            <div className="mt-2 space-y-1">
+              {completedTaskProgressConflicts.slice(0,3).map(item => (
+                <p key={item.task.id} className="text-xs">{item.task.title} — {item.match.title}</p>
+              ))}
+            </div>
+            <Button variant="outline" size="sm" className="mt-3 rounded-lg" onClick={() => setLocation("/study")}>مراجعة مواضع التقدم</Button>
+          </section>
+        )}
 
         {session && (
           <section className="overflow-hidden rounded-3xl border border-primary/30 bg-primary/5">
@@ -260,9 +332,11 @@ export default function Home() {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2 text-sm font-semibold text-primary"><Target className="size-4" />أولويتك الدراسية</div>
                 {activePriority && (
-                  activePriority.source === "daily_plan"
-                    ? <Badge variant="secondary">من خطة اليوم · {activePriority.priority === "critical" ? "عاجلة" : activePriority.priority === "high" ? "عالية" : activePriority.priority === "low" ? "مرنة" : "متوسطة"}</Badge>
-                    : <Badge variant="secondary">{activePriority.gapCount} {activePriority.pointLabel} في الفجوة</Badge>
+                  activePriority.source === "task"
+                    ? <Badge variant="secondary">مهمة مفتوحة مرتبطة بالموضوع التالي</Badge>
+                    : activePriority.source === "daily_plan"
+                      ? <Badge variant="secondary">من خطة اليوم · {activePriority.priority === "critical" ? "عاجلة" : activePriority.priority === "high" ? "عالية" : activePriority.priority === "low" ? "مرنة" : "متوسطة"}</Badge>
+                      : <Badge variant="secondary">{activePriority.gapCount} {activePriority.pointLabel} في الفجوة</Badge>
                 )}
               </div>
               {learning.isLoading || (dailyPlan.isLoading && !priority) ? (
@@ -272,7 +346,9 @@ export default function Home() {
                   <p className="mt-6 text-xs font-semibold text-muted-foreground">{activePriority.subjectName} · {activePriority.branchTitle}</p>
                   <h3 className="mt-2 text-2xl font-bold leading-tight sm:text-3xl">{activePriority.nextLesson.title}</h3>
                   <p className="mt-3 max-w-2xl text-sm leading-7 text-muted-foreground">
-                    {activePriority.detail || "دي الخطوة التالية حسب موضعك المسجل وموضع التدريس. ابدأ جلسة، وبعدها سجّل إنجازك لتحديث تقدمك وخطتك."}
+                    {activePriority.source === "task"
+                      ? "لديك مهمة مفتوحة بالفعل لهذا الموضوع؛ سنوجّهك إلى المهمة الموجودة بدل إنشاء نسخة مكررة."
+                      : "دي الخطوة التالية حسب موضعك المسجل وموضع التدريس. ابدأ جلسة، وبعدها حدّث تقدمك الفعلي."}
                   </p>
                   {activePriority.priorityReason && (
                     <p className="mt-2 rounded-xl border border-primary/15 bg-primary/[0.04] px-3 py-2 text-xs leading-6 text-muted-foreground">
@@ -280,6 +356,7 @@ export default function Home() {
                       {activePriority.priorityScore !== undefined ? " · " + activePriority.priorityScore + "/100" : ""}
                     </p>
                   )}
+                  {activePriority.taskTitle && <p className="mt-2 text-xs text-muted-foreground">المهمة المسجلة: {activePriority.taskTitle}</p>}
                   <div className="mt-6 flex flex-wrap gap-2">
                     <Button
                       onClick={() => startSession.mutate({ subjectId: activePriority.subjectId, branchId: activePriority.branchId, lessonId: activePriority.nextLesson!.nodeId })}
@@ -289,7 +366,8 @@ export default function Home() {
                       {startSession.isPending ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
                       {session ? "أنهِ الجلسة الحالية أولًا" : "ابدأ جلسة مذاكرة"}
                     </Button>
-                    <Button variant="outline" onClick={() => openStudySteps(activePriority.subjectId, activePriority.branchId, activePriority.nextLesson!.nodeId)} className="rounded-xl">افتح خطوات المذاكرة</Button>
+                    {activePriority.taskId && <Button variant="outline" onClick={() => setLocation("/tasks")} className="rounded-xl">فتح المهمة الموجودة</Button>}
+                    <Button variant="outline" onClick={() => openStudySteps(activePriority.subjectId, activePriority.branchId, activePriority.nextLesson!.nodeId)} className="rounded-xl">افتح تقدم الموضوع</Button>
                   </div>
                 </>
               ) : (
