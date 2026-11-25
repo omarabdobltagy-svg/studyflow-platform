@@ -50,6 +50,11 @@ async function startServer() {
   app.get("/webhooks/youtube", (req, res) => {
     const challenge = verifyYoutubeWebhookRequest(req.query as Record<string, unknown>);
     if (!challenge) return res.status(404).type("text/plain").send("not found");
+    console.info("[StudyFlow WebSub] YouTube channel verification challenge accepted", {
+      channelId: typeof req.query.channel_id === "string" ? req.query.channel_id : "unknown",
+      teacherId: typeof req.query.teacher_id === "string" ? req.query.teacher_id : "unknown",
+      mode: typeof req.query["hub.mode"] === "string" ? req.query["hub.mode"] : "unknown",
+    });
     return res.status(200).type("text/plain").send(challenge);
   });
 
