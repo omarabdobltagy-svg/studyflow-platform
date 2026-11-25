@@ -6,6 +6,7 @@ import { trpc } from "@/lib/trpc";
 import {
   getSIECheckpointProgressBranches,
   getSIECheckpointProgressOptions,
+  getSIECheckpointUnits,
   getSIESubject,
   normalizeSIECheckpointFrontier,
 } from "@shared/sie-catalog";
@@ -22,6 +23,9 @@ export default function Study() {
   const [subjectId, setSubjectId] = useState(initialStudyParams?.get("subject") || "");
   const [branchId, setBranchId] = useState(initialStudyParams?.get("branch") || "");
   const [subjectSearch, setSubjectSearch] = useState("");
+  const [studyViewMode, setStudyViewMode] = useState<"units" | "lessons">(
+    initialStudyParams?.get("branch") ? "lessons" : "units"
+  );
   const subjects = profile.data?.subjectIds || [];
   const selection = (profile.data?.selection || {}) as Record<string, any>;
   const courseProgressMap = (selection.learningCourseProgress || {}) as Record<string, any>;
@@ -37,6 +41,7 @@ export default function Study() {
   const [courseModeOverrides, setCourseModeOverrides] = useState<Record<string, "center" | "online">>({});
   const courseMode = courseModeOverrides[subjectId] ?? persistedCourseMode;
   const branches = useMemo(() => getSIECheckpointProgressBranches(subjectId), [subjectId]);
+  const units = useMemo(() => getSIECheckpointUnits(subjectId), [subjectId]);
   const currentBranch = branches.find(branch => branch.branchId === branchId) ?? branches[0];
   const branchChoices = currentBranch?.choices ?? [];
   const currentBranchId = currentBranch?.branchId ?? "";
@@ -216,6 +221,57 @@ export default function Study() {
     },
     onError: error => toast.error(error.message || "تعذّر حفظ موضع المنهج."),
   });
+  const saveUnitFrontier = trpc.learning.updateBranchFrontier.useMutation({
+    onSuccess: async () => {
+      await Promise.all([
+        utils.studentProfile.get.invalidate(),
+        utils.learning.get.invalidate(),
+        utils.plans.currentDaily.invalidate(),
+        utils.dashboard.summary.invalidate(),
+      ]);
+    },
+  });
+  const completeUnit = async (unit: ReturnType<typeof getSIECheckpointUnits>[number]) => {
+    if (saveUnitFrontier.isPending) return;
+    try {
+      for (const unitBranch of unit.branches) {
+        const branch = branches.find(item => item.branchId === unitBranch.branchId);
+        if (!branch || !unitBranch.choices.length) continue;
+        const finalNode = unitBranch.choices[unitBranch.choices.length - 1];
+        const targetIndex = branch.choices.findIndex(item => item.nodeId === finalNode.nodeId);
+        const savedValue = branchProgressMap[branch.branchId]?.lastCompletedLessonId;
+        const normalizedSaved = typeof savedValue === "string"
+          ? normalizeSIECheckpointFrontier(subjectId, branch.branchId, savedValue)
+          : "__UNKNOWN__";
+        const savedIndex = normalizedSaved === "__NOT_STARTED__" ? -1 : branch.choices.findIndex(item => item.nodeId === normalizedSaved);
+        if (targetIndex < 0 || savedIndex >= targetIndex) continue;
+        await saveUnitFrontier.mutateAsync({
+          subjectId,
+          branchId: branch.branchId,
+          studentFrontierId: finalNode.nodeId,
+        });
+      }
+      await Promise.all([utils.studentProfile.get.invalidate(), utils.learning.get.invalidate()]);
+      toast.success("تم تسجيل إكمال " + unit.title + " في فروعها المرتبطة.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "تعذّر تسجيل إكمال الوحدة.");
+    }
+  };
+  const openUnitLessons = (unit: ReturnType<typeof getSIECheckpointUnits>[number]) => {
+    const nextBranch = unit.branches.find(unitBranch => {
+      const branch = branches.find(item => item.branchId === unitBranch.branchId);
+      if (!branch || !unitBranch.choices.length) return false;
+      const last = unitBranch.choices[unitBranch.choices.length - 1];
+      const saved = branchProgressMap[branch.branchId]?.lastCompletedLessonId;
+      const normalized = typeof saved === "string" ? normalizeSIECheckpointFrontier(subjectId, branch.branchId, saved) : "__UNKNOWN__";
+      const savedIndex = normalized === "__NOT_STARTED__" ? -1 : branch.choices.findIndex(item => item.nodeId === normalized);
+      const targetIndex = branch.choices.findIndex(item => item.nodeId === last.nodeId);
+      return savedIndex < targetIndex;
+    }) ?? unit.branches[0];
+    if (nextBranch) setBranchId(nextBranch.branchId);
+    setStudyViewMode("lessons");
+  };
+
   const updateTeacherSelection = trpc.studentProfile.updateTeacherSelection.useMutation({
     onSuccess: async () => {
       await Promise.all([utils.studentProfile.get.invalidate(), utils.learning.get.invalidate()]);
@@ -313,6 +369,86 @@ export default function Study() {
         </article>
       </section>
 
+      <section className="app-card mb-5 overflow-hidden rounded-[1.7rem]">
+        <header className="border-b border-border/70 bg-card p-5 sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-bold tracking-[0.14em] text-primary">اختيار التقدم</p>
+              <h2 className="mt-1 text-xl font-bold">ابدأ من الوحدة، أو افتح الدروس</h2>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">تقدر تسجل إنك أنهيت وحدة كاملة بضغطة واحدة، أو تفتح دروسها لو لسه فيه جزء منها ما خلصتوش.</p>
+            </div>
+            <div className="inline-flex rounded-xl border border-border bg-muted/40 p-1">
+              <button type="button" onClick={() => setStudyViewMode("units")} aria-pressed={studyViewMode === "units"}
+                className={"rounded-lg px-4 py-2 text-xs font-bold transition " + (studyViewMode === "units" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>الوحدات</button>
+              <button type="button" onClick={() => setStudyViewMode("lessons")} aria-pressed={studyViewMode === "lessons"}
+                className={"rounded-lg px-4 py-2 text-xs font-bold transition " + (studyViewMode === "lessons" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>الدروس</button>
+            </div>
+          </div>
+        </header>
+        {studyViewMode === "units" ? (
+          <div className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5 xl:grid-cols-3">
+            {units.map((unit, unitIndex) => {
+              const unitBranchState = unit.branches.map(unitBranch => {
+                const branch = branches.find(item => item.branchId === unitBranch.branchId);
+                const saved = branchProgressMap[unitBranch.branchId]?.lastCompletedLessonId;
+                const normalized = typeof saved === "string" && branch
+                  ? normalizeSIECheckpointFrontier(subjectId, unitBranch.branchId, saved)
+                  : "__UNKNOWN__";
+                const savedIndex = normalized === "__NOT_STARTED__" ? -1 : branch?.choices.findIndex(item => item.nodeId === normalized) ?? -1;
+                const completed = unitBranch.choices.filter(choice => {
+                  const index = branch?.choices.findIndex(item => item.nodeId === choice.nodeId) ?? -1;
+                  return index >= 0 && savedIndex >= index;
+                }).length;
+                return { branchId: unitBranch.branchId, branchTitle: unitBranch.branchTitle, completed, total: unitBranch.choices.length };
+              });
+              const totalTopics = unitBranchState.reduce((sum, item) => sum + item.total, 0);
+              const completedTopics = unitBranchState.reduce((sum, item) => sum + item.completed, 0);
+              const complete = totalTopics > 0 && completedTopics === totalTopics;
+              const percent = totalTopics ? Math.round(completedTopics / totalTopics * 100) : 0;
+              return (
+                <article key={unit.unitId} className={"group relative overflow-hidden rounded-2xl border p-4 transition-all duration-300 " + (complete ? "border-primary/30 bg-primary/[0.045]" : "border-border/75 bg-card hover:-translate-y-1 hover:border-primary/35 hover:shadow-xl")}>
+                  <div className="pointer-events-none absolute -left-14 -top-14 size-36 rounded-full bg-primary/10 blur-3xl transition-opacity group-hover:opacity-100" />
+                  <div className="relative">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold tracking-[.12em] text-primary">{unit.isOfficialUnit ? "وحدة المنهج" : "مسار إضافي"}</p>
+                        <h3 className="mt-1 font-bold leading-7">{unit.title}</h3>
+                      </div>
+                      <span className={"flex size-9 shrink-0 items-center justify-center rounded-xl " + (complete ? "bg-primary text-primary-foreground" : "bg-secondary text-primary")}>
+                        {complete ? <Check className="size-4" /> : <span className="text-xs font-bold">{unitIndex + 1}</span>}
+                      </span>
+                    </div>
+                    <div className="mt-4 flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">{completedTopics} من {totalTopics} موضوع</span>
+                      <span className="font-bold text-primary">{percent}٪</span>
+                    </div>
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
+                      <motion.div className="h-full rounded-full bg-primary" initial={false} animate={{ width: percent + "%" }} transition={{ duration: .55, ease: "easeOut" }} />
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {unitBranchState.map(item => <span key={item.branchId} className="rounded-lg border border-border/70 bg-background/70 px-2 py-1 text-[10px] text-muted-foreground">{item.branchTitle}</span>)}
+                    </div>
+                    <div className="mt-4 grid grid-cols-2 gap-2">
+                      <Button type="button" variant="outline" className="rounded-xl text-xs" onClick={() => openUnitLessons(unit)}>فتح الدروس</Button>
+                      <Button type="button" className="rounded-xl text-xs" disabled={complete || saveUnitFrontier.isPending}
+                        onClick={() => void completeUnit(unit)}>
+                        {complete ? "مكتملة" : saveUnitFrontier.isPending ? "جارٍ الحفظ…" : "أنهيت الوحدة"}
+                      </Button>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+            {!units.length && <p className="col-span-full rounded-xl bg-muted/30 p-4 text-center text-sm text-muted-foreground">لم يتم ربط وحدات معتمدة لهذه المادة حتى الآن.</p>}
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center justify-between gap-3 p-4 sm:p-5">
+            <p className="text-xs leading-6 text-muted-foreground">عرض الدروس التفصيلية. اختيار آخر درس مكتمل يحدّث الموضوع التالي عليك مباشرةً.</p>
+            <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => setStudyViewMode("units")}>العودة إلى الوحدات</Button>
+          </div>
+        )}
+      </section>
+
       <section className="app-card mb-5 overflow-hidden rounded-2xl">
         <header className="border-b border-border/70 bg-gradient-to-l from-secondary/55 to-card p-5 sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -357,7 +493,7 @@ export default function Study() {
             </div>
           ) : (
             <>
-              {branches.length > 1 && (
+              {studyViewMode === "lessons" && branches.length > 1 && (
                 <div className="rounded-2xl border border-border/70 bg-muted/15 p-3 sm:p-4">
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <div>
@@ -396,7 +532,7 @@ export default function Study() {
                   </div>
                 </div>
               )}
-              <AnimatePresence mode="wait" initial={false}>
+              {studyViewMode === "lessons" && <AnimatePresence mode="wait" initial={false}>
                 <motion.div key={subjectId + "::" + currentBranchId}
                   initial={{ opacity: 0, x: 16, scale: 0.99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={{ opacity: 0, x: -16, scale: 0.99 }}
                   transition={{ duration: 0.3, ease: "easeInOut" }} className="space-y-4">
@@ -518,13 +654,13 @@ export default function Study() {
                     </AnimatePresence>
                   </div>
                 </motion.div>
-              </AnimatePresence>
+              </AnimatePresence>}
             </>
           )}
         </div>
       </section>
 
-      <section className="app-card mb-5 overflow-hidden rounded-2xl">
+      {studyViewMode === "lessons" && <section className="app-card mb-5 overflow-hidden rounded-2xl">
         <header className="border-b border-border/70 bg-card p-5 sm:p-6">
           <p className="text-[10px] font-bold tracking-[0.12em] text-primary">التراكم الدراسي</p>
           <h2 className="mt-1 text-xl font-bold">التراكم الدراسي</h2>
@@ -555,7 +691,7 @@ export default function Study() {
             {currentGap.status === "student_position_missing" ? "حدد موضعك أنت أولًا." : currentGap.status === "reference_missing" ? "لا يوجد مرجع محفوظ للمقارنة حتى الآن؛ يمكنك متابعة تقدمك دون إعداد إضافي هنا." : "الحساب يستخدم عدد نقاط الفهرس داخل هذا الفرع فقط؛ لا يعمم الرقم على بقية فروع المادة."}
           </p>
         </div>
-      </section>
+      </section>}
 
     </DashboardLayout>
   );
