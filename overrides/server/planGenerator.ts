@@ -1122,7 +1122,7 @@ function formatUpcomingTeacherSessions(
     if (!(profile.subjectIds ?? []).includes(subjectId) || !Array.isArray(slots)) continue;
     const subjectName = getSIESubject(subjectId)?.nameAr ?? subjectId;
     for (const slot of slots) {
-      if (!Number.isInteger(slot.dayOfWeek) || slot.dayOfWeek < 0 || slot.dayOfWeek > 6 || !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(slot.startTime)) continue;
+      if (!Number.isInteger(slot.dayOfWeek) || slot.dayOfWeek < 0 || slot.dayOfWeek > 6 || !/^([01]\d|2[0-3]):[0-5]\d$/.test(slot.startTime)) continue;
       let offset = (slot.dayOfWeek - base.getUTCDay() + 7) % 7;
       if (offset === 0 && sameDayAsNow && slot.startTime <= currentTime) offset = 7;
       if (offset >= horizonDays) continue;
@@ -1221,7 +1221,7 @@ export async function generatePersonalPlan(
     : { passages: [], coverageNotes: [] };
   const textbookContext = formatTextbookEvidence(textbookRetrieval).slice(0, 10_000);
   const context = (profile
-    ? buildLearningContext(profile) + "\\n\\nمعرفة الكتب الرسمية للجزء الأول وخريطة علاقات الدروس:\\n" + (textbookContext || "لم يُسترجع نص مطابق من الكتب المتاحة.")
+    ? buildLearningContext(profile) + "\n\nمعرفة الكتب الرسمية للجزء الأول وخريطة علاقات الدروس:\n" + (textbookContext || "لم يُسترجع نص مطابق من الكتب المتاحة.")
     : "لم يطلب المستخدم تخصيص الخطة بالملف الدراسي.").slice(0, 18_000);
   const system = [
     "أنت محرك التخطيط الدراسي داخل StudyFlow، ولست مساعد دردشة عام.",
@@ -1504,11 +1504,11 @@ export async function generatePersonalPlan(
     const feasibilityNote = scheduleDay > availableDays
       ? "تنبيه الجدوى: التوزيع يحتاج " + scheduleDay + " أيام دراسة، بينما المتاح " + availableDays + " يومًا حتى " + effectiveDeadline + ". لم نحذف دروسًا لإخفاء الفجوة. نافذة الامتحانات التقريبية " + examWindowLabel + "."
       : "تقدير الجدوى: يمكن توزيع الخطوات على " + scheduleDay + " أيام دراسة حتى " + effectiveDeadline + ". نافذة الامتحانات التقريبية " + examWindowLabel + ".";
-    plan = { ...plan, summary: (plan.summary + "\\n\\n" + feasibilityNote).slice(0, 1_500) };
+    plan = { ...plan, summary: (plan.summary + "\n\n" + feasibilityNote).slice(0, 1_500) };
   } else {
     plan = {
       ...plan,
-      summary: (plan.summary + "\\n\\n" + "هذه خطة للفترة القادمة فقط. ستُعاد مواءمتها عند تغير المهام أو التقدم أو مواعيد الحصص.") .slice(0, 1_500),
+      summary: (plan.summary + "\n\n" + "هذه خطة للفترة القادمة فقط. ستُعاد مواءمتها عند تغير المهام أو التقدم أو مواعيد الحصص.") .slice(0, 1_500),
     };
   }
   updatePlanGenerationProgress(userId, "saving");
