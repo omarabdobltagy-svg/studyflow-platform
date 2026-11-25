@@ -148,7 +148,7 @@ export default function Home() {
   const priority = useMemo<Priority | null>(() => {
     const gaps = ((learning.data as any)?.gapByBranch ?? {}) as Record<string, Record<string, any>>;
     const candidates = Object.entries(gaps).flatMap(([subjectId, subjectGaps]) =>
-      getSIEStudentVisibleBranches(subjectId).flatMap(branch => {
+      getSIECheckpointProgressBranches(subjectId).flatMap(branch => {
         const gap = subjectGaps[branch.branchId];
         if (gap?.status !== "calculated" || gap.gapCount === null || gap.gapCount <= 0 || gap.referencePosition === null) return [];
         const next = typeof gap.studentPosition === "number" ? branch.choices[gap.studentPosition] : undefined;
@@ -177,7 +177,7 @@ export default function Home() {
       .flatMap((task: any) => {
         const match = matchSIECheckpointTask(subjectIds, [task.title, task.notes || ""].join(" "));
         if (!match) return [];
-        const branch = getSIEStudentVisibleBranches(match.subjectId)
+        const branch = getSIECheckpointProgressBranches(match.subjectId)
           .find(item => item.branchId === match.branchId);
         const gap = (learning.data as any)?.gapByBranch?.[match.subjectId]?.[match.branchId];
         if (!branch || typeof gap?.studentPosition !== "number") return [];
@@ -254,7 +254,7 @@ export default function Home() {
     for (const step of steps as any[]) {
       const curriculumNodeIds = Array.isArray(step.curriculumNodeIds) ? step.curriculumNodeIds : [];
       for (const subjectId of subjectIds) {
-        for (const branch of getSIEStudentVisibleBranches(subjectId)) {
+        for (const branch of getSIECheckpointProgressBranches(subjectId)) {
           const gap = (learning.data as any)?.gapByBranch?.[subjectId]?.[branch.branchId];
           if (typeof gap?.studentPosition !== "number" || gap.referencePosition === null
             || gap.referencePosition <= gap.studentPosition) continue;
@@ -264,7 +264,7 @@ export default function Home() {
             subjectId,
             subjectName: getSIESubject(subjectId)?.nameAr ?? subjectId,
             branchId: branch.branchId,
-            branchTitle: branch.branchTitle,
+            branchTitle: branch.branchId === "ARB_READING" ? "نصوص الوحدة" : branch.branchTitle,
             gapCount: gap.gapCount ?? 0,
             pointLabel: branch.branchType === "official_section" ? "موضوع" : "درس",
             nextLesson: { nodeId: nextChoice.nodeId, title: nextChoice.title },
