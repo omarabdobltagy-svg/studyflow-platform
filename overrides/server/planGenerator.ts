@@ -455,11 +455,19 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
     ? selection.learningAssessments as Array<Record<string, any>>
     : [];
   const progressSnapshot = buildPlannerProgressSnapshot(profile);
+  const teacherPublicUpdates = Array.isArray(selection.teacherPublicUpdates)
+    ? selection.teacherPublicUpdates as Array<Record<string, any>>
+    : [];
+  const studyConditions = (selection.studyConditions && typeof selection.studyConditions === "object")
+    ? selection.studyConditions as Record<string, any>
+    : {};
 
   const subjectContext = (profile.subjectIds || []).map(subjectId => {
     const subject = getSIESubject(subjectId);
     const teacherId = choices[subjectId];
     const teacher = teacherId ? getSIETeacher(teacherId) : undefined;
+    const publicUpdates = teacherPublicUpdates.filter(update => update.teacherId === teacherId).slice(0, 6)
+      .map(update => [update.publishedAt, update.title, update.description, update.url].filter(Boolean).join(" | "));
     const state = teacherStates[subjectId] || {};
     const reported = courseProgress[subjectId] || {};
     const branchRecords = (reported.branches || {}) as Record<string, Record<string, any>>;
@@ -551,6 +559,7 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
       "المدرس المختار: " + ((teacher && teacher.nameAr) || teacherId || "لم يحدد"),
       "الدروس المتاحة للخطوات الجديدة ومعرفاتها (لا تختر غيرها): " + (lessonList || "فهرس المنهج غير محمّل"),
       "أحدث محتوى عام معروف للمدرس (ليس مرجع تقدم مدفوع): " + ((teacher && teacher.latestPublicCheckpoint) || "غير متاح"),
+      "منشورات المدرس العامة الحديثة الملتقطة من المصدر (تحتاج مطابقة مع المنهج وليست تكليفًا تلقائيًا): " + (publicUpdates.join(" | ") || "لا توجد تحديثات جديدة موثقة"),
       "فهرس الكورس المدفوع: " + ((teacher && teacher.paidCourseCatalogFrontier) ? JSON.stringify(teacher.paidCourseCatalogFrontier) : "غير موثق"),
       "دروس المنهج بحسب الفروع: " + (lessonList || "فهرس المنهج غير محمّل"),
     ].join("\n");
@@ -562,6 +571,10 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
     "المواد ومواضعها: \n" + (subjectContext || "لا توجد مواد مسجلة"),
     "قيم التراكم القديمة (تُعامل كمدخلات غير مؤكدة فقط): " + Object.entries(profile.backlog).map(entry => entry[0] + ": " + entry[1]).join("، "),
     "العائق المعلن: " + (profile.obstacle || "غير محدد"),
+    "ظروف الطالب اليوم: الطاقة البدنية = " + ({ low: "منخفضة", normal: "متوسطة/طبيعية", high: "مرتفعة" }[String(studyConditions.energyLevel)] || "غير محددة")
+      + "؛ الحالة المعنوية = " + ({ low: "منخفضة", neutral: "محايدة", good: "جيدة" }[String(studyConditions.moraleLevel)] || "غير محددة")
+      + "؛ الوقت المتاح = " + (Number(studyConditions.dailyMinutes) > 0 ? Number(studyConditions.dailyMinutes) + " دقيقة" : "غير محدد")
+      + "؛ قيود الموارد والأدوات = " + (String(studyConditions.resourceConstraints || "").trim() || "لا توجد قيود مبلغ عنها"),
   ].join("\n");
 }
 
@@ -597,6 +610,9 @@ export async function generatePersonalPlan(
     "قاعدة إلزامية: موضع الطالب هو آخر نقطة مكتملة بالفعل، ويبدأ التراكم من النقطة التالية. كل ما يظهر تحت (دروس مكتملة) مستبعد من مهام الدراسة الجديدة. لا تعِد شرح درس مكتمل ولا تنشئ له مهمة حل من البداية. اختر حصريًا من (دروس متاحة للتخطيط الجديد فقط)، وأرفق مع كل خطوة معرف المنهج الصحيح داخل curriculumNodeIds. لا تخترع معرفات ولا تستخدم معرف درس مكتمل.",
     "مصدر المرجع له أولوية صارمة داخل كل فرع: استخدم موضع المدرس إذا كان معروفًا، وإلا استخدم موضع الفصل في المدرسة داخل الفرع نفسه. موضع الطالب يظل مستقلًا عن الاثنين. لا تقارن أو تجمع فجوات فروع متوازية، ولا تستخدم رقم التراكم القديم كأنه فجوة مؤكدة.",
     "لا تخلط بين آخر محتوى عام للمدرس، محتوى الكورس المدفوع، موضع ما شرحه المدرس، موضع المدرسة، وما أتمه الطالب. لا تخترع أرقام محاضرات أو أسماء دروس أو مواضع غير مسجلة.",
+    "استخدم تحديثات المدرس العامة الحديثة كإشارات تحتاج مطابقة مع صف الطالب والمادة والمنهج. صنّف الإشارة إلى مراجعة أو محاضرة/شرح جديد أو تغيير موعد أو إلغاء أو إعلان غير دراسي. لا تُدخل محتوى غير متعلق بصف الطالب أو مادته، ولا تجعل المراجعة الاختيارية إلزامًا تلقائيًا.",
+    "إذا أعلنت المصادر بوضوح عن إلغاء أو تأجيل أو تغيير موعد لمحاضرة، أزل التعارض الزمني وأعد توزيع المهام المتأثرة. لا تستنتج الإلغاء من غياب منشور أو مرور الموعد؛ عند غموض الإعلان لا تغيّر الموعد كحقيقة مؤكدة.",
+    "إذا ظهرت مراجعة طويلة، حوّل موضوعاتها إلى أجزاء مرتبطة بمعرفات المنهج المتاحة ووزّعها على جلسات تتناسب مع وقت الطالب وطاقته وصعوبة كل جزء. لا تضع مراجعة طويلة في جلسة واحدة ولا تخترع مدة فيديو غير متاحة.",
     "إذا توفرت مقتطفات مسترجعة من كتاب رسمي، اجعلها المرجع الأول عند تحديد موضوعات الخطة واذكر صفحات PDF في التفاصيل عند الاستناد إليها. المعرفة العامة تستخدم لسد المتطلبات السابقة غير المشروحة وتوضع بوضوح كتمهيد مساند، ولا تنسب للكتاب. إذا كان فهرس مادة غير محمّل فاذكر هذا القيد ولا تخترع محتوى منهجيًا لها.",
     "استخدم ملف المنهج المشتق لكل مادة: أسماء الوحدات والدروس، عدد الصفحات المطبوعة، مؤشر حجم الدرس، وسبب التقدير وطريقة المذاكرة المقترحة. هذا الملف بيانات تحليلية مشتقة من الفهرس وليس نص الكتاب.",
     "عند وجود تقييم شخصي للدرس، اجعله المرجع الأول للصعوبة (difficultyBasis=student_report). إذا وُجدت نتيجة اختبار مرتبطة بالدرس، استخدمها بعد التقييم الشخصي (assessment_history). إذا غاب الاثنان استخدم تقدير المنهج المبدئي (curriculum_profile) مع ثقة منخفضة، وإلا unknown. لا تقدّم أي تقدير أولي على أنه تصنيف رسمي من الوزارة.",
@@ -609,6 +625,7 @@ export async function generatePersonalPlan(
     "الحد الأقصى لوقت الدراسة اليومي هو " + dailyMinutes + " دقيقة. مجموع دقائق الخطوات التي تحمل اسم اليوم نفسه يجب ألا يتجاوز هذا الحد، مع ترك هامش تعويض واقعي.",
     constraints.startDate ? "تاريخ بداية التنفيذ: " + constraints.startDate + "." : "تاريخ البداية يحدده الطالب عند اعتماد الخطة.",
     "احترم سعة اليوم المحددة من الطالب. لا تتجاوزها، ووزع الخطة واقعيًا مع هامش تعويض. إذا نقصت البيانات فاختر بداية تدريجية واذكر الافتراض في الملخص.",
+    "كيّف الخطة مع ظروف الطالب المعلنة: الطاقة المنخفضة تعني جلسات أقصر وعدد أولويات أقل دون ترك الأساسيات، والحالة المعنوية المنخفضة تعني بداية سهلة وتدرجًا واقعيًا، وقيود الموارد تعني عدم تكليف الطالب بأداة أو كتاب أو اتصال غير متاح. لا تقدم تشخيصًا طبيًا أو نفسيًا.",
     "لا تعتبر غياب السجل دليلًا على الإنجاز، ولا توبّخ الطالب.",
     "أخرج JSON صحيحًا فقط بالعربية: title, summary, durationLabel, steps (3-30 عنصرًا، وكل عنصر فيه day,title,detail,minutes,category,curriculumNodeIds,priority,difficulty,lessonSize,difficultyBasis,difficultyConfidence,printedPageRange,sourcePages)، habits (0-5 فيها title,cue), reviewQuestion. يجب أن يحتوي curriculumNodeIds على معرف واحد أو أكثر من الدروس المتاحة التي ترتبط بها الخطوة. printedPageRange نطاق صفحات الكتاب المطبوع [البداية، النهاية] عند توافره فقط؛ sourcePages مراجع PDF المسترجعة فعليًا فقط وتكون [] في غير ذلك. اجعل الملخص واضحًا والتفاصيل مركزة.",
     "كل خطوة يجب أن تحدد المادة والوحدة/الفرع والدرس وطريقة مذاكرته، لا عنوانًا عامًا.",
