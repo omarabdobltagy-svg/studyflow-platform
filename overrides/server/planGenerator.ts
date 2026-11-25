@@ -1078,6 +1078,7 @@ export async function generatePersonalPlan(
   includeStudentProfile = true,
   constraints: {
     dailyMinutes?: number;
+    scope?: "annual" | "daily";
     startDate?: string;
     context?: string;
     pace?: "intensive" | "balanced" | "relaxed";
@@ -1086,6 +1087,7 @@ export async function generatePersonalPlan(
   } = {}
 ): Promise<GeneratedPlan> {
   const dailyMinutes = Math.max(20, Math.min(600, Math.trunc(constraints.dailyMinutes ?? 120)));
+  const planScope = constraints.scope ?? "annual";
   const selectedPace = constraints.pace ?? "balanced";
   const paceLevel = Math.max(1, Math.min(3, Math.trunc(constraints.paceLevel ?? 2))) as 1 | 2 | 3;
   const paceLevelLabels: Record<typeof selectedPace, [string, string, string]> = {
@@ -1181,12 +1183,16 @@ export async function generatePersonalPlan(
     "لا تحوّل منظومة الأداءات الأسبوعية والشهرية إلى دروس منهجية؛ تعامل معها كالتزامات منفصلة يجب تتبع إنجازها لأن لها شرط أهلية مستقلًا، ولا تخلط نسبها مع توزيع درجات ورقة الامتحان.",
     "أخرج JSON صحيحًا فقط بالعربية: title, summary, durationLabel, steps (1-30 عنصرًا، وكل عنصر فيه day,title,detail,minutes,category,curriculumNodeIds,priority,difficulty,lessonSize,difficultyBasis,difficultyConfidence,resourceRecommendation?,printedPageRange,sourcePages)، habits (0-5 فيها title,cue). resourceRecommendation اختياري ولا يُضاف إلا لمصدر مدرس موثق ومطابق حرفيًا لأحد تحديثات الصف الثاني بكالوريا ومفيد لدرس غير مكتمل؛ شكله {title,url,teacherName,reason}. يجب أن يحتوي curriculumNodeIds على معرف واحد أو أكثر من الدروس المتاحة التي ترتبط بها الخطوة. printedPageRange نطاق صفحات الكتاب المطبوع [البداية، النهاية] عند توافره فقط؛ sourcePages مراجع PDF المسترجعة فعليًا فقط وتكون [] في غير ذلك. اجعل الملخص واضحًا والتفاصيل مركزة.",
     "كل خطوة يجب أن تحدد المادة والوحدة/الفرع والدرس وطريقة مذاكرته، لا عنوانًا عامًا.",
+    planScope === "daily"
+      ? "نطاق هذه الخطة يومي: اختر فقط الخطوات القابلة للتنفيذ اليوم ضمن وقت الطالب، وابدأ بأقرب درس غير مكتمل بعد موضعه. لا تنشئ خريطة سنوية ولا تسرد كل المتبقي؛ التغطية السنوية محفوظة في المخطط السنوي المستقل."
+      : "نطاق هذه الخطة سنوي: يجب أن تشمل جميع نقاط المنهج غير المكتملة في كل الفروع والمواد المختارة، وسيضيف النظام أي نقطة لم تغطها الاستجابة الذكية تلقائيًا.",
   ].join("\n");
   const paceLabel = selectedPace === "intensive" ? "مكثفة"
     : selectedPace === "relaxed" ? "مرنة ومريحة" : "متوازنة";
   const user = [
     "طلب الطالب أو هدفه الحالي:",
     prompt.slice(0, 1_200),
+    "نطاق الخطة: " + (planScope === "daily" ? "تشغيل يومي فقط" : "خريطة سنوية كاملة"),
     "تفضيلات الجدولة:",
     "إيقاع الخطة: " + paceLabel,
     "درجة الإيقاع: " + paceLevel + " من 3 — " + paceLevelLabel + ". " + paceLevelInstruction,
@@ -1311,7 +1317,9 @@ export async function generatePersonalPlan(
   plan = applyTeacherLedPlanningGuard(plan);
   if (profile) {
     plan = applyPlannerProgressGuard(plan, profile);
-    plan = applyPlannerCurriculumCoverageGuard(plan, profile);
+    if (planScope === "annual") {
+      plan = applyPlannerCurriculumCoverageGuard(plan, profile);
+    }
   }
   if (profile) {
     plan = applyCurriculumPrioritySignals(plan, profile);
