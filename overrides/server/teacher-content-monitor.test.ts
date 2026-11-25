@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseYoutubeAtomFeed, shouldScanTeacherSource } from "./teacher-content-monitor";
+import { parseYoutubeAtomFeed, parseYoutubeDurationMinutes, shouldScanTeacherSource } from "./teacher-content-monitor";
 
 describe("teacher public channel monitor", () => {
   it("parses public YouTube upload entries and decodes Arabic metadata", () => {
@@ -23,6 +23,12 @@ describe("teacher public channel monitor", () => {
     });
   });
 
+  it("parses YouTube ISO 8601 durations into real session minutes", () => {
+    expect(parseYoutubeDurationMinutes("PT3H58M36S")).toBe(239);
+    expect(parseYoutubeDurationMinutes("PT45M19S")).toBe(46);
+    expect(parseYoutubeDurationMinutes("PT0S")).toBeUndefined();
+    expect(parseYoutubeDurationMinutes("unknown")).toBeUndefined();
+  });
   it("ignores incomplete entries with no stable video identifier", () => {
     const xml = `<feed><entry><title>مراجعة</title><published>2026-11-24T18:00:00Z</published></entry></feed>`;
     expect(parseYoutubeAtomFeed(xml, { teacherId: "T1", teacherName: "مدرس" })).toEqual([]);
