@@ -3,7 +3,7 @@ import CurriculumProgressScene, { type SceneBranch } from "@/components/Curricul
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import {
-  getSIECheckpointBranches,
+  getSIECheckpointProgressBranches,
   getSIECheckpointChoiceDisplayLabel,
   getSIECheckpointProgressOptions,
   getSIESubject,
@@ -58,7 +58,7 @@ export default function CurriculumMap() {
     if (!subjectId && subjects.length) setSubjectId(subjects[0]);
   }, [subjectId, subjects]);
 
-  const branches = useMemo(() => getSIECheckpointBranches(subjectId), [subjectId]);
+  const branches = useMemo(() => getSIECheckpointProgressBranches(subjectId), [subjectId]);
   useEffect(() => {
     if (!branches.length) {
       setSelectedBranchId("");
@@ -75,48 +75,18 @@ export default function CurriculumMap() {
   const subjectGaps = ((learning.data as any)?.gapByBranch?.[subjectId] ?? {}) as Record<string, LearningGap>;
 
   const branchViews: BranchView[] = useMemo(() => branches.map(branch => {
-    const rawGap = subjectGaps[branch.branchId] ?? null;
+    const gap = subjectGaps[branch.branchId] ?? null;
     const saved = branchProgress[branch.branchId] ?? {};
-    const progressOptions = getSIECheckpointProgressOptions(subjectId, branch.branchId);
-    const choices = progressOptions
-      .map(option => {
-        const original = branch.choices.find(choice => choice.nodeId === option.value);
-        return original ? { ...original, title: option.label } : null;
-      })
-      .filter((choice): choice is SIECheckpointChoice => choice !== null);
-
-    // Server positions count source checkpoints. Convert them to visible topic
-    // positions so multi-part topics remain one completed unit in every view.
-    const visiblePosition = (rawPosition: number | null) => rawPosition === null
-      ? null
-      : progressOptions.filter(option => {
-          const rawIndex = branch.choices.findIndex(choice => choice.nodeId === option.value);
-          return rawIndex >= 0 && rawIndex < rawPosition;
-        }).length;
-    const studentPosition = visiblePosition(rawGap?.studentPosition ?? null);
-    const referencePosition = visiblePosition(rawGap?.referencePosition ?? null);
-    const gap = rawGap ? {
-      ...rawGap,
-      studentPosition,
-      referencePosition,
-      gapCount: studentPosition === null || referencePosition === null
-        ? null : Math.max(0, referencePosition - studentPosition),
-      aheadCount: studentPosition === null || referencePosition === null
-        ? null : Math.max(0, studentPosition - referencePosition),
-      studentFrontierTitle: progressOptions.find(option => option.value === rawGap.studentFrontierId)?.label
-        ?? rawGap.studentFrontierTitle,
-      referenceFrontierTitle: progressOptions.find(option => option.value === rawGap.referenceFrontierId)?.label
-        ?? rawGap.referenceFrontierTitle,
-    } : null;
-    const nextLesson = studentPosition !== null && studentPosition >= 0 && studentPosition < choices.length
-      ? choices[studentPosition]
+    const nextIndex = gap?.studentPosition;
+    const nextLesson = typeof nextIndex === "number" && nextIndex >= 0 && nextIndex < branch.choices.length
+      ? branch.choices[nextIndex]
       : null;
     return {
       branchId: branch.branchId,
       branchTitle: branch.branchTitle,
       branchType: branch.branchType,
       pointLabel: branch.branchType === "official_section" ? "موضوع" : "درس",
-      choices,
+      choices: branch.choices,
       gap,
       nextLesson,
       minutesPerLesson: Number.isFinite(Number(saved.estimatedMinutesPerLesson))
@@ -125,7 +95,7 @@ export default function CurriculumMap() {
           ? Number(subjectProgress.estimatedMinutesPerLesson)
           : null,
     };
-  }), [branches, subjectGaps, branchProgress, subjectProgress, subjectId]);
+  }), [branches, subjectGaps, branchProgress, subjectProgress]);
 
   const sceneBranches: SceneBranch[] = useMemo(() => branchViews.map(branch => ({
     branchId: branch.branchId,
