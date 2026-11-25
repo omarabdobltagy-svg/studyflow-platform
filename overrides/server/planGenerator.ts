@@ -4,8 +4,8 @@ import { calculateLearningGap } from "@shared/sie-learning-progress";
 import { invokeLLM, invokeNvidiaLLM } from "./_core/llm";
 import { isPrimaryProviderFallbackEligible } from "./_core/llmFallback";
 import { getStudentProfile, saveAiPlan } from "./db";
-import { formatTextbookEvidence, getCurriculumBranchPriorityGuidance, retrieveTextbookEvidence } from "./textbook-retrieval";
-import { buildExamBlueprintContext, getExamComponentForText, getSubjectExamBlueprint } from "./exam-blueprints";
+import { formatTextbookEvidence, getCurriculumBranchPriorityGuidance, orderPlanStepsByCurriculumDependencies, retrieveTextbookEvidence } from "./textbook-retrieval";
+import { buildExamBlueprintContext, SECOND_YEAR_BAC_EXAM_WINDOW_2026_2027 } from "./exam-blueprints";
 import { isSecondYearBaccalaureateProfile, isSecondYearBaccalaureateUpdate, selectedTeacherIds } from "./teacher-content-monitor";
 
 const planSchema = z.object({
@@ -610,9 +610,6 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
   const teacherStates = (selection.teacherProgressState || {}) as Record<string, Record<string, any>>;
   const lessonProgress = mergeSubjectLessonProgress(selection.subjectLessonProgress, selection.sq3rProgress);
   const courseProgress = (selection.learningCourseProgress || {}) as Record<string, any>;
-  const assessmentHistory = Array.isArray(selection.learningAssessments)
-    ? selection.learningAssessments as Array<Record<string, any>>
-    : [];
   const progressSnapshot = buildPlannerProgressSnapshot(profile);
   const allowedTeacherIds = new Set(selectedTeacherIds(profile));
   const teacherPublicUpdates = isSecondYearBaccalaureateProfile(profile)
@@ -700,12 +697,6 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
       ].join(" | ");
     }).join("\n");
 
-    const recentAssessments = assessmentHistory.filter(item => item.subjectId === subjectId).slice(-5);
-    const assessmentSummary = recentAssessments.map(item =>
-      String(item.assessmentType || "تقييم") + ": " + String(item.scorePercent) + "%"
-      + (Array.isArray(item.weakConcepts) && item.weakConcepts.length
-        ? "؛ نقاط تحتاج تقوية: " + item.weakConcepts.join("، ") : "")
-    ).join(" | ");
     const legacyBacklog = profile.backlog[subjectId] ?? (subject && profile.backlog[subject.nameAr]) ?? null;
     const lessonList = branches.map(branch => {
       const state = progressSnapshot.branches.get(plannerBranchKey(subjectId, branch.branchId));
@@ -720,7 +711,6 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
       "آخر محاضرة/عنصر في كورس المدرس كما أبلغ الطالب: " + (reported.teacherCourseFrontier || "غير محدد"),
       "الوقت التقديري للدرس: " + (reported.estimatedMinutesPerLesson ?? 45) + " دقيقة",
       "صعوبة المادة حسب الطالب: " + (reported.difficulty || "غير محددة"),
-      "نتائج التقييمات الحديثة: " + (assessmentSummary || "لا توجد نتائج مسجلة"),
       "المدرس المختار: " + ((teacher && teacher.nameAr) || teacherId || "لم يحدد"),
       "الدروس المتاحة للخطوات الجديدة ومعرفاتها (لا تختر غيرها): " + (lessonList || "فهرس المنهج غير محمّل"),
       "أحدث محتوى عام معروف للمدرس (ليس مرجع تقدم مدفوع): " + ((teacher && teacher.latestPublicCheckpoint) || "غير متاح"),
@@ -755,10 +745,6 @@ export function applyVerifiedExamComponentWeights(
   const selection = (profile.selection || {}) as Record<string, any>;
   const progress = buildPlannerProgressSnapshot(profile);
   const lessonProgress = mergeSubjectLessonProgress(selection.subjectLessonProgress, selection.sq3rProgress);
-  const assessments = Array.isArray(selection.learningAssessments)
-    ? selection.learningAssessments as Array<Record<string, any>>
-    : [];
-
   const nodeLookup = new Map<string, { subjectId: string; branchId: string; lessonTitle: string; branchLength: number }>();
   for (const subjectId of profile.subjectIds || []) {
     for (const branch of getFirstPartBranches(subjectId)) {
@@ -802,10 +788,6 @@ export function applyVerifiedExamComponentWeights(
     }
 
     const { subjectId, branchId, lessonTitle, branchLength } = curriculumLocation;
-    const subjectName = getSIESubject(subjectId)?.nameAr || subjectId;
-    const sourceText = [lessonTitle, step.title, step.category, step.detail].join(" ");
-    const blueprint = getSubjectExamBlueprint(subjectId, subjectName);
-    const component = getExamComponentForText(subjectId, subjectName, sourceText);
     const branchProgress = progress.branches.get(plannerBranchKey(subjectId, branchId));
 
     const signals: Array<{ key: string; value: number; weight: number; label: string }> = [];
@@ -814,90 +796,46 @@ export function applyVerifiedExamComponentWeights(
       signals.push({
         key: "curriculum_core",
         value: 0.82,
-        weight: 0.18,
-        label: "أولوية تأسيسية معتمدة في توجيه التخطيط: " + (branchPriorityGuidance.rationale || "فرع أساسي") + "؛ هذه إشارة ترتيب داخلية وليست وزن درجات رسميًا.",
+        weight: 0.25,
+        label: "أولوية تأسيسية معتمدة من توجيه المنتج: " + (branchPriorityGuidance.rationale || "فرع أساسي") + "؛ هذه إشارة ترتيب وليست وزن درجات.",
       });
     }
-    const examWeightKnown = Boolean(
-      component && component.assessmentShare !== null && component.marks !== null
-        && blueprint && blueprint.paperMarks !== null
-    );
-    if (examWeightKnown && component && blueprint) {
-      const maximumShare = Math.max(...blueprint.components.map(item => item.assessmentShare ?? 0));
-      if (maximumShare > 0) {
-        const value = Math.max(0, Math.min(1, component.assessmentShare! / maximumShare));
-        signals.push({
-          key: "exam",
-          value,
-          weight: 0.35,
-          label: "وزن " + component.label + " هو " + component.marks + "/" + blueprint.paperMarks
-            + " (" + Math.round(component.assessmentShare! * 100) + "% من ورقة الامتحان السنوي)",
-        });
-      }
-    }
-
     if (branchProgress?.gapCount !== null && branchProgress?.gapCount !== undefined) {
       const value = Math.max(0, Math.min(1, branchProgress.gapCount / Math.max(1, branchLength)));
       signals.push({
         key: "gap",
         value,
-        weight: 0.25,
+        weight: 0.40,
         label: "فجوة الفرع " + branchProgress.gapCount + " نقطة من " + branchLength,
-      });
-    }
-
-    const recentAssessments = assessments
-      .filter(item => item.subjectId === subjectId)
-      .slice(-5);
-    const scoreValues = recentAssessments
-      .map(item => Number(item.scorePercent))
-      .filter(value => Number.isFinite(value) && value >= 0 && value <= 100);
-    const averageScore = scoreValues.length
-      ? scoreValues.reduce((sum, value) => sum + value, 0) / scoreValues.length
-      : null;
-    const weakConcepts = recentAssessments.flatMap(item =>
-      Array.isArray(item.weakConcepts) ? item.weakConcepts.map(String) : []
-    );
-    const normalizedText = normalizePlannerLessonText(sourceText);
-    const matchedWeakConcept = weakConcepts.find(concept => {
-      const normalized = normalizePlannerLessonText(concept);
-      if (!normalized || normalized.length < 3) return false;
-      return normalizedText.includes(normalized) || mentionsCompletedLesson(sourceText, concept);
-    });
-    if (matchedWeakConcept || averageScore !== null) {
-      const value = matchedWeakConcept
-        ? 1
-        : Math.max(0, Math.min(1, (100 - averageScore!) / 100));
-      signals.push({
-        key: "assessment",
-        value,
-        weight: 0.20,
-        label: matchedWeakConcept
-          ? "نقطة ضعف مسجلة: " + matchedWeakConcept
-          : "متوسط آخر " + scoreValues.length + " تقييمات للمادة " + Math.round(averageScore!) + "%",
       });
     }
 
     const lessonRecord = step.curriculumNodeIds
       .map(nodeId => lessonProgress[subjectId]?.[nodeId])
       .find(Boolean) ?? {};
-    const difficulty = step.difficulty !== "unknown" ? step.difficulty : lessonRecord.difficulty;
+    const reportedDifficulty = lessonRecord.difficulty;
+    const difficulty = reportedDifficulty && reportedDifficulty !== "unknown"
+      ? reportedDifficulty
+      : step.difficultyBasis === "student_report" || step.difficultyBasis === "curriculum_profile"
+        ? step.difficulty
+        : "unknown";
     const difficultyValue = difficultySignal(difficulty);
     const sizeValue = sizeSignal(step.lessonSize);
     const effortValue = 0.6 * difficultyValue + 0.4 * sizeValue;
     signals.push({
       key: "effort",
       value: effortValue,
-      weight: 0.10,
-      label: "الصعوبة " + (difficulty === "hard" ? "مرتفعة" : difficulty === "medium" ? "متوسطة" : difficulty === "easy" ? "منخفضة" : "غير مقيمة")
-        + "؛ حجم المحتوى " + (step.lessonSize === "large" ? "كبير" : step.lessonSize === "medium" ? "متوسط" : step.lessonSize === "small" ? "صغير" : "غير محدد"),
+      weight: 0.15,
+      label: "الصعوبة " + (difficulty === "hard" ? "مرتفعة" : difficulty === "medium" ? "متوسطة" : difficulty === "easy" ? "منخفضة" : "غير محسومة")
+        + "؛ حجم المحتوى " + (step.lessonSize === "large" ? "كبير" : step.lessonSize === "medium" ? "متوسط" : step.lessonSize === "small" ? "صغير" : "غير محدد")
+        + (reportedDifficulty ? "؛ توجد إشارة مسجلة من الطالب" : "؛ لا توجد صعوبة مؤكدة من الطالب"),
     });
 
     signals.push({
       key: "urgency",
       value: prioritySignal(step.priority),
-      weight: 0.10,
-      label: "إلحاح المهمة بناءً على سياق الاختبار والتحديثات والمدخلات المتاحة",
+      weight: 0.20,
+      label: "ترتيب المتابعة حسب موضع الطالب والمرجع التعليمي والوقت المتبقي، دون وزن امتحاني مفترض",
     });
 
     const totalWeight = signals.reduce((sum, signal) => sum + signal.weight, 0);
@@ -908,22 +846,14 @@ export function applyVerifiedExamComponentWeights(
       : score >= 0.65 ? "high"
         : score >= 0.42 ? "medium" : "low";
     const hasCalculatedGap = branchProgress?.gapCount !== null && branchProgress?.gapCount !== undefined;
-    const hasAssessmentEvidence = scoreValues.length > 0 || Boolean(matchedWeakConcept);
+    const hasStudentDifficulty = Boolean(lessonRecord.difficulty && lessonRecord.difficulty !== "unknown");
     const hasBranchPriorityGuidance = branchPriorityGuidance?.tier === "core";
-    const priorityEvidenceConfidence = examWeightKnown && (hasCalculatedGap || hasAssessmentEvidence || hasBranchPriorityGuidance)
+    const priorityEvidenceConfidence = hasCalculatedGap && (hasStudentDifficulty || hasBranchPriorityGuidance)
       ? "high" as const
-      : hasCalculatedGap || hasAssessmentEvidence || hasBranchPriorityGuidance
+      : hasCalculatedGap || hasStudentDifficulty || hasBranchPriorityGuidance
         ? "medium" as const
         : "low" as const;
-    const partialExamMarkNote = component && component.marks !== null
-      && component.assessmentShare === null && blueprint?.paperMarks !== null && blueprint?.paperMarks !== undefined
-      ? "درجة المكوّن المنشورة " + component.marks + "/" + blueprint.paperMarks
-        + "، لكنها معلومة جزئية لا تدخل في الحساب لأن إجمالي التوزيع المتاح غير متطابق؛ يلزم مراجعة جدول المواصفة الأصلي."
-      : null;
-    const priorityReason = [
-      ...signals.map(signal => signal.label),
-      ...(partialExamMarkNote ? [partialExamMarkNote] : []),
-    ].join("؛ ").slice(0, 500);
+    const priorityReason = signals.map(signal => signal.label).join("؛ ").slice(0, 500);
 
     return {
       index,
@@ -935,11 +865,9 @@ export function applyVerifiedExamComponentWeights(
         priorityScore: Math.round(score * 100),
         priorityReason,
         priorityEvidenceConfidence,
-        ...(component && component.marks !== null && blueprint?.paperMarks !== null && blueprint?.paperMarks !== undefined ? {
-          examComponentLabel: component.label,
-          examComponentMarks: component.marks,
-          examPaperMarks: blueprint.paperMarks,
-        } : {}),
+        ...(reportedDifficulty && reportedDifficulty !== "unknown"
+          ? { difficulty: reportedDifficulty, difficultyBasis: "student_report" as const, difficultyConfidence: "high" as const }
+          : {}),
       },
     };
   });
@@ -1052,13 +980,13 @@ export async function generatePersonalPlan(
     : "لم يطلب المستخدم تخصيص الخطة بالملف الدراسي.").slice(0, 13_000);
   const system = [
     "أنت محرك التخطيط الدراسي داخل StudyFlow، ولست مساعد دردشة عام.",
-    "جودة الخطة لا تعتمد على قوة صياغة الطالب أو طول طلبه. استخرج النية حتى لو كان الطلب قصيرًا أو عاميًا أو غير مرتب، ثم استعن تلقائيًا بكل بيانات الملف الدراسي والمنهج والتراكم والتقدم والتقييمات والسياق المتاح لبناء أفضل خطة عملية ممكنة.",
+    "جودة الخطة لا تعتمد على قوة صياغة الطالب أو طول طلبه. استخرج النية حتى لو كان الطلب قصيرًا أو عاميًا أو غير مرتب، ثم استعن تلقائيًا ببيانات الملف والمنهج والتراكم والتقدم وسجل تنفيذ المهام والصعوبة التي صرّح بها الطالب والسياق المتاح.",
     "لا تطلب من الطالب إعادة كتابة بيانات موجودة في ملفه، ولا تنتظر منه هندسة برومبت احترافي. افترض أقل قدر ممكن، واذكر الافتراضات المؤثرة فقط داخل الملخص، ولا تخترع بيانات ناقصة.",
-    "حلّل فجوة المنهج المحسوبة تلقائيًا لكل فرع مستقل داخل المادة، وموضع الطالب وموضع التدريس المرجعي داخل الفرع نفسه، وسجل إنجاز المذاكرة وصعوبة الدروس والنتائج المحفوظة مسبقًا؛ ثم ابنِ خطة متابعة عملية.",
+    "حلّل فجوة المنهج لكل فرع مستقل، وموضع الطالب مقابل موضع المدرس في الفرع نفسه، وما أكمله الطالب وما أجّله فعليًا، والصعوبة المسجلة من الطالب. لا تجمع فجوات الفروع المستقلة ولا تستنتج سلوكًا من غياب البيانات.",
     "حدود مسؤولية أساسية: StudyFlow مخطط ومتابع للتقدم، وليس مدرسًا أو منصة امتحانات. المهارات والأهداف التعليمية الواردة في الكتب تُستخدم لفهم طبيعة الدرس وترابطه فقط؛ المدرس هو من يشرح هذه المهارات ويدرّب الطالب عليها ويقيّمها.",
     "ممنوع أن تنشئ للطالب اختبارًا أو كويزًا أو أسئلة مراجعة أو سؤال استرجاع أو اختبارًا تشخيصيًا أو مهمة لقياس إتقان مهارة. لا تطلب من الطالب الإجابة عن أسئلة من المنهج، ولا تمنحه درجة أو حكم إتقان من خلال أسئلة يولدها النظام.",
     "المهام التي يجوز أن تقترحها: متابعة محاضرة مدرس معروفة، مراجعة الصفحات أو الملاحظات المرتبطة بشرح المدرس، أو تنفيذ واجب/تدريب عيّنه المدرس بالفعل وكان الطالب أو سجله قد أشار إليه. لا تخترع واجبًا أو مجموعة أسئلة أو تدريبًا من عندك. عند غياب واجب موثق لا تعوّضه باختبار من إنشاء النظام.",
-    "يمكن الاستفادة من نتيجة مسجلة سابقًا في الملف كإشارة تاريخية للتخطيط فقط؛ لا تنشئ تقييمًا جديدًا للحصول على هذه النتيجة ولا تدّعِ أن StudyFlow قاس مستوى الطالب.",
+    "لا تستخدم أي درجات أو نتائج اختبار في حساب الأولوية ما لم يكن مصدرها موثقًا بوضوح على أنها من المدرس أو منصة تعليمية خارجية. في هذه المرحلة لا يعتمد المحرك على نتائج غير موثقة المصدر، ولا ينشئ تقييمًا جديدًا للحصول على بيانات عن الطالب.",
     "قاعدة إلزامية: موضع الطالب هو آخر نقطة مكتملة بالفعل، ويبدأ التراكم من النقطة التالية. كل ما يظهر تحت (دروس مكتملة) مستبعد من مهام الدراسة الجديدة. لا تعِد شرح درس مكتمل ولا تنشئ له مهمة حل من البداية. اختر حصريًا من (دروس متاحة للتخطيط الجديد فقط)، وأرفق مع كل خطوة معرف المنهج الصحيح داخل curriculumNodeIds. لا تخترع معرفات ولا تستخدم معرف درس مكتمل.",
     "مصدر المرجع له أولوية صارمة داخل كل فرع: استخدم موضع المدرس إذا كان معروفًا، وإلا استخدم موضع الفصل في المدرسة داخل الفرع نفسه. موضع الطالب يظل مستقلًا عن الاثنين. لا تقارن أو تجمع فجوات فروع متوازية، ولا تستخدم رقم التراكم القديم كأنه فجوة مؤكدة.",
     "لا تخلط بين آخر محتوى عام للمدرس، محتوى الكورس المدفوع، موضع ما شرحه المدرس، موضع المدرسة، وما أتمه الطالب. لا تخترع أرقام محاضرات أو أسماء دروس أو مواضع غير مسجلة.",
@@ -1070,8 +998,8 @@ export async function generatePersonalPlan(
     "إذا ظهرت مراجعة طويلة، حوّل موضوعاتها إلى أجزاء مرتبطة بمعرفات المنهج المتاحة ووزّعها على جلسات تتناسب مع وقت الطالب وطاقته وصعوبة كل جزء. لا تضع مراجعة طويلة في جلسة واحدة ولا تخترع مدة فيديو غير متاحة.",
     "إذا توفرت مقتطفات مسترجعة من كتاب رسمي، اجعلها المرجع الأول عند تحديد موضوعات الخطة واذكر صفحات PDF في التفاصيل عند الاستناد إليها. المعرفة العامة تستخدم لسد المتطلبات السابقة غير المشروحة وتوضع بوضوح كتمهيد مساند، ولا تنسب للكتاب. إذا كان فهرس مادة غير محمّل فاذكر هذا القيد ولا تخترع محتوى منهجيًا لها.",
     "استخدم ملف المنهج المشتق لكل مادة: أسماء الوحدات والدروس، عدد الصفحات المطبوعة، مؤشر حجم الدرس، وسبب التقدير وطريقة المذاكرة المقترحة. هذا الملف بيانات تحليلية مشتقة من الفهرس وليس نص الكتاب.",
-    "عند وجود تقييم شخصي للدرس، اجعله المرجع الأول للصعوبة (difficultyBasis=student_report). إذا وُجدت نتيجة اختبار مرتبطة بالدرس، استخدمها بعد التقييم الشخصي (assessment_history). إذا غاب الاثنان استخدم تقدير المنهج المبدئي (curriculum_profile) مع ثقة منخفضة، وإلا unknown. لا تقدّم أي تقدير أولي على أنه تصنيف رسمي من الوزارة.",
-    "رتّب الأولويات بمحرك متعدد المعايير، لا بترتيب فهرس الكتاب وحده: 35% لوزن المكوّن في ورقة امتحان نهاية السنة عندما يكون التوزيع السنوي معتمدًا وموثقًا، و25% لفجوة الطالب داخل الفرع والمتطلبات السابقة، و20% لنتائج الاختبارات ونقاط الضعف المسجلة، و10% لصعوبة المفهوم وحجم العبء، و10% لقرب الموعد والتغييرات الدراسية المؤكدة من المدرس. هذه أوزان داخلية لترتيب الخطة وليست توزيع درجات رسميًا. إذا كان وزن جزء غير معروف فلا تخترع رقمًا؛ أعد توزيع أثره على الأدلة المتاحة واخفض الثقة. طاقة الطالب تغيّر طول الجلسة وعدد المهام اليومية، ولا تلغي أهمية جزء امتحاني عالي الوزن.",
+    "عند وجود صعوبة صرّح بها الطالب، استخدمها أولًا (difficultyBasis=student_report) وثقة مرتفعة كمعلومة ذاتية. إذا لم توجد، استخدم تقدير حجم/كثافة المحتوى المستنتج من الكتاب فقط مع difficultyBasis=curriculum_profile وثقة منخفضة. لا تقدّم أي تقدير أولي على أنه تصنيف رسمي من الوزارة، ولا تستنتج صعوبة الطالب من نتائج لم يصرّح بها.",
+    "رتّب الأولويات دون اختراع أوزان امتحانية: ابدأ بموضع الطالب مقابل موضع المدرس داخل الفرع، ثم المتطلبات المعرفية الحقيقية، والتكليفات المعروفة وموعدها، وقواعد أولوية الفرع التي أكدها المنتج، ثم حجم المحتوى والصعوبة التي سجلها الطالب. عندما لا توجد مواصفة رسمية للدرجات، لا تستخدم أي نسبة أو عدد أسئلة كعامل رقمي. في التاريخ والبرمجة يجب أن تبقى كل الدروس غير المكتملة ضمن التغطية السنوية. طاقة الطالب تحدد عدد المهام وطول الجلسة، ولا تحذف المحتوى.",
     "الهدف الامتحاني الافتراضي لكل المواد هو امتحان نهاية السنة في الصف الثاني بكالوريا. لا يوجد امتحان ترم أول في هذا المسار؛ لذلك لا تنشئ خطة أو أولوية على أساس امتحان ترم أول، ولا تستخدم توزيع درجات منشورًا لفترة أخرى. لا تضف وزنًا امتحانيًا رقميًا لأي فرع إلا إذا وُجدت مواصفة رسمية تخص الامتحان السنوي نفسه.",
     "استخدم توجيهات أنماط السؤال في بيانات الكتب كإشارات نوعية لمعرفة المهارات التي تحظى باهتمام، وليس لنسخ شكل امتحان: لا تنقل عدد الأسئلة أو نوعها أو توزيع الدرجات أو نسب الاختياري والمقالي أو أوزان الصف الثالث إلى البكالوريا، ولا تستنتج درجة غير موثقة للفقرة أو القصة. لا تنشئ أسئلة من أي نمط مهما كانت أهميته؛ دور هذه البيانات هو ترتيب متابعة المحتوى فقط.",
     "في العربي، احترم إشارة الأولوية التأسيسية لفرع النحو كما هي معرفة في بيانات المنتج، مع بقاء البلاغة والقراءة والنصوص والتعبير والإملاء والأدب فروعًا مستقلة كما في الكتالوج. في الإنجليزي، امنح القواعد والمفردات إشارة أولوية تأسيسية مستندة إلى توجيه المنتج وأنماط السؤال المهاري العامة في الثانوية العامة، دون نقل عدد الأسئلة أو توزيع درجات الصف الثالث إلى البكالوريا.",
@@ -1082,9 +1010,9 @@ export async function generatePersonalPlan(
     "قسّم عبء المتابعة بحسب حجم الدرس: مشاهدة المحاضرة على أجزاء، أو قراءة الصفحات التي عيّنها المدرس، أو مراجعة ملاحظات الطالب. لا تحوّل مهارات الدرس إلى أنشطة اختبار أو قياس إتقان من إنشاء النظام.",
     "يمكن إدراج الحل أو التدريب فقط عندما يكون واجبًا محددًا من المدرس أو مهمة ذكر الطالب أنه مكلف بها. لا تضف أسئلة أو أوراق عمل أو اختبارات تدريبية من عندك.",
     "أخرج خطة عملية مفصلة من 6 إلى 20 خطوة عادةً، ويمكن أن تصل إلى 30 خطوة عندما يتطلب التراكم ذلك. كل خطوة قصيرة وواضحة وقابلة للتنفيذ؛ لا تكتب فقرات طويلة.",
-    "موعد امتحان نهاية السنة الثابت هو 12 يونيو 2027 (2027-06-12). لا تستبدله بموعد آخر؛ جهّز الخطة للاستعداد قبل هذا التاريخ واترك هامش مراجعة.",
+    "نافذة الامتحانات التقريبية التي أكدها المستخدم من 12 يونيو 2027 إلى 22 يونيو 2027. ليست هذه مواصفة وزارة نهائية ولا يومًا واحدًا ثابتًا. استهدف إتمام التغطية الأساسية قبل 11 يونيو 2027 لتوفير هامش داخل النافذة، واذكر أن النافذة تقريبية.",
     "إيقاع الخطة الذي اختاره الطالب: " + (constraints.pace === "intensive" ? "مكثفة؛ زد كثافة الجلسات ضمن وقت الطالب اليومي مع الحفاظ على فواصل المراجعة والراحة." : constraints.pace === "relaxed" ? "مريحة؛ وزع الحمل على فترة أطول وجلسات أخف مع عدم إسقاط المتطلبات الأساسية." : "متوازنة؛ تقدم ثابت وحمل يومي متوسط مع مساحة للمراجعة والتعويض.") + ".",
-    constraints.deadline ? "الموعد الشخصي الإضافي: " + constraints.deadline + ". إذا سبق موعد الامتحان فاجعله هدف الإنجاز الداخلي، مع بقاء 12 يونيو 2027 موعد الامتحان الرسمي؛ ولا تتجاوز الموعد الرسمي." : "لا يوجد موعد شخصي إضافي؛ اعتمد امتحان 12 يونيو 2027 موعدًا نهائيًا.",
+    constraints.deadline ? "الموعد الشخصي الإضافي: " + constraints.deadline + ". إذا كان أسبق من 11 يونيو فاجعله هدف الإنجاز الداخلي؛ لا تعتبره موعد الامتحان الرسمي." : "لا يوجد موعد شخصي إضافي؛ استهدف إتمام المحتوى الأساسي قبل 11 يونيو 2027 تحسبًا لنافذة الامتحانات التقريبية من 12 إلى 22 يونيو 2027.",
     "الحد الأقصى لوقت الدراسة اليومي هو " + dailyMinutes + " دقيقة. مجموع دقائق الخطوات التي تحمل اسم اليوم نفسه يجب ألا يتجاوز هذا الحد، مع ترك هامش تعويض واقعي.",
     constraints.startDate ? "تاريخ بداية التنفيذ: " + constraints.startDate + "." : "تاريخ البداية يحدده الطالب عند اعتماد الخطة.",
     "احترم سعة اليوم المحددة من الطالب. لا تتجاوزها، ووزع الخطة واقعيًا مع هامش تعويض. إذا نقصت البيانات فاختر بداية تدريجية واذكر الافتراض في الملخص.",
@@ -1103,7 +1031,7 @@ export async function generatePersonalPlan(
     "إيقاع الخطة: " + paceLabel,
     "متوسط الوقت المتاح يوميًا: " + dailyMinutes + " دقيقة",
     "الموعد الشخصي الإضافي: " + (constraints.deadline || "لا يوجد"),
-    "موعد امتحان نهاية السنة الثابت: 12 يونيو 2027 (2027-06-12)",
+    "نافذة امتحانات نهاية السنة التقريبية: 12–22 يونيو 2027؛ هدف جاهزية المحتوى الأساسي: 11 يونيو 2027",
     additionalContext ? "\nالسياق الإضافي الذي يجب دمجه في القرار:\n" + additionalContext : "",
     "\nبيانات الملف الدراسي الحالية:",
     context,
@@ -1224,9 +1152,7 @@ export async function generatePersonalPlan(
   if (profile) {
     plan = applyVerifiedExamComponentWeights(plan, profile);
     plan = applyVerifiedTeacherResourceRecommendations(plan, profile);
-  }
-  if (profile) {
-    plan = applyVerifiedExamComponentWeights(plan, profile);
+    plan = orderPlanStepsByCurriculumDependencies(plan);
   }
 
   // A model may suggest a page number that was not actually retrieved from an indexed
@@ -1256,7 +1182,7 @@ export async function generatePersonalPlan(
     }),
   };
 
-  const examDeadline = "2027-06-12";
+  const examDeadline = SECOND_YEAR_BAC_EXAM_WINDOW_2026_2027.planningReadyBy;
   const effectiveDeadline = constraints.deadline && constraints.deadline < examDeadline
     ? constraints.deadline
     : examDeadline;
@@ -1266,9 +1192,10 @@ export async function generatePersonalPlan(
   const availableDays = Number.isFinite(startUtc) && Number.isFinite(endUtc)
     ? Math.max(0, Math.floor((endUtc - startUtc) / 86_400_000) + 1)
     : 0;
+  const examWindowLabel = SECOND_YEAR_BAC_EXAM_WINDOW_2026_2027.start + " إلى " + SECOND_YEAR_BAC_EXAM_WINDOW_2026_2027.end;
   const feasibilityNote = scheduleDay > availableDays
-    ? "تنبيه الجدوى: التوزيع الحالي يحتاج نحو " + scheduleDay + " أيام دراسة، بينما المتاح حتى الموعد المختار " + availableDays + " يومًا. لم نحذف دروسًا لإخفاء الفجوة؛ زِد وقتك اليومي أو اختر إيقاعًا أكثر كثافة، وراجع هذا التقدير قبل الاعتماد."
-    : "تقدير الجدول الأولي: يمكن توزيع الخطوات على " + scheduleDay + " أيام دراسة ضمن المدة المتاحة حتى " + effectiveDeadline + "، بافتراض توفر الوقت اليومي الذي حددته.";
+    ? "تنبيه الجدوى: التوزيع الحالي يحتاج نحو " + scheduleDay + " أيام دراسة، بينما المتاح حتى هدف الجاهزية " + availableDays + " يومًا. لم نحذف دروسًا لإخفاء الفجوة. نافذة الامتحانات التقريبية " + examWindowLabel + "؛ راجع الوقت المتاح أو كثافة الخطة قبل الاعتماد."
+    : "تقدير الجدوى: يمكن توزيع الخطوات على " + scheduleDay + " أيام دراسة حتى هدف الجاهزية " + effectiveDeadline + ". نافذة الامتحانات التقريبية " + examWindowLabel + "، وأُبقي هامش استعداد قبل بدايتها.";
   plan = {
     ...plan,
     summary: (plan.summary + "\\n\\n" + feasibilityNote).slice(0, 1_500),
