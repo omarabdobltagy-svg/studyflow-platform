@@ -82,7 +82,6 @@ const arabicFirstTerm: SubjectExamBlueprint = {
   ],
   sourceUrls: [
     "https://shbabbek.com/show/287545",
-    "https://www.almasryalyoum.com/news/details/4406783",
   ],
 };
 
@@ -105,8 +104,7 @@ const historyPolicy: SubjectExamBlueprint = {
     "توجد مواصفة ورقة امتحانية للفصل الأول 2026/2027 منشورة بتاريخ 21 نوفمبر 2026؛ لم يُعتمد منها توزيع رقمي تفصيلي في هذه النسخة.",
   ],
   sourceUrls: [
-    "https://aloostaz.com/eg/manahej/thanawi/saf-2/term-1/",
-    "https://nceee.edu.eg/puplic/images/nceee/pdf/MOASFAT2023/T-3-C.pdf",
+    "https://aloostaz.com/eg/manahej/thanawi/saf-2/term-1/التاريخ/مواصفات-الورقة-الامتحانية-التاريخ-الصف-الثاني-الثانوي-الت-وزارة-التربية-والتعليم",
   ],
 };
 
