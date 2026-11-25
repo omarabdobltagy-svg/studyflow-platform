@@ -1,4 +1,4 @@
-import { getSIETeacher } from "@shared/sie-catalog";
+import { getSIETeacher, SIE_CATALOG_META } from "@shared/sie-catalog";
 
 export type TeacherPublicUpdate = {
   externalId: string;
@@ -84,17 +84,38 @@ export function shouldScanTeacherSource(lastScannedAt: string | undefined, now =
   return !Number.isFinite(timestamp) || timestamp > now || now - timestamp >= SOURCE_SCAN_INTERVAL_MS;
 }
 
-export function selectedTeacherIds(profile: {
+export type TeacherMonitoringProfile = {
+  educationSystem?: string;
+  gradeYear?: string;
+  subjectIds?: string[];
   teacherSelections?: Record<string, string>;
   selection?: Record<string, any>;
-}) {
+};
+
+export function isSecondYearBaccalaureateProfile(profile: TeacherMonitoringProfile): boolean {
+  return profile.educationSystem === "baccalaureate"
+    && String(profile.gradeYear ?? "").trim() === SIE_CATALOG_META.gradeYear
+    && Array.isArray(profile.subjectIds)
+    && profile.subjectIds.some(subjectId => /_G2_BAC$/.test(subjectId));
+}
+
+export function selectedTeacherIds(profile: TeacherMonitoringProfile): string[] {
+  if (!isSecondYearBaccalaureateProfile(profile)) return [];
   const selection = profile.selection ?? {};
   const choices = {
     ...(profile.teacherSelections ?? {}),
     ...((selection.teacherChoices && typeof selection.teacherChoices === "object") ? selection.teacherChoices : {}),
   } as Record<string, string>;
-  return [...new Set(Object.values(choices))]
-    .filter((id): id is string => typeof id === "string" && !!id && id !== "__SKIP__" && id !== "__DEFERRED__");
+  const subjectIds = new Set(profile.subjectIds ?? []);
+  const validTeacherIds = Object.entries(choices).flatMap(([subjectId, teacherId]) => {
+    if (!subjectIds.has(subjectId) || !/_G2_BAC$/.test(subjectId)) return [];
+    if (typeof teacherId !== "string" || !teacherId || teacherId === "__SKIP__" || teacherId === "__DEFERRED__") return [];
+    const teacher = getSIETeacher(teacherId);
+    const courseStatus = teacher?.systemCourseVerification?.EG_BACCALAUREATE;
+    if (!teacher || !teacher.subjectIds.includes(subjectId) || !courseStatus || courseStatus === "not_verified_for_2026_2027") return [];
+    return [teacherId];
+  });
+  return [...new Set(validTeacherIds)];
 }
 
 function configuredFacebookPageIds(): Record<string, string> {
@@ -206,11 +227,7 @@ async function fetchJson(url: string, accessToken?: string) {
 }
 
 export async function scanSelectedTeacherSources(
-  profile: {
-    teacherName?: string;
-    teacherSelections?: Record<string, string>;
-    selection?: Record<string, any>;
-  },
+  profile: TeacherMonitoringProfile,
   now = new Date(),
 ): Promise<TeacherSourceScanResult> {
   const selection = profile.selection ?? {};
@@ -218,6 +235,9 @@ export async function scanSelectedTeacherSources(
     ? selection.teacherPublicScanState as Record<string, string>
     : {};
   const selectedIds = selectedTeacherIds(profile);
+  if (!isSecondYearBaccalaureateProfile(profile) || selectedIds.length === 0) {
+    return { updates: [], scanState: previousState };
+  }
   const youtubeApiKey = process.env.YOUTUBE_API_KEY?.trim() ?? "";
   if (youtubeApiKey) await probeYoutubeApiKey(youtubeApiKey, now.getTime());
   const facebookPages = configuredFacebookPageIds();
