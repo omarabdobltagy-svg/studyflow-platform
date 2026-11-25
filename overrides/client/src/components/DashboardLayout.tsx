@@ -7,6 +7,8 @@ import QueryErrorNotice from "@/components/QueryErrorNotice";
 import BrandMark from "@/components/BrandMark";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
+import StudyOrbScene from "@/components/StudyOrbScene";
+import { gsap } from "gsap";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
   BarChart3, BookOpenCheck, BookOpenText, BrainCircuit, CalendarDays, CalendarRange, MessageCircle, Network,
@@ -14,7 +16,7 @@ import {
   Menu, Moon, Settings2, Sparkles, Sun,
 } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 
 type NavigationGroup = {
@@ -77,6 +79,7 @@ export default function DashboardLayout({ title, description, children, action }
   });
   const [location, setLocation] = useLocation();
   const [isMobileNavOpen, setMobileNavOpen] = useState(false);
+  const pageContentRef = useRef<HTMLDivElement>(null);
   // Keep the top dock focused on the few destinations students use every day.
   // The full navigation remains available in the sidebar and the mobile "sections" sheet.
   const desktopDockItems = [
@@ -89,6 +92,17 @@ export default function DashboardLayout({ title, description, children, action }
   const studentProfile = trpc.studentProfile.get.useQuery(undefined, { enabled: Boolean(user) });
   const { theme, toggleTheme } = useTheme();
   const reduceMotion = useReducedMotion();
+
+  useEffect(() => {
+    if (reduceMotion || !pageContentRef.current) return;
+    const context = gsap.context(() => {
+      const headings = gsap.utils.toArray<HTMLElement>(".sf-main h1, .sf-main h2, .sf-main .eyebrow");
+      const cards = gsap.utils.toArray<HTMLElement>(".sf-main .app-card");
+      if (headings.length) gsap.fromTo(headings, { y: 12, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, stagger: 0.035, ease: "power3.out", clearProps: "transform,opacity" });
+      if (cards.length) gsap.fromTo(cards, { y: 17, opacity: 0 }, { y: 0, opacity: 1, duration: 0.58, stagger: 0.055, ease: "power3.out", delay: 0.04, clearProps: "transform,opacity" });
+    }, pageContentRef);
+    return () => context.revert();
+  }, [location, reduceMotion]);
 
   useEffect(() => {
     if (user && studentProfile.isSuccess && studentProfile.data == null && location !== "/onboarding") {
@@ -119,6 +133,7 @@ export default function DashboardLayout({ title, description, children, action }
 
   if (!user) return (
     <div className="sf-login-screen sf-shell-v3">
+      <StudyOrbScene className="sf-login-3d" />
       <div className="sf-login-frame sf-login-frame-v4">
         <section className="sf-login-form-side">
           <div className="sf-login-form-card">
@@ -239,6 +254,7 @@ export default function DashboardLayout({ title, description, children, action }
 
   return (
     <div className="sf-app-shell sf-shell-v3">
+      <StudyOrbScene className="sf-workspace-3d" />
       <div className="sf-app-frame" data-page={pageKey}>
         <div className="sf-app-main">
           <motion.header
@@ -309,7 +325,7 @@ export default function DashboardLayout({ title, description, children, action }
               exit={reduceMotion ? undefined : { opacity: 0, y: -10, filter: "blur(3px)" }}
               transition={{ duration: reduceMotion ? 0 : 0.34, ease: [0.22, 1, 0.36, 1] }}
             >
-              <div className={"sf-page sf-page-" + pageKey} data-page={pageKey}>
+              <div ref={pageContentRef} className={"sf-page sf-page-" + pageKey} data-page={pageKey}>
                 {studentProfile.isError && (
                   <QueryErrorNotice onRetry={() => void studentProfile.refetch()} label="تعذّر التحقق من ملفك الدراسي. بياناتك لم تُحذف؛ أعد المحاولة." />
                 )}
