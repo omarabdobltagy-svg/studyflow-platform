@@ -614,6 +614,16 @@ function PlanCard({
   const dayCount = new Set(plan.steps.map(step => step.day || "غير مجدول")).size;
   const highPriorityCount = plan.steps.filter(step => step.priority === "critical" || step.priority === "high").length;
   const firstStep = plan.steps[0];
+  const dayGroups: Array<{ day: string; steps: Array<{ step: PlanStep; index: number }> }> = [];
+  plan.steps.forEach((step, index) => {
+    const day = step.day || "غير مجدول";
+    let group = dayGroups.find(item => item.day === day);
+    if (!group) {
+      group = { day, steps: [] };
+      dayGroups.push(group);
+    }
+    group.steps.push({ step, index });
+  });
   const priorityLabel = (value?: string) => value === "critical" ? "عاجل" : value === "high" ? "أولوية عالية" : value === "low" ? "منخفضة" : "متوسطة";
   const difficultyLabel = (value?: string) => value === "hard" ? "صعب" : value === "easy" ? "سهل" : value === "medium" ? "متوسط" : "غير محدد";
   return (
@@ -674,84 +684,87 @@ function PlanCard({
             {editable && <Button type="button" size="sm" variant="outline" className="rounded-lg" onClick={onAddStep}><Plus className="size-4" />إضافة مهمة</Button>}
           </div>
 
-          <div className="space-y-3">
-            {plan.steps.map((step, index) => (
-              <div key={`step-group-${index}`}>
-                {(index === 0 || plan.steps[index - 1]?.day !== step.day) && (
-                  <div className="mb-3 mt-5 flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2">
-                    <h4 className="text-sm font-bold">{step.day || `اليوم ${index + 1}`}</h4>
-                    <span className="text-[11px] text-muted-foreground">
-                      {plan.steps.filter(item => (item.day || "غير مجدول") === (step.day || "غير مجدول")).length} مهام · {formatStudyDuration(plan.steps.filter(item => (item.day || "غير مجدول") === (step.day || "غير مجدول")).reduce((sum, item) => sum + item.minutes, 0))}
-                    </span>
-                  </div>
-                )}
-              <article className="rounded-xl border border-border/70 bg-muted/15 p-4">
-                <div className="flex flex-wrap items-center gap-2 text-xs">
-                  <span className="rounded-lg bg-secondary px-2 py-1 font-semibold text-primary">{step.category}</span>
-                  {step.priority && <span className="mr-auto rounded-lg border border-border bg-background px-2 py-1">{priorityLabel(step.priority)}</span>}
-                </div>
-
-                {editable ? (
-                  <>
-                    <label className="mt-3 block text-[11px] font-semibold text-muted-foreground">عنوان المهمة</label>
-                    <input
-                      value={step.title}
-                      onChange={event => onChange({ ...plan, steps: plan.steps.map((item, itemIndex) => itemIndex === index ? { ...item, title: event.target.value } : item) })}
-                      className="mt-1 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm font-semibold outline-none focus:border-primary/50"
-                    />
-                    <label className="mt-3 block text-[11px] font-semibold text-muted-foreground">تفاصيل التنفيذ</label>
-                    <Textarea
-                      value={step.detail}
-                      onChange={event => onChange({ ...plan, steps: plan.steps.map((item, itemIndex) => itemIndex === index ? { ...item, detail: event.target.value } : item) })}
-                      className="mt-1 min-h-20 rounded-lg bg-background text-sm leading-6"
-                    />
-                    <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
-                      <div>
-                        <label className="block text-[11px] font-semibold text-muted-foreground">المدة بالدقائق</label>
-                        <input
-                          type="number"
-                          min={5}
-                          max={480}
-                          step={5}
-                          value={step.minutes}
-                          onChange={event => {
-                            const minutes = Number(event.target.value);
-                            onChange({ ...plan, steps: plan.steps.map((item, itemIndex) => itemIndex === index ? { ...item, minutes: Number.isFinite(minutes) ? Math.max(5, Math.min(480, minutes)) : 5 } : item) });
-                          }}
-                          className="mt-1 h-10 w-28 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-primary/50"
-                        />
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Button type="button" variant="ghost" size="icon" className="size-8" disabled={index === 0} onClick={() => onMoveStep(index, -1)} aria-label="نقل المهمة لأعلى"><ArrowUp className="size-4" /></Button>
-                        <Button type="button" variant="ghost" size="icon" className="size-8" disabled={index === plan.steps.length - 1} onClick={() => onMoveStep(index, 1)} aria-label="نقل المهمة لأسفل"><ArrowDown className="size-4" /></Button>
-                        <Button type="button" variant="ghost" size="icon" className="size-8 text-destructive hover:text-destructive" disabled={plan.steps.length <= 1} onClick={() => onRemoveStep(index)} aria-label="حذف المهمة"><X className="size-4" /></Button>
-                      </div>
+           <div className="space-y-3">
+            {dayGroups.map((group, groupIndex) => (
+              <details key={group.day} open={groupIndex === 0} className="overflow-hidden rounded-2xl border border-border/70 bg-card">
+                <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 px-4 py-3 transition hover:bg-muted/30 [&::-webkit-details-marker]:hidden">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-secondary text-sm font-bold text-primary">{groupIndex + 1}</span>
+                    <div className="min-w-0">
+                      <h4 className="font-bold">{group.day}</h4>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">{group.steps.length} مهام · {formatStudyDuration(group.steps.reduce((sum, item) => sum + item.step.minutes, 0))}</p>
                     </div>
-                  </>
-                ) : (
-                  <>
-                    <h4 className="mt-3 font-semibold">{step.title}</h4>
-                    <p className="mt-1 text-sm leading-7 text-muted-foreground">{step.detail}</p>
-                    <p className="mt-2 text-xs text-muted-foreground">{step.minutes} دقيقة</p>
-                  </>
-                )}
-
-                {step.priorityReason && <p className="mt-2 border-t border-border/60 pt-2 text-xs leading-6 text-muted-foreground">سبب الأولوية: {step.priorityReason}</p>}
-                {step.resourceRecommendation && (
-                  <a href={step.resourceRecommendation.url} target="_blank" rel="noreferrer" className="mt-3 inline-flex max-w-full flex-wrap items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs font-semibold text-primary hover:bg-primary/10">
-                    <ArrowUpRight className="size-3.5" />
-                    مشاهدة مقترحة من {step.resourceRecommendation.teacherName || "المدرس"}: {step.resourceRecommendation.title}
-                    <span className="font-normal text-muted-foreground">— {step.resourceRecommendation.reason}</span>
-                  </a>
-                )}
-                <div className="mt-3 flex flex-wrap gap-1.5 text-[10px] text-muted-foreground">
-
-                  {step.priorityScore !== undefined && <span className="rounded-md border border-border bg-background px-2 py-1">أولوية {step.priorityScore}/100</span>}
-                  {step.difficulty && <span className="rounded-md border border-border bg-background px-2 py-1">الصعوبة: {difficultyLabel(step.difficulty)}</span>}
-                  {step.printedPageRange && <span className="rounded-md border border-border bg-background px-2 py-1">صفحات {step.printedPageRange[0]}–{step.printedPageRange[1]}</span>}
+                  </div>
+                  <span className="text-xs font-semibold text-primary">عرض مهام اليوم</span>
+                </summary>
+                <div className="space-y-3 border-t border-border/60 bg-muted/10 p-3 sm:p-4">
+                  {group.steps.map(({ step, index }) => (
+                    <article key={`step-${index}-${step.curriculumNodeIds?.join("-") || "manual"}`} className="rounded-xl border border-border/70 bg-background p-4">
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <span className="rounded-lg bg-secondary px-2 py-1 font-semibold text-primary">{step.category}</span>
+                        {step.priority && <span className="mr-auto rounded-lg border border-border bg-card px-2 py-1">{priorityLabel(step.priority)}</span>}
+                      </div>
+                      {editable ? (
+                        <>
+                          <label className="mt-3 block text-[11px] font-semibold text-muted-foreground">عنوان المهمة</label>
+                          <input
+                            value={step.title}
+                            onChange={event => onChange({ ...plan, steps: plan.steps.map((item, itemIndex) => itemIndex === index ? { ...item, title: event.target.value } : item) })}
+                            className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm font-semibold outline-none focus:border-primary/50"
+                          />
+                          <label className="mt-3 block text-[11px] font-semibold text-muted-foreground">تفاصيل التنفيذ</label>
+                          <Textarea
+                            value={step.detail}
+                            onChange={event => onChange({ ...plan, steps: plan.steps.map((item, itemIndex) => itemIndex === index ? { ...item, detail: event.target.value } : item) })}
+                            className="mt-1 min-h-20 rounded-lg bg-card text-sm leading-6"
+                          />
+                          <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
+                            <div>
+                              <label className="block text-[11px] font-semibold text-muted-foreground">المدة بالدقائق</label>
+                              <input
+                                type="number"
+                                min={5}
+                                max={480}
+                                step={5}
+                                value={step.minutes}
+                                onChange={event => {
+                                  const minutes = Number(event.target.value);
+                                  onChange({ ...plan, steps: plan.steps.map((item, itemIndex) => itemIndex === index ? { ...item, minutes: Number.isFinite(minutes) ? Math.max(5, Math.min(480, minutes)) : 5 } : item) });
+                                }}
+                                className="mt-1 h-10 w-28 rounded-lg border border-border bg-card px-3 text-sm outline-none focus:border-primary/50"
+                              />
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Button type="button" variant="ghost" size="icon" className="size-8" disabled={index === 0} onClick={() => onMoveStep(index, -1)} aria-label="نقل المهمة لأعلى"><ArrowUp className="size-4" /></Button>
+                              <Button type="button" variant="ghost" size="icon" className="size-8" disabled={index === plan.steps.length - 1} onClick={() => onMoveStep(index, 1)} aria-label="نقل المهمة لأسفل"><ArrowDown className="size-4" /></Button>
+                              <Button type="button" variant="ghost" size="icon" className="size-8 text-destructive hover:text-destructive" disabled={plan.steps.length <= 1} onClick={() => onRemoveStep(index)} aria-label="حذف المهمة"><X className="size-4" /></Button>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <h4 className="mt-3 font-semibold">{step.title}</h4>
+                          <p className="mt-1 text-sm leading-7 text-muted-foreground">{step.detail}</p>
+                          <p className="mt-2 text-xs text-muted-foreground">{step.minutes} دقيقة</p>
+                        </>
+                      )}
+                      {step.priorityReason && <p className="mt-2 border-t border-border/60 pt-2 text-xs leading-6 text-muted-foreground">سبب الأولوية: {step.priorityReason}</p>}
+                      {step.resourceRecommendation && (
+                        <a href={step.resourceRecommendation.url} target="_blank" rel="noreferrer" className="mt-3 inline-flex max-w-full flex-wrap items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs font-semibold text-primary hover:bg-primary/10">
+                          <ArrowUpRight className="size-3.5" />
+                          مشاهدة مقترحة من {step.resourceRecommendation.teacherName || "المدرس"}: {step.resourceRecommendation.title}
+                          <span className="font-normal text-muted-foreground">— {step.resourceRecommendation.reason}</span>
+                        </a>
+                      )}
+                      <div className="mt-3 flex flex-wrap gap-1.5 text-[10px] text-muted-foreground">
+                        {step.priorityScore !== undefined && <span className="rounded-md border border-border bg-card px-2 py-1">أولوية {step.priorityScore}/100</span>}
+                        {step.difficulty && <span className="rounded-md border border-border bg-card px-2 py-1">الصعوبة: {difficultyLabel(step.difficulty)}</span>}
+                        {step.printedPageRange && <span className="rounded-md border border-border bg-card px-2 py-1">صفحات {step.printedPageRange[0]}–{step.printedPageRange[1]}</span>}
+                      </div>
+                    </article>
+                  ))}
                 </div>
-              </article>
-              </div>
+              </details>
             ))}
           </div>
           {editable && (
