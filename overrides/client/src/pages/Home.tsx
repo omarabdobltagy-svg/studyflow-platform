@@ -262,6 +262,30 @@ export default function Home() {
     : dailyPlanPriority ?? priority);
   const completedTaskProgressConflicts = mappedOpenTasks.filter(item => item.isAlreadyCompleted);
 
+  const teacherScheduleAnnouncements = useMemo(() => {
+    const selection = (profile.data?.selection ?? {}) as Record<string, any>;
+    const updates = Array.isArray(selection.teacherPublicUpdates) ? selection.teacherPublicUpdates : [];
+    return updates
+      .filter((update: any) =>
+        update.confidence === "high"
+        && ["lecture_cancelled", "class_suspended", "schedule_changed"].includes(update.announcementType)
+      )
+      .sort((left: any, right: any) => Date.parse(String(right.publishedAt)) - Date.parse(String(left.publishedAt)))
+      .slice(0, 4) as Array<{
+        externalId: string;
+        teacherId: string;
+        teacherName: string;
+        sourceType: "youtube" | "facebook";
+        title: string;
+        description: string;
+        url: string;
+        publishedAt: string;
+        announcementType: "lecture_cancelled" | "class_suspended" | "schedule_changed";
+        confidence: "high";
+        affectedDate?: string;
+      }>;
+  }, [profile.data?.selection]);
+
   const plan = dailyPlan.data?.plan;
   const tasks = summary.data?.tasks ?? [];
   const taskCount = summary.data?.taskStats.total ?? 0;
@@ -284,7 +308,7 @@ export default function Home() {
     <DashboardLayout
       title="مساحة اليوم"
       description="اعرف أولويتك، ابدأ المذاكرة، وتابع تقدمك من مكان واحد."
-      action={<Button onClick={() => setLocation("/planner")} className="gap-2 rounded-xl"><Sparkles className="size-4" />المخطط الذكي</Button>}
+      action={<Button onClick={() => setLocation("/planner")} className="gap-2 rounded-xl"><Sparkles className="size-4" />خطة المذاكرة</Button>}
     >
       <div className="space-y-6 pb-6">
         <header className="flex flex-wrap items-end justify-between gap-3">
@@ -297,6 +321,31 @@ export default function Home() {
           </div>
           <Badge variant="outline" className="rounded-full px-3 py-1.5 text-xs">مساحتك الدراسية</Badge>
         </header>
+
+        {teacherScheduleAnnouncements.length > 0 && (
+          <section className="overflow-hidden rounded-[1.6rem] border border-[#C9ED62]/25 bg-[#141B12] text-[#F1F0E8] shadow-[0_24px_70px_-48px_rgba(0,0,0,.8)]">
+            <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3 sm:px-5">
+              <div className="flex items-center gap-2">
+                <span className="flex size-8 items-center justify-center rounded-xl bg-[#C9ED62]/15 text-[#C9ED62]"><CalendarDays className="size-4" /></span>
+                <div><h3 className="text-sm font-bold">تحديثات مهمة من المدرسين</h3><p className="mt-0.5 text-[10px] text-[#AAB09E]">إعلانات عامة واضحة تم التحقق من نوعها</p></div>
+              </div>
+              <Badge className="rounded-full border border-[#C9ED62]/25 bg-[#C9ED62]/10 text-[#DCE8B7]">{teacherScheduleAnnouncements.length} جديد</Badge>
+            </div>
+            <div className="divide-y divide-white/10">
+              {teacherScheduleAnnouncements.map(update => (
+                <article key={update.externalId} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-[#C9ED62]">{update.announcementType === "lecture_cancelled" ? "إلغاء محاضرة" : update.announcementType === "class_suspended" ? "توقف / راحة من المحاضرات" : "تغيير موعد محاضرة"} · {update.teacherName}</p>
+                    <p className="mt-1 text-sm font-bold">{update.title}</p>
+                    {update.description && update.description !== update.title && <p className="mt-1 line-clamp-2 text-xs leading-5 text-[#B9C1AF]">{update.description}</p>}
+                    {update.affectedDate && <p className="mt-1 text-[10px] text-[#AAB09E]">التاريخ المذكور: {update.affectedDate}</p>}
+                  </div>
+                  <a href={update.url} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-[#C9ED62]/25 bg-white/[.04] px-3 py-2 text-[11px] font-bold text-[#DCE8B7] hover:bg-white/[.08]">فتح المصدر <ArrowLeft className="size-3" /></a>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
 
         {summary.isError && <QueryErrorNotice onRetry={() => void summary.refetch()} label="تعذّر تحميل مهامك. أعد المحاولة؛ بياناتك لم تُحذف." />}
         {learning.isError && <QueryErrorNotice onRetry={() => void learning.refetch()} label="تعذّر تحميل تقدم المنهج. يمكنك متابعة مهامك أثناء إعادة المحاولة." />}
