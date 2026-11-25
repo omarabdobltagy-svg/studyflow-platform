@@ -119,6 +119,61 @@ async function fetchText(url: string) {
   return response.text();
 }
 
+
+
+const YOUTUBE_API_KEY_PROBE_INTERVAL_MS = 15 * 60 * 1_000;
+let youtubeApiKeyProbeAt = 0;
+let youtubeApiKeyProbeInFlight: Promise<void> | null = null;
+
+async function probeYoutubeApiKey(apiKey: string, now = Date.now()): Promise<void> {
+  if (youtubeApiKeyProbeInFlight) return youtubeApiKeyProbeInFlight;
+  if (now - youtubeApiKeyProbeAt < YOUTUBE_API_KEY_PROBE_INTERVAL_MS) return;
+
+  youtubeApiKeyProbeAt = now;
+  const task = (async () => {
+    try {
+      const url = new URL("https://www.googleapis.com/youtube/v3/channels");
+      url.searchParams.set("part", "id");
+      url.searchParams.set("id", "UCdur25RCItdfoXA89ORWSkw");
+      url.searchParams.set("key", apiKey);
+      const response = await fetch(url, {
+        headers: { "user-agent": "StudyFlow-YouTube-Key-Probe/1.0" },
+        signal: AbortSignal.timeout(8_000),
+      });
+      if (response.ok) {
+        const payload = await response.json() as Record<string, any>;
+        const channelFound = Array.isArray(payload.items) && payload.items.length > 0;
+        console.info("[StudyFlow YouTube API] API key accepted", {
+          httpStatus: response.status,
+          channelFound,
+        });
+        return;
+      }
+      const payload = await response.json().catch(() => ({})) as Record<string, any>;
+      const apiStatus = typeof payload.error?.status === "string" ? payload.error.status : "unknown";
+      const apiReason = Array.isArray(payload.error?.errors) && typeof payload.error.errors[0]?.reason === "string"
+        ? payload.error.errors[0].reason
+        : "unknown";
+      console.warn("[StudyFlow YouTube API] API key rejected or unavailable", {
+        httpStatus: response.status,
+        apiStatus,
+        apiReason,
+      });
+    } catch (error) {
+      console.warn("[StudyFlow YouTube API] Key probe request failed", {
+        errorName: error instanceof Error ? error.name : "UnknownError",
+      });
+    }
+  })();
+
+  youtubeApiKeyProbeInFlight = task;
+  try {
+    await task;
+  } finally {
+    if (youtubeApiKeyProbeInFlight === task) youtubeApiKeyProbeInFlight = null;
+  }
+}
+
 async function fetchJson(url: string, accessToken?: string) {
   const response = await fetch(url, {
     headers: {
@@ -144,6 +199,8 @@ export async function scanSelectedTeacherSources(
     ? selection.teacherPublicScanState as Record<string, string>
     : {};
   const selectedIds = selectedTeacherIds(profile);
+  const youtubeApiKey = process.env.YOUTUBE_API_KEY?.trim() ?? "";
+  if (youtubeApiKey) await probeYoutubeApiKey(youtubeApiKey, now.getTime());
   const facebookPages = configuredFacebookPageIds();
   const pageToken = process.env.META_PAGE_ACCESS_TOKEN || process.env.FACEBOOK_PAGE_ACCESS_TOKEN;
   const graphVersion = process.env.META_GRAPH_API_VERSION || "v27.0";
@@ -159,7 +216,7 @@ export async function scanSelectedTeacherSources(
       tasks.push((async () => {
         let channelId = directChannelId;
         const handle = teacherYoutubeUrl.match(/youtube\.com\/@([^/?]+)/i)?.[1];
-        const apiKey = process.env.YOUTUBE_API_KEY;
+        const apiKey = youtubeApiKey;
         if (!channelId && handle && apiKey) {
           const channelResponse = await fetchJson("https://www.googleapis.com/youtube/v3/channels?part=id&forHandle=" + encodeURIComponent("@" + handle) + "&key=" + encodeURIComponent(apiKey));
           const channelItems = Array.isArray(channelResponse.items) ? channelResponse.items as Array<Record<string, unknown>> : [];
@@ -216,7 +273,7 @@ export async function scanSelectedTeacherSources(
     .sort((left, right) => Date.parse(right.publishedAt) - Date.parse(left.publishedAt))
     .slice(0, MAX_UPDATES_PER_SCAN);
 
-  const apiKey = process.env.YOUTUBE_API_KEY;
+  const apiKey = youtubeApiKey;
   const videoIds = orderedUpdates
     .filter(update => update.sourceType === "youtube")
     .map(update => update.externalId.replace(/^youtube:/, ""));
