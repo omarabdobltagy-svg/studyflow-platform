@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
-import { getSIECheckpointProgressBranches, getSIESubject, matchSIECheckpointTask } from "@shared/sie-catalog";
+import { getSIECheckpointProgressBranches, getSIESubject, matchSIECheckpointTask, normalizeSIECheckpointFrontier } from "@shared/sie-catalog";
 import {
   ArrowLeft, BarChart3, BookOpenText, CalendarDays, Check, CheckCircle2,
   Clock3, Compass, GraduationCap, ListChecks, Loader2, MessageCircle,
@@ -51,7 +51,8 @@ function dueLabel(value: Date | string | null | undefined) {
 function sessionLesson(session: ExternalSession | null) {
   if (!session) return null;
   const branch = getSIECheckpointProgressBranches(session.subjectId).find(item => item.branchId === session.branchId);
-  const lesson = branch?.choices.find(item => item.nodeId === session.lessonId);
+  const normalizedLessonId = normalizeSIECheckpointFrontier(session.subjectId, session.branchId, session.lessonId);
+  const lesson = branch?.choices.find(item => item.nodeId === normalizedLessonId);
   return {
     subject: getSIESubject(session.subjectId)?.nameAr ?? session.subjectId,
     branch: branch?.branchTitle ?? "مسار دراسي",
