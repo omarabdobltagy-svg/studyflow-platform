@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isSecondYearBaccalaureateProfile, parseYoutubeAtomFeed, parseYoutubeDurationMinutes, selectedTeacherIds, shouldScanTeacherSource } from "./teacher-content-monitor";
+import { isSecondYearBaccalaureateProfile, isSecondYearBaccalaureateUpdate, parseYoutubeAtomFeed, parseYoutubeDurationMinutes, selectedTeacherIds, shouldScanTeacherSource } from "./teacher-content-monitor";
 
 describe("teacher public channel monitor", () => {
   it("parses public YouTube upload entries and decodes Arabic metadata", () => {
@@ -72,5 +72,17 @@ describe("teacher public channel monitor", () => {
       educationSystem: "baccalaureate",
       teacherSelections: { ENG1_G2_BAC: "T_AR_MOHAMED_SALAH" },
     })).toEqual([]);
+  });
+  it("accepts teacher updates only when the post itself identifies second-year Baccalaureate", () => {
+    expect(isSecondYearBaccalaureateUpdate({ title: "مراجعة نحو تانية بكالوريا 2027" })).toBe(true);
+    expect(isSecondYearBaccalaureateUpdate({ title: "2 Bac 2027 - Unit 3 revision" })).toBe(true);
+    expect(isSecondYearBaccalaureateUpdate({ title: "Baccalaureate الصف الثاني الثانوي" })).toBe(true);
+  });
+
+  it("rejects generic or other-grade posts even from a teacher selected for second-year Baccalaureate", () => {
+    expect(isSecondYearBaccalaureateUpdate({ title: "مراجعة نحو للصف الأول الثانوي بكالوريا" })).toBe(false);
+    expect(isSecondYearBaccalaureateUpdate({ title: "مراجعة نحو تالتة بكالوريا" })).toBe(false);
+    expect(isSecondYearBaccalaureateUpdate({ title: "شرح نحو للصف الثاني الثانوي" })).toBe(false);
+    expect(isSecondYearBaccalaureateUpdate({ title: "مراجعة عامة في النحو" })).toBe(false);
   });
 });
