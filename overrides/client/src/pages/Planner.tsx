@@ -17,6 +17,8 @@ import {
   CalendarClock,
   CheckCircle2,
   Clock3,
+  MessageCircle,
+  Send,
   Loader2,
   Plus,
   RefreshCw,
@@ -354,25 +356,24 @@ export default function Planner() {
         {history.isError && <QueryErrorNotice onRetry={() => void history.refetch()} label="تعذّر تحميل خططك المحفوظة." />}
         {profile.isError && <QueryErrorNotice onRetry={() => void profile.refetch()} label="تعذّر تحميل ملفك الدراسي. أعد المحاولة قبل توليد الخطة." />}
 
-        <section className="relative isolate overflow-hidden rounded-[1.8rem] border border-primary/20 bg-[#111610] p-6 text-[#F3F0E7] shadow-[0_35px_90px_-55px_rgba(0,0,0,.85)] sm:p-8">
-          <div className="pointer-events-none absolute -right-16 -top-24 size-72 rounded-full bg-[#C9ED62]/10 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-24 left-1/4 size-64 rounded-full bg-[#D1B77B]/10 blur-3xl" />
+        <section className="relative overflow-hidden rounded-[1.8rem] border border-border bg-card p-6 text-card-foreground shadow-sm sm:p-8">
+          <div className="pointer-events-none absolute -right-16 -top-24 size-72 rounded-full bg-primary/10 blur-3xl" />
           <div className="relative flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
             <div className="max-w-2xl">
-              <p className="text-[10px] font-bold tracking-[.24em] text-[#C9ED62]">STUDYFLOW · PERSONAL STUDY ENGINE</p>
+              <p className="text-[10px] font-bold tracking-[.2em] text-primary">STUDYFLOW · PERSONAL STUDY ENGINE</p>
               <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">خطة مذاكرتك، حسب واقعك.</h2>
-              <p className="mt-3 max-w-xl text-sm leading-8 text-[#C0C7B4]">المنصة تقرأ مهامك وتقدمك ومواعيد حصص المدرسين، ثم توازن بين إنهاء المتراكم والاستعداد للدرس الجديد. وتتجدد الخطة مع تغيّر يومك.</p>
+              <p className="mt-3 max-w-xl text-sm leading-8 text-muted-foreground">المنصة تقرأ مهامك وتقدمك ومواعيد حصص المدرسين، ثم توازن بين إنهاء المتراكم والاستعداد للدرس الجديد. وتتجدد الخطة مع تغيّر يومك.</p>
             </div>
-            <div className="grid min-w-[185px] grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-white/[.045] p-3 backdrop-blur">
-              <div><p className="text-[10px] text-[#9DA793]">المهام المفتوحة</p><p className="mt-1 text-2xl font-bold text-[#C9ED62]">{(tasksQuery.data ?? []).filter((task: any) => task.status !== "done").length.toLocaleString("ar-EG")}</p></div>
-              <div><p className="text-[10px] text-[#9DA793]">موادك</p><p className="mt-1 text-2xl font-bold">{(profile.data?.subjectIds?.length ?? 0).toLocaleString("ar-EG")}</p></div>
+            <div className="grid min-w-[185px] grid-cols-2 gap-2 rounded-2xl border border-border bg-muted/30 p-3">
+              <div><p className="text-[10px] text-muted-foreground">المهام المفتوحة</p><p className="mt-1 text-2xl font-bold text-primary">{(tasksQuery.data ?? []).filter((task: any) => task.status !== "done").length.toLocaleString("ar-EG")}</p></div>
+              <div><p className="text-[10px] text-muted-foreground">موادك</p><p className="mt-1 text-2xl font-bold">{(profile.data?.subjectIds?.length ?? 0).toLocaleString("ar-EG")}</p></div>
             </div>
           </div>
           {profile.data && (
-            <div className="relative mt-5 flex flex-wrap gap-2 border-t border-white/10 pt-4 text-xs text-[#C0C7B4]">
-              <span className="rounded-full border border-white/10 bg-white/[.045] px-3 py-1.5">{profile.data.studentName}</span>
-              <span className="rounded-full border border-white/10 bg-white/[.045] px-3 py-1.5">{profile.data.track}</span>
-              <span className="rounded-full border border-white/10 bg-white/[.045] px-3 py-1.5">{profile.data.subjectIds.length} مواد</span>
+            <div className="relative mt-5 flex flex-wrap gap-2 border-t border-border/70 pt-4 text-xs text-muted-foreground">
+              <span className="rounded-full border border-border bg-muted/30 px-3 py-1.5">{profile.data.studentName}</span>
+              <span className="rounded-full border border-border bg-muted/30 px-3 py-1.5">{profile.data.track}</span>
+              <span className="rounded-full border border-border bg-muted/30 px-3 py-1.5">{profile.data.subjectIds.length} مواد</span>
             </div>
           )}
         </section>
@@ -652,6 +653,7 @@ function PlanCard({
     }
     group.steps.push({ step, index });
   });
+  const maxDayMinutes = Math.max(1, ...dayGroups.map(group => group.steps.reduce((sum, item) => sum + item.step.minutes, 0)));
   const priorityLabel = (value?: string) => value === "critical" ? "عاجل" : value === "high" ? "أولوية عالية" : value === "low" ? "منخفضة" : "متوسطة";
   const difficultyLabel = (value?: PlanStep["difficulty"]) =>
     value === "easy" ? "سهل" : value === "medium" ? "متوسط" : value === "hard" ? "صعب" : "";
@@ -704,30 +706,38 @@ function PlanCard({
 
       <div className="grid gap-5 p-4 sm:p-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(230px,.65fr)]">
         <main className="min-w-0">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h3 className="font-bold">توزيع الأيام</h3>
-              <p className="mt-1 text-xs text-muted-foreground">{editable ? "راجع الخطوات والوقت قبل إضافتها لمهامك." : "توزيع المهام على الأيام القادمة."}</p>
+              <h3 className="font-bold">توزيع المذاكرة على الأيام</h3>
+              <p className="mt-1 text-xs text-muted-foreground">{editable ? "كل يوم ظاهر بالكامل. عدّل أي مهمة قبل اعتماد الخطة." : "نظرة مباشرة على مهام كل يوم ووقتها."}</p>
             </div>
             {editable && <Button type="button" size="sm" variant="outline" className="rounded-lg" onClick={onAddStep}><Plus className="size-4" />إضافة موضوع</Button>}
           </div>
 
-           <div className="space-y-3">
+          <div className="grid gap-3 md:grid-cols-2">
             {dayGroups.map((group, groupIndex) => (
-              <details key={group.day} open={groupIndex === 0} className="overflow-hidden rounded-2xl border border-border/70 bg-card">
-                <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 px-4 py-3 transition hover:bg-muted/30 [&::-webkit-details-marker]:hidden">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-secondary text-sm font-bold text-primary">{groupIndex + 1}</span>
-                    <div className="min-w-0">
-                      <h4 className="font-bold">{group.day}</h4>
-                      <p className="mt-0.5 text-[11px] text-muted-foreground">{group.steps.length} مهام · وقت المذاكرة {formatStudyDuration(group.steps.reduce((sum, item) => sum + item.step.minutes, 0))}</p>
+              <section key={group.day} className="min-w-0 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+                <header className="border-b border-border/70 bg-muted/25 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-sm font-bold text-primary">{String(groupIndex + 1).padStart(2, "0")}</span>
+                      <div className="min-w-0">
+                        <h4 className="break-words font-bold">{group.day}</h4>
+                        <p className="mt-1 text-[11px] text-muted-foreground">{group.steps.length} مهام</p>
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-left">
+                      <b className="block text-sm font-bold tabular-nums text-foreground">{formatStudyDuration(group.steps.reduce((sum, item) => sum + item.step.minutes, 0))}</b>
+                      <span className="text-[10px] text-muted-foreground">إجمالي وقت اليوم</span>
                     </div>
                   </div>
-                  <span className="text-xs font-semibold text-primary">فتح تفاصيل اليوم</span>
-                </summary>
-                <div className="space-y-3 border-t border-border/60 bg-muted/10 p-3 sm:p-4">
+                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">
+                    <div className="h-full rounded-full bg-primary transition-[width] duration-300" style={{ width: Math.min(100, Math.round(group.steps.reduce((sum, item) => sum + item.step.minutes, 0) / maxDayMinutes * 100)) + "%" }} />
+                  </div>
+                </header>
+                <div className="space-y-2.5 bg-muted/10 p-3 sm:p-4">
                   {group.steps.map(({ step, index }) => (
-                    <article key={`step-${index}-${step.curriculumNodeIds?.join("-") || "manual"}`} className="group rounded-2xl border border-border/70 bg-background p-4 transition-colors hover:border-primary/25">
+                    <article key={`step-${index}-${step.curriculumNodeIds?.join("-") || "manual"}`} className="group rounded-xl border border-border/70 bg-background p-3.5 transition-colors hover:border-primary/30">
                       <div className="flex items-start gap-3">
                         <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-secondary text-xs font-bold text-primary">{index + 1}</span>
                         <div className="min-w-0 flex-1">
@@ -813,7 +823,7 @@ function PlanCard({
                     </article>
                   ))}
                 </div>
-              </details>
+              </section>
             ))}
           </div>
           {editable && (
@@ -843,6 +853,93 @@ function PlanCard({
             </p>
           )}
         </aside>
+
+        <PlanAssistantChat plan={plan} />
+      </div>
+    </section>
+  );
+}
+
+function PlanAssistantChat({ plan }: { plan: PlanView }) {
+  const [messages, setMessages] = useState<Array<{ role: "user" | "assistant"; content: string }>>([]);
+  const [draft, setDraft] = useState("");
+  const context = useMemo(() => [
+    "السياق: المستخدم يتحدث من صفحة خطة المذاكرة في StudyFlow.",
+    "اسم الخطة: " + plan.title,
+    "ملخص الخطة: " + plan.summary,
+    "مدة التنفيذ: " + plan.durationLabel,
+    "خطوات الخطة الحالية:",
+    ...plan.steps.map((step, index) =>
+      `${index + 1}. ${step.day} | ${step.title} | ${step.minutes} دقيقة | ${step.category} | ${step.detail}${step.priorityReason ? " | سبب الأولوية: " + step.priorityReason : ""}`
+    ),
+  ].join("\n").slice(0, 7_500), [plan]);
+
+  const chat = trpc.ai.chat.useMutation({
+    onSuccess: result => setMessages(current => [...current, { role: "assistant", content: result.content }].slice(-20)),
+    onError: error => toast.error(error.message || "تعذّر الوصول إلى مساعد الخطة."),
+  });
+
+  const sendMessage = () => {
+    const content = draft.trim();
+    if (!content || chat.isPending) return;
+    const nextMessages = [...messages, { role: "user" as const, content }].slice(-20);
+    setMessages(nextMessages);
+    setDraft("");
+    chat.mutate({ messages: nextMessages, memory: "", context });
+  };
+
+  return (
+    <section className="lg:col-span-2 overflow-hidden rounded-2xl border border-border bg-card">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 bg-muted/20 p-4 sm:p-5">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><MessageCircle className="size-5" /></span>
+          <div className="min-w-0">
+            <h3 className="font-bold">اتكلم مع مساعد خطتك</h3>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">اسأله عن ترتيب الأيام أو وقت أي خطوة أو اطلب اقتراحًا لتعديل الخطة.</p>
+          </div>
+        </div>
+        <span className="rounded-full border border-border bg-background px-3 py-1.5 text-[10px] text-muted-foreground">مرتبط بالخطة الحالية</span>
+      </header>
+      <div className="grid gap-3 p-3 sm:p-4">
+        <div className="max-h-[360px] min-h-24 space-y-3 overflow-y-auto rounded-xl bg-muted/15 p-3" aria-live="polite">
+          {!messages.length && (
+            <div className="flex min-h-20 items-center gap-3 text-sm text-muted-foreground">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><BrainCircuit className="size-4" /></span>
+              <p>أنا شايف تفاصيل الخطة الحالية. اسألني مثلاً: ليه حطيت الدرس ده في اليوم ده؟ أو اقترح توزيعًا أخف.</p>
+            </div>
+          )}
+          {messages.map((message, index) => (
+            <div key={`${index}-${message.role}`} className={message.role === "user" ? "flex justify-start" : "flex justify-end"}>
+              <div className={"max-w-[92%] whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-sm leading-7 " + (message.role === "user"
+                ? "rounded-br-md bg-primary text-primary-foreground"
+                : "rounded-bl-md border border-border bg-card text-foreground")}>
+                {message.content}
+              </div>
+            </div>
+          ))}
+          {chat.isPending && <div className="flex justify-end"><span className="rounded-xl border border-border bg-card px-3 py-2 text-xs text-muted-foreground">المساعد بيحلل الخطة...</span></div>}
+        </div>
+        <div className="flex items-end gap-2">
+          <textarea
+            value={draft}
+            onChange={event => setDraft(event.target.value)}
+            onKeyDown={event => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+              }
+            }}
+            rows={2}
+            maxLength={4_000}
+            placeholder="اكتب سؤالك عن الخطة..."
+            aria-label="اكتب رسالة لمساعد الخطة"
+            className="min-h-12 max-h-32 min-w-0 flex-1 resize-y rounded-xl border border-border bg-background px-3 py-2.5 text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground focus:border-primary/60"
+          />
+          <Button type="button" onClick={sendMessage} disabled={!draft.trim() || chat.isPending} className="h-12 shrink-0 rounded-xl px-4">
+            <Send className="size-4" /><span className="hidden sm:inline">إرسال</span>
+          </Button>
+        </div>
+        <p className="px-1 text-[10px] text-muted-foreground">المساعد يقترح ويشرح؛ تعديل المهام أو ترتيبها يتم من أدوات الخطة نفسها قبل الاعتماد.</p>
       </div>
     </section>
   );
