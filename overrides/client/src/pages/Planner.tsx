@@ -129,7 +129,7 @@ export default function Planner() {
   const [usePersonalDeadline, setUsePersonalDeadline] = useState(false);
   const [personalDeadline, setPersonalDeadline] = useState("");
   const [approved, setApproved] = useState(false);
-  const autoStarted = useRef(false);
+  const historyInitialized = useRef(false);
 
   const history = trpc.plans.list.useQuery();
   const profile = trpc.studentProfile.get.useQuery(undefined, {
@@ -142,7 +142,8 @@ export default function Planner() {
     .flatMap(record => {
       const saved = parseSavedPlan(record);
       return saved ? [{ id: record.id, createdAt: record.createdAt, plan: saved }] : [];
-    }), [history.data]);
+    })
+    .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()), [history.data]);
 
   const generate = trpc.plans.generate.useMutation({
     onSuccess: result => {
@@ -201,7 +202,7 @@ export default function Planner() {
     onSuccess: async result => {
       setPlan(null);
       setApproved(false);
-      autoStarted.current = false;
+      historyInitialized.current = true;
       await Promise.all([
         utils.plans.list.invalidate(),
         utils.plans.currentDaily.invalidate(),
@@ -231,18 +232,12 @@ export default function Planner() {
   };
 
   useEffect(() => {
-    if (history.isLoading || profile.isLoading || history.isError || profile.isError || autoStarted.current) return;
-    if (!profile.data || !Array.isArray(profile.data.subjectIds) || profile.data.subjectIds.length === 0) return;
-
-    // Always build a fresh draft automatically when the student opens
-    // the planner. History is intentionally opt-in; it must not silently
-    // replace today's generated draft with an old saved plan.
-    autoStarted.current = true;
-    const savedDailyMinutes = Number((profile.data as any)?.selection?.studyConditions?.dailyMinutes);
-    runGeneration("balanced", 2, Number.isFinite(savedDailyMinutes) && savedDailyMinutes >= 20
-      ? Math.min(600, savedDailyMinutes)
-      : 120, null);
-  }, [history.isLoading, history.isError, profile.isLoading, profile.isError, profile.data]);
+    if (history.isLoading || history.isError || historyInitialized.current) return;
+    historyInitialized.current = true;
+    // Open the most recent saved annual draft instead of silently generating
+    // and storing another copy every time the student visits this page.
+    if (savedPlans.length > 0) setPlan(savedPlans[0].plan);
+  }, [history.isLoading, history.isError, savedPlans]);
 
   const updatePlan = (next: PlanView) => {
     setPlan(next);
@@ -313,24 +308,24 @@ export default function Planner() {
   return (
     <DashboardLayout
       title="المخطط الذكي"
-      description="الخطة تبدأ تلقائيًا من ملفك الدراسي. راجعها وعدّلها، ثم اعتمدها لتحويلها إلى مهام."
+      description="راجع خريطة المنهج وتقدمك، وجدّد المسودة عند الحاجة. لا تُنشأ مهام فعلية إلا بعد اعتمادك."
     >
       <div className="space-y-5">
         {history.isError && <QueryErrorNotice onRetry={() => void history.refetch()} label="تعذّر تحميل خططك المحفوظة." />}
         {profile.isError && <QueryErrorNotice onRetry={() => void profile.refetch()} label="تعذّر تحميل ملفك الدراسي. أعد المحاولة قبل توليد الخطة." />}
 
-        <section className="relative overflow-hidden rounded-[1.6rem] border border-slate-700/60 bg-gradient-to-l from-slate-950 via-slate-900 to-indigo-950 p-5 text-white shadow-xl sm:p-7">
-          <div className="pointer-events-none absolute -left-12 -top-16 size-56 rounded-full bg-violet-500/15 blur-3xl" />
+        <section className="relative overflow-hidden rounded-[1.6rem] border border-stone-700/60 bg-gradient-to-l from-[#24211d] via-[#1b1a18] to-[#342c24] p-5 text-white shadow-xl sm:p-7">
+          <div className="pointer-events-none absolute -left-12 -top-16 size-56 rounded-full bg-amber-500/10 blur-3xl" />
           <div className="relative flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
             <div className="max-w-2xl">
-              <p className="text-[11px] font-bold tracking-[0.2em] text-violet-200/75">STUDYFLOW · AI STUDY PLAN</p>
+              <p className="text-[11px] font-bold tracking-[0.2em] text-amber-100/75">STUDYFLOW · AI STUDY PLAN</p>
               <h2 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">خطة واحدة. قرار واضح. وتنفيذ تحت سيطرتك.</h2>
               <p className="mt-2 text-sm leading-7 text-slate-300">
                 الذكاء الاصطناعي يبني المسودة من موادك وتقدمك وتراكمك. أنت تراجع المهام وتغيّرها قبل أن تتحول إلى جدول تنفيذ.
               </p>
             </div>
             <div className="shrink-0 rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
-              <div className="flex items-center gap-2 text-xs font-semibold text-violet-100"><CalendarClock className="size-4" />موعد امتحان نهاية السنة</div>
+              <div className="flex items-center gap-2 text-xs font-semibold text-amber-100"><CalendarClock className="size-4" />موعد امتحان نهاية السنة</div>
               <div className="mt-2 text-xl font-bold">12–22 يونيو 2027</div>
               <p className="mt-1 text-[11px] text-slate-300">فترة امتحانات تقريبية — الجاهزية المستهدفة قبل 11 يونيو</p>
             </div>
@@ -359,7 +354,7 @@ export default function Planner() {
               <span className="flex size-10 items-center justify-center rounded-xl bg-secondary text-primary"><BrainCircuit className="size-5" /></span>
               <div>
                 <h3 className="font-bold">لم تتكوّن المسودة بعد</h3>
-                <p className="mt-1 text-sm text-muted-foreground">يمكنك إعادة تشغيل التوليد من هنا.</p>
+                <p className="mt-1 text-sm text-muted-foreground">لم يتم إنشاء مسودة بعد. أنشئ خريطة المنهج مرة واحدة، ثم حدّثها يدويًا عندما يتغير تقدمك.</p>
               </div>
             </div>
             <Button className="mt-4 rounded-xl" onClick={() => runGeneration(pace, paceLevel, dailyMinutes, usePersonalDeadline ? personalDeadline : null)} disabled={generate.isPending}>
