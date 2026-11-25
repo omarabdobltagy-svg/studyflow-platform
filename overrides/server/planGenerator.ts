@@ -218,6 +218,8 @@ function buildPlannerProgressSnapshot(
   profile: NonNullable<Awaited<ReturnType<typeof getStudentProfile>>>
 ): PlannerProgressSnapshot {
   const selection = (profile.selection || {}) as Record<string, any>;
+  const frontiers = (selection.teacherFrontiers || {}) as Record<string, string>;
+  const teacherStates = (selection.teacherProgressState || {}) as Record<string, Record<string, any>>;
   const lessonProgress = mergeSubjectLessonProgress(selection.subjectLessonProgress, selection.sq3rProgress);
   const courseProgress = (selection.learningCourseProgress || {}) as Record<string, any>;
   const branches = new Map<string, PlannerBranchProgress>();
@@ -836,6 +838,7 @@ export function applyPlannerCurriculumCoverageGuard(
           lessonSize: "unknown",
           difficultyBasis: "unknown",
           difficultyConfidence: "low",
+          printedPageRange: undefined,
           sourcePages: [],
         });
       }
