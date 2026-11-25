@@ -546,7 +546,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <p className="text-sm font-bold">مواعيد محاضرات المدرس</p>
-                        <p className="mt-1 text-xs leading-6 text-muted-foreground">سجّل المواعيد المتكررة لهذه المادة. ده يساعد المنصة تحط مذاكرة الدرس قبل المحاضرة وتكتشف تعارضات الجدول. تقدر تضيف أو تعدّل المواعيد لاحقًا من ملفك الدراسي.</p>
+                        <p className="mt-1 text-xs leading-6 text-muted-foreground">سجّل اليوم ووقت بداية المحاضرة المتكرر. لا تحتاج إلى تحديد مدتها أو وقت انتهائها؛ المنصة ستستخدم الموعد لمساعدتك على تجهيز الدرس قبل الحصة.</p>
                       </div>
                       <span className="rounded-full border border-primary/20 bg-primary/5 px-3 py-1.5 text-[10px] font-bold text-primary">"مطلوب لكل مادة"</span>
                     </div>
@@ -590,7 +590,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                             </select>
                           </label>
                           <label className="block text-xs font-semibold">
-                            وقت البداية
+                            موعد المحاضرة
                             <input
                               type="time"
                               value={slot.startTime}
