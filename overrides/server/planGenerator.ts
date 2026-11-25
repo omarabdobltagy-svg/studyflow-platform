@@ -594,11 +594,11 @@ export function applyVerifiedExamComponentWeights(
   plan: GeneratedPlan,
   profile: NonNullable<Awaited<ReturnType<typeof getStudentProfile>>>,
 ): GeneratedPlan {
-  const nodeLookup = new Map<string, { subjectId: string; branchId: string }>();
+  const nodeLookup = new Map<string, { subjectId: string; branchId: string; lessonTitle: string }>();
   for (const subjectId of profile.subjectIds || []) {
     for (const branch of getFirstPartBranches(subjectId)) {
       for (const choice of branch.choices) {
-        nodeLookup.set(choice.nodeId, { subjectId, branchId: branch.branchId });
+        nodeLookup.set(choice.nodeId, { subjectId, branchId: branch.branchId, lessonTitle: choice.title });
       }
     }
   }
@@ -627,7 +627,7 @@ export function applyVerifiedExamComponentWeights(
 
     const { subjectId, branchId } = curriculumLocation;
     const subjectName = getSIESubject(subjectId)?.nameAr || subjectId;
-    const sourceText = [step.title, step.category, step.detail].join(" ");
+    const sourceText = [curriculumLocation.lessonTitle, step.title, step.category, step.detail].join(" ");
     const component = getExamComponentForText(subjectId, subjectName, sourceText);
     const blueprint = getSubjectExamBlueprint(subjectId, subjectName);
     const originalScore = basePriorityScore(step.priority);
