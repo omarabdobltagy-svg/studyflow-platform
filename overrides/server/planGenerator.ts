@@ -23,6 +23,12 @@ const planSchema = z.object({
     lessonSize: z.enum(["small", "medium", "large", "unknown"]).default("unknown"),
     difficultyBasis: z.enum(["student_report", "assessment_history", "curriculum_profile", "unknown"]).default("unknown"),
     difficultyConfidence: z.enum(["low", "medium", "high"]).default("low"),
+    priorityScore: z.number().min(0).max(100).optional(),
+    priorityReason: z.string().trim().max(500).optional(),
+    priorityEvidenceConfidence: z.enum(["low", "medium", "high"]).optional(),
+    examComponentLabel: z.string().trim().max(120).optional(),
+    examComponentMarks: z.number().int().min(0).max(100).optional(),
+    examPaperMarks: z.number().int().min(1).max(100).optional(),
     printedPageRange: z.tuple([z.number().int().positive().max(5_000), z.number().int().positive().max(5_000)]).nullish().transform(range => range ?? undefined),
     sourcePages: z.array(z.number().int().positive().max(5_000)).max(20).default([]),
   })).min(3).max(30),
@@ -584,6 +590,55 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
   ].join("\n");
 }
 
+export function applyVerifiedExamComponentWeights(
+  plan: GeneratedPlan,
+  profile: NonNullable<Awaited<ReturnType<typeof getStudentProfile>>>,
+): GeneratedPlan {
+  const nodeToSubject = new Map<string, string>();
+  for (const subjectId of profile.subjectIds || []) {
+    for (const branch of getFirstPartBranches(subjectId)) {
+      for (const choice of branch.choices) nodeToSubject.set(choice.nodeId, subjectId);
+    }
+  }
+
+  const steps = plan.steps.map(step => {
+    const subjectId = step.curriculumNodeIds.map(id => nodeToSubject.get(id)).find(Boolean);
+    if (!subjectId) return step;
+    const subjectName = getSIESubject(subjectId)?.nameAr || subjectId;
+    const sourceText = [step.title, step.category, step.detail].join(" ");
+    const component = getExamComponentForText(subjectId, subjectName, sourceText);
+    if (!component || component.assessmentShare === null || component.marks === null) return step;
+    const blueprint = getSubjectExamBlueprint(subjectId, subjectName);
+    if (!blueprint || blueprint.paperMarks === null) return step;
+
+    const maximumShare = Math.max(...blueprint.components.map(item => item.assessmentShare ?? 0));
+    if (maximumShare <= 0) return step;
+    const relativeExamWeight = component.assessmentShare / maximumShare;
+    const originalPriority = prioritySignal(step.priority);
+    // Verified exam weight is a hard ranking signal, while model urgency still
+    // allows a personally weak component to rise when evidence supports it.
+    const score = 0.6 * relativeExamWeight + 0.4 * originalPriority;
+    const priority = score >= 0.78 ? "critical"
+      : score >= 0.62 ? "high"
+        : score >= 0.42 ? "medium" : "low";
+    return {
+      ...step,
+      priority,
+      priorityScore: Math.round(score * 100),
+      priorityReason:
+        "وزن المكوّن الموثق " + component.marks + "/" + blueprint.paperMarks
+        + " (" + Math.round(component.assessmentShare * 100) + "% من الورقة)؛ "
+        + "الوزن النسبي مقارنة بأعلى مكوّن " + Math.round(relativeExamWeight * 100) + "%"
+        + "؛ تمت موازنته مع إلحاح الطالب وتقييم النموذج.",
+      priorityEvidenceConfidence: "high" as const,
+      examComponentLabel: component.label,
+      examComponentMarks: component.marks,
+      examPaperMarks: blueprint.paperMarks,
+    };
+  });
+  return { ...plan, steps };
+}
+
 export async function generatePersonalPlan(
   userId: number,
   prompt: string,
@@ -760,6 +815,9 @@ export async function generatePersonalPlan(
   }
   if (profile) {
     plan = applyPlannerProgressGuard(plan, profile);
+  }
+  if (profile) {
+    plan = applyVerifiedExamComponentWeights(plan, profile);
   }
 
   // A model may suggest a page number that was not actually retrieved from an indexed
