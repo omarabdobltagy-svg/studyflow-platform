@@ -594,24 +594,41 @@ export function applyVerifiedExamComponentWeights(
   plan: GeneratedPlan,
   profile: NonNullable<Awaited<ReturnType<typeof getStudentProfile>>>,
 ): GeneratedPlan {
-  const nodeLookup = new Map<string, { subjectId: string; branchId: string; lessonTitle: string }>();
+  const selection = (profile.selection || {}) as Record<string, any>;
+  const progress = buildPlannerProgressSnapshot(profile);
+  const lessonProgress = mergeSubjectLessonProgress(selection.subjectLessonProgress, selection.sq3rProgress);
+  const assessments = Array.isArray(selection.learningAssessments)
+    ? selection.learningAssessments as Array<Record<string, any>>
+    : [];
+
+  const nodeLookup = new Map<string, { subjectId: string; branchId: string; lessonTitle: string; branchLength: number }>();
   for (const subjectId of profile.subjectIds || []) {
     for (const branch of getFirstPartBranches(subjectId)) {
       for (const choice of branch.choices) {
-        nodeLookup.set(choice.nodeId, { subjectId, branchId: branch.branchId, lessonTitle: choice.title });
+        nodeLookup.set(choice.nodeId, {
+          subjectId,
+          branchId: branch.branchId,
+          lessonTitle: choice.title,
+          branchLength: branch.choices.length,
+        });
       }
     }
   }
 
-  const basePriorityScore = (value: unknown) =>
+  const prioritySignal = (value: unknown) =>
     value === "critical" ? 1 : value === "high" ? 0.8 : value === "medium" ? 0.55 : value === "low" ? 0.3 : 0.5;
+  const difficultySignal = (value: unknown) =>
+    value === "hard" ? 1 : value === "medium" ? 0.68 : value === "easy" ? 0.3 : 0.5;
+  const sizeSignal = (value: unknown) =>
+    value === "large" ? 1 : value === "medium" ? 0.65 : value === "small" ? 0.3 : 0.5;
 
   const ranked = plan.steps.map((step, index) => {
     const curriculumLocation = step.curriculumNodeIds
       .map(nodeId => nodeLookup.get(nodeId))
       .find(Boolean);
+
     if (!curriculumLocation) {
-      const score = basePriorityScore(step.priority);
+      const score = prioritySignal(step.priority);
       return {
         index,
         groupKey: "__unmapped__" + index,
@@ -620,52 +637,115 @@ export function applyVerifiedExamComponentWeights(
           ...step,
           priorityScore: Math.round(score * 100),
           priorityEvidenceConfidence: "low" as const,
-          priorityReason: step.priorityReason || "لا يوجد معرف منهجي كافٍ لربط الخطوة بوزن امتحان محدد؛ حافظ المخطط على تقديره العام.",
-        },
-      };
-    }
-
-    const { subjectId, branchId } = curriculumLocation;
-    const subjectName = getSIESubject(subjectId)?.nameAr || subjectId;
-    const sourceText = [curriculumLocation.lessonTitle, step.title, step.category, step.detail].join(" ");
-    const component = getExamComponentForText(subjectId, subjectName, sourceText);
-    const blueprint = getSubjectExamBlueprint(subjectId, subjectName);
-    const originalScore = basePriorityScore(step.priority);
-
-    if (!component || component.assessmentShare === null || component.marks === null
-      || !blueprint || blueprint.paperMarks === null) {
-      return {
-        index,
-        groupKey: plannerBranchKey(subjectId, branchId),
-        score: originalScore,
-        step: {
-          ...step,
-          priorityScore: Math.round(originalScore * 100),
-          priorityEvidenceConfidence: "low" as const,
           priorityReason: step.priorityReason
-            || "لا توجد أوزان فرعية موثقة لهذا الجزء في الفترة الحالية؛ استند الترتيب إلى فجوة المنهج ونتائجك وصعوبة الدرس.",
+            || "لم يُربط هذا الإجراء بمعرّف منهجي؛ حُفظ تقديره العام دون ادعاء وزن امتحاني.",
         },
       };
     }
 
-    const maximumShare = Math.max(...blueprint.components.map(item => item.assessmentShare ?? 0));
-    if (maximumShare <= 0) {
-      return {
-        index,
-        groupKey: plannerBranchKey(subjectId, branchId),
-        score: originalScore,
-        step: { ...step, priorityScore: Math.round(originalScore * 100) },
-      };
+    const { subjectId, branchId, lessonTitle, branchLength } = curriculumLocation;
+    const subjectName = getSIESubject(subjectId)?.nameAr || subjectId;
+    const sourceText = [lessonTitle, step.title, step.category, step.detail].join(" ");
+    const blueprint = getSubjectExamBlueprint(subjectId, subjectName);
+    const component = getExamComponentForText(subjectId, subjectName, sourceText);
+    const branchProgress = progress.branches.get(plannerBranchKey(subjectId, branchId));
+
+    const signals: Array<{ key: string; value: number; weight: number; label: string }> = [];
+    const examWeightKnown = Boolean(
+      component && component.assessmentShare !== null && component.marks !== null
+        && blueprint && blueprint.paperMarks !== null
+    );
+    if (examWeightKnown && component && blueprint) {
+      const maximumShare = Math.max(...blueprint.components.map(item => item.assessmentShare ?? 0));
+      if (maximumShare > 0) {
+        const value = Math.max(0, Math.min(1, component.assessmentShare! / maximumShare));
+        signals.push({
+          key: "exam",
+          value,
+          weight: 0.35,
+          label: "وزن " + component.label + " هو " + component.marks + "/" + blueprint.paperMarks
+            + " (" + Math.round(component.assessmentShare! * 100) + "% من ورقة هذه الفترة)",
+        });
+      }
     }
 
-    const relativeExamWeight = Math.max(0, Math.min(1, component.assessmentShare / maximumShare));
-    // A verified mark share is the stronger signal; the model's urgency retains
-    // room for a student-specific weakness without letting a low-mark component
-    // dominate every other component by default.
-    const score = 0.45 * originalScore + 0.55 * relativeExamWeight;
-    const priority = score >= 0.85 ? "critical"
+    if (branchProgress?.gapCount !== null && branchProgress?.gapCount !== undefined) {
+      const value = Math.max(0, Math.min(1, branchProgress.gapCount / Math.max(1, branchLength)));
+      signals.push({
+        key: "gap",
+        value,
+        weight: 0.25,
+        label: "فجوة الفرع " + branchProgress.gapCount + " نقطة من " + branchLength,
+      });
+    }
+
+    const recentAssessments = assessments
+      .filter(item => item.subjectId === subjectId)
+      .slice(-5);
+    const scoreValues = recentAssessments
+      .map(item => Number(item.scorePercent))
+      .filter(value => Number.isFinite(value) && value >= 0 && value <= 100);
+    const averageScore = scoreValues.length
+      ? scoreValues.reduce((sum, value) => sum + value, 0) / scoreValues.length
+      : null;
+    const weakConcepts = recentAssessments.flatMap(item =>
+      Array.isArray(item.weakConcepts) ? item.weakConcepts.map(String) : []
+    );
+    const normalizedText = normalizePlannerLessonText(sourceText);
+    const matchedWeakConcept = weakConcepts.find(concept => {
+      const normalized = normalizePlannerLessonText(concept);
+      if (!normalized || normalized.length < 3) return false;
+      return normalizedText.includes(normalized) || mentionsCompletedLesson(sourceText, concept);
+    });
+    if (matchedWeakConcept || averageScore !== null) {
+      const value = matchedWeakConcept
+        ? 1
+        : Math.max(0, Math.min(1, (100 - averageScore!) / 100));
+      signals.push({
+        key: "assessment",
+        value,
+        weight: 0.20,
+        label: matchedWeakConcept
+          ? "نقطة ضعف مسجلة: " + matchedWeakConcept
+          : "متوسط آخر " + scoreValues.length + " تقييمات للمادة " + Math.round(averageScore!) + "%",
+      });
+    }
+
+    const lessonRecord = step.curriculumNodeIds
+      .map(nodeId => lessonProgress[subjectId]?.[nodeId])
+      .find(Boolean) ?? {};
+    const difficulty = step.difficulty !== "unknown" ? step.difficulty : lessonRecord.difficulty;
+    const difficultyValue = difficultySignal(difficulty);
+    const sizeValue = sizeSignal(step.lessonSize);
+    const effortValue = 0.6 * difficultyValue + 0.4 * sizeValue;
+    signals.push({
+      key: "effort",
+      value: effortValue,
+      weight: 0.10,
+      label: "الصعوبة " + (difficulty === "hard" ? "مرتفعة" : difficulty === "medium" ? "متوسطة" : difficulty === "easy" ? "منخفضة" : "غير مقيمة")
+        + "؛ حجم المحتوى " + (step.lessonSize === "large" ? "كبير" : step.lessonSize === "medium" ? "متوسط" : step.lessonSize === "small" ? "صغير" : "غير محدد"),
+    });
+
+    signals.push({
+      key: "urgency",
+      value: prioritySignal(step.priority),
+      weight: 0.10,
+      label: "إلحاح المهمة بناءً على سياق الاختبار والتحديثات والمدخلات المتاحة",
+    });
+
+    const totalWeight = signals.reduce((sum, signal) => sum + signal.weight, 0);
+    const score = totalWeight > 0
+      ? signals.reduce((sum, signal) => sum + signal.value * signal.weight, 0) / totalWeight
+      : prioritySignal(step.priority);
+    const priority = score >= 0.82 ? "critical"
       : score >= 0.65 ? "high"
         : score >= 0.42 ? "medium" : "low";
+    const priorityEvidenceConfidence = examWeightKnown && (branchProgress?.gapCount !== null || scoreValues.length > 0)
+      ? "high" as const
+      : (branchProgress?.gapCount !== null && branchProgress?.gapCount !== undefined) || scoreValues.length > 0
+        ? "medium" as const
+        : "low" as const;
+
     return {
       index,
       groupKey: plannerBranchKey(subjectId, branchId),
@@ -674,21 +754,17 @@ export function applyVerifiedExamComponentWeights(
         ...step,
         priority,
         priorityScore: Math.round(score * 100),
-        priorityEvidenceConfidence: "high" as const,
-        priorityReason:
-          "وزن المكوّن الموثق " + component.marks + "/" + blueprint.paperMarks
-          + " (" + Math.round(component.assessmentShare * 100) + "% من الورقة)، "
-          + "والوزن النسبي مقارنة بأعلى مكوّن " + Math.round(relativeExamWeight * 100) + "%"
-          + "؛ تمت موازنته مع إلحاح هذه المهمة وفق فجوة الطالب ونتائجه.",
-        examComponentLabel: component.label,
-        examComponentMarks: component.marks,
-        examPaperMarks: blueprint.paperMarks,
+        priorityReason: signals.map(signal => signal.label).join("؛ "),
+        priorityEvidenceConfidence,
+        ...(examWeightKnown && component && blueprint ? {
+          examComponentLabel: component.label,
+          examComponentMarks: component.marks ?? undefined,
+          examPaperMarks: blueprint.paperMarks ?? undefined,
+        } : {}),
       },
     };
   });
 
-  // Reorder independent branch queues by their evidence score, but preserve
-  // the original lesson sequence and all sub-steps within each branch.
   const groups = new Map<string, typeof ranked>();
   for (const item of ranked) {
     const group = groups.get(item.groupKey) ?? [];
@@ -700,6 +776,9 @@ export function applyVerifiedExamComponentWeights(
     const rightScore = right.reduce((sum, item) => sum + item.score, 0) / right.length;
     return rightScore - leftScore || left[0].index - right[0].index;
   });
+
+  // Preserve prerequisite order within each curriculum branch; interleave
+  // independent branches by their evidence-backed urgency.
   const steps: GeneratedPlan["steps"] = [];
   let round = 0;
   while (orderedGroups.some(group => round < group.length)) {
