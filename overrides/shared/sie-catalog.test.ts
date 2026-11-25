@@ -200,6 +200,28 @@ describe("Arabic course taxonomy", () => {
     expect(new Set([...expressionIds, ...spellingIds]).size).toBe(expressionIds.length + spellingIds.length);
   });
 
+  it("distinguishes spelling course lessons from textbook applications without changing saved IDs", () => {
+    const options = getSIECheckpointProgressOptions("ARB_G2_BAC", "ARB_SPELLING");
+    expect(options).toHaveLength(8);
+    const teacherCourseOptions = options.filter(option =>
+      option.value === "ARB_C09_TAA_MARBUTA" || option.value === "ARB_C20_HAMZA"
+    );
+    expect(teacherCourseOptions).toHaveLength(2);
+    expect(teacherCourseOptions.every(option => option.description?.includes("كورس المدرس"))).toBe(true);
+    const textbookApplications = options.filter(option => option.value.startsWith("ARB_SPELL_"));
+    expect(textbookApplications).toHaveLength(6);
+    expect(textbookApplications.every(option =>
+      option.description?.includes("تطبيق إملائي") && option.description.includes("كتاب الطالب")
+    )).toBe(true);
+    expect(options.some(option => option.description?.includes("الدرس تطبيق"))).toBe(false);
+    const legacyApplication = getSIECheckpointChoices("ARB_G2_BAC")
+      .find(choice => choice.nodeId === "ARB_SPELL_U1_TAA_MARBUTA")!;
+    const displayLabel = getSIECheckpointChoiceDisplayLabel(legacyApplication);
+    expect(displayLabel).toContain("تطبيق إملائي");
+    expect(displayLabel).toContain("كتاب الطالب");
+    expect(displayLabel).not.toContain("الدرس تطبيق");
+  });
+
   it("uses the student's visible Arabic topic units to match existing tasks without changing progress", () => {
     const visibleNahw = getSIECheckpointProgressBranches("ARB_G2_BAC").find(branch => branch.branchId === "ARB_NAHW");
     expect(visibleNahw?.choices.filter(choice => choice.title.includes("الممنوع من الصرف"))).toHaveLength(1);
