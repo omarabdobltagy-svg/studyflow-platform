@@ -57,6 +57,8 @@ type PlanView = {
   durationLabel: string;
   steps: PlanStep[];
   habits: { title: string; cue: string }[];
+  // Export component compatibility only; deliberately blank so no AI self-test is created.
+  reviewQuestion: string;
   taskSync?: { parentGoalId: number; stageCount: number; taskCount: number; routineId?: number | null };
 };
 const PLANNING_READY_BY = "2027-06-11";
@@ -111,6 +113,7 @@ function parseSavedPlan(record: { planJson: string }): PlanView | null {
         ...raw,
       })),
       habits: Array.isArray(saved.habits) ? saved.habits : [],
+      reviewQuestion: "",
     };
   } catch {
     return null;
@@ -147,6 +150,7 @@ export default function Planner() {
         ...result,
         habits: Array.isArray(result.habits) ? result.habits : [],
         steps: Array.isArray(result.steps) ? result.steps : [],
+        reviewQuestion: "",
       });
       setApproved(false);
       void utils.plans.list.invalidate();
