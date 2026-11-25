@@ -183,7 +183,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
         : step === 3
           ? Boolean(track && (track.fixedSubjectIds || firstElectiveGroup.length === 0 || firstElectiveGroup.some(item => item.subjectId === form.electiveSubjectId)))
           : Boolean(currentSetupSubject && form.courseModes[currentSetupSubject.subjectId]
-            && (editMode || form.teacherScheduleUnfixed[currentSetupSubject.subjectId]
+            && (form.teacherScheduleUnfixed[currentSetupSubject.subjectId]
               || (form.teacherSchedules[currentSetupSubject.subjectId] ?? []).length > 0));
 
   const next = () => {
@@ -236,16 +236,14 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
     const teacherSelections = Object.fromEntries(
       Object.entries(form.teacherSelections).filter(([, teacherId]) => teacherId && teacherId !== SKIP_TEACHER)
     );
-    if (!editMode) {
-      const missingSchedule = selectedSubjects.find(subject =>
-        !(form.teacherSchedules[subject.subjectId] ?? []).length
-        && !form.teacherScheduleUnfixed[subject.subjectId]
-      );
-      if (missingSchedule) {
-        setSubjectSetupIndex(selectedSubjects.findIndex(subject => subject.subjectId === missingSchedule.subjectId));
-        toast.error("سجّل موعد المحاضرة لمادة " + missingSchedule.nameAr + " أو حدّد أن مواعيدها غير ثابتة حاليًا.");
-        return;
-      }
+    const missingSchedule = selectedSubjects.find(subject =>
+      !(form.teacherSchedules[subject.subjectId] ?? []).length
+      && !form.teacherScheduleUnfixed[subject.subjectId]
+    );
+    if (missingSchedule) {
+      setSubjectSetupIndex(selectedSubjects.findIndex(subject => subject.subjectId === missingSchedule.subjectId));
+      toast.error("سجّل موعد المحاضرة لمادة " + missingSchedule.nameAr + " أو حدّد أن مواعيدها غير ثابتة حاليًا.");
+      return;
     }
     complete.mutate({
       studentName: form.studentName.trim(),
@@ -551,7 +549,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                         <p className="text-sm font-bold">مواعيد محاضرات المدرس</p>
                         <p className="mt-1 text-xs leading-6 text-muted-foreground">سجّل المواعيد المتكررة لهذه المادة. ده يساعد المنصة تحط مذاكرة الدرس قبل المحاضرة وتكتشف تعارضات الجدول. تقدر تضيف أو تعدّل المواعيد لاحقًا من ملفك الدراسي.</p>
                       </div>
-                      <span className="rounded-full border border-primary/20 bg-primary/5 px-3 py-1.5 text-[10px] font-bold text-primary">{editMode ? "قابل للتعديل" : "مطلوب لكل مادة"}</span>
+                      <span className="rounded-full border border-primary/20 bg-primary/5 px-3 py-1.5 text-[10px] font-bold text-primary">"مطلوب لكل مادة"</span>
                     </div>
                     <label className="mt-4 flex items-start gap-2 rounded-xl border border-border/70 bg-card px-3 py-3 text-xs leading-6">
                       <input
