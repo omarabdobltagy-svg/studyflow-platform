@@ -364,6 +364,14 @@ describe("subject curriculum layouts", () => {
     expect(visible[0].branchTitle).toBe("الوحدات (Units)");
   });
 
+  it("shows the English lesson number and skill type in progress picker descriptions", () => {
+    const vocabulary = getSIECheckpointProgressOptions("ENG1_G2_BAC", "ENG_VOCABULARY");
+    const grammar = getSIECheckpointProgressOptions("ENG1_G2_BAC", "ENG_GRAMMAR");
+    expect(vocabulary[0].description).toContain("Lesson 1 · Vocabulary");
+    expect(vocabulary[0].description).toContain("الوحدة 1");
+    expect(grammar[0].description).toContain("Lesson 2 · Grammar");
+    expect(grammar[0].description).toContain("الوحدة 1");
+  });
   it("gives subjects without a loaded index one editable linear curriculum path", () => {
     const branches = getSIECheckpointBranches("PHY_G2_BAC_PENDING");
     expect(branches).toHaveLength(1);
