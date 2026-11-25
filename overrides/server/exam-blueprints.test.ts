@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildExamBlueprintContext, getSubjectExamBlueprint } from "./exam-blueprints";
+import { buildExamBlueprintContext, getExamComponentForText, getSubjectExamBlueprint } from "./exam-blueprints";
 
 describe("second-year baccalaureate exam blueprints", () => {
   it("uses the current first-term English component marks without promoting the story", () => {
@@ -14,14 +14,16 @@ describe("second-year baccalaureate exam blueprints", () => {
       .toBeCloseTo(8 / 30);
   });
 
-  it("does not invent Arabic component marks when the breakdown is not verified", () => {
+  it("shows the published partial Arabic breakdown without using inconsistent marks as weights", () => {
     const blueprint = getSubjectExamBlueprint("ARB_G2_BAC", "اللغة العربية");
     expect(blueprint?.annualSubjectMarks).toBe(100);
     expect(blueprint?.paperMarks).toBe(60);
-    expect(blueprint?.components.length).toBeGreaterThan(0);
-    expect(blueprint?.components.every(component => component.marks === null && component.assessmentShare === null))
-      .toBe(true);
+    expect(blueprint?.components.map(component => component.marks)).toEqual([8, 7, 15, 9, 10, 3, 7]);
+    expect(blueprint?.components.every(component => component.assessmentShare === null)).toBe(true);
+    expect(blueprint?.components.reduce((sum, component) => sum + (component.marks ?? 0), 0)).toBe(59);
     expect(blueprint?.unverified.some(note => note.includes("59 لا 60"))).toBe(true);
+    expect(getExamComponentForText("ARB_G2_BAC", "اللغة العربية", "قصة وا إسلاماه والنص الأدبي")?.marks).toBe(7);
+    expect(getExamComponentForText("ARB_G2_BAC", "اللغة العربية", "النحو")?.marks).toBe(10);
   });
 
   it("keeps history and programming unit weights unknown instead of treating units as equal official weights", () => {
