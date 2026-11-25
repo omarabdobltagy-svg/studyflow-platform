@@ -66,20 +66,23 @@ const arabicFirstTerm: SubjectExamBlueprint = {
   mcqShare: 0.5,
   essayShare: 0.5,
   components: [
-    { id: "reading", label: "القراءة والنصوص المعلوماتية والأدبية", marks: null, assessmentShare: null, priorityNote: "مكوّن رسمي في الورقة؛ الوزن التفصيلي غير مثبت هنا" },
-    { id: "literature", label: "الأدب والنصوص الشعرية والنثرية", marks: null, assessmentShare: null, priorityNote: "مكوّن رسمي في الورقة؛ الوزن التفصيلي غير مثبت هنا" },
-    { id: "rhetoric", label: "البلاغة", marks: null, assessmentShare: null, priorityNote: "مكوّن رسمي في الورقة؛ الوزن التفصيلي غير مثبت هنا" },
-    { id: "grammar", label: "النحو", marks: null, assessmentShare: null, priorityNote: "مكوّن رسمي في الورقة؛ الوزن التفصيلي غير مثبت هنا" },
-    { id: "expression", label: "التعبير الوظيفي والإبداعي", marks: null, assessmentShare: null, priorityNote: "مكوّن رسمي في الورقة؛ الوزن التفصيلي غير مثبت هنا" },
+    { id: "reading", label: "القراءة والنص المعلوماتي", marks: 8, questionCount: 5, assessmentShare: null, priorityNote: "8 درجات في التوزيع المنشور؛ لا تدخل في الوزن الحسابي حتى مراجعة الجدول الأصلي" },
+    { id: "story_literary", label: "قصة وا إسلاماه والنص الأدبي", marks: 7, questionCount: 5, assessmentShare: null, priorityNote: "7 درجات في التوزيع المنشور؛ لا تدخل في الوزن الحسابي حتى مراجعة الجدول الأصلي" },
+    { id: "poetry_prose", label: "النصوص الشعرية والنثرية", marks: 15, questionCount: 13, assessmentShare: null, priorityNote: "15 درجة في التوزيع المنشور؛ لا تدخل في الوزن الحسابي حتى مراجعة الجدول الأصلي" },
+    { id: "literature_rhetoric", label: "الأدب والبلاغة", marks: 9, assessmentShare: null, priorityNote: "9 درجات في التوزيع المنشور؛ لا يدخل الوزن في الحساب لأن مجموع البنود المنشور غير متطابق" },
+    { id: "grammar", label: "النحو", marks: 10, questionCount: 8, assessmentShare: null, priorityNote: "10 درجات في التوزيع المنشور؛ لا تدخل في الوزن الحسابي حتى مراجعة الجدول الأصلي" },
+    { id: "functional_writing", label: "التعبير الوظيفي", marks: 3, questionCount: 1, assessmentShare: null, priorityNote: "3 درجات في التوزيع المنشور؛ لا تدخل في الوزن الحسابي حتى مراجعة الجدول الأصلي" },
+    { id: "creative_writing", label: "التعبير الإبداعي", marks: 7, questionCount: 1, assessmentShare: null, priorityNote: "7 درجات في التوزيع المنشور؛ لا تدخل في الوزن الحسابي حتى مراجعة الجدول الأصلي" },
   ],
   unverified: [
-    "المتاح حاليًا يثبت أن الورقة من 60 درجة و40 سؤالًا وزمنها 3 ساعات مع توازن 50% اختيار من متعدد و50% مقالي.",
-    "لا نعتمد توزيعًا رقميًا فرعيًا على المكوّنات لأن النسخة التفصيلية المتداولة تجمع إلى 59 لا 60؛ يلزم استخراج جدول PDF الأصلي قبل استخدام أرقام فرعية.",
+    "الورقة من 60 درجة و40 سؤالًا وزمنها 3 ساعات، مع 50% اختيار من متعدد و50% مقالي.",
+    "تفصيل الدرجات المنشور للمكوّنات يجمع إلى 59 لا 60 (8+7+15+9+10+3+7)، لذلك تُعرض الدرجات كدليل جزئي ولا تُستخدم لحساب الوزن النسبي قبل مراجعة جدول PDF الأصلي.",
+    "أعداد الأسئلة المتاحة في المصدر: القراءة 5، القصة والنص الأدبي 5، النصوص الشعرية والنثرية 13، النحو 8، والتعبير الوظيفي والإبداعي سؤال واحد لكل منهما؛ لم يُثبت عدد أسئلة الأدب والبلاغة منفصلًا.",
     "هذه مواصفة الفصل الدراسي الأول 2026/2027 وليست مواصفة نهائي آخر السنة.",
   ],
   sourceUrls: [
     "https://shbabbek.com/show/287545",
-    "https://aloostaz.com/eg/manahej/thanawi/saf-2/term-1/",
+    "https://www.almasryalyoum.com/news/details/4406783",
   ],
 };
 
@@ -150,11 +153,26 @@ export function getSubjectExamBlueprint(subjectId: string, subjectName = ""): Su
 
 export function getExamComponentForText(subjectId: string, subjectName: string, text: string): ExamComponent | null {
   const blueprint = getSubjectExamBlueprint(subjectId, subjectName);
-  if (!blueprint || blueprint.subjectKey !== "english" || blueprint.appliesTo !== "first_term_2026_2027") return null;
+  if (!blueprint) return null;
   const normalized = text.normalize("NFKC").toLocaleLowerCase("ar")
     .replace(/[ً-ٰٟـ]/g, "")
     .replace(/[أإآ]/g, "ا")
     .replace(/ى/g, "ي");
+
+  if (blueprint.subjectKey === "arabic" && blueprint.appliesTo === "first_term_2026_2027") {
+    const componentId =
+      /النص المعلوماتي|القراءة|قراءة/u.test(normalized) ? "reading"
+        : /وا اسلاماه|القصة|النص الادبي/u.test(normalized) ? "story_literary"
+          : /النصوص الشعريه|النصوص النثريه|الشعر|النثر/u.test(normalized) ? "poetry_prose"
+            : /الادب|البلاغه/u.test(normalized) ? "literature_rhetoric"
+              : /النحو|قواعد/u.test(normalized) ? "grammar"
+                : /التعبير الوظيفي|دعوه|اعلان|تعليق/u.test(normalized) ? "functional_writing"
+                  : /التعبير الابداعي|موضوع تعبيري/u.test(normalized) ? "creative_writing"
+                    : null;
+    return componentId ? blueprint.components.find(component => component.id === componentId) ?? null : null;
+  }
+
+  if (blueprint.subjectKey !== "english" || blueprint.appliesTo !== "first_term_2026_2027") return null;
   const componentId =
     /قصة|story|novel|رواية/u.test(normalized) ? "story"
       : /ترجم|translation/u.test(normalized) ? "translation"
