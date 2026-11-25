@@ -808,12 +808,11 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
   return [
     "اسم الطالب: " + profile.studentName,
     "النظام: " + profile.educationSystem + "؛ الصف: " + profile.gradeYear + "؛ المسار: " + profile.track,
-    "مواعيد حصص المدرسين الأسبوعية التي سجلها الطالب (مرجع تخطيط ملزم، وليست إعلان إلغاء): " + Object.entries((selection.teacherSchedules || {}) as Record<string, Array<{dayOfWeek:number;startTime:string;durationMinutes:number}>>)
+    "مواعيد حصص المدرسين الأسبوعية التي سجلها الطالب (اليوم ووقت البداية فقط؛ لا تفترض مدة للحصة أو وقت انتهائها، وهي مرجع تخطيط ملزم وليست إعلان إلغاء): " + Object.entries((selection.teacherSchedules || {}) as Record<string, Array<{dayOfWeek:number;startTime:string}>>)
       .filter(([subjectId]) => (profile.subjectIds || []).includes(subjectId))
       .flatMap(([subjectId, slots]) => (Array.isArray(slots) ? slots : []).map(slot =>
         (getSIESubject(subjectId)?.nameAr ?? subjectId) + " — " +
-        ["الأحد","الإثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"][slot.dayOfWeek] + " الساعة " + slot.startTime +
-        " — " + slot.durationMinutes + " دقيقة"
+        ["الأحد","الإثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"][slot.dayOfWeek] + " الساعة " + slot.startTime
       )).join("؛ ") || "لم يسجل الطالب مواعيد حصص أسبوعية بعد.",
     "المواد ومواضعها: \n" + (subjectContext || "لا توجد مواد مسجلة"),
     "مرجع مواصفات الامتحان وتوزيع الأسئلة/الدرجات (التزم بحدود كل مستند):\n" + examBlueprintContext,
@@ -1113,7 +1112,7 @@ function formatUpcomingTeacherSessions(
 ): string {
   if (!profile) return "لا يوجد ملف دراسي لقراءة مواعيد الحصص.";
   const selection = (profile.selection ?? {}) as Record<string, any>;
-  const schedules = (selection.teacherSchedules ?? {}) as Record<string, Array<{ dayOfWeek: number; startTime: string; durationMinutes: number }>>;
+  const schedules = (selection.teacherSchedules ?? {}) as Record<string, Array<{ dayOfWeek: number; startTime: string }>>;
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
   const currentTime = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Africa/Cairo",
@@ -1125,7 +1124,7 @@ function formatUpcomingTeacherSessions(
   if (Number.isNaN(base.getTime())) return "تعذر التحقق من تواريخ الحصص.";
   const sameDayAsNow = (startDate || today) === today;
   const dayNames = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
-  const sessions: Array<{ date: string; time: string; label: string; duration: number }> = [];
+  const sessions: Array<{ date: string; time: string; label: string }> = [];
 
   for (const [subjectId, slots] of Object.entries(schedules)) {
     if (!(profile.subjectIds ?? []).includes(subjectId) || !Array.isArray(slots)) continue;
@@ -1141,14 +1140,13 @@ function formatUpcomingTeacherSessions(
         date: date.toISOString().slice(0, 10),
         time: slot.startTime,
         label: subjectName + " · " + dayNames[slot.dayOfWeek],
-        duration: slot.durationMinutes,
       });
     }
   }
 
   sessions.sort((left, right) => left.date.localeCompare(right.date) || left.time.localeCompare(right.time));
   return sessions.length
-    ? sessions.map(session => session.label + " · " + session.date + " · " + session.time + " · " + session.duration + " دقيقة").join("\n")
+    ? sessions.map(session => session.label + " · " + session.date + " · " + session.time).join("\n")
     : "لا توجد حصة مسجلة قادمة داخل أفق هذه الخطة.";
 }
 
