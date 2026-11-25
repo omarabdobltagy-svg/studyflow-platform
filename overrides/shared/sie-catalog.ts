@@ -784,7 +784,7 @@ export const SIE_CHECKPOINT_CHOICES: Record<string, SIECheckpointChoice[]> = {
     { nodeId: "ARB_C06_VIEWPOINT", title: "شرح زاوية الرؤية", unitTitle: "الترم الأول", courseSequenceNumber: 6, lessonType: "reading", sourceLabel: "فهرس منصة الشرح", branchId: "ARB_READING", branchTitle: "القراءة", branchType: "course_track" },
     { nodeId: "ARB_U1_L2", title: "الخلق جوهر الفضيلة", unitTitle: "العلم والضمير", unitNumber: 1, lessonNumber: "2", courseSequenceNumber: 7, lessonType: "prose", sourceLabel: "فهرس الدروس وكتاب الطالب", branchId: "ARB_TEXTS", branchTitle: "النصوص", branchType: "course_track" },
     { nodeId: "ARB_C08_IMPLICIT_MEANING", title: "شرح الدلالة الضمنية", unitTitle: "الترم الأول", courseSequenceNumber: 8, lessonType: "reading", sourceLabel: "فهرس منصة الشرح", branchId: "ARB_READING", branchTitle: "القراءة", branchType: "course_track" },
-    { nodeId: "ARB_C09_TAA_MARBUTA", title: "التاء المربوطة والهاء المربوطة", unitTitle: "الترم الأول", courseSequenceNumber: 9, lessonType: "spelling", sourceLabel: "فهرس منصة الشرح", branchId: "ARB_SPELLING", branchTitle: "الإملاء", branchType: "course_track" },
+    { nodeId: "ARB_C09_TAA_MARBUTA", title: "الفرق بين التاء المربوطة والهاء والتاء المفتوحة", unitTitle: "الترم الأول", courseSequenceNumber: 9, lessonType: "spelling", sourceLabel: "فهرس منصة الشرح", branchId: "ARB_SPELLING", branchTitle: "الإملاء", branchType: "course_track" },
     { nodeId: "ARB_C10_ARGUMENT_PARA", title: "كيفية كتابة فقرة حجاجية", unitTitle: "الترم الأول", courseSequenceNumber: 10, lessonType: "expression", sourceLabel: "فهرس منصة الشرح", branchId: "ARB_EXPRESSION", branchTitle: "التعبير", branchType: "course_track" },
     { nodeId: "ARB_C11_FIGURE", title: "الصورة الخيالية", unitTitle: "الترم الأول", courseSequenceNumber: 11, lessonType: "rhetoric", sourceLabel: "فهرس منصة الشرح", branchId: "ARB_BALAGHA", branchTitle: "البلاغة", branchType: "course_track" },
     { nodeId: "ARB_C12_STORY1", title: "حكايات الغريب", author: "جمال الغيطاني", unitTitle: "من روائع الأدب العربي", courseSequenceNumber: 12, lessonType: "story", sourceLabel: "كتاب من روائع الأدب العربي - 2027", branchId: "ARB_LITERATURE", branchTitle: "الأدب والقصة", branchType: "course_track" },
@@ -795,6 +795,7 @@ export const SIE_CHECKPOINT_CHOICES: Record<string, SIECheckpointChoice[]> = {
     { nodeId: "ARB_C17_TEXT_DISCOURSE", title: "أنواع الخطاب في النص المعلوماتي", unitTitle: "الترم الأول", courseSequenceNumber: 17, lessonType: "reading", sourceLabel: "فهرس منصة الشرح", branchId: "ARB_READING", branchTitle: "القراءة", branchType: "course_track" },
     { nodeId: "ARB_C18_IJAZ", title: "الإيجاز في البلاغة", unitTitle: "الترم الأول", courseSequenceNumber: 18, lessonType: "rhetoric", sourceLabel: "فهرس منصة الشرح", branchId: "ARB_BALAGHA", branchTitle: "البلاغة", branchType: "course_track" },
     { nodeId: "ARB_C19_ITNAB", title: "الإطناب", unitTitle: "الترم الأول", courseSequenceNumber: 19, lessonType: "rhetoric", sourceLabel: "فهرس منصة الشرح", branchId: "ARB_BALAGHA", branchTitle: "البلاغة", branchType: "course_track" },
+    { nodeId: "ARB_SPELL_U2_MIDDLE_HAMZA", title: "رسم الهمزة المتوسطة", unitTitle: "سلطان الكلمة الرقمية", unitNumber: 2, lessonNumber: "إملاء", lessonType: "spelling", note: "درس إملائي مستقل وارد ضمن الوحدة الثانية من كتاب الطالب، وليس مجرد تدريب تطبيقي.", sourceLabel: "كتاب الطالب - الجزء الأول، الوحدة الثانية", branchId: "ARB_SPELLING", branchTitle: "الإملاء", branchType: "course_track" },
     { nodeId: "ARB_C20_HAMZA", title: "همزة القطع وألف الوصل", unitTitle: "الترم الأول", courseSequenceNumber: 20, lessonType: "spelling", sourceLabel: "فهرس منصة الشرح", branchId: "ARB_SPELLING", branchTitle: "الإملاء", branchType: "course_track" },
     { nodeId: "ARB_U2_L2", title: "بين الذوق والعقل", unitTitle: "سلطان الكلمة الرقمية", unitNumber: 2, lessonNumber: "2", courseSequenceNumber: 21, lessonType: "prose", sourceLabel: "فهرس الدروس وكتاب الطالب", branchId: "ARB_TEXTS", branchTitle: "النصوص", branchType: "course_track" },
 
@@ -1150,7 +1151,7 @@ export function getSIECheckpointBranches(subjectId: string): SIECheckpointBranch
     !(subjectId === "ARB_G2_BAC" && choice.branchId === "ARB_READING" && readingSkillNodeIds.has(choice.nodeId))
     // Keep legacy exercise IDs in raw catalog records, but do not expose practice activities
     // as standalone lessons in the student-facing spelling branch.
-    && !(subjectId === "ARB_G2_BAC" && choice.branchId === "ARB_SPELLING" && choice.nodeId.startsWith("ARB_SPELL_"))
+    && !(subjectId === "ARB_G2_BAC" && choice.branchId === "ARB_SPELLING" && choice.nodeId.startsWith("ARB_SPELL_") && choice.nodeId !== "ARB_SPELL_U2_MIDDLE_HAMZA")
   );
   const groups = new Map<string, SIECheckpointBranch>();
   for (const choice of filteredChoices) {
