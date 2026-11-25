@@ -740,9 +740,11 @@ export function applyVerifiedExamComponentWeights(
     const priority = score >= 0.82 ? "critical"
       : score >= 0.65 ? "high"
         : score >= 0.42 ? "medium" : "low";
-    const priorityEvidenceConfidence = examWeightKnown && (branchProgress?.gapCount !== null || scoreValues.length > 0)
+    const hasCalculatedGap = branchProgress?.gapCount !== null && branchProgress?.gapCount !== undefined;
+    const hasAssessmentEvidence = scoreValues.length > 0 || Boolean(matchedWeakConcept);
+    const priorityEvidenceConfidence = examWeightKnown && (hasCalculatedGap || hasAssessmentEvidence)
       ? "high" as const
-      : (branchProgress?.gapCount !== null && branchProgress?.gapCount !== undefined) || scoreValues.length > 0
+      : hasCalculatedGap || hasAssessmentEvidence
         ? "medium" as const
         : "low" as const;
 
