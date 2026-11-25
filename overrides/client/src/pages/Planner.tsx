@@ -723,7 +723,7 @@ function PlanCard({
                   </a>
                 )}
                 <div className="mt-3 flex flex-wrap gap-1.5 text-[10px] text-muted-foreground">
-                  {step.examComponentLabel && <span className="rounded-md border border-border bg-background px-2 py-1">{step.examComponentLabel} · {step.examComponentMarks}/{step.examPaperMarks}</span>}
+
                   {step.priorityScore !== undefined && <span className="rounded-md border border-border bg-background px-2 py-1">أولوية {step.priorityScore}/100</span>}
                   {step.difficulty && <span className="rounded-md border border-border bg-background px-2 py-1">الصعوبة: {difficultyLabel(step.difficulty)}</span>}
                   {step.printedPageRange && <span className="rounded-md border border-border bg-background px-2 py-1">صفحات {step.printedPageRange[0]}–{step.printedPageRange[1]}</span>}
