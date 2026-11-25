@@ -1406,7 +1406,9 @@ export function matchSIECheckpointTask(
         candidates.push({
           subjectId,
           branchId: branch.branchId,
-          branchTitle: branch.branchTitle,
+          branchTitle: subjectId === "ARB_G2_BAC" && branch.branchId === "ARB_READING"
+            ? "نصوص الوحدة"
+            : branch.branchTitle,
           nodeId: choice.nodeId,
           title: choice.title,
           confidence: taskNormalized === titleNormalized
