@@ -726,6 +726,7 @@ export async function syncDailyPlanGoalTree(
       minutes: number;
       category: string;
       priority?: "critical" | "high" | "medium" | "low";
+      resourceRecommendation?: { title: string; url: string; teacherName?: string; reason: string };
     }>;
   },
   schedule: { startDate: string; dailyMinutes: number },
@@ -742,6 +743,14 @@ export async function syncDailyPlanGoalTree(
     throw new Error("لا يمكن إنشاء مهام يومية من خطة بلا خطوات عملية.");
   }
   const dueDates = schedulePlanStepDates(schedule.startDate, steps, schedule.dailyMinutes);
+  const taskNotes = (step: typeof steps[number]) => [
+    step.detail,
+    ...(step.resourceRecommendation ? [
+      "مشاهدة إضافية موصى بها من " + (step.resourceRecommendation.teacherName || "المدرس") + ": " + step.resourceRecommendation.title,
+      step.resourceRecommendation.url,
+      "سبب التوصية: " + step.resourceRecommendation.reason,
+    ] : []),
+  ].filter(Boolean).join("\n\n");
   const startDate = new Date(`${schedule.startDate}T12:00:00.000Z`);
 
   return db.transaction(async tx => {
@@ -890,7 +899,7 @@ export async function syncDailyPlanGoalTree(
         if (task) {
           await tx.update(tasks).set({
             title: step.title,
-            notes: step.detail,
+            notes: taskNotes(step),
             category: step.category || "دراسة",
             priority,
             estimatedMinutes: step.minutes,
@@ -904,7 +913,7 @@ export async function syncDailyPlanGoalTree(
           userId,
           goalId: stage.id,
           title: step.title,
-          notes: step.detail,
+          notes: taskNotes(step),
           category: step.category || "دراسة",
           priority,
           estimatedMinutes: step.minutes,
@@ -931,7 +940,7 @@ export async function syncDailyPlanGoalTree(
         userId,
         goalId: stageGoalId,
         title: step.title,
-        notes: step.detail,
+        notes: taskNotes(step),
         category: step.category || "دراسة",
         priority,
         estimatedMinutes: step.minutes,
