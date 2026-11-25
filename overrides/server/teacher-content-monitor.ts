@@ -105,9 +105,10 @@ export function isSecondYearBaccalaureateUpdate(update: { title?: unknown; descr
     .toLocaleLowerCase("ar")
     .replace(/[أإآٱ]/g, "ا")
     .replace(/[ً-ٰٟـ]/g, "");
-  const hasBaccalaureateMarker = /بكالوريا|baccalaureate|(?:^|\\W)2\\s*bac(?:calaureate)?(?:$|\\W)|(?:^|\\W)bac\\s*2(?:$|\\W)/iu.test(text);
-  const hasSecondYearMarker = /الصف\\s*الثاني|ثاني\\s*(?:ثانوي|الثانوي)|تاني(?:ة)?\\s*(?:ثانوي|بكالوريا)|الثانيه|الثانية|second\\s*(?:year|secondary)|2nd\\s*(?:year|secondary)|grade\\s*11|\\bg11\\b|(?:^|\\W)2\\s*bac(?:calaureate)?(?:$|\\W)/iu.test(text);
-  return hasBaccalaureateMarker && hasSecondYearMarker;
+  const hasBaccalaureateMarker = /بكالوريا|baccalaureate|(?:^|\W)2\s*bac(?:calaureate)?(?:$|\W)|(?:^|\W)bac\s*2(?:$|\W)/iu.test(text);
+  const hasSecondYearMarker = /الصف\s*الثاني|ثاني\s*(?:ثانوي|الثانوي)|تاني(?:ة)?\s*(?:ثانوي|بكالوريا)|الثانيه|الثانية|second\s*(?:year|secondary)|2nd\s*(?:year|secondary)|grade\s*11|\bg11\b|(?:^|\W)2\s*bac(?:calaureate)?(?:$|\W)/iu.test(text);
+  const hasOtherYearMarker = /(?:الصف|دفعة|سنة)\s*(?:الأول|الأولى|الاول|اولى|الثالث|الثالثة|تالتة)|(?:الأول|الأولى|اولى|الثالث|الثالثة|تالتة)\s*بكالوريا|(?:first|third)\s*(?:year|secondary|bac)|(?:1st|3rd)\s*(?:year|secondary)|grade\s*(?:10|12)|\bg(?:10|12)\b/iu.test(text);
+  return hasBaccalaureateMarker && hasSecondYearMarker && !hasOtherYearMarker;
 }
 export function selectedTeacherIds(profile: TeacherMonitoringProfile): string[] {
   if (!isSecondYearBaccalaureateProfile(profile)) return [];
