@@ -312,14 +312,25 @@ export async function listStudentTeacherMonitoringProfiles() {
   const database = await requireDb();
   const rows = await database.select({
     userId: studentProfiles.userId,
+    educationSystem: studentProfiles.educationSystem,
+    gradeYear: studentProfiles.gradeYear,
+    subjectsJson: studentProfiles.subjectsJson,
     teacherSelectionsJson: studentProfiles.teacherSelectionsJson,
     selectionJson: studentProfiles.selectionJson,
   }).from(studentProfiles);
-  return rows.map(row => ({
-    userId: row.userId,
-    teacherSelections: parseJson<Record<string, string>>(row.teacherSelectionsJson, {}),
-    selection: parseJson<Record<string, unknown>>(row.selectionJson ?? "{}", {}),
-  }));
+  return rows.map(row => {
+    const selection = parseJson<Record<string, unknown>>(row.selectionJson ?? "{}", {});
+    const subjects = parseJson<string[]>(row.subjectsJson, []);
+    const educationSystem = row.educationSystem as "baccalaureate" | "general_secondary" | "other";
+    return {
+      userId: row.userId,
+      educationSystem,
+      gradeYear: row.gradeYear,
+      subjectIds: resolveStudentSubjectIds(subjects, selection, educationSystem),
+      teacherSelections: parseJson<Record<string, string>>(row.teacherSelectionsJson, {}),
+      selection,
+    };
+  });
 }
 
 export async function saveStudentProfile(userId: number, data: StudentProfileInput) {
@@ -718,7 +729,7 @@ export async function syncDailyPlanGoalTree(
     }>;
   },
   schedule: { startDate: string; dailyMinutes: number },
-  identity: { goalTitle?: string; goalCategory?: string } = {},
+  identity: { goalTitle?: string; goalCategory?: string; supersedeCategories?: string[] } = {},
 ) {
   const db = await requireDb();
   const goalTitle = identity.goalTitle?.trim() || "خطة StudyFlow اليومية";
@@ -734,6 +745,49 @@ export async function syncDailyPlanGoalTree(
   const startDate = new Date(`${schedule.startDate}T12:00:00.000Z`);
 
   return db.transaction(async tx => {
+    // Retire open tasks from older AI-generated plans before writing the new one.
+    // Completed tasks remain as historical evidence; manually created tasks are untouched.
+    const supersedeCategories = [...new Set(identity.supersedeCategories ?? [goalCategory])];
+    const previousParents = await tx.select().from(goals).where(and(
+      eq(goals.userId, userId),
+      inArray(goals.category, supersedeCategories),
+      isNull(goals.parentGoalId),
+    ));
+    for (const previousParent of previousParents) {
+      if (previousParent.title === goalTitle && previousParent.category === goalCategory) continue;
+      const previousStages = await tx.select().from(goals).where(and(
+        eq(goals.userId, userId),
+        eq(goals.parentGoalId, previousParent.id),
+      ));
+      const previousStageIds = previousStages.map(stage => stage.id);
+      if (!previousStageIds.length) {
+        await tx.delete(goals).where(and(eq(goals.id, previousParent.id), eq(goals.userId, userId)));
+        continue;
+      }
+      const previousTasks = await tx.select().from(tasks).where(and(
+        eq(tasks.userId, userId),
+        inArray(tasks.goalId, previousStageIds),
+      ));
+      await tx.delete(tasks).where(and(
+        eq(tasks.userId, userId),
+        inArray(tasks.goalId, previousStageIds),
+        eq(tasks.status, "todo"),
+      ));
+      const stagesWithCompletedWork = new Set(previousTasks.filter(task => task.status === "done").map(task => task.goalId));
+      for (const stage of previousStages) {
+        if (!stagesWithCompletedWork.has(stage.id)) {
+          await tx.delete(goals).where(and(eq(goals.id, stage.id), eq(goals.userId, userId)));
+        } else {
+          await tx.update(goals).set({ status: "completed" }).where(and(eq(goals.id, stage.id), eq(goals.userId, userId)));
+        }
+      }
+      if (stagesWithCompletedWork.size === 0) {
+        await tx.delete(goals).where(and(eq(goals.id, previousParent.id), eq(goals.userId, userId)));
+      } else {
+        await tx.update(goals).set({ status: "paused" }).where(and(eq(goals.id, previousParent.id), eq(goals.userId, userId)));
+      }
+    }
+
     const existingParents = await tx.select().from(goals).where(and(
       eq(goals.userId, userId),
       eq(goals.title, goalTitle),
@@ -1396,6 +1450,12 @@ export async function saveAiPlan(userId: number, data: { prompt: string; title: 
 export async function listAiPlans(userId: number) {
   const db = await requireDb();
   return db.select().from(aiPlans).where(eq(aiPlans.userId, userId)).orderBy(desc(aiPlans.createdAt)).limit(12);
+}
+
+export async function deleteAiPlan(userId: number, planId: number) {
+  const db = await requireDb();
+  const result = await db.delete(aiPlans).where(and(eq(aiPlans.id, planId), eq(aiPlans.userId, userId)));
+  if (result[0].affectedRows === 0) throw new Error("الخطة غير موجودة أو لا تملك حذفها.");
 }
 
 export async function getLatestAiPlanByPromptPrefix(userId: number, prefix: string) {
