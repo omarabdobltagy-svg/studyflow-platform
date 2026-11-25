@@ -611,21 +611,28 @@ export function normalizeApprovedPlanSteps(steps: ApprovedPlanStep[]) {
     .filter(step => step.title.length > 0);
 }
 
-export function schedulePlanStepDates(startDate: string, steps: Array<{ minutes: number }>, dailyMinutes: number) {
+export function schedulePlanStepDates(
+  startDate: string,
+  steps: Array<{ minutes: number }>,
+  dailyMinutes: number,
+  daysPerWeek = 7,
+) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) throw new Error("تاريخ بداية الخطة غير صالح.");
   const parsedStart = new Date(`${startDate}T12:00:00.000Z`);
   if (Number.isNaN(parsedStart.getTime()) || parsedStart.toISOString().slice(0, 10) !== startDate) throw new Error("تاريخ بداية الخطة غير صالح.");
   const capacity = Math.min(600, Math.max(20, Math.round(dailyMinutes)));
-  let dayOffset = 0;
+  const weeklyDays = Math.min(7, Math.max(5, Math.round(daysPerWeek)));
+  let studyDayIndex = 0;
   let usedMinutes = 0;
   return steps.map(step => {
     const duration = Math.min(480, Math.max(5, Math.round(step.minutes || 25)));
     if (usedMinutes > 0 && usedMinutes + duration > capacity) {
-      dayOffset += 1;
+      studyDayIndex += 1;
       usedMinutes = 0;
     }
+    const calendarOffset = studyDayIndex + Math.floor(studyDayIndex / weeklyDays) * (7 - weeklyDays);
     const dueAt = new Date(parsedStart);
-    dueAt.setUTCDate(dueAt.getUTCDate() + dayOffset);
+    dueAt.setUTCDate(dueAt.getUTCDate() + calendarOffset);
     usedMinutes += duration;
     return dueAt;
   });
@@ -732,7 +739,7 @@ export async function syncDailyPlanGoalTree(
       resourceRecommendation?: { title: string; url: string; teacherName?: string; reason: string };
     }>;
   },
-  schedule: { startDate: string; dailyMinutes: number },
+  schedule: { startDate: string; dailyMinutes: number; daysPerWeek?: number },
   identity: { goalTitle?: string; goalCategory?: string; supersedeCategories?: string[] } = {},
 ) {
   const db = await requireDb();
@@ -745,7 +752,7 @@ export async function syncDailyPlanGoalTree(
   if (!plan.title.trim() || steps.length === 0) {
     throw new Error("لا يمكن إنشاء مهام يومية من خطة بلا خطوات عملية.");
   }
-  const dueDates = schedulePlanStepDates(schedule.startDate, steps, schedule.dailyMinutes);
+  const dueDates = schedulePlanStepDates(schedule.startDate, steps, schedule.dailyMinutes, schedule.daysPerWeek ?? 7);
   const taskNotes = (step: typeof steps[number]) => [
     step.detail,
     ...(step.resourceRecommendation ? [
@@ -905,6 +912,9 @@ export async function syncDailyPlanGoalTree(
         }).where(and(eq(goals.id, stage.id), eq(goals.userId, userId)));
 
         const task = (tasksByStage.get(stage.id) ?? []).find(item => item.status === "todo");
+        if (task && linkedExistingTask && task.id !== linkedExistingTask.id) {
+          await tx.delete(tasks).where(and(eq(tasks.id, task.id), eq(tasks.userId, userId)));
+        }
         if (task && !linkedExistingTask) {
           await tx.update(tasks).set({
             title: step.title,
