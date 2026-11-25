@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseGeneratedPlan } from "./planGenerator";
+import { applyTeacherLedPlanningGuard, parseGeneratedPlan } from "./planGenerator";
 
 describe("AI planner response normalization", () => {
   it("accepts a valid plan with fewer than three eligible tasks", () => {
@@ -59,6 +59,36 @@ describe("AI planner response normalization", () => {
     });
     expect(plan.habits).toEqual([]);
     expect(plan).not.toHaveProperty("reviewQuestion");
+  });
+
+  it("removes model-generated self-tests while preserving teacher-led study tasks", () => {
+    const parsed = parseGeneratedPlan(JSON.stringify({
+      title: "خطة متابعة",
+      summary: "خطة لمتابعة شرح المدرس والمواد المسجلة في الملف.",
+      durationLabel: "يومان",
+      steps: [
+        { day: "اليوم 1", title: "متابعة المحاضرة", detail: "مشاهدة شرح المدرس المسجل للدرس.", minutes: 40, category: "محاضرة" },
+        { day: "اليوم 2", title: "اختبار ذاتي", detail: "حل اختبار قصير من أسئلة ينشئها النظام.", minutes: 30, category: "اختبار" },
+      ],
+      habits: [{ title: "تجهيز جلسة الدراسة", cue: "جهّز الكتاب والملاحظات قبل بدء المحاضرة." }],
+    }));
+    const guarded = applyTeacherLedPlanningGuard(parsed);
+    expect(guarded.steps.map(step => step.title)).toEqual(["متابعة المحاضرة"]);
+    expect(guarded.habits).toHaveLength(1);
+    expect(guarded).not.toHaveProperty("reviewQuestion");
+  });
+
+  it("rejects a plan made entirely of AI-generated assessments", () => {
+    const parsed = parseGeneratedPlan(JSON.stringify({
+      title: "خطة اختبار",
+      summary: "خطة تحتوي على تقييمات ينشئها النظام.",
+      durationLabel: "يوم",
+      steps: [
+        { day: "اليوم 1", title: "اختبار ذاتي", detail: "حل اختبار قصير.", minutes: 30, category: "اختبار" },
+      ],
+      habits: [],
+    }));
+    expect(() => applyTeacherLedPlanningGuard(parsed)).toThrow("StudyFlow");
   });
 
   it("does not fabricate an empty task list", () => {
