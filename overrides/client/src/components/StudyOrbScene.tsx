@@ -1,3 +1,4 @@
+/// <reference path="../types/three.d.ts" />
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { gsap } from "gsap";
