@@ -84,6 +84,12 @@ type CurriculumUnitProfile = {
   lessons?: Array<CurriculumLessonProfile | string>;
 };
 
+type CurriculumBranchPriorityGuidance = {
+  tier?: "core";
+  source?: string;
+  rationale?: string;
+};
+
 type CurriculumIntelligence = {
   planningPolicy?: {
     scope?: string;
@@ -95,6 +101,14 @@ type CurriculumIntelligence = {
     branchTaxonomyPolicy?: string;
     coverageBoundary?: string;
   };
+  subjectPlanningGuidance?: Record<string, {
+    priorityBranches?: Record<string, CurriculumBranchPriorityGuidance>;
+    requiredCoverage?: boolean;
+    source?: string;
+    rationale?: string;
+    coverageRule?: string;
+    otherSkillGuidance?: string;
+  }>;
   subjects: Record<string, {
     title: string;
     coverage: string;
@@ -104,10 +118,35 @@ type CurriculumIntelligence = {
   }>;
 };
 
-function getCurriculumIntelligenceNotes(subjectIds: string[]): string[] {
+let curriculumCatalogCache: CurriculumIntelligence | null = null;
+let curriculumCatalogLoadAttempted = false;
+
+function loadCurriculumCatalog(): CurriculumIntelligence | null {
+  if (curriculumCatalogLoadAttempted) return curriculumCatalogCache;
+  curriculumCatalogLoadAttempted = true;
   try {
     const file = readFileSync(join(ROOT, "curriculum-intelligence-part1.json"), "utf8");
-    const catalogue = JSON.parse(file) as CurriculumIntelligence;
+    curriculumCatalogCache = JSON.parse(file) as CurriculumIntelligence;
+  } catch (error) {
+    console.error("[StudyFlow curriculum] Could not load derived curriculum profile:", error instanceof Error ? error.message : "unknown error");
+    curriculumCatalogCache = null;
+  }
+  return curriculumCatalogCache;
+}
+
+/** Returns a non-exam priority signal explicitly configured for a curriculum branch. */
+export function getCurriculumBranchPriorityGuidance(
+  subjectId: string,
+  branchId: string,
+): CurriculumBranchPriorityGuidance | null {
+  const catalogue = loadCurriculumCatalog();
+  return catalogue?.subjectPlanningGuidance?.[subjectId]?.priorityBranches?.[branchId] ?? null;
+}
+
+function getCurriculumIntelligenceNotes(subjectIds: string[]): string[] {
+  try {
+    const catalogue = loadCurriculumCatalog();
+    if (!catalogue) return ["بيانات المنهج التفصيلية غير متاحة الآن؛ لا تخترع أسماء دروس أو صفحات أو أحكام صعوبة."];
     const policy = catalogue.planningPolicy;
     const policyLines = policy ? [
       "سياسة استخدام المعرفة المنهجية داخل StudyFlow:",
@@ -120,6 +159,19 @@ function getCurriculumIntelligenceNotes(subjectIds: string[]): string[] {
       ...(policy.allowedPlanTasks?.length ? ["أنواع مهام التخطيط المسموح بها: " + policy.allowedPlanTasks.join(" | ")] : []),
       ...(policy.prohibitedPlanTasks?.length ? ["أنواع مهام التخطيط المحظورة: " + policy.prohibitedPlanTasks.join(" | ")] : []),
     ].filter((line): line is string => typeof line === "string" && line.length > 0) : [];
+    const guidanceLines = subjectIds.flatMap(subjectId => {
+      const guidance = catalogue.subjectPlanningGuidance?.[subjectId];
+      if (!guidance) return [];
+      const lines = ["توجيهات التخطيط المعتمدة للمادة " + subjectId + ":"];
+      if (guidance.requiredCoverage) lines.push("تغطية جميع الدروس غير المكتملة إلزامية؛ لا يُحذف أي درس من الخريطة السنوية بسبب ترتيب الأولوية.");
+      if (guidance.rationale) lines.push(guidance.rationale);
+      if (guidance.coverageRule) lines.push(guidance.coverageRule);
+      if (guidance.otherSkillGuidance) lines.push(guidance.otherSkillGuidance);
+      for (const [branchId, branch] of Object.entries(guidance.priorityBranches ?? {})) {
+        if (branch.tier === "core") lines.push("أولوية تأسيسية للفرع " + branchId + "؛ إشارة ترتيب داخلية وليست وزن درجات رسميًا. " + (branch.rationale ?? ""));
+      }
+      return lines;
+    });
     const subjectLines = subjectIds.flatMap(subjectId => {
       const subject = catalogue.subjects[subjectId];
       if (!subject) return [];
@@ -151,7 +203,7 @@ function getCurriculumIntelligenceNotes(subjectIds: string[]): string[] {
       if (subject.limitation) lines.push("حدود المصدر: " + subject.limitation);
       return lines;
     });
-    return [...policyLines, ...subjectLines];
+    return [...policyLines, ...guidanceLines, ...subjectLines];
   } catch (error) {
     console.error("[StudyFlow curriculum] Could not load derived curriculum profile:", error instanceof Error ? error.message : "unknown error");
     return ["بيانات المنهج التفصيلية غير متاحة الآن؛ لا تخترع أسماء دروس أو صفحات أو أحكام صعوبة."];
