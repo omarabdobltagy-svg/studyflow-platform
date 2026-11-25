@@ -12,7 +12,7 @@ export type SubjectExamBlueprint = {
   label: string;
   grade: "second_secondary_baccalaureate";
   track: "engineering_and_computing";
-  appliesTo: "first_term_2026_2027" | "annual_baccalaureate_policy";
+  appliesTo: "annual_baccalaureate_exam" | "annual_baccalaureate_policy";
   status: "official_paper_spec" | "official_general_policy" | "partial_official_evidence";
   annualSubjectMarks: number;
   paperMarks: number | null;
@@ -24,65 +24,46 @@ export type SubjectExamBlueprint = {
   sourceUrls: string[];
 };
 
-const englishFirstTerm: SubjectExamBlueprint = {
-  subjectKey: "english",
-  label: "اللغة الإنجليزية الأولى",
-  grade: "second_secondary_baccalaureate",
-  track: "engineering_and_computing",
-  appliesTo: "first_term_2026_2027",
-  status: "official_paper_spec",
-  annualSubjectMarks: 100,
-  paperMarks: 30,
-  durationMinutes: 180,
-  mcqShare: 8 / 30 + 7 / 30,
-  essayShare: 4 / 30 + 3 / 30 + 8 / 30,
-  components: [
-    { id: "vocabulary_grammar", label: "المفردات والتراكيب والقواعد", marks: 8, questionCount: 14, assessmentShare: 8 / 30, priorityNote: "وزن مرتفع نسبيًا؛ لا تُهمَل القواعد والمفردات" },
-    { id: "reading", label: "القراءة والفهم", marks: 7, questionCount: 7, assessmentShare: 7 / 30, priorityNote: "وزن مرتفع نسبيًا مع تدريب على قطعة غير مسبوقة" },
-    { id: "translation", label: "الترجمة في الاتجاهين", marks: 4, questionCount: 4, assessmentShare: 4 / 30, priorityNote: "وزن متوسط؛ تتطلب ممارسة تحريرية قصيرة" },
-    { id: "story", label: "القصة المقررة", marks: 3, questionCount: 3, assessmentShare: 3 / 30, priorityNote: "وزن أقل من القواعد والقراءة والكتابة؛ لا تجعلها الأولوية الأولى تلقائيًا" },
-    { id: "writing", label: "إعادة الصياغة والتعبير", marks: 8, questionCount: 4, assessmentShare: 8 / 30, priorityNote: "وزن مرتفع نسبيًا؛ يشمل إعادة الصياغة وموضوعًا من 180 كلمة" },
-  ],
-  unverified: [
-    "هذه مواصفة الفصل الدراسي الأول 2026/2027 وليست مواصفة نهائي آخر السنة.",
-    "لا يجوز إسقاط هذا التوزيع على الفصل الثاني أو الامتحان السنوي ما لم تصدر مواصفة معتمدة لهما.",
-  ],
-  sourceUrls: [
-    "https://shbabbek.com/show/288302",
-    "https://www.masrawy.com/news/education-schooleducation/details/2026/11/11/3077187",
-  ],
-};
-
-const arabicFirstTerm: SubjectExamBlueprint = {
+const arabicAnnualPolicy: SubjectExamBlueprint = {
   subjectKey: "arabic",
   label: "اللغة العربية",
   grade: "second_secondary_baccalaureate",
   track: "engineering_and_computing",
-  appliesTo: "first_term_2026_2027",
+  appliesTo: "annual_baccalaureate_exam",
   status: "partial_official_evidence",
   annualSubjectMarks: 100,
-  paperMarks: 60,
-  durationMinutes: 180,
-  mcqShare: 0.5,
-  essayShare: 0.5,
-  components: [
-    { id: "reading", label: "القراءة والنص المعلوماتي", marks: 8, questionCount: 5, assessmentShare: null, priorityNote: "8 درجات في التوزيع المنشور؛ لا تدخل في الوزن الحسابي حتى مراجعة الجدول الأصلي" },
-    { id: "story_literary", label: "قصة وا إسلاماه والنص الأدبي", marks: 7, questionCount: 5, assessmentShare: null, priorityNote: "7 درجات في التوزيع المنشور؛ لا تدخل في الوزن الحسابي حتى مراجعة الجدول الأصلي" },
-    { id: "poetry_prose", label: "النصوص الشعرية والنثرية", marks: 15, questionCount: 13, assessmentShare: null, priorityNote: "15 درجة في التوزيع المنشور؛ لا تدخل في الوزن الحسابي حتى مراجعة الجدول الأصلي" },
-    { id: "literature_rhetoric", label: "الأدب والبلاغة", marks: 9, assessmentShare: null, priorityNote: "9 درجات في التوزيع المنشور؛ لا يدخل الوزن في الحساب لأن مجموع البنود المنشور غير متطابق" },
-    { id: "grammar", label: "النحو", marks: 10, questionCount: 8, assessmentShare: null, priorityNote: "10 درجات في التوزيع المنشور؛ لا تدخل في الوزن الحسابي حتى مراجعة الجدول الأصلي" },
-    { id: "functional_writing", label: "التعبير الوظيفي", marks: 3, questionCount: 1, assessmentShare: null, priorityNote: "3 درجات في التوزيع المنشور؛ لا تدخل في الوزن الحسابي حتى مراجعة الجدول الأصلي" },
-    { id: "creative_writing", label: "التعبير الإبداعي", marks: 7, questionCount: 1, assessmentShare: null, priorityNote: "7 درجات في التوزيع المنشور؛ لا تدخل في الوزن الحسابي حتى مراجعة الجدول الأصلي" },
-  ],
+  paperMarks: null,
+  durationMinutes: null,
+  mcqShare: null,
+  essayShare: null,
+  components: [],
   unverified: [
-    "الورقة من 60 درجة و40 سؤالًا وزمنها 3 ساعات، مع 50% اختيار من متعدد و50% مقالي.",
-    "تفصيل الدرجات المنشور للمكوّنات يجمع إلى 59 لا 60 (8+7+15+9+10+3+7)، لذلك تُعرض الدرجات كدليل جزئي ولا تُستخدم لحساب الوزن النسبي قبل مراجعة جدول PDF الأصلي.",
-    "أعداد الأسئلة المتاحة في المصدر: القراءة 5، القصة والنص الأدبي 5، النصوص الشعرية والنثرية 13، النحو 8، والتعبير الوظيفي والإبداعي سؤال واحد لكل منهما؛ لم يُثبت عدد أسئلة الأدب والبلاغة منفصلًا.",
-    "هذه مواصفة الفصل الدراسي الأول 2026/2027 وليست مواصفة نهائي آخر السنة.",
+    "الدرجة السنوية للمادة في الصف الثاني 100 درجة، وهذه ليست درجة ورقة الامتحان وحدها.",
+    "لا يوجد امتحان ترم أول في النظام المعتمد لهذا المخطط؛ الهدف هو الاستعداد لامتحان نهاية السنة.",
+    "لم تتوفر في هذه النسخة مواصفة سنوية رسمية تفصيلية توزع درجات ورقة العربي على الفروع؛ لا تُستخدم أي أوزان منشورة لفترة أخرى في ترتيب النهائي.",
   ],
-  sourceUrls: [
-    "https://shbabbek.com/show/287545",
+  sourceUrls: [],
+};
+
+const englishAnnualPolicy: SubjectExamBlueprint = {
+  subjectKey: "english",
+  label: "اللغة الإنجليزية الأولى",
+  grade: "second_secondary_baccalaureate",
+  track: "engineering_and_computing",
+  appliesTo: "annual_baccalaureate_exam",
+  status: "partial_official_evidence",
+  annualSubjectMarks: 100,
+  paperMarks: null,
+  durationMinutes: null,
+  mcqShare: null,
+  essayShare: null,
+  components: [],
+  unverified: [
+    "الدرجة السنوية للمادة في الصف الثاني 100 درجة، وهذه ليست درجة ورقة الامتحان وحدها.",
+    "لا يوجد امتحان ترم أول في النظام المعتمد لهذا المخطط؛ الهدف هو الاستعداد لامتحان نهاية السنة.",
+    "لم تتوفر في هذه النسخة مواصفة سنوية رسمية تفصيلية توزع درجات ورقة الإنجليزي على الفروع؛ لا تُستخدم أي أوزان منشورة لفترة أخرى في ترتيب النهائي.",
   ],
+  sourceUrls: [],
 };
 
 const historyPolicy: SubjectExamBlueprint = {
@@ -101,11 +82,9 @@ const historyPolicy: SubjectExamBlueprint = {
   unverified: [
     "درجة المادة في الصف الثاني 100 ضمن مواد هذا الصف.",
     "قالب امتحان البكالوريا العام يوازن بين الاختيار من متعدد والمقالي، لكن لم يثبت بعد توزيع درجات كل وحدة أو موضوع في التاريخ للامتحان السنوي.",
-    "توجد مواصفة ورقة امتحانية للفصل الأول 2026/2027 منشورة بتاريخ 21 نوفمبر 2026؛ لم يُعتمد منها توزيع رقمي تفصيلي في هذه النسخة.",
+    "لا توجد في هذه النسخة مواصفة سنوية تفصيلية معتمدة لتوزيع درجات ورقة التاريخ على الوحدات.",
   ],
-  sourceUrls: [
-    "https://aloostaz.com/eg/manahej/thanawi/saf-2/term-1/التاريخ/مواصفات-الورقة-الامتحانية-التاريخ-الصف-الثاني-الثانوي-الت-وزارة-التربية-والتعليم",
-  ],
+  sourceUrls: [],
 };
 
 const programmingPolicy: SubjectExamBlueprint = {
@@ -137,8 +116,8 @@ const subjectMatchers: Array<{ key: SubjectExamBlueprint["subjectKey"]; test: Re
 ];
 
 const blueprints: Record<SubjectExamBlueprint["subjectKey"], SubjectExamBlueprint> = {
-  arabic: arabicFirstTerm,
-  english: englishFirstTerm,
+  arabic: arabicAnnualPolicy,
+  english: englishAnnualPolicy,
   history: historyPolicy,
   programming_ai: programmingPolicy,
 };
@@ -157,7 +136,7 @@ export function getExamComponentForText(subjectId: string, subjectName: string, 
     .replace(/[أإآ]/g, "ا")
     .replace(/ى/g, "ي");
 
-  if (blueprint.subjectKey === "arabic" && blueprint.appliesTo === "first_term_2026_2027") {
+  if (blueprint.subjectKey === "arabic") {
     const componentId =
       /النص المعلوماتي|القراءة|قراءة/u.test(normalized) ? "reading"
         : /وا اسلاماه|القصة|النص الادبي/u.test(normalized) ? "story_literary"
@@ -170,7 +149,7 @@ export function getExamComponentForText(subjectId: string, subjectName: string, 
     return componentId ? blueprint.components.find(component => component.id === componentId) ?? null : null;
   }
 
-  if (blueprint.subjectKey !== "english" || blueprint.appliesTo !== "first_term_2026_2027") return null;
+  if (blueprint.subjectKey !== "english") return null;
   const componentId =
     /قصة|story|novel|رواية/u.test(normalized) ? "story"
       : /ترجم|translation/u.test(normalized) ? "translation"
@@ -194,7 +173,7 @@ export function buildExamBlueprintContext(subjects: Array<{ id: string; name: st
       : "لا توجد أوزان فرعية موثقة قابلة للاستخدام بعد.";
     return [
       "المادة: " + blueprint.label,
-      "نطاق المواصفة: " + (blueprint.appliesTo === "first_term_2026_2027" ? "الفصل الأول 2026/2027 فقط" : "سياسة عامة/دليل جزئي، وليست توزيع وحدات للنهائي"),
+      "نطاق المواصفة: " + (blueprint.appliesTo === "annual_baccalaureate_exam" ? "الامتحان السنوي لنهاية الصف الثاني" : "سياسة سنوية عامة/دليل جزئي، وليست توزيعًا تفصيليًا للوحدات"),
       "حالة الدليل: " + blueprint.status,
       "الدرجة السنوية للمادة في الصف الثاني: " + blueprint.annualSubjectMarks + " من 100",
       "درجة ورقة الامتحان: " + (blueprint.paperMarks === null ? "غير مثبتة في هذا الدليل" : blueprint.paperMarks + " درجة") + "؛ لا تخلط بين درجة الورقة والدرجة السنوية للمادة",
@@ -207,11 +186,12 @@ export function buildExamBlueprintContext(subjects: Array<{ id: string; name: st
     ].join("\n");
   });
   return [
-    "مراجع مواصفات الامتحان المتاحة لهذا الطالب:",
-    "مواد الصف الثاني الأربع في مسار الهندسة وعلوم الحاسب متساوية في الدرجة السنوية: 100 لكل مادة (400 إجمالًا لهذا الصف). هذا لا يعني تساوي كل درس داخل المادة.",
+    "الهدف الأساسي للمخطط: الاستعداد للامتحان السنوي في نهاية الصف الثاني بكالوريا، وليس امتحان ترم أول. لا يوجد امتحان ترم أول ضمن هذا المسار.",
+    "مراجع مواصفات الامتحان السنوي المتاحة لهذا الطالب:",
+    "مواد الصف الثاني الأربع في مسار الهندسة وعلوم الحاسب متساوية في الدرجة السنوية: 100 لكل مادة (400 إجمالًا لهذا الصف). هذه الدرجة السنوية تشمل منظومة التقييم، ولا يجوز افتراض أنها درجة ورقة النهائي وحدها أو أن وحدات المادة متساوية الوزن.",
     ...subjectLines,
     "منظومة الأداءات والتقييمات منفصلة عن توزيع ورقة الامتحان: المشروع 15%، التقييم الأسبوعي 20%، الأداء المنزلي/الحصة 15%، السلوك والمواظبة 10%، التقييم الشهري الأول 20%، والثاني 20%. شرط دخول الفرصة الأولى 60% إنجاز من تلك المنظومة. لا تحسب هذه النسب ضمن درجات مكوّنات الورقة.",
     "لا تخترع توزيع درجات أو عدد أسئلة لأي مادة أو فترة لا تملك وثيقة رسمية مطابقة لها.",
-    "استخدم النسب الرقمية فقط عندما تكون مطابقة لنطاق المواصفة. إذا كانت المواصفة للفصل الأول فلا تنقلها إلى النهائي السنوي أو الفصل الثاني. في المكوّنات التي لا تملك توزيعًا رسميًا، اكتب أن الوزن غير مثبت، واستخدم اختبار الطالب التشخيصي ونتائجه والمتطلبات السابقة وحجم المنهج لتقدير الأولوية، مع وسم الثقة بأنها منخفضة/تقديرية.",
+    "استخدم النسب الرقمية فقط عندما تكون موثقة صراحة للامتحان السنوي لنهاية الصف الثاني. لا تستخدم مواصفات ترم أول أو فترة تقييم أخرى لتقدير أوزان النهائي. في المكوّنات التي لا تملك توزيعًا سنويًا رسميًا، اكتب أن الوزن غير مثبت، واستخدم اختبار الطالب التشخيصي ونتائجه والمتطلبات السابقة وحجم المنهج لتقدير الأولوية، مع وسم الثقة بأنها منخفضة/تقديرية.",
   ].join("\n");
 }
