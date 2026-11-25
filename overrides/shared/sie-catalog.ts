@@ -998,14 +998,37 @@ export function getSIECheckpointChoiceTypeLabel(choice: SIECheckpointChoice): st
   }
 }
 
+function getSIECheckpointSequenceLabel(choice: SIECheckpointChoice): string {
+  const sequence = choice.lessonNumber?.trim();
+  if (!sequence) return "";
+  if (/^\\d+(?:\\.\\d+)?$/.test(sequence)) {
+    if (choice.lessonType === "topic") return `Lesson ${sequence}`;
+    if (choice.lessonType === "grammar") return `قاعدة نحوية ${sequence}`;
+    return `الدرس ${sequence}`;
+  }
+  if (sequence === "تطبيق") {
+    return choice.lessonType === "spelling" ? "تطبيق إملائي" : "تطبيق كتابي";
+  }
+  return sequence;
+}
+
+function getSIECheckpointProgressDescription(choice: SIECheckpointChoice): string {
+  const unit = choice.unitNumber
+    ? `الوحدة ${choice.unitNumber}: ${choice.unitTitle || ""}`
+    : choice.unitTitle || "";
+  const source = choice.sourceLabel || "";
+  const sourcePage = source.match(/ص\\s*\\d+/)?.[0];
+  const sourceLabel = source.includes("فهرس منصة الشرح")
+    ? "كورس المدرس"
+    : source.includes("كتاب الطالب")
+      ? ["كتاب الطالب", sourcePage].filter(Boolean).join(" · ")
+      : source;
+  return [unit, getSIECheckpointSequenceLabel(choice), sourceLabel].filter(Boolean).join(" · ");
+}
+
 export function getSIECheckpointChoiceDisplayLabel(choice: SIECheckpointChoice): string {
-  // The internal teacher-course ordering is metadata only; never show it as a
-  // second numbering system beside the official textbook lesson number.
-  const lessonNumber = choice.lessonNumber
-    ? choice.lessonType === "topic" ? `Lesson ${choice.lessonNumber}`
-      : choice.lessonType === "grammar" ? `قاعدة نحوية ${choice.lessonNumber}`
-        : `الدرس ${choice.lessonNumber}`
-    : "";
+  // Values such as "تطبيق" are activity types, not lesson numbers.
+  const lessonNumber = getSIECheckpointSequenceLabel(choice);
   const unit = choice.unitNumber
     ? choice.lessonType === "topic" ? `Unit ${choice.unitNumber}: ${choice.unitTitle}` : `الوحدة ${choice.unitNumber}: ${choice.unitTitle}`
     : choice.unitTitle;
@@ -1223,9 +1246,7 @@ export function getSIECheckpointProgressOptions(
     return branch.choices.map(choice => ({
       value: choice.nodeId,
       label: choice.title,
-      description: choice.lessonNumber
-        ? (choice.unitNumber ? "الوحدة " + choice.unitNumber + " · " : "") + "الدرس " + choice.lessonNumber
-        : choice.unitTitle || "",
+      description: getSIECheckpointProgressDescription(choice),
     }));
   }
 
@@ -1246,9 +1267,7 @@ export function getSIECheckpointProgressOptions(
     options.push({
       value: choice.nodeId,
       label: choice.title,
-      description: choice.lessonNumber
-        ? (choice.unitNumber ? "الوحدة " + choice.unitNumber + " · " : "") + "الدرس " + choice.lessonNumber
-        : choice.unitTitle || "",
+      description: getSIECheckpointProgressDescription(choice),
     });
   }
   return options;
