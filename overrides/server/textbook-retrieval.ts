@@ -108,6 +108,7 @@ type CurriculumIntelligence = {
     rationale?: string;
     coverageRule?: string;
     otherSkillGuidance?: string;
+    examPatternGuidance?: string;
   }>;
   subjects: Record<string, {
     title: string;
@@ -167,6 +168,7 @@ function getCurriculumIntelligenceNotes(subjectIds: string[]): string[] {
       if (guidance.rationale) lines.push(guidance.rationale);
       if (guidance.coverageRule) lines.push(guidance.coverageRule);
       if (guidance.otherSkillGuidance) lines.push(guidance.otherSkillGuidance);
+      if (guidance.examPatternGuidance) lines.push("استلهام نوعي لمجالات المهارة فقط دون نسخ بنية الامتحان: " + guidance.examPatternGuidance);
       for (const [branchId, branch] of Object.entries(guidance.priorityBranches ?? {})) {
         if (branch.tier === "core") lines.push("أولوية تأسيسية للفرع " + branchId + "؛ إشارة ترتيب داخلية وليست وزن درجات رسميًا. " + (branch.rationale ?? ""));
       }
