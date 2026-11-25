@@ -248,6 +248,12 @@ export default function Study() {
         }
         toast.success("تم حفظ آخر موضع في جميع فروع العربي.");
       } else if (result.savedStudent && result.learningGap?.studentPosition === branchChoices.length && branchChoices.length > 0) {
+        if (isEnglishSkillBranch) {
+          toast.success(currentBranchId === "ENG_VOCABULARY"
+            ? "أنهيت دروس Vocabulary المفهرسة داخل الوحدات."
+            : "أنهيت دروس Grammar المفهرسة داخل الوحدات.");
+          return;
+        }
         const nextTarget = getNextLearningTarget(subjects, subjectId, branches, currentBranchId);
         if (nextTarget) {
           setSubjectId(nextTarget.subjectId);
