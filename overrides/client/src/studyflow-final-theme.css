@@ -219,7 +219,7 @@ html body .sf-shell-v3 .sf-main .sf-plan-day-header {
   padding:18px !important;
   background:linear-gradient(110deg,color-mix(in srgb,var(--accent) 54%,var(--card)),var(--muted)) !important;
 }
-html body .sf-shell-v3 .sf-main .sf-plan-day-header .bg-primary/10,
+html body .sf-shell-v3 .sf-main .sf-plan-day-header .bg-primary\\/10,
 html body .sf-shell-v3 .sf-main .sf-plan-day-header .bg-secondary {
   background:var(--accent) !important; color:var(--accent-foreground) !important;
 }
