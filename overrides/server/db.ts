@@ -1468,6 +1468,68 @@ export async function deleteAiPlan(userId: number, planId: number) {
   if (result[0].affectedRows === 0) throw new Error("الخطة غير موجودة أو لا تملك حذفها.");
 }
 
+/**
+ * Deletes one student's AI plan history and only the goal trees created by
+ * the AI planner. Manually created goals/tasks and learning progress are kept.
+ */
+export async function deleteAllAiPlansAndGoalTrees(userId: number) {
+  const db = await requireDb();
+  return db.transaction(async tx => {
+    const userGoals = await tx.select().from(goals).where(eq(goals.userId, userId));
+    const aiRootCategories = new Set(["خطة يومية", "خطة ذكية", "خطة تدريبية"]);
+    const aiRootTitles = new Set([
+      "خطة StudyFlow اليومية",
+      "خطة StudyFlow الذكية الحالية",
+    ]);
+    const goalIds = new Set<number>(
+      userGoals
+        .filter(goal => goal.parentGoalId === null && (
+          aiRootCategories.has(goal.category) || aiRootTitles.has(goal.title)
+        ))
+        .map(goal => goal.id),
+    );
+
+    // Include every descendant stage, not only one level deep.
+    let expanded = true;
+    while (expanded) {
+      expanded = false;
+      for (const goal of userGoals) {
+        if (goal.parentGoalId !== null && goalIds.has(goal.parentGoalId) && !goalIds.has(goal.id)) {
+          goalIds.add(goal.id);
+          expanded = true;
+        }
+      }
+    }
+
+    const ownedGoalIds = [...goalIds];
+    let deletedTasks = 0;
+    let deletedGoals = 0;
+    if (ownedGoalIds.length > 0) {
+      const taskRows = await tx.select({ id: tasks.id }).from(tasks).where(and(
+        eq(tasks.userId, userId),
+        inArray(tasks.goalId, ownedGoalIds),
+      ));
+      deletedTasks = taskRows.length;
+      await tx.delete(tasks).where(and(
+        eq(tasks.userId, userId),
+        inArray(tasks.goalId, ownedGoalIds),
+      ));
+      const goalResult = await tx.delete(goals).where(and(
+        eq(goals.userId, userId),
+        inArray(goals.id, ownedGoalIds),
+      ));
+      deletedGoals = Number(goalResult[0]?.affectedRows ?? ownedGoalIds.length);
+    }
+
+    const planResult = await tx.delete(aiPlans).where(eq(aiPlans.userId, userId));
+    return {
+      deletedPlans: Number(planResult[0]?.affectedRows ?? 0),
+      deletedTasks,
+      deletedGoals,
+    };
+  });
+}
+
 export async function getLatestAiPlanByPromptPrefix(userId: number, prefix: string) {
   const db = await requireDb();
   const rows = await db.select()
