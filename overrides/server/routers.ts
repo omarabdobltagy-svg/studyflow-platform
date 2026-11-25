@@ -901,6 +901,21 @@ export const appRouter = router({
         },
       };
     }),
+    completeWelcomeGuide: protectedProcedure
+      .mutation(async ({ ctx }) => {
+        const profile = await getStudentProfile(ctx.user.id);
+        if (!profile) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "أكمل ملفك الدراسي أولًا." });
+        }
+        const selection = (profile.selection ?? {}) as Record<string, any>;
+        if (!selection.welcomeGuideCompletedAt) {
+          await updateStudentProfileSelection(ctx.user.id, {
+            ...selection,
+            welcomeGuideCompletedAt: new Date().toISOString(),
+          });
+        }
+        return { success: true };
+      }),
     updateTeacherSelection: protectedProcedure
       .input(z.object({
         subjectId: z.string().trim().min(1).max(80),
