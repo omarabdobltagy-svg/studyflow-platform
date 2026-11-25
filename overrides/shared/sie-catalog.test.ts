@@ -54,7 +54,7 @@ describe("Arabic course taxonomy", () => {
       branchId: "ARB_BALAGHA",
     });
     expect(choices.find(choice => choice.courseSequenceNumber === 9)).toMatchObject({
-      title: "التاء المربوطة والهاء المربوطة",
+      title: "الفرق بين التاء المربوطة والهاء والتاء المفتوحة",
       lessonType: "spelling",
       branchId: "ARB_SPELLING",
     });
