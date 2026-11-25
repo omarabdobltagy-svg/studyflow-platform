@@ -7,6 +7,23 @@ import {
   splitTextbookPages,
 } from "./textbook-retrieval";
 
+describe("Part 1 textbook planning context", () => {
+  it("provides the teacher-led policy and learning intent for the four supported subjects", () => {
+    const result = retrieveTextbookEvidence(
+      ["ARB_G2_BAC", "ENG1_G2_BAC", "HIS_G2_BAC", "PROG_AI_G2_BAC"],
+      "Part 1 Ministry textbook planning",
+      4,
+    );
+    const context = result.coverageNotes.join("\\n");
+    expect(context).toContain("StudyFlow مخطط ومتابع للتقدم");
+    expect(context).toContain("لا ينشئ");
+    expect(context).toContain("النحو");
+    expect(context).toContain("Vocabulary");
+    expect(context).toContain("الوثائق التاريخية");
+    expect(context).toContain("التطبيق العملي");
+  });
+});
+
 describe("generic page parsing helpers", () => {
   const pages = splitTextbookPages(
     "HIS_G2_BAC",
