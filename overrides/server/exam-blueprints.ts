@@ -14,6 +14,7 @@ export type SubjectExamBlueprint = {
   track: "engineering_and_computing";
   appliesTo: "first_term_2026_2027" | "annual_baccalaureate_policy";
   status: "official_paper_spec" | "official_general_policy" | "partial_official_evidence";
+  annualSubjectMarks: number;
   paperMarks: number | null;
   durationMinutes: number | null;
   mcqShare: number | null;
@@ -30,6 +31,7 @@ const englishFirstTerm: SubjectExamBlueprint = {
   track: "engineering_and_computing",
   appliesTo: "first_term_2026_2027",
   status: "official_paper_spec",
+  annualSubjectMarks: 100,
   paperMarks: 30,
   durationMinutes: 180,
   mcqShare: 8 / 30 + 7 / 30,
@@ -58,6 +60,7 @@ const arabicFirstTerm: SubjectExamBlueprint = {
   track: "engineering_and_computing",
   appliesTo: "first_term_2026_2027",
   status: "partial_official_evidence",
+  annualSubjectMarks: 100,
   paperMarks: 60,
   durationMinutes: 180,
   mcqShare: 0.5,
@@ -87,10 +90,11 @@ const historyPolicy: SubjectExamBlueprint = {
   track: "engineering_and_computing",
   appliesTo: "annual_baccalaureate_policy",
   status: "partial_official_evidence",
-  paperMarks: 100,
+  annualSubjectMarks: 100,
+  paperMarks: null,
   durationMinutes: null,
-  mcqShare: 0.5,
-  essayShare: 0.5,
+  mcqShare: null,
+  essayShare: null,
   components: [],
   unverified: [
     "درجة المادة في الصف الثاني 100 ضمن مواد هذا الصف.",
@@ -175,8 +179,8 @@ export function buildExamBlueprintContext(subjects: Array<{ id: string; name: st
       "المادة: " + blueprint.label,
       "نطاق المواصفة: " + (blueprint.appliesTo === "first_term_2026_2027" ? "الفصل الأول 2026/2027 فقط" : "سياسة عامة/دليل جزئي، وليست توزيع وحدات للنهائي"),
       "حالة الدليل: " + blueprint.status,
-      "درجة المادة السنوية للصف الثاني: " + (blueprint.paperMarks ?? "غير متاحة"),
-      "درجة ورقة الفصل: " + (blueprint.appliesTo === "first_term_2026_2027" ? blueprint.paperMarks : "لا تستخدم درجة المادة السنوية كأنها درجة امتحان الفصل"),
+      "الدرجة السنوية للمادة في الصف الثاني: " + blueprint.annualSubjectMarks + " من 100",
+      "درجة ورقة الامتحان: " + (blueprint.paperMarks === null ? "غير مثبتة في هذا الدليل" : blueprint.paperMarks + " درجة") + "؛ لا تخلط بين درجة الورقة والدرجة السنوية للمادة",
       "زمن الورقة بالدقائق: " + (blueprint.durationMinutes ?? "غير مثبت"),
       "اختيار من متعدد: " + (blueprint.mcqShare === null ? "غير مثبت" : Math.round(blueprint.mcqShare * 100) + "%")
         + "؛ مقالي: " + (blueprint.essayShare === null ? "غير مثبت" : Math.round(blueprint.essayShare * 100) + "%"),
