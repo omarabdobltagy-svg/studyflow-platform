@@ -5,6 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import {
+  getSIECheckpointProgressBranches,
+  getSIESubject,
+  matchSIECheckpointTask,
+} from "@shared/sie-catalog";
+import {
   ArrowDown,
   ArrowUp,
   ArrowUpRight,
@@ -43,6 +48,7 @@ type PlanStep = {
   priorityReason?: string;
   priorityEvidenceConfidence?: "low" | "medium" | "high";
   curriculumNodeIds?: string[];
+  existingTask?: { id: number; title: string; status: "todo" | "done"; confidence: "exact" | "strong" };
   resourceRecommendation?: { title: string; url: string; teacherName?: string; reason: string };
   difficulty?: "easy" | "medium" | "hard" | "unknown";
   lessonSize?: "small" | "medium" | "large" | "unknown";
@@ -64,7 +70,7 @@ type PlanView = {
 const PLANNING_READY_BY = "2027-06-11";
 const DAILY_SNAPSHOT_PREFIX = "SIE_DAILY_PLAN_V4:";
 const todayCairo = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
-const initialPrompt = "حلّل ملفي الدراسي كاملًا وأنشئ مسودة خطة واقعية تغطي التراكم والمنهج المتبقي. اعتمد على موضع الطالب والمدرس داخل كل فرع، وسجل تنفيذ المهام، والوقت المتاح والصعوبة التي أبلغ عنها الطالب، والمتطلبات المنهجية الموثقة. لا تنشئ أي اختبار أو سؤال أو تدريب أو واجب من عندك.";
+const initialPrompt = "أنشئ الخطة السنوية الكاملة للعام الدراسي 2026–2027 حتى الجاهزية قبل 11 يونيو 2027. غطِّ المنهج كله في المواد المختارة، وانطلق من آخر موضوع مكتمل في كل فرع. ادمج المهام الحالية دون تكرارها، ولا تعتبر المهمة دليلًا على اكتمال الدرس. لا تنشئ اختبارات أو أسئلة أو واجبات من عندك.";
 const paceOptions: Array<{ value: Pace; title: string; subtitle: string }> = [
   { value: "intensive", title: "مكثفة", subtitle: "إنجاز أسرع مع حمل أعلى محسوب" },
   { value: "balanced", title: "متوازنة", subtitle: "تقدم ثابت ومساحة للتعويض" },
@@ -126,6 +132,7 @@ export default function Planner() {
   const [pace, setPace] = useState<Pace>("balanced");
   const [paceLevel, setPaceLevel] = useState<PaceLevel>(2);
   const [dailyMinutes, setDailyMinutes] = useState(120);
+  const [daysPerWeek, setDaysPerWeek] = useState<5 | 6 | 7>(6);
   const [usePersonalDeadline, setUsePersonalDeadline] = useState(false);
   const [personalDeadline, setPersonalDeadline] = useState("");
   const [approved, setApproved] = useState(false);
@@ -137,6 +144,49 @@ export default function Planner() {
     retry: 1,
     refetchOnWindowFocus: true,
   });
+  const learning = trpc.learning.get.useQuery(undefined, { staleTime: 15_000 });
+  const tasksQuery = trpc.tasks.list.useQuery(undefined, { staleTime: 15_000 });
+
+  const progressPreview = useMemo(() => {
+    const subjects = profile.data?.subjectIds ?? [];
+    const gaps = (learning.data as any)?.gapByBranch ?? {};
+    return subjects.flatMap(subjectId =>
+      getSIECheckpointProgressBranches(subjectId).map(branch => {
+        const gap = gaps[subjectId]?.[branch.branchId];
+        const nextIndex = gap?.studentPosition;
+        const next = typeof nextIndex === "number" ? branch.choices[nextIndex] : null;
+        return {
+          key: subjectId + "::" + branch.branchId,
+          subject: getSIESubject(subjectId)?.nameAr ?? subjectId,
+          branch: branch.branchTitle,
+          lastCompleted: gap?.studentFrontierTitle || (nextIndex === 0 ? "لم يبدأ بعد" : "غير محدد"),
+          next: next?.title ?? (gap?.studentPosition === branch.choices.length ? "اكتمل الفرع" : "غير محدد"),
+          gapCount: gap?.gapCount ?? null,
+          reference: gap?.referenceFrontierTitle ?? "غير مسجل",
+        };
+      })
+    );
+  }, [profile.data?.subjectIds, learning.data]);
+
+  const mappedOpenTasks = useMemo(() => {
+    const subjects = profile.data?.subjectIds ?? [];
+    return (tasksQuery.data ?? [])
+      .filter((task: any) => task.status !== "done")
+      .map((task: any) => ({
+        task,
+        match: matchSIECheckpointTask(subjects, [task.title, task.notes || ""].join(" ")),
+      }));
+  }, [tasksQuery.data, profile.data?.subjectIds]);
+  const curriculumLinkedTasks = mappedOpenTasks.filter(item => item.match);
+  const taskProgressConflicts = curriculumLinkedTasks.filter(({ task, match }) => {
+    if (!match) return false;
+    const branch = getSIECheckpointProgressBranches(match.subjectId).find(item => item.branchId === match.branchId);
+    const gap = (learning.data as any)?.gapByBranch?.[match.subjectId]?.[match.branchId];
+    const index = branch?.choices.findIndex(choice => choice.nodeId === match.nodeId) ?? -1;
+    return index >= 0 && typeof gap?.studentPosition === "number" && index < gap.studentPosition;
+  });
+  const isPreflightReady = !profile.isLoading && !learning.isLoading && !tasksQuery.isLoading
+    && !profile.isError && !learning.isError && !tasksQuery.isError;
 
   const savedPlans = useMemo(() => (history.data || [])
     .filter(record => !String(record.prompt || "").startsWith(DAILY_SNAPSHOT_PREFIX))
@@ -187,7 +237,7 @@ export default function Planner() {
         utils.dashboard.summary.invalidate(),
         utils.plans.list.invalidate(),
       ]);
-      toast.success(`تم اعتماد خطتك وإنشاء ${result.taskCount} مهام في قائمة المهام.`);
+      toast.success(`تم اعتماد الخطة السنوية وربط ${result.taskCount} خطوة بالمهام.`);
     },
     onError: error => toast.error("تعذّر اعتماد الخطة: " + error.message),
   });
@@ -218,7 +268,7 @@ export default function Planner() {
     onError: error => toast.error("تعذّر مسح الخطط: " + error.message),
   });
 
-  const runGeneration = (selectedPace: Pace, selectedLevel: PaceLevel, selectedMinutes: number, deadline: string | null) => {
+  const runGeneration = (selectedPace: Pace, selectedLevel: PaceLevel, selectedMinutes: number, selectedDays: 5 | 6 | 7, deadline: string | null) => {
     if (deadline && deadline < todayCairo) {
       toast.error("الموعد الشخصي يجب أن يكون اليوم أو في المستقبل.");
       return;
@@ -227,6 +277,7 @@ export default function Planner() {
       prompt: initialPrompt,
       includeStudentProfile: true,
       dailyMinutes: selectedMinutes,
+      daysPerWeek: selectedDays,
       startDate: todayCairo,
       pace: selectedPace,
       paceLevel: selectedLevel,
@@ -300,7 +351,7 @@ export default function Planner() {
           day: step.day || `اليوم ${index + 1}`,
         })),
       },
-      schedule: { startDate: todayCairo, dailyMinutes },
+      schedule: { startDate: todayCairo, dailyMinutes, daysPerWeek },
     });
   };
 
@@ -314,7 +365,7 @@ export default function Planner() {
   return (
     <DashboardLayout
       title="المخطط الذكي"
-      description="راجع خريطة المنهج وتقدمك، وجدّد المسودة عند الحاجة. لا تُنشأ مهام فعلية إلا بعد اعتمادك."
+      description="ابنِ خارطة العام الدراسي كاملة من بيانات المنصة، ثم اعتمد توزيعها على مراحل وأسابيع."
     >
       <div className="space-y-5">
         {history.isError && <QueryErrorNotice onRetry={() => void history.refetch()} label="تعذّر تحميل خططك المحفوظة." />}
@@ -353,19 +404,177 @@ export default function Planner() {
           </section>
         )}
 
-        {generate.isPending && !plan && <PlanLoading progress={generationProgress.data ?? null} />}
-        {!generate.isPending && !plan && !history.isLoading && !profile.isLoading && profile.data?.subjectIds?.length && !profile.isError && (
-          <section className="app-card rounded-2xl p-5">
-            <div className="flex items-center gap-3">
-              <span className="flex size-10 items-center justify-center rounded-xl bg-secondary text-primary"><BrainCircuit className="size-5" /></span>
+        <section className="app-card overflow-hidden rounded-[1.6rem] border border-border/80">
+          <header className="border-b border-border/70 bg-gradient-to-l from-secondary/65 to-card p-5 sm:p-6">
+            <p className="eyebrow">ANNUAL PLAN · 2026 / 2027</p>
+            <h2 className="mt-1 text-xl font-bold">قبل ما نبني خطتك السنوية</h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">راجع البيانات التي ستدخل في التخطيط، ثم حدّد وقتك وإيقاعك. لن يُنشئ النظام خطة متراكمات منفصلة، ولن يعتبر وجود مهمة دليلًا على أنك أنهيت الدرس.</p>
+            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <Metric label="المواد المختارة" value={(profile.data?.subjectIds?.length ?? 0).toLocaleString("ar-EG")} />
+              <Metric label="المهام المفتوحة" value={(tasksQuery.data ?? []).filter((task: any) => task.status !== "done").length.toLocaleString("ar-EG")} />
+              <Metric label="مهام مرتبطة بالمنهج" value={curriculumLinkedTasks.length.toLocaleString("ar-EG")} />
+              <Metric label="فروع تقدم مقروءة" value={progressPreview.length.toLocaleString("ar-EG")} />
+            </div>
+          </header>
+
+          <div className="grid gap-5 p-5 sm:p-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(280px,.85fr)]">
+            <div className="space-y-4">
               <div>
-                <h3 className="font-bold">لم تتكوّن المسودة بعد</h3>
-                <p className="mt-1 text-sm text-muted-foreground">لم يتم إنشاء مسودة بعد. أنشئ خريطة المنهج مرة واحدة، ثم حدّثها يدويًا عندما يتغير تقدمك.</p>
+                <h3 className="font-bold">إعدادات الدراسة السنوية</h3>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">دي تفضيلات الخطة من البداية، ومش هنطلب منك تعيد إدخال تقدم أو مهام موجودة بالفعل.</p>
+              </div>
+
+              <div>
+                <p className="mb-2 text-sm font-semibold">إيقاع الخطة</p>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  {paceOptions.map(option => (
+                    <button
+                      type="button"
+                      key={option.value}
+                      onClick={() => setPace(option.value)}
+                      aria-pressed={pace === option.value}
+                      className={"rounded-xl border p-3 text-right transition " + (pace === option.value
+                        ? "border-primary bg-primary/5 ring-1 ring-primary/20"
+                        : "border-border bg-muted/20 hover:border-primary/40")}
+                    >
+                      <span className="block text-sm font-bold">{option.title}</span>
+                      <span className="mt-1 block text-xs leading-5 text-muted-foreground">{option.subtitle}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-2 text-sm font-semibold">درجة الكثافة</p>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  {paceLevelOptions[pace].map(option => (
+                    <button
+                      type="button"
+                      key={option.value}
+                      onClick={() => setPaceLevel(option.value)}
+                      aria-pressed={paceLevel === option.value}
+                      className={"rounded-xl border p-3 text-right transition " + (paceLevel === option.value
+                        ? "border-primary bg-primary/5 ring-1 ring-primary/20"
+                        : "border-border bg-muted/20 hover:border-primary/40")}
+                    >
+                      <span className="block text-sm font-bold">{option.title}</span>
+                      <span className="mt-1 block text-xs leading-5 text-muted-foreground">{option.description}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold">وقت المذاكرة في اليوم</span>
+                  <select
+                    value={dailyMinutes}
+                    onChange={event => setDailyMinutes(Number(event.target.value))}
+                    className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm"
+                  >
+                    {[60, 90, 120, 150, 180, 210, 240, 300, 360, 420].map(value => (
+                      <option key={value} value={value}>{formatStudyDuration(value)}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold">أيام الدراسة في الأسبوع</span>
+                  <select
+                    value={daysPerWeek}
+                    onChange={event => setDaysPerWeek(Number(event.target.value) as 5 | 6 | 7)}
+                    className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm"
+                  >
+                    <option value={5}>5 أيام + يومان راحة</option>
+                    <option value={6}>6 أيام + يوم راحة</option>
+                    <option value={7}>7 أيام</option>
+                  </select>
+                </label>
+              </div>
+
+              <div>
+                <p className="mb-2 text-sm font-semibold">هل عندك موعد شخصي قبل الامتحانات؟</p>
+                <label className="flex min-h-11 items-center gap-2 rounded-xl border border-border bg-muted/20 px-3 text-sm">
+                  <input type="checkbox" checked={usePersonalDeadline} onChange={event => setUsePersonalDeadline(event.target.checked)} className="size-4 accent-primary" />
+                  نعم، عندي موعد إضافي
+                </label>
+                {usePersonalDeadline && (
+                  <input
+                    type="date"
+                    min={todayCairo}
+                    max={PLANNING_READY_BY}
+                    value={personalDeadline}
+                    onChange={event => setPersonalDeadline(event.target.value)}
+                    className="mt-2 h-11 w-full rounded-xl border border-border bg-background px-3 text-sm"
+                  />
+                )}
+              </div>
+
+              <div className="rounded-xl border border-primary/15 bg-primary/[0.04] p-3 text-xs leading-6 text-muted-foreground">
+                الهدف الافتراضي: إنهاء الاستعداد الأساسي قبل 11 يونيو 2027، مع نافذة امتحانات تقريبية من 12 إلى 22 يونيو 2027. اليوميات والمهام الحالية ستبقى منفصلة عن الخطة السنوية.
+              </div>
+              <div className="flex flex-col gap-2 border-t border-border/70 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs leading-5 text-muted-foreground">الخطة ستغطي كل الموضوعات غير المكتملة وتُظهر المهام الموجودة بدل نسخها.</p>
+                <Button
+                  className="rounded-xl px-5"
+                  onClick={() => runGeneration(pace, paceLevel, dailyMinutes, daysPerWeek, usePersonalDeadline ? personalDeadline : null)}
+                  disabled={!isPreflightReady || generate.isPending || (usePersonalDeadline && !personalDeadline)}
+                >
+                  {generate.isPending ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+                  {loadedSavedDraft ? "إعادة بناء الخطة السنوية" : "إنشاء الخطة السنوية"}
+                </Button>
               </div>
             </div>
-            <Button className="mt-4 rounded-xl" onClick={() => runGeneration(pace, paceLevel, dailyMinutes, usePersonalDeadline ? personalDeadline : null)} disabled={generate.isPending}>
-              <Sparkles className="size-4" /> إنشاء المسودة
-            </Button>
+
+            <aside className="space-y-3">
+              <div className="rounded-xl border border-border/70 bg-muted/15 p-4">
+                <h3 className="font-bold">ما تقرأه المنصة الآن</h3>
+                {profile.isLoading || learning.isLoading || tasksQuery.isLoading ? (
+                  <p className="mt-2 text-xs text-muted-foreground">جارٍ قراءة الملف والتقدم والمهام...</p>
+                ) : (
+                  <>
+                    <p className="mt-2 text-xs leading-5 text-muted-foreground">الموضوع التالي محسوب بعد آخر موضوع مكتمل، ومرجع المدرس ظاهر للمقارنة فقط.</p>
+                    <div className="mt-3 max-h-64 space-y-2 overflow-y-auto">
+                      {progressPreview.slice(0, 12).map(item => (
+                        <div key={item.key} className="rounded-lg border border-border/70 bg-card p-3">
+                          <p className="text-xs font-bold">{item.subject} · {item.branch}</p>
+                          <p className="mt-1 text-[11px] text-muted-foreground">آخر موضوع مكتمل: {item.lastCompleted}</p>
+                          <p className="mt-1 text-xs font-semibold text-primary">التالي: {item.next}</p>
+                          <p className="mt-1 text-[10px] text-muted-foreground">مرجع المدرس: {item.reference}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+              <div className="rounded-xl border border-border/70 bg-muted/15 p-4">
+                <h3 className="font-bold">المهام التي ستُدمج</h3>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">{curriculumLinkedTasks.length} مهمة مفتوحة تطابقت مع موضوعات المنهج؛ سيتم إظهارها بدل إنشاء نسخ أخرى.</p>
+                {curriculumLinkedTasks.slice(0, 5).map(({ task, match }) => (
+                  <p key={task.id} className="mt-2 rounded-lg bg-card px-3 py-2 text-xs">
+                    <b>{task.title}</b>
+                    {match && <span className="block mt-1 text-muted-foreground">{getSIESubject(match.subjectId)?.nameAr} · {match.branchTitle} · {match.title}</span>}
+                  </p>
+                ))}
+              </div>
+              {taskProgressConflicts.length > 0 && (
+                <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.04] p-4">
+                  <h3 className="text-sm font-bold">تعارض يحتاج مراجعة</h3>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">فيه مهمة مفتوحة مرتبطة بموضوع مسجل كمكتمل. المنصة لن تغيّر التقدم تلقائيًا.</p>
+                  {taskProgressConflicts.slice(0,3).map(({ task, match }) => <p key={task.id} className="mt-2 text-xs">{task.title} — {match?.title}</p>)}
+                  <a href="/study" className="mt-2 inline-flex text-xs font-semibold text-primary">مراجعة تقدم المنهج</a>
+                </div>
+              )}
+              {(profile.isError || learning.isError || tasksQuery.isError) && (
+                <div className="rounded-xl border border-destructive/25 bg-destructive/5 p-3 text-xs text-destructive">تعذر قراءة كل البيانات الحالية؛ أعد المحاولة قبل إنشاء الخطة حتى لا تُبنى على بيانات ناقصة.</div>
+              )}
+            </aside>
+          </div>
+        </section>
+
+        {generate.isPending && !plan && <PlanLoading progress={generationProgress.data ?? null} />}
+        {!generate.isPending && !plan && !history.isLoading && !profile.isLoading && profile.data?.subjectIds?.length && (
+          <section className="app-card rounded-2xl p-4 text-sm text-muted-foreground">
+            لم تُنشأ مسودة سنوية بعد. أكمل إعدادات الخطة أعلاه ثم ابدأ التوليد.
           </section>
         )}
 
@@ -380,7 +589,7 @@ export default function Planner() {
                 <Button
                   type="button"
                   className="shrink-0 rounded-xl"
-                  onClick={() => runGeneration(pace, paceLevel, dailyMinutes, usePersonalDeadline ? personalDeadline : null)}
+                  onClick={() => runGeneration(pace, paceLevel, dailyMinutes, daysPerWeek, usePersonalDeadline ? personalDeadline : null)}
                   disabled={generate.isPending}
                 >
                   {generate.isPending ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
@@ -390,7 +599,7 @@ export default function Planner() {
             )}
             <PlanCard
               plan={plan}
-              title={approved ? "الخطة المعتمدة" : loadedSavedDraft ? "آخر مسودة محفوظة — لم تُحدّث تلقائيًا" : "المسودة الجديدة التي أنشأها المخطط"}
+              title={approved ? "الخطة السنوية المعتمدة" : loadedSavedDraft ? "آخر مسودة سنوية محفوظة" : "مسودة الخطة السنوية"}
               studentName={profile.data?.studentName}
               editable={!approved}
               onChange={updatePlan}
@@ -402,108 +611,6 @@ export default function Planner() {
               approved={approved}
             />
 
-            {!approved && (
-              <section className="app-card rounded-2xl border border-border/70 p-5 sm:p-6">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="eyebrow">PERSONALIZE YOUR PLAN</p>
-                    <h3 className="mt-1 text-lg font-bold">خلّيني أضبط الخطة على أسلوبك</h3>
-                    <p className="mt-1 text-sm leading-6 text-muted-foreground">دي أول نسخة. جاوب على الأسئلة دي، وأنا أعيد توزيع الحمل والمدة من غير ما أطلب منك إدخال بيانات ملفك مرة ثانية.</p>
-                  </div>
-                  <span className="rounded-xl bg-secondary px-3 py-2 text-xs font-semibold text-primary">نمط الخطة ودرجة كثافتها</span>
-                </div>
-
-                <div className="mt-5">
-                  <p className="mb-2 text-sm font-semibold">1. تحب إيقاع الخطة يكون إزاي؟</p>
-                  <div className="grid gap-2 md:grid-cols-3">
-                    {paceOptions.map(option => (
-                      <button
-                        type="button"
-                        key={option.value}
-                        onClick={() => setPace(option.value)}
-                        aria-pressed={pace === option.value}
-                        className={"rounded-xl border p-3 text-right transition " + (pace === option.value
-                          ? "border-primary bg-primary/5 ring-1 ring-primary/20"
-                          : "border-border bg-muted/20 hover:border-primary/40")}
-                      >
-                        <span className="block text-sm font-bold">{option.title}</span>
-                        <span className="mt-1 block text-xs leading-5 text-muted-foreground">{option.subtitle}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="mt-5">
-                  <p className="mb-2 text-sm font-semibold">2. اختار درجة الكثافة داخل النمط</p>
-                  <div className="grid gap-2 md:grid-cols-3">
-                    {paceLevelOptions[pace].map(option => (
-                      <button
-                        type="button"
-                        key={option.value}
-                        onClick={() => setPaceLevel(option.value)}
-                        aria-pressed={paceLevel === option.value}
-                        className={"rounded-xl border p-3 text-right transition " + (paceLevel === option.value
-                          ? "border-primary bg-primary/5 ring-1 ring-primary/20"
-                          : "border-border bg-muted/20 hover:border-primary/40")}
-                      >
-                        <span className="flex items-center justify-between gap-2 text-sm font-bold">
-                          {option.title}
-                          <span className="text-[10px] text-muted-foreground">درجة {option.value}</span>
-                        </span>
-                        <span className="mt-1 block text-xs leading-5 text-muted-foreground">{option.description}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="mt-5 grid gap-4 md:grid-cols-2">
-                  <div>
-                    <label htmlFor="planner-daily-time" className="mb-2 block text-sm font-semibold">3. تقدر تخصص كام دقيقة للمذاكرة يوميًا؟</label>
-                    <select
-                      id="planner-daily-time"
-                      value={dailyMinutes}
-                      onChange={event => setDailyMinutes(Number(event.target.value))}
-                      className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      {[60, 90, 120, 150, 180, 210, 240, 300, 360, 420].map(value => (
-                        <option key={value} value={value}>{formatStudyDuration(value)}</option>
-                      ))}
-                    </select>
-                    <p className="mt-1.5 text-xs text-muted-foreground">الوقت ده هو متوسط متاح، مش إلزام يومي ثابت.</p>
-                  </div>
-                  <div>
-                    <p className="mb-2 text-sm font-semibold">4. هل عندك موعد شخصي تخلص قبله؟</p>
-                    <label className="flex min-h-11 items-center gap-2 rounded-xl border border-border bg-muted/20 px-3 text-sm">
-                      <input type="checkbox" checked={usePersonalDeadline} onChange={event => setUsePersonalDeadline(event.target.checked)} className="size-4 accent-primary" />
-                      عندي موعد نهائي إضافي
-                    </label>
-                    {usePersonalDeadline && (
-                      <input
-                        type="date"
-                        min={todayCairo}
-                        max={PLANNING_READY_BY}
-                        value={personalDeadline}
-                        onChange={event => setPersonalDeadline(event.target.value)}
-                        className="mt-2 h-11 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      />
-                    )}
-                    <p className="mt-1.5 text-xs text-muted-foreground">لو مفيش موعد إضافي، هنستهدف الجاهزية قبل 11 يونيو ضمن نافذة 12–22 يونيو 2027.</p>
-                  </div>
-                </div>
-
-                <div className="mt-5 flex flex-col gap-3 border-t border-border/70 pt-4 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-xs leading-5 text-muted-foreground">إعادة الضبط تنشئ نسخة جديدة للمراجعة فقط، ولا تغيّر مهامك الحالية قبل اعتمادها.</p>
-                  <Button
-                    className="rounded-xl"
-                    onClick={() => runGeneration(pace, paceLevel, dailyMinutes, usePersonalDeadline ? personalDeadline : null)}
-                    disabled={generate.isPending || (usePersonalDeadline && !personalDeadline)}
-                  >
-                    {generate.isPending ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
-                    أعد توزيع الخطة
-                  </Button>
-                </div>
-              </section>
-            )}
           </>
         )}
 
