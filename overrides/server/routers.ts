@@ -11,7 +11,6 @@ import {
   addChapter,
   addLibraryAttachment,
   assertLibraryAttachmentTarget,
-  approvePlanAsGoalTree,
   syncDailyPlanGoalTree,
   completeStudyStep,
   createBook,
@@ -47,12 +46,14 @@ import {
   getActiveStudySession,
   listAiPlans,
   deleteAiPlan,
+  deleteAllAiPlansAndGoalTrees,
   listBooks,
   listCalendarEvents,
   listGoals,
   listRoutines,
   listTasks,
   saveStudentProfile,
+  saveAiPlan,
   saveSIEOnboarding,
   updateStudentProfileSelection,
   updateStudentLearningBaseline,
@@ -96,7 +97,7 @@ type DailyPlanResult = {
 };
 
 // V6 scopes teacher signals to second-year Baccalaureate and retires stale AI-plan tasks.
-const DAILY_PLANNER_POLICY_VERSION = "annual-exam-may-2027-teacher-scope-v2";
+const DAILY_PLANNER_POLICY_VERSION = "annual-exam-june-12-2027-g2-planner-v3";
 const DAILY_PLAN_PREFIX = "SIE_DAILY_PLAN_V4:";
 const dailyPlanLocks = new Map<number, Promise<DailyPlanResult>>();
 const dailyPlanDirtyUsers = new Set<number>();
@@ -2493,10 +2494,25 @@ export const appRouter = router({
         await logStudentActivity(ctx.user.id, "plan.deleted", "ai_plan", input.id, "حُذفت خطة محفوظة من السجل");
         return { success: true };
       }),
+    deleteAll: protectedProcedure
+      .mutation(async ({ ctx }) => {
+        const result = await deleteAllAiPlansAndGoalTrees(ctx.user.id);
+        await logStudentActivity(
+          ctx.user.id,
+          "plans.cleared",
+          "ai_plan",
+          null,
+          "تم حذف جميع خطط الذكاء الاصطناعي والمهام المرتبطة بها",
+          result,
+        );
+        return { success: true, ...result };
+      }),
     currentDaily: protectedProcedure.query(async ({ ctx }) => {
       const snapshot = await getCurrentDailyPlanForStudent(ctx.user.id);
       queueTeacherSourceScan(ctx.user.id);
-      if (snapshot.needsRefresh && snapshot.dailyMinutes) {
+      // Do not publish an initial AI plan as tasks before the student reviews it.
+      // Refresh only a previously generated/approved daily plan.
+      if (snapshot.needsRefresh && snapshot.dailyMinutes && snapshot.generatedAt) {
         queueDailyPlanEnsure(ctx.user.id, snapshot.dailyMinutes);
       }
       return snapshot;
@@ -2554,90 +2570,125 @@ export const appRouter = router({
         prompt: z.string().trim().min(12, "أضف تفاصيل أكثر قليلًا حتى تكون الخطة مناسبة.").max(2_000),
         includeStudentProfile: z.boolean().default(true),
         dailyMinutes: z.number().int().min(20).max(600).default(120),
-        startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        startDate: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/).optional(),
+        pace: z.enum(["intensive", "balanced", "relaxed"]).default("balanced"),
+        deadline: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/).nullable().default(null),
       }))
       .mutation(async ({ ctx, input }) => {
         const startDate = input.startDate
           ?? new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
         const result = await generatePersonalPlan(
-          ctx.user.id, input.prompt, input.includeStudentProfile,
-          { dailyMinutes: input.dailyMinutes, startDate }
-        );
-        const synced = await syncDailyPlanGoalTree(
           ctx.user.id,
-          result,
-          { startDate, dailyMinutes: input.dailyMinutes },
+          input.prompt,
+          input.includeStudentProfile,
           {
-            goalTitle: "خطة StudyFlow الذكية الحالية",
-            goalCategory: "خطة ذكية",
-            supersedeCategories: ["خطة ذكية", "خطة يومية"],
+            dailyMinutes: input.dailyMinutes,
+            startDate,
+            pace: input.pace,
+            deadline: input.deadline,
           },
         );
-        const taskSync = {
-          parentGoalId: synced.parentGoalId,
-          stageCount: synced.taskCount,
-          taskCount: synced.taskCount,
-          routineId: null,
-          createdTaskCount: synced.createdTaskCount,
-          refreshedTaskCount: synced.refreshedTaskCount,
-          preservedCompletedTaskCount: synced.preservedCompletedTaskCount,
-        };
-        await logStudentActivity(ctx.user.id, "plan.generated", "ai_plan", null, "ولّد المخطط الذكي خطة وحوّلها تلقائيًا إلى مهام", {
+        await logStudentActivity(ctx.user.id, "plan.draft_generated", "ai_plan", null, "أنشأ المخطط الذكي مسودة للمراجعة قبل الاعتماد", {
           title: result.title,
           stepCount: result.steps.length,
-          taskCount: taskSync.taskCount,
-          createdTaskCount: taskSync.createdTaskCount,
-          refreshedTaskCount: taskSync.refreshedTaskCount,
+          pace: input.pace,
+          dailyMinutes: input.dailyMinutes,
+          officialExamDate: "2027-06-12",
+          personalDeadline: input.deadline,
         });
-        queueDailyPlanReconciliation(ctx.user.id);
-        return { ...result, taskSync };
+        // A draft is stored as an AI plan, but does not change the task list.
+        return result;
       }),
     approve: protectedProcedure
       .input(z.object({
         plan: z.object({
           title: z.string().trim().min(3).max(160),
           summary: z.string().trim().max(1_500),
+          durationLabel: z.string().trim().min(1).max(100).optional(),
+          habits: z.array(z.object({
+            title: z.string().trim().min(1).max(160),
+            cue: z.string().trim().min(1).max(240),
+          })).max(5).default([]),
+          reviewQuestion: z.string().trim().min(1).max(600).optional(),
           steps: z.array(z.object({
             day: z.string().trim().min(1).max(60),
             title: z.string().trim().min(2).max(180),
-            detail: z.string().trim().max(1_200),
+            detail: z.string().trim().min(1).max(1_200),
             minutes: z.number().int().min(5).max(480),
             category: z.string().trim().min(2).max(80),
+            curriculumNodeIds: z.array(z.string().trim().min(1).max(120)).max(8).optional(),
             priority: z.enum(["critical", "high", "medium", "low"]).optional(),
             difficulty: z.enum(["easy", "medium", "hard", "unknown"]).optional(),
             lessonSize: z.enum(["small", "medium", "large", "unknown"]).optional(),
             difficultyBasis: z.enum(["student_report", "assessment_history", "curriculum_profile", "unknown"]).optional(),
             difficultyConfidence: z.enum(["low", "medium", "high"]).optional(),
+            priorityScore: z.number().min(0).max(100).optional(),
+            priorityReason: z.string().trim().max(500).optional(),
+            priorityEvidenceConfidence: z.enum(["low", "medium", "high"]).optional(),
+            examComponentLabel: z.string().trim().max(120).optional(),
+            examComponentMarks: z.number().int().min(0).max(100).optional(),
+            examPaperMarks: z.number().int().min(1).max(100).optional(),
+            resourceRecommendation: z.object({
+              title: z.string().trim().min(2).max(240),
+              url: z.string().url().max(1_000).refine(value => value.startsWith("https://")),
+              teacherName: z.string().trim().max(120).optional(),
+              reason: z.string().trim().min(5).max(500),
+            }).optional(),
             printedPageRange: z.tuple([z.number().int().positive().max(5_000), z.number().int().positive().max(5_000)]).optional(),
             sourcePages: z.array(z.number().int().positive().max(5_000)).max(20).optional(),
           })).min(1).max(30),
         }),
         schedule: z.object({
-          startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+          startDate: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/),
           dailyMinutes: z.number().int().min(20).max(600),
-        }).optional(),
-        routine: z.object({
-          name: z.string().trim().min(1).max(120),
-          period: z.enum(["morning", "evening", "custom"]),
-          accent: z.string().trim().min(1).max(20).optional(),
-          items: z.array(z.object({
-            title: z.string().trim().min(1).max(180),
-            durationMinutes: z.number().int().min(1).max(300),
-          })).min(1).max(20),
-        }).optional(),
+        }),
       }))
       .mutation(async ({ ctx, input }) => {
-        const result = await approvePlanAsGoalTree(ctx.user.id, {
-          title: input.plan.title,
-          summary: input.plan.summary,
-          steps: input.plan.steps.map((step, index) => ({ ...step, day: index + 1 })),
-        }, input.schedule, input.routine);
-        await logStudentActivity(ctx.user.id, "plan.approved", "ai_plan", null, "تم اعتماد خطة وتحويلها إلى مهام", {
-          title: input.plan.title, taskCount: result.taskCount, routineCreated: Boolean(result.routineId),
+        const approvedPlan = {
+          ...input.plan,
+          durationLabel: input.plan.durationLabel || "حتى امتحان نهاية السنة",
+          habits: input.plan.habits,
+          reviewQuestion: input.plan.reviewQuestion || "ما أهم فكرة تستطيع شرحها دون الرجوع إلى الكتاب؟",
+          steps: input.plan.steps.map((step, index) => ({
+            ...step,
+            day: step.day || `اليوم ${index + 1}`,
+            curriculumNodeIds: step.curriculumNodeIds ?? [],
+            sourcePages: step.sourcePages ?? [],
+          })),
+        };
+        const synced = await syncDailyPlanGoalTree(
+          ctx.user.id,
+          approvedPlan,
+          input.schedule,
+          {
+            goalTitle: "خطة StudyFlow اليومية",
+            goalCategory: "خطة يومية",
+            supersedeCategories: ["خطة يومية", "خطة ذكية", "خطة تدريبية"],
+          },
+        );
+        const fingerprint = await getDailyPlanSourceFingerprint(
+          ctx.user.id,
+          input.schedule.dailyMinutes,
+          input.schedule.startDate,
+        );
+        await saveAiPlan(ctx.user.id, {
+          prompt: DAILY_PLAN_PREFIX + fingerprint + ":",
+          title: approvedPlan.title,
+          planJson: JSON.stringify(approvedPlan),
         });
-        queueDailyPlanReconciliation(ctx.user.id);
-        return result;
+        await logStudentActivity(ctx.user.id, "plan.approved", "ai_plan", null, "اعتمد الطالب مسودة المخطط وأنشئت المهام بعد مراجعته", {
+          title: approvedPlan.title,
+          taskCount: synced.taskCount,
+          officialExamDate: "2027-06-12",
+        });
+        return {
+          parentGoalId: synced.parentGoalId,
+          stageCount: synced.taskCount,
+          taskCount: synced.taskCount,
+          routineId: null,
+        };
       }),
+
   }),
 });
 
