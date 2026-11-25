@@ -160,7 +160,7 @@ export default function Planner() {
   const curriculumLinkedTasks = mappedOpenTasks.filter(item => item.match);
   const taskProgressConflicts = curriculumLinkedTasks.filter(({ task, match }) => {
     if (!match) return false;
-    const branch = getSIEStudentVisibleBranches(match.subjectId).find(item => item.branchId === match.branchId);
+    const branch = getSIECheckpointProgressBranches(match.subjectId).find(item => item.branchId === match.branchId);
     const gap = (learning.data as any)?.gapByBranch?.[match.subjectId]?.[match.branchId];
     const index = branch?.choices.findIndex(choice => choice.nodeId === match.nodeId) ?? -1;
     return index >= 0 && typeof gap?.studentPosition === "number" && index < gap.studentPosition;
