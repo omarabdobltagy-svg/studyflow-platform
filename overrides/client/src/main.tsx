@@ -13,6 +13,7 @@ import "./unified-workspace.css";
 import "./workspace-finish.css";
 import "./workspace-interaction-hub.css";
 import "./workspace-transitions.css";
+import "./studyflow-final-theme.css";
 
 // Analytics is optional. Do not emit a broken /umami request when no endpoint is configured.
 const analyticsEndpoint = import.meta.env.VITE_ANALYTICS_ENDPOINT?.trim();
