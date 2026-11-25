@@ -98,9 +98,10 @@ type DailyPlanResult = {
 };
 
 // V6 scopes teacher signals to second-year Baccalaureate and retires stale AI-plan tasks.
-const DAILY_PLANNER_POLICY_VERSION = "annual-exam-june-12-2027-g2-planner-v3";
+const DAILY_PLANNER_POLICY_VERSION = "smart-study-horizon-teacher-sync-v1";
 const DAILY_PLAN_PREFIX = "SIE_DAILY_PLAN_V4:";
 const ANNUAL_PLAN_PREFIX = "SIE_ANNUAL_PLAN_V1:";
+const STUDY_PLAN_PREFIX = "SIE_STUDY_PLAN_V2:";
 const dailyPlanLocks = new Map<number, Promise<DailyPlanResult>>();
 const dailyPlanDirtyUsers = new Set<number>();
 const dailyPlanReconcileTimers = new Map<number, ReturnType<typeof setTimeout>>();
