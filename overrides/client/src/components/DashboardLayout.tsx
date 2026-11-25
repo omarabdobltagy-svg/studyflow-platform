@@ -254,8 +254,8 @@ export default function DashboardLayout({ title, description, children, action }
 
   return (
     <div className="sf-app-shell sf-shell-v3">
-      <StudyOrbScene className="sf-workspace-3d" />
       <div className="sf-app-frame" data-page={pageKey}>
+        <StudyOrbScene className="sf-workspace-3d" />
         <div className="sf-app-main">
           <motion.header
             className="sf-topbar sf-topbar-editorial"
