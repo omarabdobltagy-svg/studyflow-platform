@@ -44,7 +44,7 @@ export function parseYoutubeAtomFeed(
   teacher: { teacherId: string; teacherName: string },
   observedAt = new Date(),
 ): TeacherPublicUpdate[] {
-  const entries = xml.match(/<entry(?:\\s[^>]*)?>[\\s\\S]*?<\\/entry>/g) ?? [];
+  const entries = xml.match(/<entry(?:\s[^>]*)?>[\s\S]*?<\/entry>/g) ?? [];
   return entries.flatMap(entry => {
     const videoId = xmlTag(entry, "yt:videoId");
     const title = xmlTag(entry, "title");
