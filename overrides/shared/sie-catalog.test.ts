@@ -91,6 +91,21 @@ describe("Arabic course taxonomy", () => {
     expect(normalizeSIECheckpointFrontier("ARB_G2_BAC", "ARB_NAHW", "ARB_U3_N1")).toBe("ARB_U3_N1");
   });
 
+  it("uses the student's visible Arabic topic units to match existing tasks without changing progress", () => {
+    const { getSIECheckpointProgressBranches, matchSIECheckpointTask } = require("./sie-catalog") as typeof import("./sie-catalog");
+    const visibleNahw = getSIECheckpointProgressBranches("ARB_G2_BAC").find(branch => branch.branchId === "ARB_NAHW");
+    expect(visibleNahw?.choices.filter(choice => choice.title.includes("الممنوع من الصرف"))).toHaveLength(1);
+    expect(visibleNahw?.choices.find(choice => choice.title.includes("الممنوع من الصرف"))?.nodeId).toBe("ARB_U2_N3");
+
+    const taskMatch = matchSIECheckpointTask(["ARB_G2_BAC"], "نرس الممنوع من الصرف");
+    expect(taskMatch).toMatchObject({
+      subjectId: "ARB_G2_BAC",
+      branchId: "ARB_NAHW",
+      nodeId: "ARB_U2_N3",
+      confidence: "strong",
+    });
+  });
+
   it("returns readable Arabic types and source-aware labels", () => {
     const choices = getSIECheckpointChoices("ARB_G2_BAC");
     const rhetoric = choices.find(choice => choice.courseSequenceNumber === 19)!;
