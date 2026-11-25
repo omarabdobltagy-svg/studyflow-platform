@@ -24,6 +24,7 @@ describe("second-year baccalaureate exam blueprints", () => {
     expect(blueprint?.unverified.some(note => note.includes("59 لا 60"))).toBe(true);
     expect(getExamComponentForText("ARB_G2_BAC", "اللغة العربية", "قصة وا إسلاماه والنص الأدبي")?.marks).toBe(7);
     expect(getExamComponentForText("ARB_G2_BAC", "اللغة العربية", "النحو")?.marks).toBe(10);
+    expect(getExamComponentForText("ARB_G2_BAC", "اللغة العربية", "النصوص الشعرية والنثرية")?.marks).toBe(15);
   });
 
   it("keeps history and programming unit weights unknown instead of treating units as equal official weights", () => {
