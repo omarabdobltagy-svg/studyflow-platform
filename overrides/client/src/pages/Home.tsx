@@ -154,7 +154,7 @@ export default function Home() {
         const next = typeof gap.studentPosition === "number" ? branch.choices[gap.studentPosition] : undefined;
         return [{
           subjectId, subjectName: getSIESubject(subjectId)?.nameAr ?? subjectId,
-          branchId: branch.branchId, branchTitle: branch.branchTitle, gapCount: gap.gapCount as number,
+          branchId: branch.branchId, branchTitle: branch.branchId === "ARB_READING" ? "نصوص الوحدة" : branch.branchTitle, gapCount: gap.gapCount as number,
           pointLabel: branch.branchType === "official_section" ? "موضوع" : "درس",
           nextLesson: next ? { nodeId: next.nodeId, title: next.title } : null,
           ratio: gap.referencePosition > 0 ? gap.gapCount / gap.referencePosition : 0,
