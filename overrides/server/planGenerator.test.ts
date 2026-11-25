@@ -1,5 +1,98 @@
 import { describe, expect, it } from "vitest";
-import { applyTeacherLedPlanningGuard, parseGeneratedPlan } from "./planGenerator";
+import {
+  applyCurriculumPrioritySignals,
+  applyPlannerCurriculumCoverageGuard,
+  applyPlannerProgressGuard,
+  applyTeacherLedPlanningGuard,
+  parseGeneratedPlan,
+} from "./planGenerator";
+import { getSIECheckpointBranches } from "@shared/sie-catalog";
+
+describe("annual plan curriculum coverage and progress alignment", () => {
+  it("treats the selected Arabic grammar topic as fully completed and puts the teacher's next topic first", () => {
+    const profile = {
+      subjectIds: ["ARB_G2_BAC"],
+      selection: {
+        learningCourseProgress: {
+          ARB_G2_BAC: {
+            branches: {
+              ARB_NAHW: {
+                lastCompletedLessonId: "ARB_U2_N1",
+                teacherTeachingFrontierId: "ARB_U3_N1",
+              },
+            },
+          },
+        },
+      },
+    } as any;
+    const plan = parseGeneratedPlan(JSON.stringify({
+      title: "خريطة النحو",
+      summary: "خريطة متابعة النحو.",
+      durationLabel: "أيام",
+      steps: [
+        {
+          day: "اليوم 1",
+          title: "العطف",
+          detail: "متابعة شرح المدرس للموضوع.",
+          minutes: 45,
+          category: "النحو",
+          curriculumNodeIds: ["ARB_U3_N2"],
+        },
+        {
+          day: "اليوم 1",
+          title: "النعت والبدل والتمييز بينهما",
+          detail: "متابعة شرح المدرس للموضوع.",
+          minutes: 45,
+          category: "النحو",
+          curriculumNodeIds: ["ARB_U3_N1"],
+        },
+      ],
+      habits: [],
+    }));
+
+    const progressGuarded = applyPlannerProgressGuard(plan, profile);
+    const covered = applyPlannerCurriculumCoverageGuard(progressGuarded, profile);
+    const ranked = applyCurriculumPrioritySignals(covered, profile);
+    const grammarIds = ranked.steps.flatMap(step => step.curriculumNodeIds)
+      .filter(id => id.startsWith("ARB_U"));
+
+    expect(grammarIds).toEqual(["ARB_U3_N1", "ARB_U3_N2"]);
+    expect(ranked.steps[0].priorityReason).toContain("الخطوة التالية مباشرة");
+    expect(ranked.steps[0].priorityReason).toContain("الفجوة الحالية: 1");
+  });
+
+  it("covers all remaining programming chapters, including chapters 5–7, once", () => {
+    const profile = {
+      subjectIds: ["PROG_AI_G2_BAC"],
+      selection: {},
+    } as any;
+    const firstChapterNode = getSIECheckpointBranches("PROG_AI_G2_BAC")[0].choices[0].nodeId;
+    const plan = parseGeneratedPlan(JSON.stringify({
+      title: "خريطة البرمجة",
+      summary: "خريطة المقرر بالكامل.",
+      durationLabel: "أيام",
+      steps: [{
+        day: "اليوم 1",
+        title: "بداية المقرر",
+        detail: "متابعة شرح المدرس وقراءة الكتاب.",
+        minutes: 45,
+        category: "البرمجة والذكاء الاصطناعي",
+        curriculumNodeIds: [firstChapterNode],
+      }],
+      habits: [],
+    }));
+
+    const covered = applyPlannerCurriculumCoverageGuard(plan, profile);
+    const ids = covered.steps.flatMap(step => step.curriculumNodeIds);
+    const officialIds = getSIECheckpointBranches("PROG_AI_G2_BAC")[0].choices.map(choice => choice.nodeId);
+    const laterChapters = officialIds.filter(id => /^PROG_[5-7]_/.test(id));
+
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(new Set(ids)).toEqual(new Set(officialIds));
+    expect(laterChapters.length).toBeGreaterThan(0);
+    for (const id of laterChapters) expect(ids).toContain(id);
+  });
+});
 
 describe("AI planner response normalization", () => {
   it("accepts a valid plan with fewer than three eligible tasks", () => {
