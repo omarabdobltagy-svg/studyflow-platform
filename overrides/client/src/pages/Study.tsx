@@ -167,7 +167,12 @@ export default function Study() {
 
   const saveBranchFrontier = trpc.learning.updateBranchFrontier.useMutation({
     onSuccess: async (result, variables) => {
-      await Promise.all([utils.studentProfile.get.invalidate(), utils.learning.get.invalidate()]);
+      await Promise.all([
+        utils.studentProfile.get.invalidate(),
+        utils.learning.get.invalidate(),
+        utils.plans.currentDaily.invalidate(),
+        utils.dashboard.summary.invalidate(),
+      ]);
       const savedDraftKey = variables.subjectId + "::" + variables.branchId;
       const clearSavedDraft = (drafts: Record<string, string>) => {
         const next = { ...drafts };
