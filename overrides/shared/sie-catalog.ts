@@ -1483,6 +1483,28 @@ export function matchSIECheckpointTask(
   const taskTokens = tokens(taskText);
   if (!taskTokens.length) return null;
   const taskNormalized = normalize(taskText);
+
+  // Legacy tasks using the old combined title represented the complete pair of new checkpoints.
+  const legacyGrammarTerms = ["النعت", "البدل", "التمييز"];
+  const hasLegacyCombinedGrammarTitle = legacyGrammarTerms.every(term =>
+    taskTokens.some(token => token === term || token === `و${term}`)
+  );
+  if (subjectIds.includes("ARB_G2_BAC") && hasLegacyCombinedGrammarTitle) {
+    const legacyMatch = getSIECheckpointProgressBranches("ARB_G2_BAC")
+      .find(branch => branch.branchId === "ARB_NAHW")
+      ?.choices.find(choice => choice.nodeId === "ARB_U3_N1_TAMYIZ");
+    if (legacyMatch) {
+      return {
+        subjectId: "ARB_G2_BAC",
+        branchId: "ARB_NAHW",
+        branchTitle: legacyMatch.branchTitle,
+        nodeId: legacyMatch.nodeId,
+        title: legacyMatch.title,
+        confidence: "strong",
+      };
+    }
+  }
+
   const candidates: Array<SIECheckpointTaskMatch & { score: number }> = [];
 
   for (const subjectId of subjectIds) {
@@ -1499,7 +1521,7 @@ export function matchSIECheckpointTask(
             : overlap / Math.min(taskTokens.length, titleTokens.length);
         // Short task labels often omit the rest of a longer textbook title.
         // Require at least two meaningful shared Arabic terms to avoid generic matches.
-        if (score < 0.58 || overlap < 2) continue;
+        if (score < 0.58 || (overlap < 2 && taskNormalized !== titleNormalized)) continue;
         candidates.push({
           subjectId,
           branchId: branch.branchId,
