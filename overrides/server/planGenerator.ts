@@ -6,7 +6,7 @@ import { isPrimaryProviderFallbackEligible } from "./_core/llmFallback";
 import { getStudentProfile, saveAiPlan } from "./db";
 import { formatTextbookEvidence, retrieveTextbookEvidence } from "./textbook-retrieval";
 import { buildExamBlueprintContext, getExamComponentForText, getSubjectExamBlueprint } from "./exam-blueprints";
-import { isSecondYearBaccalaureateProfile, selectedTeacherIds } from "./teacher-content-monitor";
+import { isSecondYearBaccalaureateProfile, isSecondYearBaccalaureateUpdate, selectedTeacherIds } from "./teacher-content-monitor";
 
 const planSchema = z.object({
   title: z.string().trim().min(3).max(160),
@@ -474,6 +474,7 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
     ? (Array.isArray(selection.teacherPublicUpdates)
       ? (selection.teacherPublicUpdates as Array<Record<string, any>>)
         .filter(update => typeof update.teacherId === "string" && allowedTeacherIds.has(update.teacherId))
+        .filter(isSecondYearBaccalaureateUpdate)
         .filter(update => typeof update.url === "string" && /^https:\/\//i.test(update.url))
       : [])
     : [];
@@ -825,6 +826,7 @@ export function applyVerifiedTeacherResourceRecommendations(
   const allowedUpdates = updates.filter(update =>
     typeof update.teacherId === "string"
     && allowedTeacherIds.has(update.teacherId)
+    && isSecondYearBaccalaureateUpdate(update)
     && typeof update.url === "string"
     && /^https:\/\//i.test(update.url)
   );
