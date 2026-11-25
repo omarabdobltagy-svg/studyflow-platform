@@ -682,9 +682,18 @@ export function parseGeneratedPlan(content: string): GeneratedPlan {
 }
 
 function getPlanningBranches(subjectId: string) {
-  // Use exactly the topic units shown to the student. Multi-part topics such
-  // as Arabic Nahw are one curriculum item in annual planning and progress.
-  return getSIEStudentVisibleBranches(subjectId);
+  // Retain the legacy ARB_READING progress path internally so named reading
+  // texts remain schedulable from their unit cards, but never label it as a
+  // separate Reading branch in student-facing plans or task categories.
+  return getSIECheckpointProgressBranches(subjectId).map(branch =>
+    subjectId === "ARB_G2_BAC" && branch.branchId === "ARB_READING"
+      ? {
+          ...branch,
+          branchTitle: "نصوص الوحدة",
+          choices: branch.choices.map(choice => ({ ...choice, branchTitle: "نصوص الوحدة" })),
+        }
+      : branch
+  );
 }
 
 function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof getStudentProfile>>>) {
