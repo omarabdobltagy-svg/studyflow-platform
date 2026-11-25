@@ -23,6 +23,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 type Pace = "intensive" | "balanced" | "relaxed";
+type PaceLevel = 1 | 2 | 3;
+type GenerationProgress = {
+  status: "running" | "complete" | "failed";
+  currentStage: "profile" | "curriculum" | "model" | "validation" | "saving" | "complete";
+  completedStages: Array<"profile" | "curriculum" | "model" | "validation" | "saving" | "complete">;
+  detail: string;
+  updatedAt: number;
+  error?: string;
+};
 type PlanStep = {
   day: string;
   title: string;
@@ -33,14 +42,11 @@ type PlanStep = {
   priorityScore?: number;
   priorityReason?: string;
   priorityEvidenceConfidence?: "low" | "medium" | "high";
-  examComponentLabel?: string;
-  examComponentMarks?: number;
-  examPaperMarks?: number;
   curriculumNodeIds?: string[];
   resourceRecommendation?: { title: string; url: string; teacherName?: string; reason: string };
   difficulty?: "easy" | "medium" | "hard" | "unknown";
   lessonSize?: "small" | "medium" | "large" | "unknown";
-  difficultyBasis?: "student_report" | "assessment_history" | "curriculum_profile" | "unknown";
+  difficultyBasis?: "student_report" | "curriculum_profile" | "unknown";
   difficultyConfidence?: "low" | "medium" | "high";
   printedPageRange?: [number, number];
   sourcePages?: number[];
@@ -51,18 +57,34 @@ type PlanView = {
   durationLabel: string;
   steps: PlanStep[];
   habits: { title: string; cue: string }[];
-  reviewQuestion: string;
   taskSync?: { parentGoalId: number; stageCount: number; taskCount: number; routineId?: number | null };
 };
-const EXAM_DATE = "2027-06-12";
+const PLANNING_READY_BY = "2027-06-11";
 const DAILY_SNAPSHOT_PREFIX = "SIE_DAILY_PLAN_V4:";
 const todayCairo = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
-const initialPrompt = "حلّل ملفي الدراسي كاملًا وأنشئ مسودة خطة سنوية واقعية تغطي المنهج المتبقي، وتراعي التراكم ونتائج التقييم وصعوبة الدروس والمتطلبات السابقة، وتبدأ من اليوم وتستهدف الاستعداد لامتحان نهاية السنة.";
+const initialPrompt = "حلّل ملفي الدراسي كاملًا وأنشئ مسودة خطة واقعية تغطي التراكم والمنهج المتبقي. اعتمد على موضع الطالب والمدرس داخل كل فرع، وسجل تنفيذ المهام، والوقت المتاح والصعوبة التي أبلغ عنها الطالب، والمتطلبات المنهجية الموثقة. لا تنشئ أي اختبار أو سؤال أو تدريب أو واجب من عندك.";
 const paceOptions: Array<{ value: Pace; title: string; subtitle: string }> = [
-  { value: "intensive", title: "مكثفة", subtitle: "إنجاز أسرع وحمل يومي أعلى" },
-  { value: "balanced", title: "متوازنة", subtitle: "تقدم ثابت مع مساحة للمراجعة" },
-  { value: "relaxed", title: "مريحة", subtitle: "جلسات أخف ووقت استيعاب أكبر" },
+  { value: "intensive", title: "مكثفة", subtitle: "إنجاز أسرع مع حمل أعلى محسوب" },
+  { value: "balanced", title: "متوازنة", subtitle: "تقدم ثابت ومساحة للتعويض" },
+  { value: "relaxed", title: "مرنة ومريحة", subtitle: "جلسات أخف وحرية أكبر في التنفيذ" },
 ];
+const paceLevelOptions: Record<Pace, Array<{ value: PaceLevel; title: string; description: string }>> = {
+  intensive: [
+    { value: 1, title: "مكثفة محسوبة", description: "تقدم أسرع مع الحفاظ على جلسات الفهم والراحة." },
+    { value: 2, title: "مكثفة عالية", description: "حمل مرتفع وهامش تعويض أصغر دون تجاوز وقتك." },
+    { value: 3, title: "مكثفة قصوى", description: "أعلى كثافة قابلة للتنفيذ فقط؛ لا تحميل فوق طاقتك." },
+  ],
+  balanced: [
+    { value: 1, title: "متوازنة خفيفة", description: "حمل أخف وتقدم ثابت مع مساحة واسعة للتعويض." },
+    { value: 2, title: "متوازنة نشطة", description: "توازن بين الإنجاز والفهم والمراجعة والتعويض." },
+    { value: 3, title: "متوازنة سريعة", description: "تقدم أسرع دون تحويل كل الأيام إلى ضغط مكثف." },
+  ],
+  relaxed: [
+    { value: 1, title: "مرنة جدًا", description: "جلسات أقل في البداية ومرونة واسعة حسب ظروفك." },
+    { value: 2, title: "راحة نشطة", description: "حمل مريح ومنتظم مع هدف واضح دون ضغط زائد." },
+    { value: 3, title: "مرنة قوية", description: "مرونة في التنفيذ مع إنجاز أعلى قليلًا ووقت للاستيعاب." },
+  ],
+};
 
 function formatStudyDuration(minutes: number) {
   const hours = Math.floor(minutes / 60);
@@ -89,7 +111,6 @@ function parseSavedPlan(record: { planJson: string }): PlanView | null {
         ...raw,
       })),
       habits: Array.isArray(saved.habits) ? saved.habits : [],
-      reviewQuestion: "", // Legacy export compatibility only; StudyFlow no longer generates or displays self-test questions.
     };
   } catch {
     return null;
@@ -100,6 +121,7 @@ export default function Planner() {
   const utils = trpc.useUtils();
   const [plan, setPlan] = useState<PlanView | null>(null);
   const [pace, setPace] = useState<Pace>("balanced");
+  const [paceLevel, setPaceLevel] = useState<PaceLevel>(2);
   const [dailyMinutes, setDailyMinutes] = useState(120);
   const [usePersonalDeadline, setUsePersonalDeadline] = useState(false);
   const [personalDeadline, setPersonalDeadline] = useState("");
@@ -125,13 +147,18 @@ export default function Planner() {
         ...result,
         habits: Array.isArray(result.habits) ? result.habits : [],
         steps: Array.isArray(result.steps) ? result.steps : [],
-        reviewQuestion: "", // Ignore legacy or provider-supplied self-test questions.
       });
       setApproved(false);
       void utils.plans.list.invalidate();
       toast.success("المسودة جاهزة. راجعها واضبطها قبل اعتماد المهام.");
     },
     onError: error => toast.error("تعذّر بناء الخطة: " + error.message),
+  });
+
+  const generationProgress = trpc.plans.generationProgress.useQuery(undefined, {
+    enabled: generate.isPending,
+    refetchInterval: generate.isPending ? 750 : false,
+    refetchOnWindowFocus: false,
   });
 
   const approvePlan = trpc.plans.approve.useMutation({
@@ -183,7 +210,7 @@ export default function Planner() {
     onError: error => toast.error("تعذّر مسح الخطط: " + error.message),
   });
 
-  const runGeneration = (selectedPace: Pace, selectedMinutes: number, deadline: string | null) => {
+  const runGeneration = (selectedPace: Pace, selectedLevel: PaceLevel, selectedMinutes: number, deadline: string | null) => {
     if (deadline && deadline < todayCairo) {
       toast.error("الموعد الشخصي يجب أن يكون اليوم أو في المستقبل.");
       return;
@@ -194,6 +221,7 @@ export default function Planner() {
       dailyMinutes: selectedMinutes,
       startDate: todayCairo,
       pace: selectedPace,
+      paceLevel: selectedLevel,
       deadline,
     });
   };
@@ -207,7 +235,7 @@ export default function Planner() {
     // replace today's generated draft with an old saved plan.
     autoStarted.current = true;
     const savedDailyMinutes = Number((profile.data as any)?.selection?.studyConditions?.dailyMinutes);
-    runGeneration("balanced", Number.isFinite(savedDailyMinutes) && savedDailyMinutes >= 20
+    runGeneration("balanced", 2, Number.isFinite(savedDailyMinutes) && savedDailyMinutes >= 20
       ? Math.min(600, savedDailyMinutes)
       : 120, null);
   }, [history.isLoading, history.isError, profile.isLoading, profile.isError, profile.data]);
@@ -299,8 +327,8 @@ export default function Planner() {
             </div>
             <div className="shrink-0 rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
               <div className="flex items-center gap-2 text-xs font-semibold text-violet-100"><CalendarClock className="size-4" />موعد امتحان نهاية السنة</div>
-              <div className="mt-2 text-xl font-bold">12 يونيو 2027</div>
-              <p className="mt-1 text-[11px] text-slate-300">موعد ثابت في حسابات التخطيط</p>
+              <div className="mt-2 text-xl font-bold">12–22 يونيو 2027</div>
+              <p className="mt-1 text-[11px] text-slate-300">فترة امتحانات تقريبية — الجاهزية المستهدفة قبل 11 يونيو</p>
             </div>
           </div>
           {profile.data && (
@@ -320,7 +348,7 @@ export default function Planner() {
           </section>
         )}
 
-        {generate.isPending && !plan && <PlanLoading />}
+        {generate.isPending && !plan && <PlanLoading progress={generationProgress.data ?? null} />}
         {!generate.isPending && !plan && !profile.isLoading && profile.data?.subjectIds?.length && !profile.isError && (
           <section className="app-card rounded-2xl p-5">
             <div className="flex items-center gap-3">
@@ -330,7 +358,7 @@ export default function Planner() {
                 <p className="mt-1 text-sm text-muted-foreground">يمكنك إعادة تشغيل التوليد من هنا.</p>
               </div>
             </div>
-            <Button className="mt-4 rounded-xl" onClick={() => runGeneration(pace, dailyMinutes, usePersonalDeadline ? personalDeadline : null)} disabled={generate.isPending}>
+            <Button className="mt-4 rounded-xl" onClick={() => runGeneration(pace, paceLevel, dailyMinutes, usePersonalDeadline ? personalDeadline : null)} disabled={generate.isPending}>
               <Sparkles className="size-4" /> إنشاء المسودة
             </Button>
           </section>
@@ -360,7 +388,7 @@ export default function Planner() {
                     <h3 className="mt-1 text-lg font-bold">خلّيني أضبط الخطة على أسلوبك</h3>
                     <p className="mt-1 text-sm leading-6 text-muted-foreground">دي أول نسخة. جاوب على الأسئلة دي، وأنا أعيد توزيع الحمل والمدة من غير ما أطلب منك إدخال بيانات ملفك مرة ثانية.</p>
                   </div>
-                  <span className="rounded-xl bg-secondary px-3 py-2 text-xs font-semibold text-primary">3 اختيارات بسيطة</span>
+                  <span className="rounded-xl bg-secondary px-3 py-2 text-xs font-semibold text-primary">نمط الخطة ودرجة كثافتها</span>
                 </div>
 
                 <div className="mt-5">
@@ -383,9 +411,32 @@ export default function Planner() {
                   </div>
                 </div>
 
+                <div className="mt-5">
+                  <p className="mb-2 text-sm font-semibold">2. اختار درجة الكثافة داخل النمط</p>
+                  <div className="grid gap-2 md:grid-cols-3">
+                    {paceLevelOptions[pace].map(option => (
+                      <button
+                        type="button"
+                        key={option.value}
+                        onClick={() => setPaceLevel(option.value)}
+                        aria-pressed={paceLevel === option.value}
+                        className={"rounded-xl border p-3 text-right transition " + (paceLevel === option.value
+                          ? "border-primary bg-primary/5 ring-1 ring-primary/20"
+                          : "border-border bg-muted/20 hover:border-primary/40")}
+                      >
+                        <span className="flex items-center justify-between gap-2 text-sm font-bold">
+                          {option.title}
+                          <span className="text-[10px] text-muted-foreground">درجة {option.value}</span>
+                        </span>
+                        <span className="mt-1 block text-xs leading-5 text-muted-foreground">{option.description}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="mt-5 grid gap-4 md:grid-cols-2">
                   <div>
-                    <label htmlFor="planner-daily-time" className="mb-2 block text-sm font-semibold">2. تقدر تخصص كام دقيقة للمذاكرة يوميًا؟</label>
+                    <label htmlFor="planner-daily-time" className="mb-2 block text-sm font-semibold">3. تقدر تخصص كام دقيقة للمذاكرة يوميًا؟</label>
                     <select
                       id="planner-daily-time"
                       value={dailyMinutes}
@@ -408,13 +459,13 @@ export default function Planner() {
                       <input
                         type="date"
                         min={todayCairo}
-                        max={EXAM_DATE}
+                        max={PLANNING_READY_BY}
                         value={personalDeadline}
                         onChange={event => setPersonalDeadline(event.target.value)}
                         className="mt-2 h-11 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       />
                     )}
-                    <p className="mt-1.5 text-xs text-muted-foreground">لو مفيش موعد إضافي، هنخطط مباشرة حتى امتحان 12 يونيو 2027.</p>
+                    <p className="mt-1.5 text-xs text-muted-foreground">لو مفيش موعد إضافي، هنستهدف الجاهزية قبل 11 يونيو ضمن نافذة 12–22 يونيو 2027.</p>
                   </div>
                 </div>
 
@@ -422,7 +473,7 @@ export default function Planner() {
                   <p className="text-xs leading-5 text-muted-foreground">إعادة الضبط تنشئ نسخة جديدة للمراجعة فقط، ولا تغيّر مهامك الحالية قبل اعتمادها.</p>
                   <Button
                     className="rounded-xl"
-                    onClick={() => runGeneration(pace, dailyMinutes, usePersonalDeadline ? personalDeadline : null)}
+                    onClick={() => runGeneration(pace, paceLevel, dailyMinutes, usePersonalDeadline ? personalDeadline : null)}
                     disabled={generate.isPending || (usePersonalDeadline && !personalDeadline)}
                   >
                     {generate.isPending ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
@@ -494,22 +545,42 @@ export default function Planner() {
   );
 }
 
-function PlanLoading() {
+function PlanLoading({ progress }: { progress: GenerationProgress | null }) {
+  const stages: Array<{ id: GenerationProgress["currentStage"]; title: string }> = [
+    { id: "profile", title: "قراءة ملف الطالب والتقدم المسجل" },
+    { id: "curriculum", title: "تحميل خريطة الكتب والفروع والمتطلبات" },
+    { id: "model", title: "تحليل الأولويات وتكوين المسودة" },
+    { id: "validation", title: "مراجعة المسودة والقواعد المعتمدة" },
+    { id: "saving", title: "حفظ المسودة للمراجعة" },
+  ];
   return (
     <section className="app-card rounded-2xl p-5 sm:p-6" role="status" aria-live="polite">
       <div className="flex items-center gap-3">
         <span className="flex size-11 items-center justify-center rounded-xl bg-secondary text-primary"><Sparkles className="size-5 animate-pulse" /></span>
         <div>
-          <h3 className="font-bold">ببني أول مسودة لخطة دراستك</h3>
-          <p className="mt-1 text-sm text-muted-foreground">براجع المواد والتقدم والتراكم وبوازن الحمل قبل عرض المهام.</p>
+          <h3 className="font-bold">ببني مسودة خطتك</h3>
+          <p className="mt-1 text-sm text-muted-foreground">{progress?.detail || "جارٍ بدء المعالجة وقراءة بياناتك."}</p>
         </div>
         <Loader2 className="mr-auto size-5 animate-spin text-primary" />
       </div>
-      <div className="mt-5 space-y-3">
-        <div className="loading-shimmer h-16 rounded-xl" />
-        <div className="loading-shimmer h-16 rounded-xl" />
-        <div className="loading-shimmer h-16 rounded-xl" />
-      </div>
+      <ol className="mt-5 space-y-2">
+        {stages.map((stage, index) => {
+          const done = progress?.completedStages.includes(stage.id) ?? false;
+          const current = progress?.status === "running" && progress.currentStage === stage.id;
+          return (
+            <li key={stage.id} className={"flex items-center gap-3 rounded-xl border px-3 py-3 " + (current
+              ? "border-primary/40 bg-primary/5"
+              : done ? "border-emerald-500/20 bg-emerald-500/5" : "border-border/60 bg-muted/10")}>
+              <span className="flex size-7 shrink-0 items-center justify-center rounded-full border border-border/70 text-xs">
+                {done ? <CheckCircle2 className="size-4 text-emerald-600" /> : current ? <Loader2 className="size-4 animate-spin text-primary" /> : index + 1}
+              </span>
+              <span className={"text-sm " + (current || done ? "font-semibold" : "text-muted-foreground")}>{stage.title}</span>
+              {current && <span className="mr-auto text-[11px] font-medium text-primary">جارٍ الآن</span>}
+              {done && <span className="mr-auto text-[11px] text-emerald-700">اكتملت</span>}
+            </li>
+          );
+        })}
+      </ol>
     </section>
   );
 }
