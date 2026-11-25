@@ -218,8 +218,6 @@ function buildPlannerProgressSnapshot(
   profile: NonNullable<Awaited<ReturnType<typeof getStudentProfile>>>
 ): PlannerProgressSnapshot {
   const selection = (profile.selection || {}) as Record<string, any>;
-  const frontiers = (selection.teacherFrontiers || {}) as Record<string, string>;
-  const teacherStates = (selection.teacherProgressState || {}) as Record<string, Record<string, any>>;
   const lessonProgress = mergeSubjectLessonProgress(selection.subjectLessonProgress, selection.sq3rProgress);
   const courseProgress = (selection.learningCourseProgress || {}) as Record<string, any>;
   const branches = new Map<string, PlannerBranchProgress>();
@@ -706,11 +704,8 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
     const teacher = teacherId ? getSIETeacher(teacherId) : undefined;
     const publicUpdates = teacherPublicUpdates.filter(update => update.teacherId === teacherId).slice(0, 6)
       .map(update => [update.publishedAt, update.title, update.durationMinutes ? "المدة الموثقة: " + update.durationMinutes + " دقيقة" : "", update.description, update.url].filter(Boolean).join(" | "));
-    const state = teacherStates[subjectId] || {};
     const reported = courseProgress[subjectId] || {};
-    const branchRecords = (reported.branches || {}) as Record<string, Record<string, any>>;
     const branches = getPlanningBranches(subjectId);
-    const studentLegacyFrontier = reported.lastCompletedLessonId || frontiers[subjectId] || state.studentAttendedFrontier || null;
     const subjectLessonRecords = lessonProgress[subjectId] || {};
 
     const branchSummaries = branches.map(branch => {
@@ -727,6 +722,12 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
         teacherTeachingFrontierId: teacherFrontier,
         schoolClassFrontierId: schoolFrontier,
       });
+      const studentLabel = branch.choices.find(choice => choice.nodeId === studentFrontier)?.title
+        || (studentFrontier === "__NOT_STARTED__" ? "لم يبدأ بعد" : "غير محدد");
+      const referenceLabelTitle = branch.choices.find(choice => choice.nodeId === gap.referenceFrontierId)?.title
+        || (gap.referenceFrontierId === "__NOT_STARTED__" ? "لم يبدأ بعد" : "غير محدد");
+      const referenceLabel = gap.referenceSource === "teacher" ? "المدرس"
+        : gap.referenceSource === "school" ? "المدرسة" : "غير متاح";
       const records = branch.choices.map(choice => subjectLessonRecords[choice.nodeId]).filter(Boolean);
       const completed = records.filter((item: any) => Array.isArray(item.completedSteps) && item.completedSteps.length === 5).length;
       const underway = records.filter((item: any) => Array.isArray(item.completedSteps) && item.completedSteps.length > 0 && item.completedSteps.length < 5).length;
