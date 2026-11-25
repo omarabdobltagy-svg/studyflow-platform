@@ -85,17 +85,49 @@ type CurriculumUnitProfile = {
 };
 
 type CurriculumIntelligence = {
-  subjects: Record<string, { title: string; coverage: string; units: CurriculumUnitProfile[]; limitation?: string }>;
+  planningPolicy?: {
+    scope?: string;
+    platformRole?: string;
+    teacherOwnsInstruction?: string;
+    allowedPlanTasks?: string[];
+    prohibitedPlanTasks?: string[];
+    assessmentEvidence?: string;
+    branchTaxonomyPolicy?: string;
+    coverageBoundary?: string;
+  };
+  subjects: Record<string, {
+    title: string;
+    coverage: string;
+    units: CurriculumUnitProfile[];
+    limitation?: string;
+    learningIntent?: string[];
+  }>;
 };
 
 function getCurriculumIntelligenceNotes(subjectIds: string[]): string[] {
   try {
     const file = readFileSync(join(ROOT, "curriculum-intelligence-part1.json"), "utf8");
     const catalogue = JSON.parse(file) as CurriculumIntelligence;
-    return subjectIds.flatMap(subjectId => {
+    const policy = catalogue.planningPolicy;
+    const policyLines = policy ? [
+      "سياسة استخدام المعرفة المنهجية داخل StudyFlow:",
+      policy.scope,
+      policy.platformRole,
+      policy.teacherOwnsInstruction,
+      policy.branchTaxonomyPolicy,
+      policy.assessmentEvidence,
+      policy.coverageBoundary,
+      ...(policy.allowedPlanTasks?.length ? ["أنواع مهام التخطيط المسموح بها: " + policy.allowedPlanTasks.join(" | ")] : []),
+      ...(policy.prohibitedPlanTasks?.length ? ["أنواع مهام التخطيط المحظورة: " + policy.prohibitedPlanTasks.join(" | ")] : []),
+    ].filter(Boolean) : [];
+    const subjectLines = subjectIds.flatMap(subjectId => {
       const subject = catalogue.subjects[subjectId];
       if (!subject) return [];
       const lines = [`المنهج المشتق — ${subject.title}:`];
+      if (subject.learningIntent?.length) {
+        lines.push("الأهداف التربوية المعلنة في مقدمة/بنية الكتاب — للفهم السياقي فقط، وليست اختبارات ينشئها النظام:");
+        for (const intent of subject.learningIntent) lines.push("- " + intent);
+      }
       for (const unit of subject.units) {
         const unitRange = unit.pages ? `؛ صفحات مطبوعة ${unit.pages[0]}–${unit.pages[1]} (${unit.pageCount ?? unit.pages[1] - unit.pages[0] + 1} صفحة، ${unit.size ?? "حجم غير محدد"})` : "";
         lines.push(`الوحدة: ${unit.title}${unitRange}`);
@@ -119,6 +151,7 @@ function getCurriculumIntelligenceNotes(subjectIds: string[]): string[] {
       if (subject.limitation) lines.push("حدود المصدر: " + subject.limitation);
       return lines;
     });
+    return [...policyLines, ...subjectLines];
   } catch (error) {
     console.error("[StudyFlow curriculum] Could not load derived curriculum profile:", error instanceof Error ? error.message : "unknown error");
     return ["بيانات المنهج التفصيلية غير متاحة الآن؛ لا تخترع أسماء دروس أو صفحات أو أحكام صعوبة."];
