@@ -146,6 +146,10 @@ export default function Study() {
   const nextStudentLesson = typeof currentGap.studentPosition === "number"
     ? branchChoices[currentGap.studentPosition]
     : undefined;
+  const studentFrontierDisplayLabel = branchChoiceOptions.find(option => option.value === lastCompletedLessonId)?.label
+    ?? currentGap.studentFrontierTitle;
+  const teacherFrontierDisplayLabel = branchChoiceOptions.find(option => option.value === teacherTeachingFrontierId)?.label
+    ?? currentGap.referenceFrontierTitle;
   const isStudentDoneWithBranch = currentGap.studentPosition === branchChoices.length && branchChoices.length > 0;
 
 
@@ -395,7 +399,7 @@ export default function Study() {
                     <div>
                       <p className="text-[10px] font-bold tracking-[0.12em] text-primary">الفرع الحالي · {branchIndex + 1}</p>
                       <h3 className="mt-1 text-lg font-bold">{currentBranch?.branchTitle || "الفرع الحالي"}</h3>
-                      <p className="mt-1 text-xs leading-5 text-muted-foreground">{branchChoices.length} {currentBranchPointLabel} في فهرس هذا الفرع.</p>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">{branchChoiceOptions.length} {currentBranchPointLabel} في فهرس هذا الفرع.</p>
                     </div>
                     <span className="rounded-lg border border-border bg-background px-3 py-2 text-[11px] font-semibold text-muted-foreground">
                       {branches[branchIndex + 1] ? "التالي: " + branches[branchIndex + 1].branchTitle : "آخر فرع في المادة"}
@@ -435,7 +439,7 @@ export default function Study() {
                     <div className="min-w-0 rounded-2xl border border-primary/20 bg-primary/[0.035] p-3 sm:p-4">
                       <div className="border-b border-border/70 pb-3">
                         <p className="text-[10px] font-bold tracking-[0.12em] text-primary">تقدمك</p>
-                        <h4 className="mt-1 break-words text-sm font-bold sm:text-base">آخر درس أنهيته</h4>
+                        <h4 className="mt-1 break-words text-sm font-bold sm:text-base">آخر موضوع أنهيته</h4>
                         <p className="mt-1 text-xs leading-5 text-muted-foreground">اختيارك يعني أنك أنهيت هذه النقطة بالفعل. النقطة التالية بعدها هي أول ما يدخل في تراكمك. يتم الحفظ تلقائيًا بعد تحديد موضع المدرس أيضًا.</p>
                       </div>
                       <div className="mt-4 grid gap-6 md:grid-cols-2">
@@ -524,11 +528,11 @@ export default function Study() {
         <div className="grid gap-3 p-5 sm:grid-cols-2 lg:grid-cols-4 sm:p-6">
           <div className="rounded-xl border border-border/70 bg-background p-4">
             <p className="text-xs text-muted-foreground">موضعك أنت</p>
-            <p className="mt-2 font-semibold">{currentGap.studentFrontierTitle || (lastCompletedLessonId === "__NOT_STARTED__" ? "لم تبدأ الفرع" : "غير محدد")}</p>
+            <p className="mt-2 font-semibold">{studentFrontierDisplayLabel || (lastCompletedLessonId === "__NOT_STARTED__" ? "لم تبدأ الفرع" : "غير محدد")}</p>
           </div>
           <div className="rounded-xl border border-border/70 bg-background p-4">
             <p className="text-xs text-muted-foreground">المرجع المقارن</p>
-            <p className="mt-2 font-semibold">{currentGap.referenceFrontierTitle || (currentGap.referenceSource === "teacher" ? "موضع المدرس" : currentGap.referenceSource === "school" ? "موضع المجموعة" : "غير محدد")}</p>
+            <p className="mt-2 font-semibold">{teacherFrontierDisplayLabel || (currentGap.referenceSource === "teacher" ? "موضع المدرس" : currentGap.referenceSource === "school" ? "موضع المجموعة" : "غير محدد")}</p>
             <p className="mt-1 text-[11px] text-muted-foreground">{currentGap.referenceSource === "teacher" ? "المدرس" : currentGap.referenceSource === "school" ? "السنتر / المجموعة" : "لا يوجد مرجع محفوظ"}</p>
           </div>
           <div className="rounded-xl border border-primary/25 bg-primary/5 p-4">
