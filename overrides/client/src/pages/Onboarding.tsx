@@ -52,6 +52,7 @@ type FormState = {
   courseModes: Record<string, "center" | "online">;
   customTeacherNames: Record<string, string>;
   teacherSchedules: TeacherScheduleMap;
+  teacherScheduleUnfixed: Record<string, boolean>;
 };
 
 const steps = ["بياناتك", "النظام الدراسي", "المسار", "المواد", "طريقة الدراسة لكل مادة"];
@@ -117,6 +118,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
     courseModes: {},
     customTeacherNames: {},
     teacherSchedules: {},
+    teacherScheduleUnfixed: {},
   });
 
   useEffect(() => {
@@ -180,7 +182,9 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
         ? Boolean(form.trackId)
         : step === 3
           ? Boolean(track && (track.fixedSubjectIds || firstElectiveGroup.length === 0 || firstElectiveGroup.some(item => item.subjectId === form.electiveSubjectId)))
-          : Boolean(currentSetupSubject && form.courseModes[currentSetupSubject.subjectId]);
+          : Boolean(currentSetupSubject && form.courseModes[currentSetupSubject.subjectId]
+            && (editMode || form.teacherScheduleUnfixed[currentSetupSubject.subjectId]
+              || (form.teacherSchedules[currentSetupSubject.subjectId] ?? []).length > 0));
 
   const next = () => {
     if (!stepValid) {
@@ -188,6 +192,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
       else if (step === 1) toast.error("اختر النظام الدراسي.");
       else if (step === 2) toast.error("اختر المسار أو الشعبة.");
       else if (step === 3) toast.error("اختر المادة التخصصية المطلوبة لمسارك.");
+      else if (step === 4) toast.error("أضف موعد محاضرة واحدًا على الأقل لهذه المادة، أو حدّد أن مواعيدها غير ثابتة حاليًا.");
       return;
     }
     if (step === 4) {
@@ -206,14 +211,14 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
   const chooseSystem = (systemId: SIESystemId) => {
     setSubjectSetupIndex(0);
     setForm(current => ({
-      ...current, systemId, trackId: "", electiveSubjectId: "", teacherSelections: {}, checkpointSelections: {}, courseModes: {}, customTeacherNames: {},
+      ...current, systemId, trackId: "", electiveSubjectId: "", teacherSelections: {}, checkpointSelections: {}, courseModes: {}, customTeacherNames: {}, teacherSchedules: {}, teacherScheduleUnfixed: {},
     }));
   };
 
   const chooseTrack = (trackId: string) => {
     setSubjectSetupIndex(0);
     setForm(current => ({
-      ...current, trackId, electiveSubjectId: "", teacherSelections: {}, checkpointSelections: {}, courseModes: {}, customTeacherNames: {},
+      ...current, trackId, electiveSubjectId: "", teacherSelections: {}, checkpointSelections: {}, courseModes: {}, customTeacherNames: {}, teacherSchedules: {}, teacherScheduleUnfixed: {},
     }));
   };
 
@@ -231,6 +236,17 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
     const teacherSelections = Object.fromEntries(
       Object.entries(form.teacherSelections).filter(([, teacherId]) => teacherId && teacherId !== SKIP_TEACHER)
     );
+    if (!editMode) {
+      const missingSchedule = selectedSubjects.find(subject =>
+        !(form.teacherSchedules[subject.subjectId] ?? []).length
+        && !form.teacherScheduleUnfixed[subject.subjectId]
+      );
+      if (missingSchedule) {
+        setSubjectSetupIndex(selectedSubjects.findIndex(subject => subject.subjectId === missingSchedule.subjectId));
+        toast.error("سجّل موعد المحاضرة لمادة " + missingSchedule.nameAr + " أو حدّد أن مواعيدها غير ثابتة حاليًا.");
+        return;
+      }
+    }
     complete.mutate({
       studentName: form.studentName.trim(),
       phone: normalizeEgyptianPhone(form.phone),
@@ -249,6 +265,9 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
           durationMinutes: slot.durationMinutes,
         })),
       ])),
+      teacherScheduleUnfixedSubjectIds: selectedSubjects
+        .filter(subject => form.teacherScheduleUnfixed[subject.subjectId])
+        .map(subject => subject.subjectId),
       teacherFrontierReports: {},
     });
   };
@@ -532,10 +551,25 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                         <p className="text-sm font-bold">مواعيد محاضرات المدرس</p>
                         <p className="mt-1 text-xs leading-6 text-muted-foreground">سجّل المواعيد المتكررة لهذه المادة. ده يساعد المنصة تحط مذاكرة الدرس قبل المحاضرة وتكتشف تعارضات الجدول. تقدر تضيف أو تعدّل المواعيد لاحقًا من ملفك الدراسي.</p>
                       </div>
-                      <span className="rounded-full border border-primary/20 bg-primary/5 px-3 py-1.5 text-[10px] font-bold text-primary">اختياري</span>
+                      <span className="rounded-full border border-primary/20 bg-primary/5 px-3 py-1.5 text-[10px] font-bold text-primary">{editMode ? "قابل للتعديل" : "مطلوب لكل مادة"}</span>
                     </div>
+                    <label className="mt-4 flex items-start gap-2 rounded-xl border border-border/70 bg-card px-3 py-3 text-xs leading-6">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(form.teacherScheduleUnfixed[currentSetupSubjectId])}
+                        onChange={event => setForm(current => ({
+                          ...current,
+                          teacherScheduleUnfixed: { ...current.teacherScheduleUnfixed, [currentSetupSubjectId]: event.target.checked },
+                          teacherSchedules: event.target.checked
+                            ? { ...current.teacherSchedules, [currentSetupSubjectId]: [] }
+                            : current.teacherSchedules,
+                        }))}
+                        className="mt-1 size-4 accent-primary"
+                      />
+                      <span><b>مواعيد المادة غير ثابتة حاليًا</b><span className="block text-muted-foreground">اختَر ده لو المدرس بينزل المحاضرات بدون جدول أسبوعي محدد.</span></span>
+                    </label>
                     <div className="mt-4 space-y-2.5">
-                      {(form.teacherSchedules[currentSetupSubjectId] ?? []).map((slot, slotIndex) => (
+                      {!form.teacherScheduleUnfixed[currentSetupSubjectId] && (form.teacherSchedules[currentSetupSubjectId] ?? []).map((slot, slotIndex) => (
                         <div key={slotIndex} className="grid gap-2 rounded-xl border border-border/70 bg-card p-3 sm:grid-cols-[1fr_1fr_.8fr_auto] sm:items-end">
                           <label className="block text-xs font-semibold">
                             اليوم
@@ -596,7 +630,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                           </Button>
                         </div>
                       ))}
-                      <Button type="button" variant="outline" className="w-full rounded-xl border-dashed" onClick={() => setForm(current => ({
+                      {!form.teacherScheduleUnfixed[currentSetupSubjectId] && <Button type="button" variant="outline" className="w-full rounded-xl border-dashed" onClick={() => setForm(current => ({
                         ...current,
                         teacherSchedules: {
                           ...current.teacherSchedules,
@@ -607,7 +641,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                         },
                       }))}>
                         <span className="text-base leading-none">+</span> إضافة موعد محاضرة
-                      </Button>
+                      </Button>}
                     </div>
                     <p className="mt-3 text-[10px] leading-5 text-muted-foreground">المواعيد هنا أسبوعية ومتكررة. لو المحاضرة لها موعد استثنائي أو اتلغت، متابعة الإعلانات العامة ستتعامل معه بشكل منفصل.</p>
                   </section>
