@@ -802,7 +802,7 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
   ].join("\n");
 }
 
-export function applyVerifiedExamComponentWeights(
+export function applyCurriculumPrioritySignals(
   plan: GeneratedPlan,
   profile: NonNullable<Awaited<ReturnType<typeof getStudentProfile>>>,
 ): GeneratedPlan {
@@ -1245,7 +1245,7 @@ export async function generatePersonalPlan(
     plan = applyPlannerProgressGuard(plan, profile);
   }
   if (profile) {
-    plan = applyVerifiedExamComponentWeights(plan, profile);
+    plan = applyCurriculumPrioritySignals(plan, profile);
     plan = applyVerifiedTeacherResourceRecommendations(plan, profile);
     plan = orderPlanStepsByCurriculumDependencies(plan);
   }
