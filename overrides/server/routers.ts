@@ -339,7 +339,7 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): 
       {
         dailyMinutes,
         startDate,
-        context: "هذه خطة التشغيل اليومية الافتراضية. استخدم بيانات ملف الدراسة والتراكم والتقدم ومواضع التدريس وسجل التقييمات والمهام والمواعيد والروتين المتاحة؛ لا تطلب من الطالب إعادة إدخال أي معلومة موجودة. أعد توزيع الخطوات غير المكتملة عند تغير أي مصدر، واحتفظ بما أنجزه الطالب. اجعل أول خطوة واضحة وقابلة للبدء فورًا.\\n\\n" + await buildDailyPlanOperationalContext(userId),
+        context: "هذه خطة التشغيل اليومية الافتراضية. استخدم بيانات ملف الدراسة والتراكم والتقدم ومواضع التدريس وسجل التقييمات والمهام والمواعيد والروتين المتاحة؛ لا تطلب من الطالب إعادة إدخال أي معلومة موجودة. أعد توزيع الخطوات غير المكتملة عند تغير أي مصدر، واحتفظ بما أنجزه الطالب. اجعل أول خطوة واضحة وقابلة للبدء فورًا.\n\n" + await buildDailyPlanOperationalContext(userId),
       },
     );
     const taskSync = await syncDailyPlanGoalTree(userId, plan, { startDate, dailyMinutes });
