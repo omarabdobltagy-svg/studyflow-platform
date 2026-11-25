@@ -8,6 +8,8 @@ import {
   getSIECheckpointChoices,
   getSIECheckpointChoicesForTeacher,
   getSIECheckpointProgressOptions,
+  getSIECheckpointProgressBranches,
+  matchSIECheckpointTask,
   normalizeSIECheckpointFrontier,
   getSIETeachersForSubject,
   validateSIESubjectSelection,
@@ -92,7 +94,6 @@ describe("Arabic course taxonomy", () => {
   });
 
   it("uses the student's visible Arabic topic units to match existing tasks without changing progress", () => {
-    const { getSIECheckpointProgressBranches, matchSIECheckpointTask } = require("./sie-catalog") as typeof import("./sie-catalog");
     const visibleNahw = getSIECheckpointProgressBranches("ARB_G2_BAC").find(branch => branch.branchId === "ARB_NAHW");
     expect(visibleNahw?.choices.filter(choice => choice.title.includes("الممنوع من الصرف"))).toHaveLength(1);
     expect(visibleNahw?.choices.find(choice => choice.title.includes("الممنوع من الصرف"))?.nodeId).toBe("ARB_U2_N3");
