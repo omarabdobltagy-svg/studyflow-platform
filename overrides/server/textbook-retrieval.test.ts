@@ -32,6 +32,8 @@ describe("Part 1 textbook planning context", () => {
     expect(context).toContain("Vocabulary");
     expect(context).toContain("الوثائق التاريخية");
     expect(context).toContain("التطبيق العملي");
+    expect(context).toContain("المفردات في سياق الجملة");
+    expect(context).toContain("لا تنقل عدد الأسئلة");
   });
 });
 
