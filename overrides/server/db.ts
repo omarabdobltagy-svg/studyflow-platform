@@ -1483,7 +1483,7 @@ export async function deleteAllAiPlansAndGoalTrees(userId: number) {
     ]);
     const goalIds = new Set<number>(
       userGoals
-        .filter(goal => goal.parentGoalId === null && (
+        .filter(goal => (goal.parentGoalId === null || goal.parentGoalId === undefined) && (
           aiRootCategories.has(goal.category) || aiRootTitles.has(goal.title)
         ))
         .map(goal => goal.id),
@@ -1514,11 +1514,15 @@ export async function deleteAllAiPlansAndGoalTrees(userId: number) {
         eq(tasks.userId, userId),
         inArray(tasks.goalId, ownedGoalIds),
       ));
-      const goalResult = await tx.delete(goals).where(and(
-        eq(goals.userId, userId),
-        inArray(goals.id, ownedGoalIds),
-      ));
-      deletedGoals = Number(goalResult[0]?.affectedRows ?? ownedGoalIds.length);
+      // Delete descendants before parents to remain safe even if the
+      // self-referencing goal relation uses RESTRICT instead of CASCADE.
+      for (const goalId of [...ownedGoalIds].reverse()) {
+        const goalResult = await tx.delete(goals).where(and(
+          eq(goals.userId, userId),
+          eq(goals.id, goalId),
+        ));
+        deletedGoals += Number(goalResult[0]?.affectedRows ?? 0);
+      }
     }
 
     const planResult = await tx.delete(aiPlans).where(eq(aiPlans.userId, userId));
