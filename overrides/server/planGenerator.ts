@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getSIECheckpointBranches, getSIESubject, getSIETeacher, normalizeSIECheckpointFrontier } from "@shared/sie-catalog";
+import { getSIECheckpointProgressBranches, getSIESubject, getSIETeacher, normalizeSIECheckpointFrontier } from "@shared/sie-catalog";
 import { calculateLearningGap } from "@shared/sie-learning-progress";
 import { invokeLLM, invokeNvidiaLLM } from "./_core/llm";
 import { isPrimaryProviderFallbackEligible } from "./_core/llmFallback";
@@ -674,9 +674,9 @@ export function parseGeneratedPlan(content: string): GeneratedPlan {
 }
 
 function getPlanningBranches(subjectId: string) {
-  // Annual planning uses the complete student-year catalog. Partial textbook
-  // retrieval must never remove later chapters from the student's roadmap.
-  return getSIECheckpointBranches(subjectId);
+  // Use exactly the topic units shown to the student. Multi-part topics such
+  // as Arabic Nahw are one curriculum item in annual planning and progress.
+  return getSIECheckpointProgressBranches(subjectId);
 }
 
 function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof getStudentProfile>>>) {
