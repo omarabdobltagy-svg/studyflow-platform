@@ -1148,11 +1148,11 @@ export function getSIECheckpointBranches(subjectId: string): SIECheckpointBranch
     const order: Record<string, number> = {
       ARB_NAHW: 0,
       ARB_BALAGHA: 1,
-      ARB_TEXTS: 2,
-      ARB_EXPRESSION: 3,
-      ARB_SPELLING: 4,
-      ARB_LITERATURE: 5,
-      ARB_READING: 99,
+      ARB_READING: 2,
+      ARB_TEXTS: 3,
+      ARB_EXPRESSION: 4,
+      ARB_SPELLING: 5,
+      ARB_LITERATURE: 6,
     };
     result.sort((left, right) => (order[left.branchId] ?? 99) - (order[right.branchId] ?? 99));
   }
