@@ -506,12 +506,15 @@ export default function Study() {
                       <motion.div className="h-full rounded-full bg-primary" initial={false} animate={{ width: percent + "%" }} transition={{ duration: .55, ease: "easeOut" }} />
                     </div>
                     {subjectId === "ENG1_G2_BAC" && unit.isOfficialUnit ? (
-                      <div className="mt-4 rounded-xl border border-border/70 bg-background/70 p-3">
-                        <div className="mb-2 flex items-center justify-between gap-2">
-                          <p className="text-[11px] font-bold text-foreground">دروس الوحدة</p>
-                          <span className="text-[10px] text-muted-foreground">{unit.lessonCount} عناصر في الفهرس</span>
+                      <div className="sf-english-unit-map mt-4 rounded-2xl border border-border/70 bg-background/70 p-3.5" data-english-unit={unit.unitNumber}>
+                        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <p className="text-xs font-extrabold text-foreground">خريطة دروس الوحدة</p>
+                            <p className="mt-1 text-[10px] text-muted-foreground">الدروس الفعلية بالترتيب، ثم المفردات والقواعد</p>
+                          </div>
+                          <span className="rounded-full border border-border bg-card px-2.5 py-1 text-[10px] font-semibold text-muted-foreground">4 Lessons · Vocabulary · Grammar</span>
                         </div>
-                        <div className="grid gap-2">
+                        <div className="sf-english-unit-lessons grid gap-2">
                           {unit.branches.flatMap(unitBranch => unitBranch.choices.map(choice => ({
                             ...choice,
                             displayBranchId: unitBranch.branchId,
@@ -526,10 +529,13 @@ export default function Study() {
                               : choice.lessonType === "vocabulary" ? "Vocabulary"
                                 : choice.lessonType === "grammar" ? "Grammar"
                                   : choice.lessonType || "درس";
+                            const sectionLabel = choice.nodeId.includes("_SEC_A_") ? "Section A"
+                              : choice.nodeId.includes("_SEC_B_") ? "Section B" : "";
                             return (
-                              <div key={choice.nodeId} className="flex min-w-0 items-start gap-2 rounded-lg border border-border/60 bg-card px-3 py-2">
-                                <span className="mt-0.5 shrink-0 rounded-md bg-secondary px-2 py-1 text-[10px] font-bold text-secondary-foreground">{lessonLabel}</span>
-                                <span className="min-w-0 text-xs leading-5 text-foreground">{choice.title}</span>
+                              <div key={choice.nodeId} className="sf-english-lesson-row flex min-w-0 items-start gap-2 rounded-xl border border-border/60 bg-card px-3 py-2.5">
+                                <span className="sf-english-lesson-type mt-0.5 shrink-0 rounded-lg bg-secondary px-2.5 py-1 text-[10px] font-extrabold text-secondary-foreground">{lessonLabel}</span>
+                                <span className="min-w-0 flex-1 text-xs font-semibold leading-6 text-foreground">{choice.title}</span>
+                                {sectionLabel && <span className="sf-english-section-tag shrink-0 rounded-md border border-border bg-muted px-2 py-1 text-[9px] font-semibold text-muted-foreground">{sectionLabel}</span>}
                               </div>
                             );
                           })}
