@@ -969,7 +969,13 @@ export async function generatePersonalPlan(
   userId: number,
   prompt: string,
   includeStudentProfile = true,
-  constraints: { dailyMinutes?: number; startDate?: string; context?: string } = {}
+  constraints: {
+    dailyMinutes?: number;
+    startDate?: string;
+    context?: string;
+    pace?: "intensive" | "balanced" | "relaxed";
+    deadline?: string | null;
+  } = {}
 ): Promise<GeneratedPlan> {
   const dailyMinutes = Math.max(20, Math.min(600, Math.trunc(constraints.dailyMinutes ?? 120)));
   const additionalContext = String(constraints.context ?? "").trim().slice(0, 3_000);
@@ -1186,6 +1192,24 @@ export async function generatePersonalPlan(
       usedMinutes += step.minutes;
       return { ...step, day: "اليوم " + scheduleDay };
     }),
+  };
+
+  const examDeadline = "2027-06-12";
+  const effectiveDeadline = constraints.deadline && constraints.deadline < examDeadline
+    ? constraints.deadline
+    : examDeadline;
+  const planningStart = constraints.startDate || new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
+  const startUtc = Date.parse(planningStart + "T00:00:00.000Z");
+  const endUtc = Date.parse(effectiveDeadline + "T00:00:00.000Z");
+  const availableDays = Number.isFinite(startUtc) && Number.isFinite(endUtc)
+    ? Math.max(0, Math.floor((endUtc - startUtc) / 86_400_000) + 1)
+    : 0;
+  const feasibilityNote = scheduleDay > availableDays
+    ? "تنبيه الجدوى: التوزيع الحالي يحتاج نحو " + scheduleDay + " أيام دراسة، بينما المتاح حتى الموعد المختار " + availableDays + " يومًا. لم نحذف دروسًا لإخفاء الفجوة؛ زِد وقتك اليومي أو اختر إيقاعًا أكثر كثافة، وراجع هذا التقدير قبل الاعتماد."
+    : "تقدير الجدول الأولي: يمكن توزيع الخطوات على " + scheduleDay + " أيام دراسة ضمن المدة المتاحة حتى " + effectiveDeadline + "، بافتراض توفر الوقت اليومي الذي حددته.";
+  plan = {
+    ...plan,
+    summary: (plan.summary + "\\n\\n" + feasibilityNote).slice(0, 1_500),
   };
   await saveAiPlan(userId, { prompt, title: plan.title, planJson: JSON.stringify(plan) });
   return plan;
