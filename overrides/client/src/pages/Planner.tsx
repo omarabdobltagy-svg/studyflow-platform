@@ -170,10 +170,13 @@ export default function Planner() {
   const savedPlans = useMemo(() => (history.data || [])
     .flatMap(record => {
       const saved = parseSavedPlan(record);
-      if (!saved || saved.title.startsWith("الخطة القديمة")) return [];
       const prompt = String(record.prompt || "");
+      const isLegacyAnnualPlan = prompt.startsWith(ANNUAL_PLAN_PREFIX)
+        || saved?.title.includes("الخطة السنوية")
+        || saved?.title.includes("الخطة القديمة");
       const isOldDailySnapshot = prompt.startsWith(DAILY_SNAPSHOT_PREFIX) && !prompt.startsWith(STUDY_PLAN_PREFIX);
-      return isOldDailySnapshot ? [] : [{ id: record.id, createdAt: record.createdAt, plan: saved }];
+      if (!saved || isLegacyAnnualPlan || isOldDailySnapshot) return [];
+      return [{ id: record.id, createdAt: record.createdAt, plan: saved }];
     })
     .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()), [history.data]);
 
