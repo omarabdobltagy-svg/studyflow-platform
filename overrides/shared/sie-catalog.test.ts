@@ -9,6 +9,7 @@ import {
   getSIECheckpointChoicesForTeacher,
   getSIECheckpointProgressOptions,
   getSIECheckpointProgressBranches,
+  getSIECheckpointUnits,
   matchSIECheckpointTask,
   normalizeSIECheckpointFrontier,
   getSIETeachersForSubject,
@@ -91,6 +92,20 @@ describe("Arabic course taxonomy", () => {
       expect(normalizeSIECheckpointFrontier("ARB_G2_BAC", "ARB_NAHW", id)).toBe("ARB_U2_N3");
     }
     expect(normalizeSIECheckpointFrontier("ARB_G2_BAC", "ARB_NAHW", "ARB_U3_N1")).toBe("ARB_U3_N1");
+  });
+
+  it("groups the official Arabic textbook into three units across its independent branches", () => {
+    const units = getSIECheckpointUnits("ARB_G2_BAC");
+    const officialUnits = units.filter(unit => unit.isOfficialUnit);
+    expect(officialUnits.map(unit => unit.unitNumber)).toEqual([1, 2, 3]);
+    expect(officialUnits.map(unit => unit.unitTitle)).toEqual([
+      "العلم والضمير",
+      "سلطان الكلمة الرقمية",
+      "الإنسان وكرامته",
+    ]);
+    const unitThreeNahw = officialUnits[2].branches.find(branch => branch.branchId === "ARB_NAHW");
+    expect(unitThreeNahw?.choices.map(choice => choice.title)).toContain("النعت والبدل والتمييز بينهما");
+    expect(unitThreeNahw?.choices.filter(choice => choice.title.includes("النعت والبدل والتمييز"))).toHaveLength(1);
   });
 
   it("uses the student's visible Arabic topic units to match existing tasks without changing progress", () => {
