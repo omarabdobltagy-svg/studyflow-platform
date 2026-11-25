@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "scope": {
     "academicYear": "2026/2027",
-    "grade": "الصف الثاني الثانوي",
+    "grade": "الصف الثاني بكالوريا المصرية",
     "part": 1,
     "term": 1,
-    "sourcePolicy": "derived_curriculum_metadata_only",
-    "notice": "هذه بيانات تخطيط مشتقة من فهارس الكتب الأصلية، وليست نصوصًا منقولة من صفحات الكتب. تقدير الصعوبة استرشادي وليس حكمًا رسميًا من الوزارة. تقييم الطالب ونتائج الاختبارات يتقدمان على التقدير."
+    "sourcePolicy": "derived_from_official_part1_textbooks_text_and_visual_inspection_no_verbatim_pages",
+    "notice": "هذه خريطة معرفة مشتقة من ملفات كتب الجزء الأول الأصلية: استُخدم استخراج النص ومراجعة الصفحات لكتب العربي والتاريخ والبرمجة، والفحص البصري لكتاب الإنجليزي المصوّر. لا تُخزَّن صفحات الكتب أو نصوصها حرفيًا. نطاقات الإنجليزي على مستوى الدرس تقديرية من فواصل الصفحات. حجم الدرس مؤشر تنظيمي، والصعوبة لا تُعتمد إلا بثقة منخفضة إلى أن يؤكدها سجل الطالب. أهداف المهارات لفهم طبيعة المحتوى فقط؛ المدرس مسؤول عن التدريب والتقييم. لا ينشئ StudyFlow أي اختبار."
   },
   "sizingRules": {
     "small": "حتى 6 صفحات مطبوعة",
@@ -15,11 +15,12 @@
     "basis": "نطاق الصفحات من فهرس الكتاب؛ لا يقيس كثافة كل صفحة، لذلك يبقى تقدير حجم أوليًا."
   },
   "priorityRules": [
-    "موضع المدرس داخل الفرع نفسه مقابل آخر درس أنجزه الطالب",
-    "موعد الاختبار والتكليفات",
-    "تقييم الطالب للصعوبة ونتائج استرجاعه واختباراته",
-    "حجم الدرس والمتطلبات السابقة",
-    "لا تعني كثرة الصفحات تلقائيًا أن الدرس صعب."
+    "موضع الطالب الفعلي مقابل آخر موضع موثق للمدرس داخل الفرع نفسه، دون دمج فجوات الفروع المستقلة.",
+    "المتطلبات المعرفية السابقة عندما تكون موثقة، مع التمييز بين prerequisite حقيقي وترتيب الكتاب أو السياق المرتبط.",
+    "التكليفات المعروفة من المدرس والموعد الموثق لها، ثم مدى تأخر الطالب عنها.",
+    "حجم المحتوى الفعلي وطبيعة المفهوم لتقسيمه إلى جلسات؛ حجم الصفحات لا يساوي الصعوبة.",
+    "الصعوبة التي يصرّح بها الطالب، وسجل الإنجاز والتأجيل الفعلي. لا يستخدم المحرك اختبارات أو أسئلة ينشئها بنفسه.",
+    "قواعد الأولوية المؤكدة من الطالب مثل أولوية النحو وGrammar وVocabulary، من دون تحويلها إلى درجات امتحانية."
   ],
   "subjects": {
     "ARB_G2_BAC": {
@@ -44,7 +45,11 @@
               "difficulty": "hard",
               "difficultyConfidence": "low",
               "basis": "قضية فكرية تتطلب الموازنة بين المعرفة والمسؤولية والاستدلال.",
-              "strategy": "قراءة تحليلية ثم تحديد الأطروحة والحجج والأدلة، يليها تدريب تطبيقي."
+              "strategy": "متابعة شرح المدرس المرتبط بالدرس، ثم مراجعة نطاق الصفحات المحدد أو الملاحظات التي سجلها الطالب. يُقسّم المحتوى إلى جلسات بحسب حجمه الفعلي. لا ينشئ StudyFlow تدريبًا أو أسئلة.",
+              "catalogMapping": {
+                "nodeId": "ARB_U1_L1",
+                "branchId": "ARB_READING"
+              }
             },
             {
               "id": "ARB_U1_L2",
@@ -58,7 +63,11 @@
               "difficulty": "medium",
               "difficultyConfidence": "low",
               "basis": "مفاهيم قيمية تحتاج فهمًا وربطًا بالأمثلة.",
-              "strategy": "فهم المفاهيم واستخراج الأفكار ثم أسئلة تطبيقية."
+              "strategy": "متابعة شرح المدرس المرتبط بالدرس، ثم مراجعة نطاق الصفحات المحدد أو الملاحظات التي سجلها الطالب. يُقسّم المحتوى إلى جلسات بحسب حجمه الفعلي. لا ينشئ StudyFlow تدريبًا أو أسئلة.",
+              "catalogMapping": {
+                "nodeId": "ARB_U1_L2",
+                "branchId": "ARB_TEXTS"
+              }
             },
             {
               "id": "ARB_U1_L3",
@@ -72,7 +81,11 @@
               "difficulty": "medium",
               "difficultyConfidence": "low",
               "basis": "نص شعري يجمع الفهم والتذوق والتحليل اللغوي.",
-              "strategy": "قراءة النص وتقسيم الأفكار ثم الصور والمعاني والتدريب."
+              "strategy": "متابعة شرح المدرس المرتبط بالدرس، ثم مراجعة نطاق الصفحات المحدد أو الملاحظات التي سجلها الطالب. يُقسّم المحتوى إلى جلسات بحسب حجمه الفعلي. لا ينشئ StudyFlow تدريبًا أو أسئلة.",
+              "catalogMapping": {
+                "nodeId": "ARB_U1_L3",
+                "branchId": "ARB_TEXTS"
+              }
             }
           ]
         },
@@ -92,7 +105,11 @@
               "difficulty": "hard",
               "difficultyConfidence": "low",
               "basis": "تحليل تأثير الإعلام والتقنية والعلاقات بين السبب والنتيجة.",
-              "strategy": "خريطة مفاهيم ثم تحليل أمثلة وأسئلة استدلال."
+              "strategy": "متابعة شرح المدرس المرتبط بالدرس، ثم مراجعة نطاق الصفحات المحدد أو الملاحظات التي سجلها الطالب. يُقسّم المحتوى إلى جلسات بحسب حجمه الفعلي. لا ينشئ StudyFlow تدريبًا أو أسئلة.",
+              "catalogMapping": {
+                "nodeId": "ARB_U2_L1",
+                "branchId": "ARB_READING"
+              }
             },
             {
               "id": "ARB_U2_L2",
@@ -106,7 +123,11 @@
               "difficulty": "medium",
               "difficultyConfidence": "low",
               "basis": "مقارنة مفاهيم وأحكام وتبريرها.",
-              "strategy": "جدول مقارنة ثم صياغة رأي مدعوم بالأدلة."
+              "strategy": "متابعة شرح المدرس المرتبط بالدرس، ثم مراجعة نطاق الصفحات المحدد أو الملاحظات التي سجلها الطالب. يُقسّم المحتوى إلى جلسات بحسب حجمه الفعلي. لا ينشئ StudyFlow تدريبًا أو أسئلة.",
+              "catalogMapping": {
+                "nodeId": "ARB_U2_L2",
+                "branchId": "ARB_TEXTS"
+              }
             },
             {
               "id": "ARB_U2_L3",
@@ -120,7 +141,11 @@
               "difficulty": "medium",
               "difficultyConfidence": "low",
               "basis": "نص شعري يتطلب فهم المعنى والتذوق والاستشهاد.",
-              "strategy": "تقسيم النص إلى أفكار ثم تفسير الصور واللغة وحل تدريبات."
+              "strategy": "متابعة شرح المدرس المرتبط بالدرس، ثم مراجعة نطاق الصفحات المحدد أو الملاحظات التي سجلها الطالب. يُقسّم المحتوى إلى جلسات بحسب حجمه الفعلي. لا ينشئ StudyFlow تدريبًا أو أسئلة.",
+              "catalogMapping": {
+                "nodeId": "ARB_U2_L3",
+                "branchId": "ARB_TEXTS"
+              }
             }
           ]
         },
@@ -140,7 +165,11 @@
               "difficulty": "hard",
               "difficultyConfidence": "low",
               "basis": "مقارنة أطر ومبادئ وتطبيقها على سياقات مختلفة.",
-              "strategy": "تلخيص محاور الحقوق ثم مقارنة المواقف وحل أسئلة استدلال."
+              "strategy": "متابعة شرح المدرس المرتبط بالدرس، ثم مراجعة نطاق الصفحات المحدد أو الملاحظات التي سجلها الطالب. يُقسّم المحتوى إلى جلسات بحسب حجمه الفعلي. لا ينشئ StudyFlow تدريبًا أو أسئلة.",
+              "catalogMapping": {
+                "nodeId": "ARB_U3_L1",
+                "branchId": "ARB_READING"
+              }
             },
             {
               "id": "ARB_U3_L2",
@@ -154,7 +183,11 @@
               "difficulty": "hard",
               "difficultyConfidence": "low",
               "basis": "مفاهيم مجردة وعلاقات بين الحرية والمسؤولية.",
-              "strategy": "تعريفات دقيقة وأمثلة مضادة ثم أسئلة تحليل."
+              "strategy": "متابعة شرح المدرس المرتبط بالدرس، ثم مراجعة نطاق الصفحات المحدد أو الملاحظات التي سجلها الطالب. يُقسّم المحتوى إلى جلسات بحسب حجمه الفعلي. لا ينشئ StudyFlow تدريبًا أو أسئلة.",
+              "catalogMapping": {
+                "nodeId": "ARB_U3_L2",
+                "branchId": "ARB_READING"
+              }
             },
             {
               "id": "ARB_U3_L3",
@@ -168,7 +201,11 @@
               "difficulty": "medium",
               "difficultyConfidence": "low",
               "basis": "نص شعري طويل نسبيًا يجمع المعنى والتذوق واللغة.",
-              "strategy": "تقسيم النص ومراجعته على مقاطع ثم حل أسئلة شاملة."
+              "strategy": "متابعة شرح المدرس المرتبط بالدرس، ثم مراجعة نطاق الصفحات المحدد أو الملاحظات التي سجلها الطالب. يُقسّم المحتوى إلى جلسات بحسب حجمه الفعلي. لا ينشئ StudyFlow تدريبًا أو أسئلة.",
+              "catalogMapping": {
+                "nodeId": "ARB_U3_L3",
+                "branchId": "ARB_TEXTS"
+              }
             }
           ]
         }
@@ -178,7 +215,25 @@
         "يعرض الكتاب النحو بوصفه استخدامًا وظيفيًا للغة ينظم الفكر ويضبط المعنى داخل الكتابة الحجاجية والإبداعية، وليس قواعد منفصلة للحفظ.",
         "تُستخدم البلاغة في تحليل الخطاب والتأثير والإقناع.",
         "تظل فروع العربي الحالية كما هي في المنصة (النحو والبلاغة والقراءة والنصوص والتعبير وغيرها). أهداف الكتاب تشرح طبيعة الدرس فقط؛ والمدرس مسؤول عن شرح المهارات والتدريب عليها."
-      ]
+      ],
+      "branchContext": {
+        "taxonomySource": "shared/sie-catalog.ts",
+        "preserveExistingBranches": true,
+        "branchIds": [
+          "ARB_NAHW",
+          "ARB_BALAGHA",
+          "ARB_READING",
+          "ARB_TEXTS",
+          "ARB_EXPRESSION",
+          "ARB_SPELLING",
+          "ARB_LITERATURE"
+        ],
+        "notes": [
+          "هذه المعرفات تعكس فروع المنصة الحالية ولا تُنشأ منها فروع جديدة.",
+          "موضوعات الكتاب ترتبط بالفرع الموجود في الكتالوج بحسب نوعها؛ مهارات النص نفسه لا تُكرر كدروس مستقلة عن النص.",
+          "تظل موضوعات النحو والبلاغة والتعبير والإملاء والأدب منفصلة كما في الكتالوج."
+        ]
+      }
     },
     "HIS_G2_BAC": {
       "title": "التاريخ الوطني",
@@ -202,7 +257,11 @@
               "difficulty": "hard",
               "difficultyConfidence": "low",
               "basis": "تركيب زمني عبر عصور متعددة وفهم الاستمرارية والتغير.",
-              "strategy": "خط زمني ثم أسباب ونتائج واسترجاع متباعد."
+              "strategy": "متابعة شرح المدرس ومراجعة الصفحات المرتبطة به. يُقسّم المحتوى بحسب كثافة الأحداث والمصادر داخل الدرس؛ يظل الدرس ضمن تغطية المنهج ولا يحذف بسبب ترتيب الأولوية.",
+              "catalogMapping": {
+                "nodeId": "HIS_U1_L1",
+                "branchId": "HIS_G2_BAC:FULL"
+              }
             },
             {
               "id": "HIS_U1_L2",
@@ -216,7 +275,11 @@
               "difficulty": "medium",
               "difficultyConfidence": "low",
               "basis": "أحداث تاريخية وعلاقات سبب ونتيجة.",
-              "strategy": "تسلسل الأحداث والأطراف ثم أسئلة تفسير."
+              "strategy": "متابعة شرح المدرس ومراجعة الصفحات المرتبطة به. يُقسّم المحتوى بحسب كثافة الأحداث والمصادر داخل الدرس؛ يظل الدرس ضمن تغطية المنهج ولا يحذف بسبب ترتيب الأولوية.",
+              "catalogMapping": {
+                "nodeId": "HIS_U1_L2",
+                "branchId": "HIS_G2_BAC:FULL"
+              }
             },
             {
               "id": "HIS_U1_L3",
@@ -230,7 +293,11 @@
               "difficulty": "hard",
               "difficultyConfidence": "low",
               "basis": "الربط بين تحولات سياسية واجتماعية خلال فترة تاريخية.",
-              "strategy": "مقارنة المراحل وتحليل عوامل التحول."
+              "strategy": "متابعة شرح المدرس ومراجعة الصفحات المرتبطة به. يُقسّم المحتوى بحسب كثافة الأحداث والمصادر داخل الدرس؛ يظل الدرس ضمن تغطية المنهج ولا يحذف بسبب ترتيب الأولوية.",
+              "catalogMapping": {
+                "nodeId": "HIS_U1_L3",
+                "branchId": "HIS_G2_BAC:FULL"
+              }
             },
             {
               "id": "HIS_U1_L4",
@@ -244,7 +311,11 @@
               "difficulty": "hard",
               "difficultyConfidence": "low",
               "basis": "تتابع أحداث وتغيرات متعددة تحتاج ربطًا زمنيًا.",
-              "strategy": "خط زمني وجدول مقارنة للأحداث والنتائج."
+              "strategy": "متابعة شرح المدرس ومراجعة الصفحات المرتبطة به. يُقسّم المحتوى بحسب كثافة الأحداث والمصادر داخل الدرس؛ يظل الدرس ضمن تغطية المنهج ولا يحذف بسبب ترتيب الأولوية.",
+              "catalogMapping": {
+                "nodeId": "HIS_U1_L4",
+                "branchId": "HIS_G2_BAC:FULL"
+              }
             }
           ]
         },
@@ -264,7 +335,11 @@
               "difficulty": "hard",
               "difficultyConfidence": "low",
               "basis": "تحليل سياسات وأهداف وآثار ومقارنة بينها.",
-              "strategy": "مصفوفة سياسة/هدف/أثر مع أسئلة استدلال."
+              "strategy": "متابعة شرح المدرس ومراجعة الصفحات المرتبطة به. يُقسّم المحتوى بحسب كثافة الأحداث والمصادر داخل الدرس؛ يظل الدرس ضمن تغطية المنهج ولا يحذف بسبب ترتيب الأولوية.",
+              "catalogMapping": {
+                "nodeId": "HIS_U2_L1",
+                "branchId": "HIS_G2_BAC:FULL"
+              }
             },
             {
               "id": "HIS_U2_L2",
@@ -278,7 +353,11 @@
               "difficulty": "medium",
               "difficultyConfidence": "low",
               "basis": "ربط حركات المقاومة بسياقها ونتائجها.",
-              "strategy": "خريطة أحداث وشخصيات وأسباب ونتائج."
+              "strategy": "متابعة شرح المدرس ومراجعة الصفحات المرتبطة به. يُقسّم المحتوى بحسب كثافة الأحداث والمصادر داخل الدرس؛ يظل الدرس ضمن تغطية المنهج ولا يحذف بسبب ترتيب الأولوية.",
+              "catalogMapping": {
+                "nodeId": "HIS_U2_L2",
+                "branchId": "HIS_G2_BAC:FULL"
+              }
             },
             {
               "id": "HIS_U2_L3",
@@ -292,7 +371,11 @@
               "difficulty": "hard",
               "difficultyConfidence": "low",
               "basis": "أسباب ونتائج وتحولات سياسية واجتماعية متداخلة.",
-              "strategy": "تحليل قبل/بعد ومقارنة النتائج وتطبيق."
+              "strategy": "متابعة شرح المدرس ومراجعة الصفحات المرتبطة به. يُقسّم المحتوى بحسب كثافة الأحداث والمصادر داخل الدرس؛ يظل الدرس ضمن تغطية المنهج ولا يحذف بسبب ترتيب الأولوية.",
+              "catalogMapping": {
+                "nodeId": "HIS_U2_L3",
+                "branchId": "HIS_G2_BAC:FULL"
+              }
             },
             {
               "id": "HIS_U2_L4",
@@ -306,7 +389,11 @@
               "difficulty": "hard",
               "difficultyConfidence": "low",
               "basis": "مفاهيم مجردة وتفسير تأثيرات متعددة.",
-              "strategy": "مفاهيم رئيسية وأمثلة وروابط سببية."
+              "strategy": "متابعة شرح المدرس ومراجعة الصفحات المرتبطة به. يُقسّم المحتوى بحسب كثافة الأحداث والمصادر داخل الدرس؛ يظل الدرس ضمن تغطية المنهج ولا يحذف بسبب ترتيب الأولوية.",
+              "catalogMapping": {
+                "nodeId": "HIS_U2_L4",
+                "branchId": "HIS_G2_BAC:FULL"
+              }
             }
           ]
         },
@@ -326,7 +413,11 @@
               "difficulty": "hard",
               "difficultyConfidence": "low",
               "basis": "مقارنة حركات وسياقات استعمارية متعددة.",
-              "strategy": "جدول مقارنة حسب البلد والقوة الاستعمارية والنتيجة."
+              "strategy": "متابعة شرح المدرس ومراجعة الصفحات المرتبطة به. يُقسّم المحتوى بحسب كثافة الأحداث والمصادر داخل الدرس؛ يظل الدرس ضمن تغطية المنهج ولا يحذف بسبب ترتيب الأولوية.",
+              "catalogMapping": {
+                "nodeId": "HIS_U3_L1",
+                "branchId": "HIS_G2_BAC:FULL"
+              }
             },
             {
               "id": "HIS_U3_L2",
@@ -340,7 +431,11 @@
               "difficulty": "hard",
               "difficultyConfidence": "low",
               "basis": "مقارنة جغرافية وزمنية بين حركات مختلفة.",
-              "strategy": "خريطة وجدول مقارنة مع استرجاع نشط."
+              "strategy": "متابعة شرح المدرس ومراجعة الصفحات المرتبطة به. يُقسّم المحتوى بحسب كثافة الأحداث والمصادر داخل الدرس؛ يظل الدرس ضمن تغطية المنهج ولا يحذف بسبب ترتيب الأولوية.",
+              "catalogMapping": {
+                "nodeId": "HIS_U3_L2",
+                "branchId": "HIS_G2_BAC:FULL"
+              }
             },
             {
               "id": "HIS_U3_L3",
@@ -354,7 +449,11 @@
               "difficulty": "medium",
               "difficultyConfidence": "low",
               "basis": "مفاهيم وعلاقات على مستويين إقليمي ودولي.",
-              "strategy": "تصنيف المرتكزات وربط كل منها بمثال."
+              "strategy": "متابعة شرح المدرس ومراجعة الصفحات المرتبطة به. يُقسّم المحتوى بحسب كثافة الأحداث والمصادر داخل الدرس؛ يظل الدرس ضمن تغطية المنهج ولا يحذف بسبب ترتيب الأولوية.",
+              "catalogMapping": {
+                "nodeId": "HIS_U3_L3",
+                "branchId": "HIS_G2_BAC:FULL"
+              }
             },
             {
               "id": "HIS_U3_L4",
@@ -368,7 +467,11 @@
               "difficulty": "medium",
               "difficultyConfidence": "low",
               "basis": "ربط مواقف وأدوار بنتائجها التاريخية.",
-              "strategy": "خط زمني وأمثلة وأسئلة تطبيقية."
+              "strategy": "متابعة شرح المدرس ومراجعة الصفحات المرتبطة به. يُقسّم المحتوى بحسب كثافة الأحداث والمصادر داخل الدرس؛ يظل الدرس ضمن تغطية المنهج ولا يحذف بسبب ترتيب الأولوية.",
+              "catalogMapping": {
+                "nodeId": "HIS_U3_L4",
+                "branchId": "HIS_G2_BAC:FULL"
+              }
             }
           ]
         }
@@ -378,7 +481,14 @@
         "يعتمد الكتاب على الوثائق التاريخية والسجلات والمضابط والمراسلات والخرائط والصور والإنفوجراف.",
         "الأهداف المعلنة تركز على تكوين وعي قائم على الدليل وفهم الهوية الوطنية والعلاقات الدولية والقرارات التاريخية من خلال شرح المدرس وأنشطة الكتاب.",
         "يظل التاريخ في فرعه الخطي الواحد الحالي كما هو؛ لا تُنشأ فروع جديدة لكل وحدة ولا تُصنّف وحداته على أنها غير مهمة."
-      ]
+      ],
+      "branchContext": {
+        "taxonomySource": "shared/sie-catalog.ts",
+        "preserveExistingBranches": true,
+        "branchId": "HIS_G2_BAC:FULL",
+        "requiredCoverage": true,
+        "note": "الوحدات الثلاث تنظّم المحتوى فقط؛ لا تتحول إلى فروع مستقلة ولا يسقط أي درس من التغطية السنوية."
+      }
     },
     "PROG_AI_G2_BAC": {
       "title": "البرمجة والذكاء الاصطناعي",
@@ -406,7 +516,11 @@
               "difficulty": "medium",
               "difficultyConfidence": "low",
               "basis": "مفاهيم تأسيسية مع ربط التقنية بالمجتمع.",
-              "strategy": "فهم المفاهيم وخريطة أثر ثم أسئلة تطبيق."
+              "strategy": "متابعة شرح المدرس ومراجعة الصفحات أو الملاحظات المرتبطة بالدرس. يجزّأ المحتوى النظري أو التقني إلى جلسات مناسبة لحجمه؛ لا ينشئ StudyFlow أكوادًا تدريبية أو أسئلة أو اختبارات للطالب.",
+              "catalogMapping": {
+                "nodeId": "PROG_1_1",
+                "branchId": "PROG_AI_G2_BAC:FULL"
+              }
             },
             {
               "id": "PROG_1_2",
@@ -424,7 +538,11 @@
               "difficulty": "hard",
               "difficultyConfidence": "low",
               "basis": "مفهوم تقني تأسيسي يعتمد عليه فهم تطبيقات لاحقة.",
-              "strategy": "شرح المفاهيم والمكونات ثم أمثلة وتحقق من الفهم."
+              "strategy": "متابعة شرح المدرس ومراجعة الصفحات أو الملاحظات المرتبطة بالدرس. يجزّأ المحتوى النظري أو التقني إلى جلسات مناسبة لحجمه؛ لا ينشئ StudyFlow أكوادًا تدريبية أو أسئلة أو اختبارات للطالب.",
+              "catalogMapping": {
+                "nodeId": "PROG_1_2",
+                "branchId": "PROG_AI_G2_BAC:FULL"
+              }
             },
             {
               "id": "PROG_1_3",
@@ -442,7 +560,11 @@
               "difficulty": "medium",
               "difficultyConfidence": "low",
               "basis": "تمييز تطبيقات وسياقات استخدام وربط المفهوم بالواقع.",
-              "strategy": "تصنيف أمثلة واختيار التقنية المناسبة."
+              "strategy": "متابعة شرح المدرس ومراجعة الصفحات أو الملاحظات المرتبطة بالدرس. يجزّأ المحتوى النظري أو التقني إلى جلسات مناسبة لحجمه؛ لا ينشئ StudyFlow أكوادًا تدريبية أو أسئلة أو اختبارات للطالب.",
+              "catalogMapping": {
+                "nodeId": "PROG_1_3",
+                "branchId": "PROG_AI_G2_BAC:FULL"
+              }
             },
             {
               "id": "PROG_1_4",
@@ -460,7 +582,11 @@
               "difficulty": "medium",
               "difficultyConfidence": "low",
               "basis": "تقييم حالات وموازنة الخصوصية والعدالة والمسؤولية.",
-              "strategy": "تحليل حالة ومناقشة حجج متعارضة."
+              "strategy": "متابعة شرح المدرس ومراجعة الصفحات أو الملاحظات المرتبطة بالدرس. يجزّأ المحتوى النظري أو التقني إلى جلسات مناسبة لحجمه؛ لا ينشئ StudyFlow أكوادًا تدريبية أو أسئلة أو اختبارات للطالب.",
+              "catalogMapping": {
+                "nodeId": "PROG_1_4",
+                "branchId": "PROG_AI_G2_BAC:FULL"
+              }
             }
           ]
         },
@@ -484,7 +610,11 @@
               "difficulty": "hard",
               "difficultyConfidence": "low",
               "basis": "مصطلحات تقنية وآليات مترابطة تحتاج تطبيقًا.",
-              "strategy": "رسم تدفق مبسط ثم تطبيق على سيناريوهات."
+              "strategy": "متابعة شرح المدرس ومراجعة الصفحات أو الملاحظات المرتبطة بالدرس. يجزّأ المحتوى النظري أو التقني إلى جلسات مناسبة لحجمه؛ لا ينشئ StudyFlow أكوادًا تدريبية أو أسئلة أو اختبارات للطالب.",
+              "catalogMapping": {
+                "nodeId": "PROG_2_1",
+                "branchId": "PROG_AI_G2_BAC:FULL"
+              }
             },
             {
               "id": "PROG_2_2",
@@ -502,7 +632,11 @@
               "difficulty": "hard",
               "difficultyConfidence": "low",
               "basis": "تصميم بنية وحلول أمنية يتطلب فهم علاقات الأنظمة.",
-              "strategy": "مخطط شبكة وتحليل تهديدات وتطبيق."
+              "strategy": "متابعة شرح المدرس ومراجعة الصفحات أو الملاحظات المرتبطة بالدرس. يجزّأ المحتوى النظري أو التقني إلى جلسات مناسبة لحجمه؛ لا ينشئ StudyFlow أكوادًا تدريبية أو أسئلة أو اختبارات للطالب.",
+              "catalogMapping": {
+                "nodeId": "PROG_2_2",
+                "branchId": "PROG_AI_G2_BAC:FULL"
+              }
             },
             {
               "id": "PROG_2_3",
@@ -520,7 +654,11 @@
               "difficulty": "hard",
               "difficultyConfidence": "low",
               "basis": "تسلسل إجراءات واتخاذ قرار في سيناريوهات متغيرة.",
-              "strategy": "خطوات استجابة مرتبة ومحاكاة ذهنية غير تشغيلية."
+              "strategy": "متابعة شرح المدرس ومراجعة الصفحات أو الملاحظات المرتبطة بالدرس. يجزّأ المحتوى النظري أو التقني إلى جلسات مناسبة لحجمه؛ لا ينشئ StudyFlow أكوادًا تدريبية أو أسئلة أو اختبارات للطالب.",
+              "catalogMapping": {
+                "nodeId": "PROG_2_3",
+                "branchId": "PROG_AI_G2_BAC:FULL"
+              }
             }
           ]
         },
@@ -544,7 +682,11 @@
               "difficulty": "medium",
               "difficultyConfidence": "low",
               "basis": "فهم المكونات والطبقات والعلاقات بينها.",
-              "strategy": "رسم معماري عالي المستوى وربط المكونات."
+              "strategy": "متابعة شرح المدرس ومراجعة الصفحات أو الملاحظات المرتبطة بالدرس. يجزّأ المحتوى النظري أو التقني إلى جلسات مناسبة لحجمه؛ لا ينشئ StudyFlow أكوادًا تدريبية أو أسئلة أو اختبارات للطالب.",
+              "catalogMapping": {
+                "nodeId": "PROG_3_1",
+                "branchId": "PROG_AI_G2_BAC:FULL"
+              }
             },
             {
               "id": "PROG_3_2",
@@ -562,7 +704,11 @@
               "difficulty": "medium",
               "difficultyConfidence": "low",
               "basis": "فهم تدفق الطلبات والاستجابات والمفاهيم المرتبطة.",
-              "strategy": "رسم تدفق البيانات ثم أمثلة قصيرة."
+              "strategy": "متابعة شرح المدرس ومراجعة الصفحات أو الملاحظات المرتبطة بالدرس. يجزّأ المحتوى النظري أو التقني إلى جلسات مناسبة لحجمه؛ لا ينشئ StudyFlow أكوادًا تدريبية أو أسئلة أو اختبارات للطالب.",
+              "catalogMapping": {
+                "nodeId": "PROG_3_2",
+                "branchId": "PROG_AI_G2_BAC:FULL"
+              }
             },
             {
               "id": "PROG_3_3",
@@ -580,7 +726,11 @@
               "difficulty": "medium",
               "difficultyConfidence": "low",
               "basis": "مفاهيم الواجهة ومكونات بناء الصفحة.",
-              "strategy": "فهم المكونات وتطبيق عملي قصير."
+              "strategy": "متابعة شرح المدرس ومراجعة الصفحات أو الملاحظات المرتبطة بالدرس. يجزّأ المحتوى النظري أو التقني إلى جلسات مناسبة لحجمه؛ لا ينشئ StudyFlow أكوادًا تدريبية أو أسئلة أو اختبارات للطالب.",
+              "catalogMapping": {
+                "nodeId": "PROG_3_3",
+                "branchId": "PROG_AI_G2_BAC:FULL"
+              }
             }
           ]
         },
@@ -604,7 +754,11 @@
               "difficulty": "easy",
               "difficultyConfidence": "low",
               "basis": "تصنيف خصائص وأمثلة مباشرة؛ تقدير أولي من عنوان الدرس.",
-              "strategy": "بطاقات تصنيف وأمثلة تطبيقية."
+              "strategy": "متابعة شرح المدرس ومراجعة الصفحات أو الملاحظات المرتبطة بالدرس. يجزّأ المحتوى النظري أو التقني إلى جلسات مناسبة لحجمه؛ لا ينشئ StudyFlow أكوادًا تدريبية أو أسئلة أو اختبارات للطالب.",
+              "catalogMapping": {
+                "nodeId": "PROG_4_1",
+                "branchId": "PROG_AI_G2_BAC:FULL"
+              }
             },
             {
               "id": "PROG_4_2",
@@ -622,7 +776,11 @@
               "difficulty": "medium",
               "difficultyConfidence": "low",
               "basis": "تطبيق معايير تصميم على احتياجات المستخدم.",
-              "strategy": "تحليل واجهة وربط كل قرار بهدف استخدام."
+              "strategy": "متابعة شرح المدرس ومراجعة الصفحات أو الملاحظات المرتبطة بالدرس. يجزّأ المحتوى النظري أو التقني إلى جلسات مناسبة لحجمه؛ لا ينشئ StudyFlow أكوادًا تدريبية أو أسئلة أو اختبارات للطالب.",
+              "catalogMapping": {
+                "nodeId": "PROG_4_2",
+                "branchId": "PROG_AI_G2_BAC:FULL"
+              }
             },
             {
               "id": "PROG_4_3",
@@ -640,7 +798,11 @@
               "difficulty": "medium",
               "difficultyConfidence": "low",
               "basis": "تقييم وفق معايير متعددة وتبرير الحكم.",
-              "strategy": "قائمة تحقق وتقييم مثال مع التعليل."
+              "strategy": "متابعة شرح المدرس ومراجعة الصفحات أو الملاحظات المرتبطة بالدرس. يجزّأ المحتوى النظري أو التقني إلى جلسات مناسبة لحجمه؛ لا ينشئ StudyFlow أكوادًا تدريبية أو أسئلة أو اختبارات للطالب.",
+              "catalogMapping": {
+                "nodeId": "PROG_4_3",
+                "branchId": "PROG_AI_G2_BAC:FULL"
+              }
             },
             {
               "id": "PROG_4_4",
@@ -658,7 +820,11 @@
               "difficulty": "medium",
               "difficultyConfidence": "low",
               "basis": "دورة متكررة تتطلب فهم القياس والتحسين.",
-              "strategy": "رسم دورة التحسين وتطبيقها على مثال."
+              "strategy": "متابعة شرح المدرس ومراجعة الصفحات أو الملاحظات المرتبطة بالدرس. يجزّأ المحتوى النظري أو التقني إلى جلسات مناسبة لحجمه؛ لا ينشئ StudyFlow أكوادًا تدريبية أو أسئلة أو اختبارات للطالب.",
+              "catalogMapping": {
+                "nodeId": "PROG_4_4",
+                "branchId": "PROG_AI_G2_BAC:FULL"
+              }
             }
           ]
         }
@@ -668,13 +834,20 @@
         "تؤكد مقدمة الوزارة على التفكير النقدي وحل المشكلات والتطبيق العملي والتحقق من المعلومات والاستخدام المسؤول للتكنولوجيا والخصوصية والأمان الرقمي.",
         "تغطي الفصول تكنولوجيا المعلومات والمجتمع والذكاء الاصطناعي وأخلاقياته، والأمن السيبراني، وتطبيقات الويب، وتصميم الويب والوسائط.",
         "تظل البرمجة والذكاء الاصطناعي في فرعها الخطي الواحد الحالي. يفهم StudyFlow موضوع الدرس وتسلسله، لكنه لا ينشئ اختبارات برمجة أو أسئلة لقياس مهارات الطالب."
-      ]
+      ],
+      "branchContext": {
+        "taxonomySource": "shared/sie-catalog.ts",
+        "preserveExistingBranches": true,
+        "branchId": "PROG_AI_G2_BAC:FULL",
+        "requiredCoverage": true,
+        "note": "الفصول الأربعة أقسام داخل فرع واحد خطي كما في الكتالوج؛ لا تنشأ فروع منفصلة للفصول."
+      }
     },
     "ENG1_G2_BAC": {
       "title": "اللغة الإنجليزية الأولى",
       "book": "English – Part 1",
-      "coverage": "toc_only_unit_ranges",
-      "confidence": "low",
+      "coverage": "visually_inspected_unit_and_topic_sections",
+      "confidence": "medium",
       "units": [
         {
           "id": "ENG_U1",
@@ -689,11 +862,105 @@
           "difficultyConfidence": "low",
           "section": "Social Reflection / Shared Responsibility",
           "lessons": [
-            "Social Media and Self-Image",
-            "Exploring Modern Lifestyles",
-            "Whose Responsibility Is It?",
-            "Understanding Mental Health"
-          ]
+            {
+              "id": "ENG_U1_SEC_A_T1",
+              "title": "Social Media and Self-Image",
+              "nodeId": "ENG_U1_SEC_A_T1",
+              "branchId": "ENG_TEXTBOOK",
+              "pages": [
+                15,
+                20
+              ],
+              "pageRangeConfidence": "medium",
+              "pageRangeBasis": "visually_inspected_section_divider",
+              "pageRangeEstimated": true,
+              "pageCount": 6,
+              "size": "small",
+              "sizeConfidence": "medium",
+              "difficulty": "unknown",
+              "difficultyConfidence": "low",
+              "basis": "عنوان موضوع وفاصل قسم تم التحقق منهما بصريًا؛ لا توجد أدلة كافية لتحديد صعوبة الموضوع من الصفحات وحدها."
+            },
+            {
+              "id": "ENG_U1_SEC_A_T2",
+              "title": "Exploring Modern Lifestyles",
+              "nodeId": "ENG_U1_SEC_A_T2",
+              "branchId": "ENG_TEXTBOOK",
+              "pages": [
+                21,
+                27
+              ],
+              "pageRangeConfidence": "medium",
+              "pageRangeBasis": "visually_inspected_section_divider",
+              "pageRangeEstimated": true,
+              "pageCount": 7,
+              "size": "medium",
+              "sizeConfidence": "medium",
+              "difficulty": "unknown",
+              "difficultyConfidence": "low",
+              "basis": "عنوان موضوع وفاصل قسم تم التحقق منهما بصريًا؛ لا توجد أدلة كافية لتحديد صعوبة الموضوع من الصفحات وحدها."
+            },
+            {
+              "id": "ENG_U1_SEC_B_T1",
+              "title": "Whose Responsibility Is It?",
+              "nodeId": "ENG_U1_SEC_B_T1",
+              "branchId": "ENG_TEXTBOOK",
+              "pages": [
+                28,
+                32
+              ],
+              "pageRangeConfidence": "medium",
+              "pageRangeBasis": "visually_inspected_section_divider",
+              "pageRangeEstimated": true,
+              "pageCount": 5,
+              "size": "small",
+              "sizeConfidence": "medium",
+              "difficulty": "unknown",
+              "difficultyConfidence": "low",
+              "basis": "عنوان موضوع وفاصل قسم تم التحقق منهما بصريًا؛ لا توجد أدلة كافية لتحديد صعوبة الموضوع من الصفحات وحدها."
+            },
+            {
+              "id": "ENG_U1_SEC_B_T2",
+              "title": "Understanding Mental Health",
+              "nodeId": "ENG_U1_SEC_B_T2",
+              "branchId": "ENG_TEXTBOOK",
+              "pages": [
+                33,
+                38
+              ],
+              "pageRangeConfidence": "medium",
+              "pageRangeBasis": "visually_inspected_section_divider",
+              "pageRangeEstimated": true,
+              "pageCount": 6,
+              "size": "small",
+              "sizeConfidence": "medium",
+              "difficulty": "unknown",
+              "difficultyConfidence": "low",
+              "basis": "عنوان موضوع وفاصل قسم تم التحقق منهما بصريًا؛ لا توجد أدلة كافية لتحديد صعوبة الموضوع من الصفحات وحدها."
+            }
+          ],
+          "skillPageReferences": {
+            "vocabulary": [
+              24,
+              31
+            ],
+            "grammar": [
+              [
+                24,
+                25
+              ],
+              [
+                34,
+                35
+              ]
+            ],
+            "writing": [
+              26,
+              32,
+              36
+            ],
+            "readingListeningSpeaking": "موزعة داخل موضوعات الوحدة؛ يراجع المدرس المهارات وفق تخطيطه ولا يحولها StudyFlow إلى مهام اختبار."
+          }
         },
         {
           "id": "ENG_U2",
@@ -708,11 +975,104 @@
           "difficultyConfidence": "low",
           "section": "Leisure in a Digital World / Lifelong Activity",
           "lessons": [
-            "Screen Time and Young People",
-            "Creative Arts as Leisure Activities",
-            "Sport and Physical Activity as Leisure",
-            "Not Exactly a Relaxing Day"
-          ]
+            {
+              "id": "ENG_U2_SEC_A_T1",
+              "title": "Screen Time and Young People",
+              "nodeId": "ENG_U2_SEC_A_T1",
+              "branchId": "ENG_TEXTBOOK",
+              "pages": [
+                42,
+                47
+              ],
+              "pageRangeConfidence": "medium",
+              "pageRangeBasis": "visually_inspected_section_divider",
+              "pageRangeEstimated": true,
+              "pageCount": 6,
+              "size": "small",
+              "sizeConfidence": "medium",
+              "difficulty": "unknown",
+              "difficultyConfidence": "low",
+              "basis": "عنوان موضوع وفاصل قسم تم التحقق منهما بصريًا؛ لا توجد أدلة كافية لتحديد صعوبة الموضوع من الصفحات وحدها."
+            },
+            {
+              "id": "ENG_U2_SEC_A_T2",
+              "title": "Creative Arts as Leisure Activities",
+              "nodeId": "ENG_U2_SEC_A_T2",
+              "branchId": "ENG_TEXTBOOK",
+              "pages": [
+                48,
+                52
+              ],
+              "pageRangeConfidence": "medium",
+              "pageRangeBasis": "visually_inspected_section_divider",
+              "pageRangeEstimated": true,
+              "pageCount": 5,
+              "size": "small",
+              "sizeConfidence": "medium",
+              "difficulty": "unknown",
+              "difficultyConfidence": "low",
+              "basis": "عنوان موضوع وفاصل قسم تم التحقق منهما بصريًا؛ لا توجد أدلة كافية لتحديد صعوبة الموضوع من الصفحات وحدها."
+            },
+            {
+              "id": "ENG_U2_SEC_B_T1",
+              "title": "Sport and Physical Activity as Leisure",
+              "nodeId": "ENG_U2_SEC_B_T1",
+              "branchId": "ENG_TEXTBOOK",
+              "pages": [
+                53,
+                57
+              ],
+              "pageRangeConfidence": "medium",
+              "pageRangeBasis": "visually_inspected_section_divider",
+              "pageRangeEstimated": true,
+              "pageCount": 5,
+              "size": "small",
+              "sizeConfidence": "medium",
+              "difficulty": "unknown",
+              "difficultyConfidence": "low",
+              "basis": "عنوان موضوع وفاصل قسم تم التحقق منهما بصريًا؛ لا توجد أدلة كافية لتحديد صعوبة الموضوع من الصفحات وحدها."
+            },
+            {
+              "id": "ENG_U2_SEC_B_T2",
+              "title": "Not Exactly a Relaxing Day",
+              "nodeId": "ENG_U2_SEC_B_T2",
+              "branchId": "ENG_TEXTBOOK",
+              "pages": [
+                58,
+                63
+              ],
+              "pageRangeConfidence": "medium",
+              "pageRangeBasis": "visually_inspected_section_divider",
+              "pageRangeEstimated": true,
+              "pageCount": 6,
+              "size": "small",
+              "sizeConfidence": "medium",
+              "difficulty": "unknown",
+              "difficultyConfidence": "low",
+              "basis": "عنوان موضوع وفاصل قسم تم التحقق منهما بصريًا؛ لا توجد أدلة كافية لتحديد صعوبة الموضوع من الصفحات وحدها."
+            }
+          ],
+          "skillPageReferences": {
+            "vocabulary": [
+              50,
+              61
+            ],
+            "grammar": [
+              [
+                51,
+                52
+              ],
+              [
+                57,
+                57
+              ]
+            ],
+            "writing": [
+              52,
+              62
+            ],
+            "readingListeningSpeaking": "موزعة داخل موضوعات الوحدة؛ يراجع المدرس المهارات وفق تخطيطه ولا يحولها StudyFlow إلى مهام اختبار."
+          }
         },
         {
           "id": "ENG_U3",
@@ -727,11 +1087,106 @@
           "difficultyConfidence": "low",
           "section": "Historical Landscape / Documenting History",
           "lessons": [
-            "Sites of Memory",
-            "The Museum as a Storyteller",
-            "The Viral Past",
-            "Social Media and Historical Events"
-          ]
+            {
+              "id": "ENG_U3_SEC_A_T1",
+              "title": "Sites of Memory",
+              "nodeId": "ENG_U3_SEC_A_T1",
+              "branchId": "ENG_TEXTBOOK",
+              "pages": [
+                77,
+                81
+              ],
+              "pageRangeConfidence": "medium",
+              "pageRangeBasis": "visually_inspected_section_divider",
+              "pageRangeEstimated": true,
+              "pageCount": 5,
+              "size": "small",
+              "sizeConfidence": "medium",
+              "difficulty": "unknown",
+              "difficultyConfidence": "low",
+              "basis": "عنوان موضوع وفاصل قسم تم التحقق منهما بصريًا؛ لا توجد أدلة كافية لتحديد صعوبة الموضوع من الصفحات وحدها."
+            },
+            {
+              "id": "ENG_U3_SEC_A_T2",
+              "title": "The Museum as a Storyteller",
+              "nodeId": "ENG_U3_SEC_A_T2",
+              "branchId": "ENG_TEXTBOOK",
+              "pages": [
+                82,
+                88
+              ],
+              "pageRangeConfidence": "medium",
+              "pageRangeBasis": "visually_inspected_section_divider",
+              "pageRangeEstimated": true,
+              "pageCount": 7,
+              "size": "medium",
+              "sizeConfidence": "medium",
+              "difficulty": "unknown",
+              "difficultyConfidence": "low",
+              "basis": "عنوان موضوع وفاصل قسم تم التحقق منهما بصريًا؛ لا توجد أدلة كافية لتحديد صعوبة الموضوع من الصفحات وحدها."
+            },
+            {
+              "id": "ENG_U3_SEC_B_T1",
+              "title": "The Viral Past",
+              "nodeId": "ENG_U3_SEC_B_T1",
+              "branchId": "ENG_TEXTBOOK",
+              "pages": [
+                89,
+                93
+              ],
+              "pageRangeConfidence": "medium",
+              "pageRangeBasis": "visually_inspected_section_divider",
+              "pageRangeEstimated": true,
+              "pageCount": 5,
+              "size": "small",
+              "sizeConfidence": "medium",
+              "difficulty": "unknown",
+              "difficultyConfidence": "low",
+              "basis": "عنوان موضوع وفاصل قسم تم التحقق منهما بصريًا؛ لا توجد أدلة كافية لتحديد صعوبة الموضوع من الصفحات وحدها."
+            },
+            {
+              "id": "ENG_U3_SEC_B_T2",
+              "title": "Social Media and Historical Events",
+              "nodeId": "ENG_U3_SEC_B_T2",
+              "branchId": "ENG_TEXTBOOK",
+              "pages": [
+                94,
+                98
+              ],
+              "pageRangeConfidence": "medium",
+              "pageRangeBasis": "visually_inspected_section_divider",
+              "pageRangeEstimated": true,
+              "pageCount": 5,
+              "size": "small",
+              "sizeConfidence": "medium",
+              "difficulty": "unknown",
+              "difficultyConfidence": "low",
+              "basis": "عنوان موضوع وفاصل قسم تم التحقق منهما بصريًا؛ لا توجد أدلة كافية لتحديد صعوبة الموضوع من الصفحات وحدها."
+            }
+          ],
+          "skillPageReferences": {
+            "vocabulary": [
+              80,
+              85,
+              91,
+              98
+            ],
+            "grammar": [
+              [
+                80,
+                80
+              ],
+              [
+                86,
+                87
+              ]
+            ],
+            "writing": [
+              88,
+              98
+            ],
+            "readingListeningSpeaking": "موزعة داخل موضوعات الوحدة؛ يراجع المدرس المهارات وفق تخطيطه ولا يحولها StudyFlow إلى مهام اختبار."
+          }
         },
         {
           "id": "ENG_U4",
@@ -746,11 +1201,105 @@
           "difficultyConfidence": "low",
           "section": "Food Awareness / Online Consumption",
           "lessons": [
-            "Food Waste",
-            "Beyond the Brand",
-            "Digital Consumption",
-            "Black Friday and Sales Culture"
-          ]
+            {
+              "id": "ENG_U4_SEC_A_T1",
+              "title": "Food Waste",
+              "nodeId": "ENG_U4_SEC_A_T1",
+              "branchId": "ENG_TEXTBOOK",
+              "pages": [
+                105,
+                110
+              ],
+              "pageRangeConfidence": "medium",
+              "pageRangeBasis": "visually_inspected_section_divider",
+              "pageRangeEstimated": true,
+              "pageCount": 6,
+              "size": "small",
+              "sizeConfidence": "medium",
+              "difficulty": "unknown",
+              "difficultyConfidence": "low",
+              "basis": "عنوان موضوع وفاصل قسم تم التحقق منهما بصريًا؛ لا توجد أدلة كافية لتحديد صعوبة الموضوع من الصفحات وحدها."
+            },
+            {
+              "id": "ENG_U4_SEC_A_T2",
+              "title": "Beyond the Brand",
+              "nodeId": "ENG_U4_SEC_A_T2",
+              "branchId": "ENG_TEXTBOOK",
+              "pages": [
+                111,
+                116
+              ],
+              "pageRangeConfidence": "medium",
+              "pageRangeBasis": "visually_inspected_section_divider",
+              "pageRangeEstimated": true,
+              "pageCount": 6,
+              "size": "small",
+              "sizeConfidence": "medium",
+              "difficulty": "unknown",
+              "difficultyConfidence": "low",
+              "basis": "عنوان موضوع وفاصل قسم تم التحقق منهما بصريًا؛ لا توجد أدلة كافية لتحديد صعوبة الموضوع من الصفحات وحدها."
+            },
+            {
+              "id": "ENG_U4_SEC_B_T1",
+              "title": "Digital Consumption",
+              "nodeId": "ENG_U4_SEC_B_T1",
+              "branchId": "ENG_TEXTBOOK",
+              "pages": [
+                117,
+                122
+              ],
+              "pageRangeConfidence": "medium",
+              "pageRangeBasis": "visually_inspected_section_divider",
+              "pageRangeEstimated": true,
+              "pageCount": 6,
+              "size": "small",
+              "sizeConfidence": "medium",
+              "difficulty": "unknown",
+              "difficultyConfidence": "low",
+              "basis": "عنوان موضوع وفاصل قسم تم التحقق منهما بصريًا؛ لا توجد أدلة كافية لتحديد صعوبة الموضوع من الصفحات وحدها."
+            },
+            {
+              "id": "ENG_U4_SEC_B_T2",
+              "title": "Black Friday and Sales Culture",
+              "nodeId": "ENG_U4_SEC_B_T2",
+              "branchId": "ENG_TEXTBOOK",
+              "pages": [
+                123,
+                129
+              ],
+              "pageRangeConfidence": "medium",
+              "pageRangeBasis": "visually_inspected_section_divider",
+              "pageRangeEstimated": true,
+              "pageCount": 7,
+              "size": "medium",
+              "sizeConfidence": "medium",
+              "difficulty": "unknown",
+              "difficultyConfidence": "low",
+              "basis": "عنوان موضوع وفاصل قسم تم التحقق منهما بصريًا؛ لا توجد أدلة كافية لتحديد صعوبة الموضوع من الصفحات وحدها."
+            }
+          ],
+          "skillPageReferences": {
+            "vocabulary": [
+              108,
+              114,
+              126
+            ],
+            "grammar": [
+              [
+                127,
+                129
+              ]
+            ],
+            "writing": [
+              116,
+              121,
+              [
+                129,
+                130
+              ]
+            ],
+            "readingListeningSpeaking": "موزعة داخل موضوعات الوحدة؛ يراجع المدرس المهارات وفق تخطيطه ولا يحولها StudyFlow إلى مهام اختبار."
+          }
         },
         {
           "id": "ENG_U5",
@@ -765,21 +1314,197 @@
           "difficultyConfidence": "low",
           "section": "Climate Change / Egypt’s Green Change Makers",
           "lessons": [
-            "The Climate Crisis",
-            "Renewable Energy – Powering a Sustainable Future",
-            "Greening Projects in Egypt",
-            "Individual and Collective Actions"
-          ]
+            {
+              "id": "ENG_U5_SEC_A_T1",
+              "title": "The Climate Crisis",
+              "nodeId": "ENG_U5_SEC_A_T1",
+              "branchId": "ENG_TEXTBOOK",
+              "pages": [
+                143,
+                149
+              ],
+              "pageRangeConfidence": "medium",
+              "pageRangeBasis": "visually_inspected_section_divider",
+              "pageRangeEstimated": true,
+              "pageCount": 7,
+              "size": "medium",
+              "sizeConfidence": "medium",
+              "difficulty": "unknown",
+              "difficultyConfidence": "low",
+              "basis": "عنوان موضوع وفاصل قسم تم التحقق منهما بصريًا؛ لا توجد أدلة كافية لتحديد صعوبة الموضوع من الصفحات وحدها."
+            },
+            {
+              "id": "ENG_U5_SEC_A_T2",
+              "title": "Renewable Energy – Powering a Sustainable Future",
+              "nodeId": "ENG_U5_SEC_A_T2",
+              "branchId": "ENG_TEXTBOOK",
+              "pages": [
+                150,
+                156
+              ],
+              "pageRangeConfidence": "medium",
+              "pageRangeBasis": "visually_inspected_section_divider",
+              "pageRangeEstimated": true,
+              "pageCount": 7,
+              "size": "medium",
+              "sizeConfidence": "medium",
+              "difficulty": "unknown",
+              "difficultyConfidence": "low",
+              "basis": "عنوان موضوع وفاصل قسم تم التحقق منهما بصريًا؛ لا توجد أدلة كافية لتحديد صعوبة الموضوع من الصفحات وحدها."
+            },
+            {
+              "id": "ENG_U5_SEC_B_T1",
+              "title": "Greening Projects in Egypt",
+              "nodeId": "ENG_U5_SEC_B_T1",
+              "branchId": "ENG_TEXTBOOK",
+              "pages": [
+                157,
+                161
+              ],
+              "pageRangeConfidence": "medium",
+              "pageRangeBasis": "visually_inspected_section_divider",
+              "pageRangeEstimated": true,
+              "pageCount": 5,
+              "size": "small",
+              "sizeConfidence": "medium",
+              "difficulty": "unknown",
+              "difficultyConfidence": "low",
+              "basis": "عنوان موضوع وفاصل قسم تم التحقق منهما بصريًا؛ لا توجد أدلة كافية لتحديد صعوبة الموضوع من الصفحات وحدها."
+            },
+            {
+              "id": "ENG_U5_SEC_B_T2",
+              "title": "Individual and Collective Actions",
+              "nodeId": "ENG_U5_SEC_B_T2",
+              "branchId": "ENG_TEXTBOOK",
+              "pages": [
+                162,
+                166
+              ],
+              "pageRangeConfidence": "medium",
+              "pageRangeBasis": "visually_inspected_section_divider",
+              "pageRangeEstimated": true,
+              "pageCount": 5,
+              "size": "small",
+              "sizeConfidence": "medium",
+              "difficulty": "unknown",
+              "difficultyConfidence": "low",
+              "basis": "عنوان موضوع وفاصل قسم تم التحقق منهما بصريًا؛ لا توجد أدلة كافية لتحديد صعوبة الموضوع من الصفحات وحدها."
+            }
+          ],
+          "skillPageReferences": {
+            "vocabulary": [
+              146
+            ],
+            "grammar": [
+              [
+                154,
+                155
+              ]
+            ],
+            "writing": [
+              [
+                148,
+                149
+              ],
+              [
+                155,
+                156
+              ],
+              161
+            ],
+            "readingListeningSpeaking": "موزعة داخل موضوعات الوحدة؛ يراجع المدرس المهارات وفق تخطيطه ولا يحولها StudyFlow إلى مهام اختبار."
+          }
         }
       ],
-      "limitation": "The scanned PDF's unit contents are verified visually; lesson-level page ranges and the complete text are not indexed. Do not invent individual topic sizes or difficulty.",
+      "limitation": "تم فحص الصفحات المصوّرة بصريًا. نطاقات موضوعات الوحدات تقديرية من الفواصل المرئية وثقتها متوسطة؛ الصعوبة لكل موضوع تظل unknown. صفحات المفردات والقواعد والكتابة محفوظة كمراجع مساندة للوحدة، لا كفروع جديدة.",
       "learningIntent": [
         "تدمج وحدات الجزء الأول مهارات القراءة والاستماع والتحدث والكتابة حول موضوعات من الحياة الواقعية.",
         "تبقى المفردات (Vocabulary) والقواعد (Grammar) مسارين منفصلين كما هما في فروع المنصة الحالية، وتُدرس المفردات والقواعد داخل سياق الاستخدام.",
         "تتضمن أنشطة القراءة تحديد الفكرة الرئيسية والتفاصيل ووجهة نظر الكاتب والتمييز بين الحقيقة والرأي، مع الاستدلال من النص.",
         "تتضمن مهام الكتابة فقرات تحليلية ونقاشية وتعبيرًا عن الرأي وكتابة حجاجية منظمة. هذه مهارات يدرّب عليها المدرس، وليست اختبارات ينشئها StudyFlow.",
         "تظل فروع القصة وGRE وفروع الكتاب الحالية منفصلة كما هي في كتالوج المنصة. هذا الملف لا يحدد وزنًا امتحانيًا للقصة أو المسارات الإضافية."
-      ]
+      ],
+      "branchContext": {
+        "taxonomySource": "shared/sie-catalog.ts",
+        "preserveExistingBranches": true,
+        "textbookBranchId": "ENG_TEXTBOOK",
+        "vocabularyBranchId": "ENG_VOCABULARY",
+        "grammarBranchId": "ENG_GRAMMAR",
+        "greBranchId": "ENG_GRE",
+        "storyBranchId": "ENG_STORY",
+        "unitLinks": [
+          {
+            "unitId": "ENG_U1",
+            "unitNumber": 1,
+            "textbookNodeIds": [
+              "ENG_U1_SEC_A_T1",
+              "ENG_U1_SEC_A_T2",
+              "ENG_U1_SEC_B_T1",
+              "ENG_U1_SEC_B_T2"
+            ],
+            "vocabularyNodeId": "ENG_VOCABULARY_U1",
+            "grammarNodeId": "ENG_GRAMMAR_U1",
+            "relationship": "same_unit_context_not_prerequisite",
+            "note": "تظل فروع Vocabulary وGrammar وموضوعات الكتاب منفصلة؛ الربط يحدد وحدة السياق فقط ولا يكرر الدرس."
+          },
+          {
+            "unitId": "ENG_U2",
+            "unitNumber": 2,
+            "textbookNodeIds": [
+              "ENG_U2_SEC_A_T1",
+              "ENG_U2_SEC_A_T2",
+              "ENG_U2_SEC_B_T1",
+              "ENG_U2_SEC_B_T2"
+            ],
+            "vocabularyNodeId": "ENG_VOCABULARY_U2",
+            "grammarNodeId": "ENG_GRAMMAR_U2",
+            "relationship": "same_unit_context_not_prerequisite",
+            "note": "تظل فروع Vocabulary وGrammar وموضوعات الكتاب منفصلة؛ الربط يحدد وحدة السياق فقط ولا يكرر الدرس."
+          },
+          {
+            "unitId": "ENG_U3",
+            "unitNumber": 3,
+            "textbookNodeIds": [
+              "ENG_U3_SEC_A_T1",
+              "ENG_U3_SEC_A_T2",
+              "ENG_U3_SEC_B_T1",
+              "ENG_U3_SEC_B_T2"
+            ],
+            "vocabularyNodeId": "ENG_VOCABULARY_U3",
+            "grammarNodeId": "ENG_GRAMMAR_U3",
+            "relationship": "same_unit_context_not_prerequisite",
+            "note": "تظل فروع Vocabulary وGrammar وموضوعات الكتاب منفصلة؛ الربط يحدد وحدة السياق فقط ولا يكرر الدرس."
+          },
+          {
+            "unitId": "ENG_U4",
+            "unitNumber": 4,
+            "textbookNodeIds": [
+              "ENG_U4_SEC_A_T1",
+              "ENG_U4_SEC_A_T2",
+              "ENG_U4_SEC_B_T1",
+              "ENG_U4_SEC_B_T2"
+            ],
+            "vocabularyNodeId": "ENG_VOCABULARY_U4",
+            "grammarNodeId": "ENG_GRAMMAR_U4",
+            "relationship": "same_unit_context_not_prerequisite",
+            "note": "تظل فروع Vocabulary وGrammar وموضوعات الكتاب منفصلة؛ الربط يحدد وحدة السياق فقط ولا يكرر الدرس."
+          },
+          {
+            "unitId": "ENG_U5",
+            "unitNumber": 5,
+            "textbookNodeIds": [
+              "ENG_U5_SEC_A_T1",
+              "ENG_U5_SEC_A_T2",
+              "ENG_U5_SEC_B_T1",
+              "ENG_U5_SEC_B_T2"
+            ],
+            "vocabularyNodeId": "ENG_VOCABULARY_U5",
+            "grammarNodeId": "ENG_GRAMMAR_U5",
+            "relationship": "same_unit_context_not_prerequisite",
+            "note": "تظل فروع Vocabulary وGrammar وموضوعات الكتاب منفصلة؛ الربط يحدد وحدة السياق فقط ولا يكرر الدرس."
+          }
+        ]
+      }
     },
     "SECOND_LANGUAGE_G2_BAC_PENDING": {
       "title": "اللغة الإيطالية – اللغة الأجنبية الثانية",
@@ -808,18 +1533,20 @@
     "platformRole": "StudyFlow ينظم عبء المذاكرة ويتابع موضع الطالب والمدرس، ويخطط للمحاضرات المسجلة والواجبات المعروفة فقط. ليس مدرسًا ولا منصة امتحانات.",
     "teacherOwnsInstruction": "المعلم هو المسؤول عن شرح المهارات والأهداف التعليمية والتدريب عليها وتقييمها. يفهم StudyFlow هذه الأهداف ليعرف طبيعة الدرس وعلاقته بما قبله، لكنه لا يشرح بدلًا من المعلم ولا يختبر الطالب فيها ولا يمنحه درجات أو حكم إتقان.",
     "allowedPlanTasks": [
-      "متابعة محاضرة معروفة للمدرس أو مورد شرح موثوق مرتبط بالدرس.",
-      "قراءة أو مراجعة صفحات الكتاب التي حددها المدرس أو الملاحظات التي سجلها الطالب.",
-      "تنفيذ واجب أو تدريب عيّنه المدرس بالفعل، بشرط وجوده في سجل معروف أو أن الطالب أبلغ عنه.",
-      "تجهيز الكتاب والملاحظات للمحاضرة وتسجيل التقدم أو التأخير الفعلي."
+      "متابعة محاضرة أو درس معروف من المدرس ومحدد في سجل الطالب.",
+      "مراجعة صفحات الكتاب أو ملاحظات محددة سبق أن عيّنها المدرس أو سجلها الطالب.",
+      "تنفيذ واجب أو تدريب عيّنه المدرس بالفعل وكان موجودًا في سجل موثق.",
+      "تجهيز الكتاب والملاحظات للمحاضرة وتسجيل التقدم أو التأجيل الفعلي.",
+      "إعادة توزيع المهام وفق السلوك الفعلي والوقت والطاقة التي يحددها الطالب."
     ],
     "prohibitedPlanTasks": [
       "إنشاء اختبارات أو كويزات أو امتحانات تجريبية أو تشخيصية أو بنوك أسئلة بواسطة الذكاء الاصطناعي.",
       "إنشاء أسئلة مراجعة أو استرجاع أو اختبار ذاتي يجيب عنها الطالب.",
       "تكليف الطالب بإثبات إتقان مهارة عبر أسئلة ينشئها StudyFlow أو منحه درجة بناءً عليها.",
-      "اختراع واجب أو تدريب أو مجموعة أسئلة لم يعيّنها المدرس."
+      "اختراع واجب أو تدريب أو مجموعة أسئلة لم يعيّنها المدرس.",
+      "تحويل أهداف المهارات الموجودة في مقدمات الكتب إلى أنشطة اختبار أو مهام تدريس ذاتي ينفذها StudyFlow."
     ],
-    "assessmentEvidence": "يمكن استخدام نتيجة اختبار أو تقييم سابق سجله المدرس أو منصة خارجية كدليل تاريخي على مستوى الطالب إذا كان مصدره معروفًا. هذا لا يسمح لـStudyFlow بإنشاء تقييم جديد.",
+    "assessmentEvidence": "لا يستخدم StudyFlow اختبارات أو أسئلة منشأة منه للحصول على بيانات عن الطالب. يمكن استخدام سجل إنجاز المهام، والتأجيلات، والصعوبة التي يصرح بها الطالب، وأي نتيجة خارجية أضيفت بمصدر واضح وبإسناد المدرس أو منصة خارجية. إذا لم يكن مصدر النتيجة موثقًا فلا تدخل في حساب الأولوية.",
     "branchTaxonomyPolicy": "لا تنشئ ولا تسمِّ ولا تدمج ولا تقسّم ولا تعِد ترتيب فروع المواد بناءً على هذا الملف. معرّفات الفروع وتسمياتها وترتيبها الحالية في shared/sie-catalog.ts هي المرجع المعتمد.",
     "coverageBoundary": "هذه البيانات تصف أهداف التعلم ومحتوى الجزء الأول فقط. لا تدّعي أنها تحليل كامل للجزء الثاني أو للسنة الدراسية كلها."
   },
@@ -866,5 +1593,583 @@
       "coverageRule": "يجب أن تظل جميع نقاط البرمجة والذكاء الاصطناعي غير المكتملة في الخريطة السنوية. لا تحذف فصلًا أو درسًا بسبب ضيق الوقت؛ أظهر ضغط الجدوى ووزع المحتوى على مراحل.",
       "examPatternGuidance": "اعتمد على طبيعة أنشطة كتاب البرمجة: فهم السيناريو، تحديد المشكلة، اختيار حل تقني، تبرير القرار، وفهم الأمان والخصوصية والتطبيق. لا تستورد توزيع أسئلة أو درجات من مواد أو أنظمة أخرى."
     }
+  },
+  "sourceEvidence": {
+    "sourcePolicy": "تحليل مشتق لا ينسخ محتوى الكتاب. الصفحات والنطاقات تشير إلى النسخ الرسمية الأصلية للجزء الأول فقط.",
+    "books": [
+      {
+        "subjectId": "ARB_G2_BAC",
+        "fileName": "Arabic-EB-part1 (1).pdf",
+        "pdfPages": 164,
+        "method": "text_extraction_and_visual_page_confirmation",
+        "pageMapConfidence": "high",
+        "limitations": [
+          "أُخذت أسماء الوحدات والدروس من فهرس الكتاب ونطاقات الصفحات المطبوعة.",
+          "المهارات والأهداف مستخلصة من مقدمة الكتاب وصفحات أهداف الدروس؛ لا تتحول إلى تكليفات أو اختبارات من StudyFlow."
+        ]
+      },
+      {
+        "subjectId": "ENG1_G2_BAC",
+        "fileName": "Eng-L1-EB-Part1 (1).pdf",
+        "pdfPages": 172,
+        "method": "visual_page_inspection_scanned_images",
+        "pageMapConfidence": "medium",
+        "limitations": [
+          "الكتاب مصوّر؛ تمت مراجعة صفحات الوحدات والفواصل والعناوين بصريًا دون OCR.",
+          "نطاقات موضوعات الدروس تقديرية حسب فواصل الأقسام المرئية وقد تختلف صفحة واحدة عند اختلاف احتساب صفحة الافتتاح.",
+          "درجة صعوبة كل موضوع غير محسومة ولا تُستنتج من طول الصفحات."
+        ]
+      },
+      {
+        "subjectId": "HIS_G2_BAC",
+        "fileName": "EgyptianHistory-Ar-EB-part1 (1).pdf",
+        "pdfPages": 127,
+        "method": "text_extraction_and_visual_toc_confirmation",
+        "pageMapConfidence": "high",
+        "limitations": [
+          "أسماء الدروس ونطاقات الصفحات مأخوذة من الكتاب الأصلي.",
+          "العلاقات التاريخية بين الدروس إرشادية؛ لا تحول الترتيب الزمني إلى شرط يمنع المذاكرة المتوازية."
+        ]
+      },
+      {
+        "subjectId": "PROG_AI_G2_BAC",
+        "fileName": "Programming-ArtificialIntelligence-Ar-EB-part1 (1).pdf",
+        "pdfPages": 95,
+        "method": "text_extraction_and_visual_toc_confirmation",
+        "pageMapConfidence": "high",
+        "limitations": [
+          "نطاقات الصفحات المطبوعة وPDF محفوظة منفصلة.",
+          "علاقات الاعتماد تعبّر عن تسلسل مفاهيمي مساعد ولا تمنع دراسة لاحقة بالتوازي عند الحاجة."
+        ]
+      }
+    ]
+  },
+  "dependencyGraph": {
+    "version": 1,
+    "semantics": "العلاقات تساعد على ترتيب الخطوات عندما تكون موجودة معًا في الخطة. لا توجد حافة تمنع الطالب من بدء درس لاحق، hardBlock=false لكل العلاقات. prerequisite تعني اعتمادًا مفاهيميًا موثقًا نسبيًا؛ curriculum_sequence تعني ترتيب الكتاب فقط؛ historical_context تعني ترابطًا موضوعيًا.",
+    "edges": [
+      {
+        "subjectId": "ARB_G2_BAC",
+        "fromNodeId": "ARB_U1_N1",
+        "toNodeId": "ARB_U1_N2",
+        "relationType": "prerequisite",
+        "strength": "medium",
+        "confidence": "medium",
+        "hardBlock": false,
+        "reason": "استكمال موضوع الأسماء الخمسة داخل فرع النحو؛ العلاقة تسلسل متابعة للشرح وليست اختبار إتقان."
+      },
+      {
+        "subjectId": "ARB_G2_BAC",
+        "fromNodeId": "ARB_U1_N2",
+        "toNodeId": "ARB_U1_N3",
+        "relationType": "curriculum_sequence",
+        "strength": "soft",
+        "confidence": "medium",
+        "hardBlock": false,
+        "reason": "تطبيق متابعة داخل فرع النحو بعد شرح القاعدة وأجزائها."
+      },
+      {
+        "subjectId": "ARB_G2_BAC",
+        "fromNodeId": "ARB_U2_N1",
+        "toNodeId": "ARB_U2_N2",
+        "relationType": "prerequisite",
+        "strength": "medium",
+        "confidence": "medium",
+        "hardBlock": false,
+        "reason": "استكمال موضوع الممنوع من الصرف داخل فرع النحو."
+      },
+      {
+        "subjectId": "ARB_G2_BAC",
+        "fromNodeId": "ARB_U2_N2",
+        "toNodeId": "ARB_U2_N3",
+        "relationType": "curriculum_sequence",
+        "strength": "soft",
+        "confidence": "medium",
+        "hardBlock": false,
+        "reason": "تطبيق متابعة بعد أجزاء شرح القاعدة."
+      },
+      {
+        "subjectId": "ARB_G2_BAC",
+        "fromNodeId": "ARB_C03_HIJJAGI",
+        "toNodeId": "ARB_C10_ARGUMENT_PARA",
+        "relationType": "curriculum_sequence",
+        "strength": "soft",
+        "confidence": "medium",
+        "hardBlock": false,
+        "reason": "موضوعا الأسلوب الحجاجي وبناء الفقرة الحجاجية ينتميان إلى فرع التعبير نفسه."
+      },
+      {
+        "subjectId": "HIS_G2_BAC",
+        "fromNodeId": "HIS_U1_L1",
+        "toNodeId": "HIS_U1_L2",
+        "relationType": "curriculum_sequence",
+        "strength": "soft",
+        "confidence": "high",
+        "hardBlock": false,
+        "reason": "ترتيب تسلسل الكتاب والسياق التاريخي؛ يمكن دراسة موضوعات لاحقة بالتوازي ولا يمنع هذا الرابط بدءها."
+      },
+      {
+        "subjectId": "HIS_G2_BAC",
+        "fromNodeId": "HIS_U1_L2",
+        "toNodeId": "HIS_U1_L3",
+        "relationType": "curriculum_sequence",
+        "strength": "soft",
+        "confidence": "high",
+        "hardBlock": false,
+        "reason": "ترتيب تسلسل الكتاب والسياق التاريخي؛ يمكن دراسة موضوعات لاحقة بالتوازي ولا يمنع هذا الرابط بدءها."
+      },
+      {
+        "subjectId": "HIS_G2_BAC",
+        "fromNodeId": "HIS_U1_L3",
+        "toNodeId": "HIS_U1_L4",
+        "relationType": "curriculum_sequence",
+        "strength": "soft",
+        "confidence": "high",
+        "hardBlock": false,
+        "reason": "ترتيب تسلسل الكتاب والسياق التاريخي؛ يمكن دراسة موضوعات لاحقة بالتوازي ولا يمنع هذا الرابط بدءها."
+      },
+      {
+        "subjectId": "HIS_G2_BAC",
+        "fromNodeId": "HIS_U1_L4",
+        "toNodeId": "HIS_U2_L1",
+        "relationType": "curriculum_sequence",
+        "strength": "soft",
+        "confidence": "high",
+        "hardBlock": false,
+        "reason": "ترتيب تسلسل الكتاب والسياق التاريخي؛ يمكن دراسة موضوعات لاحقة بالتوازي ولا يمنع هذا الرابط بدءها."
+      },
+      {
+        "subjectId": "HIS_G2_BAC",
+        "fromNodeId": "HIS_U2_L1",
+        "toNodeId": "HIS_U2_L2",
+        "relationType": "curriculum_sequence",
+        "strength": "soft",
+        "confidence": "high",
+        "hardBlock": false,
+        "reason": "ترتيب تسلسل الكتاب والسياق التاريخي؛ يمكن دراسة موضوعات لاحقة بالتوازي ولا يمنع هذا الرابط بدءها."
+      },
+      {
+        "subjectId": "HIS_G2_BAC",
+        "fromNodeId": "HIS_U2_L2",
+        "toNodeId": "HIS_U2_L3",
+        "relationType": "curriculum_sequence",
+        "strength": "soft",
+        "confidence": "high",
+        "hardBlock": false,
+        "reason": "ترتيب تسلسل الكتاب والسياق التاريخي؛ يمكن دراسة موضوعات لاحقة بالتوازي ولا يمنع هذا الرابط بدءها."
+      },
+      {
+        "subjectId": "HIS_G2_BAC",
+        "fromNodeId": "HIS_U2_L3",
+        "toNodeId": "HIS_U2_L4",
+        "relationType": "curriculum_sequence",
+        "strength": "soft",
+        "confidence": "high",
+        "hardBlock": false,
+        "reason": "ترتيب تسلسل الكتاب والسياق التاريخي؛ يمكن دراسة موضوعات لاحقة بالتوازي ولا يمنع هذا الرابط بدءها."
+      },
+      {
+        "subjectId": "HIS_G2_BAC",
+        "fromNodeId": "HIS_U2_L4",
+        "toNodeId": "HIS_U3_L1",
+        "relationType": "curriculum_sequence",
+        "strength": "soft",
+        "confidence": "high",
+        "hardBlock": false,
+        "reason": "ترتيب تسلسل الكتاب والسياق التاريخي؛ يمكن دراسة موضوعات لاحقة بالتوازي ولا يمنع هذا الرابط بدءها."
+      },
+      {
+        "subjectId": "HIS_G2_BAC",
+        "fromNodeId": "HIS_U3_L1",
+        "toNodeId": "HIS_U3_L2",
+        "relationType": "curriculum_sequence",
+        "strength": "soft",
+        "confidence": "high",
+        "hardBlock": false,
+        "reason": "ترتيب تسلسل الكتاب والسياق التاريخي؛ يمكن دراسة موضوعات لاحقة بالتوازي ولا يمنع هذا الرابط بدءها."
+      },
+      {
+        "subjectId": "HIS_G2_BAC",
+        "fromNodeId": "HIS_U3_L2",
+        "toNodeId": "HIS_U3_L3",
+        "relationType": "curriculum_sequence",
+        "strength": "soft",
+        "confidence": "high",
+        "hardBlock": false,
+        "reason": "ترتيب تسلسل الكتاب والسياق التاريخي؛ يمكن دراسة موضوعات لاحقة بالتوازي ولا يمنع هذا الرابط بدءها."
+      },
+      {
+        "subjectId": "HIS_G2_BAC",
+        "fromNodeId": "HIS_U3_L3",
+        "toNodeId": "HIS_U3_L4",
+        "relationType": "curriculum_sequence",
+        "strength": "soft",
+        "confidence": "high",
+        "hardBlock": false,
+        "reason": "ترتيب تسلسل الكتاب والسياق التاريخي؛ يمكن دراسة موضوعات لاحقة بالتوازي ولا يمنع هذا الرابط بدءها."
+      },
+      {
+        "subjectId": "HIS_G2_BAC",
+        "fromNodeId": "HIS_U1_L4",
+        "toNodeId": "HIS_U2_L1",
+        "relationType": "historical_context",
+        "strength": "soft",
+        "confidence": "medium",
+        "hardBlock": false,
+        "reason": "العصر الحديث يهيئ سياقًا لسياسات الاحتلال."
+      },
+      {
+        "subjectId": "HIS_G2_BAC",
+        "fromNodeId": "HIS_U2_L1",
+        "toNodeId": "HIS_U2_L2",
+        "relationType": "historical_context",
+        "strength": "soft",
+        "confidence": "medium",
+        "hardBlock": false,
+        "reason": "سياسات الاحتلال وسياق مقاومته موضوعان مترابطان."
+      },
+      {
+        "subjectId": "HIS_G2_BAC",
+        "fromNodeId": "HIS_U2_L3",
+        "toNodeId": "HIS_U2_L4",
+        "relationType": "historical_context",
+        "strength": "soft",
+        "confidence": "medium",
+        "hardBlock": false,
+        "reason": "التحولات السياسية والاجتماعية ترتبط ببناء الهوية الوطنية."
+      },
+      {
+        "subjectId": "HIS_G2_BAC",
+        "fromNodeId": "HIS_U2_L4",
+        "toNodeId": "HIS_U3_L3",
+        "relationType": "historical_context",
+        "strength": "soft",
+        "confidence": "low",
+        "hardBlock": false,
+        "reason": "الهوية الوطنية تقدم سياقًا إضافيًا لفهم الدور الإقليمي والدولي."
+      },
+      {
+        "subjectId": "HIS_G2_BAC",
+        "fromNodeId": "HIS_U3_L3",
+        "toNodeId": "HIS_U3_L4",
+        "relationType": "historical_context",
+        "strength": "soft",
+        "confidence": "medium",
+        "hardBlock": false,
+        "reason": "مرتكزات الدور المصري ترتبط بموضوع دعمه لحركات التحرر."
+      },
+      {
+        "subjectId": "PROG_AI_G2_BAC",
+        "fromNodeId": "PROG_1_2",
+        "toNodeId": "PROG_1_3",
+        "relationType": "prerequisite",
+        "strength": "strong",
+        "confidence": "medium",
+        "hardBlock": false,
+        "reason": "فهم أساسيات الذكاء الاصطناعي يساعد على فهم تطبيقاته في الحياة اليومية والصناعة."
+      },
+      {
+        "subjectId": "PROG_AI_G2_BAC",
+        "fromNodeId": "PROG_1_2",
+        "toNodeId": "PROG_1_4",
+        "relationType": "prerequisite",
+        "strength": "strong",
+        "confidence": "medium",
+        "hardBlock": false,
+        "reason": "فهم الذكاء الاصطناعي يسبق مناقشة قضاياه الأخلاقية وسياقات استخدامه."
+      },
+      {
+        "subjectId": "PROG_AI_G2_BAC",
+        "fromNodeId": "PROG_2_1",
+        "toNodeId": "PROG_2_2",
+        "relationType": "prerequisite",
+        "strength": "strong",
+        "confidence": "medium",
+        "hardBlock": false,
+        "reason": "مفاهيم التشفير والمصادقة تدعم فهم تصميم أمن الشبكات."
+      },
+      {
+        "subjectId": "PROG_AI_G2_BAC",
+        "fromNodeId": "PROG_2_2",
+        "toNodeId": "PROG_2_3",
+        "relationType": "prerequisite",
+        "strength": "strong",
+        "confidence": "medium",
+        "hardBlock": false,
+        "reason": "فهم بنية أمن الشبكات يدعم سياق الاستجابة للحوادث وإدارة المخاطر."
+      },
+      {
+        "subjectId": "PROG_AI_G2_BAC",
+        "fromNodeId": "PROG_3_1",
+        "toNodeId": "PROG_3_2",
+        "relationType": "prerequisite",
+        "strength": "strong",
+        "confidence": "medium",
+        "hardBlock": false,
+        "reason": "معرفة بنية تطبيق الويب تسبق فهم تدفق الاتصال بين مكوناته."
+      },
+      {
+        "subjectId": "PROG_AI_G2_BAC",
+        "fromNodeId": "PROG_3_2",
+        "toNodeId": "PROG_3_3",
+        "relationType": "curriculum_sequence",
+        "strength": "medium",
+        "confidence": "medium",
+        "hardBlock": false,
+        "reason": "ترتيب الكتاب ينتقل من الاتصال إلى أساسيات الواجهة الأمامية."
+      },
+      {
+        "subjectId": "PROG_AI_G2_BAC",
+        "fromNodeId": "PROG_4_1",
+        "toNodeId": "PROG_4_2",
+        "relationType": "prerequisite",
+        "strength": "strong",
+        "confidence": "medium",
+        "hardBlock": false,
+        "reason": "معرفة خصائص الوسائط تدعم قرارات تصميم المعلومات وتجربة المستخدم."
+      },
+      {
+        "subjectId": "PROG_AI_G2_BAC",
+        "fromNodeId": "PROG_4_2",
+        "toNodeId": "PROG_4_3",
+        "relationType": "prerequisite",
+        "strength": "medium",
+        "confidence": "medium",
+        "hardBlock": false,
+        "reason": "معايير التصميم وتجربة المستخدم توفر سياقًا لتقييم الموقع."
+      },
+      {
+        "subjectId": "PROG_AI_G2_BAC",
+        "fromNodeId": "PROG_4_3",
+        "toNodeId": "PROG_4_4",
+        "relationType": "curriculum_sequence",
+        "strength": "strong",
+        "confidence": "medium",
+        "hardBlock": false,
+        "reason": "تقييم الموقع يوفر مدخلات لدورة التحسين التكراري."
+      },
+      {
+        "subjectId": "ENG1_G2_BAC",
+        "fromNodeId": "ENG_U1_SEC_A_T1",
+        "toNodeId": "ENG_U1_SEC_A_T2",
+        "relationType": "curriculum_sequence",
+        "strength": "soft",
+        "confidence": "high",
+        "hardBlock": false,
+        "reason": "ترتيب الموضوعات وفق فواصل الكتاب المرئية؛ ليس اعتمادًا معرفيًا ولا يمنع التوازي."
+      },
+      {
+        "subjectId": "ENG1_G2_BAC",
+        "fromNodeId": "ENG_U1_SEC_A_T2",
+        "toNodeId": "ENG_U1_SEC_B_T1",
+        "relationType": "curriculum_sequence",
+        "strength": "soft",
+        "confidence": "high",
+        "hardBlock": false,
+        "reason": "ترتيب الموضوعات وفق فواصل الكتاب المرئية؛ ليس اعتمادًا معرفيًا ولا يمنع التوازي."
+      },
+      {
+        "subjectId": "ENG1_G2_BAC",
+        "fromNodeId": "ENG_U1_SEC_B_T1",
+        "toNodeId": "ENG_U1_SEC_B_T2",
+        "relationType": "curriculum_sequence",
+        "strength": "soft",
+        "confidence": "high",
+        "hardBlock": false,
+        "reason": "ترتيب الموضوعات وفق فواصل الكتاب المرئية؛ ليس اعتمادًا معرفيًا ولا يمنع التوازي."
+      },
+      {
+        "subjectId": "ENG1_G2_BAC",
+        "fromNodeId": "ENG_U2_SEC_A_T1",
+        "toNodeId": "ENG_U2_SEC_A_T2",
+        "relationType": "curriculum_sequence",
+        "strength": "soft",
+        "confidence": "high",
+        "hardBlock": false,
+        "reason": "ترتيب الموضوعات وفق فواصل الكتاب المرئية؛ ليس اعتمادًا معرفيًا ولا يمنع التوازي."
+      },
+      {
+        "subjectId": "ENG1_G2_BAC",
+        "fromNodeId": "ENG_U2_SEC_A_T2",
+        "toNodeId": "ENG_U2_SEC_B_T1",
+        "relationType": "curriculum_sequence",
+        "strength": "soft",
+        "confidence": "high",
+        "hardBlock": false,
+        "reason": "ترتيب الموضوعات وفق فواصل الكتاب المرئية؛ ليس اعتمادًا معرفيًا ولا يمنع التوازي."
+      },
+      {
+        "subjectId": "ENG1_G2_BAC",
+        "fromNodeId": "ENG_U2_SEC_B_T1",
+        "toNodeId": "ENG_U2_SEC_B_T2",
+        "relationType": "curriculum_sequence",
+        "strength": "soft",
+        "confidence": "high",
+        "hardBlock": false,
+        "reason": "ترتيب الموضوعات وفق فواصل الكتاب المرئية؛ ليس اعتمادًا معرفيًا ولا يمنع التوازي."
+      },
+      {
+        "subjectId": "ENG1_G2_BAC",
+        "fromNodeId": "ENG_U3_SEC_A_T1",
+        "toNodeId": "ENG_U3_SEC_A_T2",
+        "relationType": "curriculum_sequence",
+        "strength": "soft",
+        "confidence": "high",
+        "hardBlock": false,
+        "reason": "ترتيب الموضوعات وفق فواصل الكتاب المرئية؛ ليس اعتمادًا معرفيًا ولا يمنع التوازي."
+      },
+      {
+        "subjectId": "ENG1_G2_BAC",
+        "fromNodeId": "ENG_U3_SEC_A_T2",
+        "toNodeId": "ENG_U3_SEC_B_T1",
+        "relationType": "curriculum_sequence",
+        "strength": "soft",
+        "confidence": "high",
+        "hardBlock": false,
+        "reason": "ترتيب الموضوعات وفق فواصل الكتاب المرئية؛ ليس اعتمادًا معرفيًا ولا يمنع التوازي."
+      },
+      {
+        "subjectId": "ENG1_G2_BAC",
+        "fromNodeId": "ENG_U3_SEC_B_T1",
+        "toNodeId": "ENG_U3_SEC_B_T2",
+        "relationType": "curriculum_sequence",
+        "strength": "soft",
+        "confidence": "high",
+        "hardBlock": false,
+        "reason": "ترتيب الموضوعات وفق فواصل الكتاب المرئية؛ ليس اعتمادًا معرفيًا ولا يمنع التوازي."
+      },
+      {
+        "subjectId": "ENG1_G2_BAC",
+        "fromNodeId": "ENG_U4_SEC_A_T1",
+        "toNodeId": "ENG_U4_SEC_A_T2",
+        "relationType": "curriculum_sequence",
+        "strength": "soft",
+        "confidence": "high",
+        "hardBlock": false,
+        "reason": "ترتيب الموضوعات وفق فواصل الكتاب المرئية؛ ليس اعتمادًا معرفيًا ولا يمنع التوازي."
+      },
+      {
+        "subjectId": "ENG1_G2_BAC",
+        "fromNodeId": "ENG_U4_SEC_A_T2",
+        "toNodeId": "ENG_U4_SEC_B_T1",
+        "relationType": "curriculum_sequence",
+        "strength": "soft",
+        "confidence": "high",
+        "hardBlock": false,
+        "reason": "ترتيب الموضوعات وفق فواصل الكتاب المرئية؛ ليس اعتمادًا معرفيًا ولا يمنع التوازي."
+      },
+      {
+        "subjectId": "ENG1_G2_BAC",
+        "fromNodeId": "ENG_U4_SEC_B_T1",
+        "toNodeId": "ENG_U4_SEC_B_T2",
+        "relationType": "curriculum_sequence",
+        "strength": "soft",
+        "confidence": "high",
+        "hardBlock": false,
+        "reason": "ترتيب الموضوعات وفق فواصل الكتاب المرئية؛ ليس اعتمادًا معرفيًا ولا يمنع التوازي."
+      },
+      {
+        "subjectId": "ENG1_G2_BAC",
+        "fromNodeId": "ENG_U5_SEC_A_T1",
+        "toNodeId": "ENG_U5_SEC_A_T2",
+        "relationType": "curriculum_sequence",
+        "strength": "soft",
+        "confidence": "high",
+        "hardBlock": false,
+        "reason": "ترتيب الموضوعات وفق فواصل الكتاب المرئية؛ ليس اعتمادًا معرفيًا ولا يمنع التوازي."
+      },
+      {
+        "subjectId": "ENG1_G2_BAC",
+        "fromNodeId": "ENG_U5_SEC_A_T2",
+        "toNodeId": "ENG_U5_SEC_B_T1",
+        "relationType": "curriculum_sequence",
+        "strength": "soft",
+        "confidence": "high",
+        "hardBlock": false,
+        "reason": "ترتيب الموضوعات وفق فواصل الكتاب المرئية؛ ليس اعتمادًا معرفيًا ولا يمنع التوازي."
+      },
+      {
+        "subjectId": "ENG1_G2_BAC",
+        "fromNodeId": "ENG_U5_SEC_B_T1",
+        "toNodeId": "ENG_U5_SEC_B_T2",
+        "relationType": "curriculum_sequence",
+        "strength": "soft",
+        "confidence": "high",
+        "hardBlock": false,
+        "reason": "ترتيب الموضوعات وفق فواصل الكتاب المرئية؛ ليس اعتمادًا معرفيًا ولا يمنع التوازي."
+      }
+    ],
+    "unitBranchContext": [
+      {
+        "unitId": "ENG_U1",
+        "unitNumber": 1,
+        "textbookNodeIds": [
+          "ENG_U1_SEC_A_T1",
+          "ENG_U1_SEC_A_T2",
+          "ENG_U1_SEC_B_T1",
+          "ENG_U1_SEC_B_T2"
+        ],
+        "vocabularyNodeId": "ENG_VOCABULARY_U1",
+        "grammarNodeId": "ENG_GRAMMAR_U1",
+        "relationship": "same_unit_context_not_prerequisite",
+        "note": "تظل فروع Vocabulary وGrammar وموضوعات الكتاب منفصلة؛ الربط يحدد وحدة السياق فقط ولا يكرر الدرس."
+      },
+      {
+        "unitId": "ENG_U2",
+        "unitNumber": 2,
+        "textbookNodeIds": [
+          "ENG_U2_SEC_A_T1",
+          "ENG_U2_SEC_A_T2",
+          "ENG_U2_SEC_B_T1",
+          "ENG_U2_SEC_B_T2"
+        ],
+        "vocabularyNodeId": "ENG_VOCABULARY_U2",
+        "grammarNodeId": "ENG_GRAMMAR_U2",
+        "relationship": "same_unit_context_not_prerequisite",
+        "note": "تظل فروع Vocabulary وGrammar وموضوعات الكتاب منفصلة؛ الربط يحدد وحدة السياق فقط ولا يكرر الدرس."
+      },
+      {
+        "unitId": "ENG_U3",
+        "unitNumber": 3,
+        "textbookNodeIds": [
+          "ENG_U3_SEC_A_T1",
+          "ENG_U3_SEC_A_T2",
+          "ENG_U3_SEC_B_T1",
+          "ENG_U3_SEC_B_T2"
+        ],
+        "vocabularyNodeId": "ENG_VOCABULARY_U3",
+        "grammarNodeId": "ENG_GRAMMAR_U3",
+        "relationship": "same_unit_context_not_prerequisite",
+        "note": "تظل فروع Vocabulary وGrammar وموضوعات الكتاب منفصلة؛ الربط يحدد وحدة السياق فقط ولا يكرر الدرس."
+      },
+      {
+        "unitId": "ENG_U4",
+        "unitNumber": 4,
+        "textbookNodeIds": [
+          "ENG_U4_SEC_A_T1",
+          "ENG_U4_SEC_A_T2",
+          "ENG_U4_SEC_B_T1",
+          "ENG_U4_SEC_B_T2"
+        ],
+        "vocabularyNodeId": "ENG_VOCABULARY_U4",
+        "grammarNodeId": "ENG_GRAMMAR_U4",
+        "relationship": "same_unit_context_not_prerequisite",
+        "note": "تظل فروع Vocabulary وGrammar وموضوعات الكتاب منفصلة؛ الربط يحدد وحدة السياق فقط ولا يكرر الدرس."
+      },
+      {
+        "unitId": "ENG_U5",
+        "unitNumber": 5,
+        "textbookNodeIds": [
+          "ENG_U5_SEC_A_T1",
+          "ENG_U5_SEC_A_T2",
+          "ENG_U5_SEC_B_T1",
+          "ENG_U5_SEC_B_T2"
+        ],
+        "vocabularyNodeId": "ENG_VOCABULARY_U5",
+        "grammarNodeId": "ENG_GRAMMAR_U5",
+        "relationship": "same_unit_context_not_prerequisite",
+        "note": "تظل فروع Vocabulary وGrammar وموضوعات الكتاب منفصلة؛ الربط يحدد وحدة السياق فقط ولا يكرر الدرس."
+      }
+    ]
   }
 }
