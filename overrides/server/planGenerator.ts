@@ -5,7 +5,7 @@ import { invokeLLM, invokeNvidiaLLM } from "./_core/llm";
 import { isPrimaryProviderFallbackEligible } from "./_core/llmFallback";
 import { getStudentProfile, saveAiPlan } from "./db";
 import { formatTextbookEvidence, retrieveTextbookEvidence } from "./textbook-retrieval";
-import { buildExamBlueprintContext } from "./exam-blueprints";
+import { buildExamBlueprintContext, getExamComponentForText, getSubjectExamBlueprint } from "./exam-blueprints";
 
 const planSchema = z.object({
   title: z.string().trim().min(3).max(160),
@@ -737,7 +737,7 @@ export function applyVerifiedExamComponentWeights(
     const score = totalWeight > 0
       ? signals.reduce((sum, signal) => sum + signal.value * signal.weight, 0) / totalWeight
       : prioritySignal(step.priority);
-    const priority = score >= 0.82 ? "critical"
+    const priority: GeneratedPlan["steps"][number]["priority"] = score >= 0.82 ? "critical"
       : score >= 0.65 ? "high"
         : score >= 0.42 ? "medium" : "low";
     const hasCalculatedGap = branchProgress?.gapCount !== null && branchProgress?.gapCount !== undefined;
