@@ -9,7 +9,7 @@ describe("teacher public channel monitor", () => {
           <yt:videoId>abc123</yt:videoId>
           <title>مراجعة الوحدة الثانية &amp; حل التقييمات</title>
           <published>2026-11-24T18:00:00+00:00</published>
-          <media:description>شرح ومراجعة &amp; تطبيق</media:description>
+          <media:description><![CDATA[شرح ومراجعة &amp; تطبيق]]></media:description>
         </entry>
       </feed>`;
     const updates = parseYoutubeAtomFeed(xml, { teacherId: "T_EN_MAHMOUD_RADWAN", teacherName: "إنجلشاوي" }, new Date("2026-11-25T00:00:00Z"));
@@ -26,6 +26,7 @@ describe("teacher public channel monitor", () => {
   it("parses YouTube ISO 8601 durations into real session minutes", () => {
     expect(parseYoutubeDurationMinutes("PT3H58M36S")).toBe(239);
     expect(parseYoutubeDurationMinutes("PT45M19S")).toBe(46);
+    expect(parseYoutubeDurationMinutes("P1DT2H")).toBe(1_560);
     expect(parseYoutubeDurationMinutes("PT0S")).toBeUndefined();
     expect(parseYoutubeDurationMinutes("unknown")).toBeUndefined();
   });
