@@ -89,7 +89,7 @@ function parseSavedPlan(record: { planJson: string }): PlanView | null {
         ...raw,
       })),
       habits: Array.isArray(saved.habits) ? saved.habits : [],
-      reviewQuestion: typeof saved.reviewQuestion === "string" ? saved.reviewQuestion : "ما أهم فكرة تستطيع استرجاعها دون الرجوع إلى الكتاب؟",
+      reviewQuestion: "", // Legacy export compatibility only; StudyFlow no longer generates or displays self-test questions.
     };
   } catch {
     return null;
@@ -125,6 +125,7 @@ export default function Planner() {
         ...result,
         habits: Array.isArray(result.habits) ? result.habits : [],
         steps: Array.isArray(result.steps) ? result.steps : [],
+        reviewQuestion: "", // Ignore legacy or provider-supplied self-test questions.
       });
       setApproved(false);
       void utils.plans.list.invalidate();
@@ -679,10 +680,6 @@ function PlanCard({
                 {plan.habits.map((habit, index) => <div key={`${habit.title}-${index}`} className="rounded-lg bg-background p-3"><p className="text-sm font-semibold">{habit.title}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{habit.cue}</p></div>)}
               </div>
             ) : <p className="mt-2 text-xs leading-6 text-muted-foreground">لا توجد عادات إضافية لازمة لهذه الخطة.</p>}
-          </div>
-          <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
-            <h3 className="font-bold">سؤال استرجاع</h3>
-            <p className="mt-2 text-sm leading-7 text-muted-foreground">{plan.reviewQuestion}</p>
           </div>
           {editable && (
             <p className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-xs leading-6 text-muted-foreground">
