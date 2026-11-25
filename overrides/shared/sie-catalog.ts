@@ -1172,6 +1172,14 @@ export function getSIECheckpointBranches(subjectId: string): SIECheckpointBranch
   if (subjectId === "ARB_G2_BAC") {
     for (const branch of result) {
       branch.choices.sort((left, right) => {
+        if (branch.branchId === "ARB_SPELLING") {
+          const spellingOrder: Record<string, number> = {
+            ARB_C09_TAA_MARBUTA: 1,
+            ARB_SPELL_U2_MIDDLE_HAMZA: 2,
+            ARB_C20_HAMZA: 3,
+          };
+          return (spellingOrder[left.nodeId] ?? 99) - (spellingOrder[right.nodeId] ?? 99);
+        }
         const leftHasUnit = typeof left.unitNumber === "number";
         const rightHasUnit = typeof right.unitNumber === "number";
         if (leftHasUnit && rightHasUnit) {
