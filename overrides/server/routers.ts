@@ -2570,13 +2570,19 @@ export const appRouter = router({
         prompt: z.string().trim().min(12, "أضف تفاصيل أكثر قليلًا حتى تكون الخطة مناسبة.").max(2_000),
         includeStudentProfile: z.boolean().default(true),
         dailyMinutes: z.number().int().min(20).max(600).default(120),
-        startDate: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/).optional(),
+        startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
         pace: z.enum(["intensive", "balanced", "relaxed"]).default("balanced"),
-        deadline: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/).nullable().default(null),
+        deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().default(null),
       }))
       .mutation(async ({ ctx, input }) => {
         const startDate = input.startDate
           ?? new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
+        if (input.deadline && input.deadline < startDate) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "الموعد الشخصي لا يمكن أن يكون قبل تاريخ اليوم." });
+        }
+        if (input.deadline && input.deadline > "2027-06-12") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "الموعد الشخصي يجب أن يكون في أو قبل امتحان 12 يونيو 2027." });
+        }
         const result = await generatePersonalPlan(
           ctx.user.id,
           input.prompt,
@@ -2639,7 +2645,7 @@ export const appRouter = router({
           })).min(1).max(30),
         }),
         schedule: z.object({
-          startDate: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/),
+          startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
           dailyMinutes: z.number().int().min(20).max(600),
         }),
       }))
