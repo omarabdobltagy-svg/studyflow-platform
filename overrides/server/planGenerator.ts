@@ -877,9 +877,11 @@ export function applyCurriculumPrioritySignals(
       .map(nodeId => lessonProgress[subjectId]?.[nodeId])
       .find(Boolean) ?? {};
     const reportedDifficulty = lessonRecord.difficulty;
+    // Only student-reported difficulty can change priority. Low-confidence book-derived
+    // difficulty may help split/estimate a lesson, but must not outrank a teacher frontier.
     const difficulty = reportedDifficulty && reportedDifficulty !== "unknown"
       ? reportedDifficulty
-      : step.difficultyBasis === "student_report" || step.difficultyBasis === "curriculum_profile"
+      : step.difficultyBasis === "student_report"
         ? step.difficulty
         : "unknown";
     const difficultyValue = difficultySignal(difficulty);
