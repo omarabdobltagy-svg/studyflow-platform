@@ -3,7 +3,7 @@ import CurriculumProgressScene, { type SceneBranch } from "@/components/Curricul
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import {
-  getSIECheckpointProgressBranches,
+  getSIEStudentVisibleBranches,
   getSIECheckpointChoiceDisplayLabel,
   getSIECheckpointProgressOptions,
   getSIESubject,
@@ -58,7 +58,7 @@ export default function CurriculumMap() {
     if (!subjectId && subjects.length) setSubjectId(subjects[0]);
   }, [subjectId, subjects]);
 
-  const branches = useMemo(() => getSIECheckpointProgressBranches(subjectId), [subjectId]);
+  const branches = useMemo(() => getSIEStudentVisibleBranches(subjectId), [subjectId]);
   useEffect(() => {
     if (!branches.length) {
       setSelectedBranchId("");
