@@ -167,7 +167,12 @@ async function scanTeacherSourcesForStudent(userId: number): Promise<boolean> {
       const scanStateChanged = JSON.stringify(previousScanState) !== JSON.stringify(nextScanState);
       if (!newUpdates.length && !scanStateChanged) return false;
 
+      const freshCutoff = Date.now() - 30 * 24 * 60 * 60 * 1_000;
       const mergedUpdates = [...newUpdates, ...previousUpdates]
+        .filter(update => {
+          const publishedAt = Date.parse(String(update.publishedAt));
+          return Number.isFinite(publishedAt) && publishedAt >= freshCutoff;
+        })
         .sort((left, right) => Date.parse(String(right.publishedAt)) - Date.parse(String(left.publishedAt)))
         .slice(0, 36);
       await updateStudentProfileSelection(userId, {
