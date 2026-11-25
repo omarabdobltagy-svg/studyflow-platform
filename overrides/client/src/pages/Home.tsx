@@ -477,7 +477,7 @@ export default function Home() {
 
         <section className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4 sm:px-6">
-            <div><p className="text-xs font-semibold text-muted-foreground">خطة اليوم</p><h3 className="mt-1 text-lg font-bold">{plan?.title ?? "خطتك الدراسية"}</h3></div>
+            <div><p className="text-xs font-semibold text-muted-foreground">تخطيط تلقائي</p><h3 className="mt-1 text-lg font-bold">{plan?.title ?? "خطة المذاكرة"}</h3></div>
             <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setLocation("/planner")}>تفاصيل الخطة <ArrowLeft className="size-4" /></Button>
           </div>
           {dailyPlan.isLoading ? (
@@ -506,10 +506,16 @@ export default function Home() {
             </div>
           ) : (
             <div className="flex flex-col items-start gap-3 p-5 sm:p-6">
-              <p className="max-w-2xl text-sm leading-7 text-muted-foreground">الخطة اليومية تجمع الدروس والمهام والوقت المتاح في ترتيب واحد. جهّزها من ملفك الدراسي.</p>
-              <Button onClick={() => ensurePlan.mutate({ dailyMinutes: 120 })} disabled={ensurePlan.isPending} className="rounded-xl">
-                {ensurePlan.isPending ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}تجهيز خطة اليوم
-              </Button>
+              <p className="max-w-2xl text-sm leading-7 text-muted-foreground">
+                {profile.data?.subjectIds?.length
+                  ? "المنصة بتقرأ مهامك وتقدمك ومواعيد المدرسين وبتجهّز توزيع الفترة القادمة تلقائيًا."
+                  : "أكمل المواد ومواعيد المحاضرات في ملفك الدراسي؛ بعدها ستتكوّن خطة المذاكرة تلقائيًا عند دخولك."}
+              </p>
+              {!profile.data?.subjectIds?.length && (
+                <Button onClick={() => setLocation("/settings/academic")} variant="outline" className="rounded-xl">
+                  إكمال الملف الدراسي <ArrowLeft className="size-4" />
+                </Button>
+              )}
             </div>
           )}
         </section>
