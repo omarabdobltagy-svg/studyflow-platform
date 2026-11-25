@@ -181,12 +181,16 @@ export default function Study() {
   }, [subjects, subjectId]);
 
   useEffect(() => {
-    if (!branches.length) {
+    if (!allBranches.length) {
       setBranchId("");
       return;
     }
-    if (!branches.some(branch => branch.branchId === branchId)) setBranchId(branches[0].branchId);
-  }, [subjectId, branches, branchId]);
+    // Hidden legacy ARB_READING is still reachable through a unit's lesson detail view,
+    // but it is intentionally absent from the standalone branch selector.
+    if (!allBranches.some(branch => branch.branchId === branchId)) {
+      setBranchId(branches[0]?.branchId ?? allBranches[0].branchId);
+    }
+  }, [subjectId, branches, allBranches, branchId]);
 
   const saveBranchFrontier = trpc.learning.updateBranchFrontier.useMutation({
     onSuccess: async (result, variables) => {
