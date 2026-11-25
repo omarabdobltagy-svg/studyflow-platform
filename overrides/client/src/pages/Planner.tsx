@@ -26,8 +26,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
-type Pace = "intensive" | "balanced" | "relaxed";
-type PaceLevel = 1 | 2 | 3;
+type PlanningMode = "smart" | "backlog" | "teacher_sync";
 type GenerationProgress = {
   status: "running" | "complete" | "failed";
   currentStage: "profile" | "curriculum" | "model" | "validation" | "saving" | "complete";
@@ -66,34 +65,16 @@ type PlanView = {
   reviewQuestion: string;
   taskSync?: { parentGoalId: number; stageCount: number; taskCount: number; routineId?: number | null };
 };
-const PLANNING_READY_BY = "2027-06-11";
 const DAILY_SNAPSHOT_PREFIX = "SIE_DAILY_PLAN_V4:";
 const ANNUAL_PLAN_PREFIX = "SIE_ANNUAL_PLAN_V1:";
+const STUDY_PLAN_PREFIX = "SIE_STUDY_PLAN_V2:";
 const todayCairo = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
-const initialPrompt = "أنشئ الخطة السنوية الكاملة للعام الدراسي 2026–2027 حتى الجاهزية قبل 11 يونيو 2027. غطِّ المنهج كله في المواد المختارة، وانطلق من آخر موضوع مكتمل في كل فرع. ادمج المهام الحالية دون تكرارها، ولا تعتبر المهمة دليلًا على اكتمال الدرس. لا تنشئ اختبارات أو أسئلة أو واجبات من عندك.";
-const paceOptions: Array<{ value: Pace; title: string; subtitle: string }> = [
-  { value: "intensive", title: "مكثفة", subtitle: "إنجاز أسرع مع حمل أعلى محسوب" },
-  { value: "balanced", title: "متوازنة", subtitle: "تقدم ثابت ومساحة للتعويض" },
-  { value: "relaxed", title: "مرنة ومريحة", subtitle: "جلسات أخف وحرية أكبر في التنفيذ" },
+const initialPrompt = "كوّن لي خطة مذاكرة عملية للفترة القادمة. استخدم المهام الحالية وآخر موضع مكتمل وجدول حصص المدرسين، ووازن بين إنهاء المتراكم والاستعداد للمحاضرات الجديدة. لا تنشئ اختبارات أو أسئلة أو واجبات من عندك.";
+const planningModeOptions: Array<{ value: PlanningMode; title: string; description: string; marker: string }> = [
+  { value: "smart", title: "الخطة الذكية", description: "تخلّص المتراكم، وفي نفس الوقت تجهّزك لشرح المدرس القادم.", marker: "الموصى بها" },
+  { value: "backlog", title: "المتراكم أولًا", description: "ركّز على المهام المفتوحة والفجوات المؤكدة قبل إضافة الجديد.", marker: "تركيز" },
+  { value: "teacher_sync", title: "مواكبة المدرس", description: "حضّر للموضوع القادم قبل موعد الحصة وحافظ على متابعة الجديد.", marker: "استمرارية" },
 ];
-const paceLevelOptions: Record<Pace, Array<{ value: PaceLevel; title: string; description: string }>> = {
-  intensive: [
-    { value: 1, title: "مكثفة محسوبة", description: "تقدم أسرع مع الحفاظ على جلسات الفهم والراحة." },
-    { value: 2, title: "مكثفة عالية", description: "حمل مرتفع وهامش تعويض أصغر دون تجاوز وقتك." },
-    { value: 3, title: "مكثفة قصوى", description: "أعلى كثافة قابلة للتنفيذ فقط؛ لا تحميل فوق طاقتك." },
-  ],
-  balanced: [
-    { value: 1, title: "متوازنة خفيفة", description: "حمل أخف وتقدم ثابت مع مساحة واسعة للتعويض." },
-    { value: 2, title: "متوازنة نشطة", description: "توازن بين الإنجاز والفهم والمراجعة والتعويض." },
-    { value: 3, title: "متوازنة سريعة", description: "تقدم أسرع دون تحويل كل الأيام إلى ضغط مكثف." },
-  ],
-  relaxed: [
-    { value: 1, title: "مرنة جدًا", description: "جلسات أقل في البداية ومرونة واسعة حسب ظروفك." },
-    { value: 2, title: "راحة نشطة", description: "حمل مريح ومنتظم مع هدف واضح دون ضغط زائد." },
-    { value: 3, title: "مرنة قوية", description: "مرونة في التنفيذ مع إنجاز أعلى قليلًا ووقت للاستيعاب." },
-  ],
-};
-
 function formatStudyDuration(minutes: number) {
   const hours = Math.floor(minutes / 60);
   const remainder = minutes % 60;
@@ -129,12 +110,10 @@ function parseSavedPlan(record: { planJson: string }): PlanView | null {
 export default function Planner() {
   const utils = trpc.useUtils();
   const [plan, setPlan] = useState<PlanView | null>(null);
-  const [pace, setPace] = useState<Pace>("balanced");
-  const [paceLevel, setPaceLevel] = useState<PaceLevel>(2);
+  const [planningMode, setPlanningMode] = useState<PlanningMode>("smart");
+  const [horizonDays, setHorizonDays] = useState<7 | 14>(7);
   const [dailyMinutes, setDailyMinutes] = useState(120);
   const [daysPerWeek, setDaysPerWeek] = useState<5 | 6 | 7>(6);
-  const [usePersonalDeadline, setUsePersonalDeadline] = useState(false);
-  const [personalDeadline, setPersonalDeadline] = useState("");
   const [approved, setApproved] = useState(false);
   const [loadedSavedDraft, setLoadedSavedDraft] = useState(false);
   const historyInitialized = useRef(false);
@@ -191,12 +170,10 @@ export default function Planner() {
   const savedPlans = useMemo(() => (history.data || [])
     .flatMap(record => {
       const saved = parseSavedPlan(record);
-      if (!saved) return [];
+      if (!saved || saved.title.startsWith("الخطة القديمة")) return [];
       const prompt = String(record.prompt || "");
-      const isActualDailySnapshot = prompt.startsWith(DAILY_SNAPSHOT_PREFIX)
-        && !prompt.startsWith(ANNUAL_PLAN_PREFIX)
-        && !saved.title.startsWith("الخطة السنوية");
-      return isActualDailySnapshot ? [] : [{ id: record.id, createdAt: record.createdAt, plan: saved }];
+      const isOldDailySnapshot = prompt.startsWith(DAILY_SNAPSHOT_PREFIX) && !prompt.startsWith(STUDY_PLAN_PREFIX);
+      return isOldDailySnapshot ? [] : [{ id: record.id, createdAt: record.createdAt, plan: saved }];
     })
     .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()), [history.data]);
 
@@ -211,7 +188,7 @@ export default function Planner() {
       setApproved(false);
       setLoadedSavedDraft(false);
       void utils.plans.list.invalidate();
-      toast.success("المسودة جاهزة. راجعها واضبطها قبل اعتماد المهام.");
+      toast.success("خطة المذاكرة جاهزة. راجع توزيع الأيام قبل إضافتها لمهامك.");
     },
     onError: error => toast.error("تعذّر بناء الخطة: " + error.message),
   });
@@ -241,7 +218,7 @@ export default function Planner() {
         utils.dashboard.summary.invalidate(),
         utils.plans.list.invalidate(),
       ]);
-      toast.success(`تم اعتماد الخطة السنوية وربط ${result.taskCount} خطوة بالمهام.`);
+      toast.success(`تم اعتماد خطة المذاكرة وربط ${result.taskCount} خطوة بالمهام.`);
     },
     onError: error => toast.error("تعذّر اعتماد الخطة: " + error.message),
   });
@@ -272,20 +249,18 @@ export default function Planner() {
     onError: error => toast.error("تعذّر مسح الخطط: " + error.message),
   });
 
-  const runGeneration = (selectedPace: Pace, selectedLevel: PaceLevel, selectedMinutes: number, selectedDays: 5 | 6 | 7, deadline: string | null) => {
-    if (deadline && deadline < todayCairo) {
-      toast.error("الموعد الشخصي يجب أن يكون اليوم أو في المستقبل.");
-      return;
-    }
+  const runGeneration = (mode: PlanningMode, horizon: 7 | 14, minutes: number, studyDays: 5 | 6 | 7) => {
     generate.mutate({
       prompt: initialPrompt,
       includeStudentProfile: true,
-      dailyMinutes: selectedMinutes,
-      daysPerWeek: selectedDays,
+      planningMode: mode,
+      horizonDays: horizon,
+      dailyMinutes: minutes,
+      daysPerWeek: studyDays,
       startDate: todayCairo,
-      pace: selectedPace,
-      paceLevel: selectedLevel,
-      deadline,
+      pace: "balanced",
+      paceLevel: 2,
+      deadline: null,
     });
   };
 
@@ -368,38 +343,35 @@ export default function Planner() {
 
   return (
     <DashboardLayout
-      title="الخطة السنوية"
-      description="ابنِ خارطة العام الدراسي كاملة من بيانات المنصة، ثم اعتمد توزيعها على مراحل وأسابيع."
+      title="خطة المذاكرة"
+      description="خطة قصيرة المدى تتوازن مع مهامك الحالية ومواعيد الحصص القادمة."
     >
       <div className="space-y-5">
         {history.isError && <QueryErrorNotice onRetry={() => void history.refetch()} label="تعذّر تحميل خططك المحفوظة." />}
         {profile.isError && <QueryErrorNotice onRetry={() => void profile.refetch()} label="تعذّر تحميل ملفك الدراسي. أعد المحاولة قبل توليد الخطة." />}
 
-        <section className="relative overflow-hidden rounded-[1.6rem] border border-slate-700/60 bg-gradient-to-l from-[#111B2D] via-[#172B46] to-[#101B2D] p-5 text-white shadow-xl sm:p-7">
-          <div className="pointer-events-none absolute -left-12 -top-16 size-56 rounded-full bg-blue-400/10 blur-3xl" />
-          <div className="relative flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+        <section className="relative isolate overflow-hidden rounded-[1.8rem] border border-primary/20 bg-[#111610] p-6 text-[#F3F0E7] shadow-[0_35px_90px_-55px_rgba(0,0,0,.85)] sm:p-8">
+          <div className="pointer-events-none absolute -right-16 -top-24 size-72 rounded-full bg-[#C9ED62]/10 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-24 left-1/4 size-64 rounded-full bg-[#D1B77B]/10 blur-3xl" />
+          <div className="relative flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
             <div className="max-w-2xl">
-              <p className="text-[11px] font-bold tracking-[0.2em] text-blue-100/80">STUDYFLOW · AI STUDY PLAN</p>
-              <h2 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">خارطة الدراسة السنوية 2026–2027</h2>
-              <p className="mt-2 text-sm leading-7 text-slate-300">
-                تغطية كاملة للموضوعات في موادك، من آخر نقطة مكتملة حتى هدف الجاهزية قبل الامتحانات. تتوزع على أسابيع وتراعي المهام الموجودة ووقتك الفعلي.
-              </p>
+              <p className="text-[10px] font-bold tracking-[.24em] text-[#C9ED62]">STUDYFLOW · PERSONAL STUDY ENGINE</p>
+              <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">خطة مذاكرتك، حسب واقعك.</h2>
+              <p className="mt-3 max-w-xl text-sm leading-8 text-[#C0C7B4]">المنصة تقرأ مهامك وتقدمك ومواعيد حصص المدرسين، ثم توازن بين إنهاء المتراكم والاستعداد للدرس الجديد. وتتجدد الخطة مع تغيّر يومك.</p>
             </div>
-            <div className="shrink-0 rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
-              <div className="flex items-center gap-2 text-xs font-semibold text-blue-100"><CalendarClock className="size-4" />موعد امتحان نهاية السنة</div>
-              <div className="mt-2 text-xl font-bold">12–22 يونيو 2027</div>
-              <p className="mt-1 text-[11px] text-slate-300">فترة امتحانات تقريبية — الجاهزية المستهدفة قبل 11 يونيو</p>
+            <div className="grid min-w-[185px] grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-white/[.045] p-3 backdrop-blur">
+              <div><p className="text-[10px] text-[#9DA793]">المهام المفتوحة</p><p className="mt-1 text-2xl font-bold text-[#C9ED62]">{(tasksQuery.data ?? []).filter((task: any) => task.status !== "done").length.toLocaleString("ar-EG")}</p></div>
+              <div><p className="text-[10px] text-[#9DA793]">موادك</p><p className="mt-1 text-2xl font-bold">{(profile.data?.subjectIds?.length ?? 0).toLocaleString("ar-EG")}</p></div>
             </div>
           </div>
           {profile.data && (
-            <div className="relative mt-5 flex flex-wrap gap-2 border-t border-white/10 pt-4 text-xs text-slate-300">
-              <span className="rounded-full bg-white/10 px-3 py-1.5">{profile.data.studentName}</span>
-              <span className="rounded-full bg-white/10 px-3 py-1.5">{profile.data.track}</span>
-              <span className="rounded-full bg-white/10 px-3 py-1.5">{profile.data.subjectIds.length} مواد محددة</span>
+            <div className="relative mt-5 flex flex-wrap gap-2 border-t border-white/10 pt-4 text-xs text-[#C0C7B4]">
+              <span className="rounded-full border border-white/10 bg-white/[.045] px-3 py-1.5">{profile.data.studentName}</span>
+              <span className="rounded-full border border-white/10 bg-white/[.045] px-3 py-1.5">{profile.data.track}</span>
+              <span className="rounded-full border border-white/10 bg-white/[.045] px-3 py-1.5">{profile.data.subjectIds.length} مواد</span>
             </div>
           )}
         </section>
-
         {!profile.isLoading && profile.data && (!profile.data.subjectIds || profile.data.subjectIds.length === 0) && (
           <section className="app-card rounded-2xl p-5">
             <h3 className="font-bold">أكمل ملفك الدراسي أولًا</h3>
@@ -410,9 +382,9 @@ export default function Planner() {
 
         <section className="app-card overflow-hidden rounded-[1.6rem] border border-border/80">
           <header className="border-b border-border/70 bg-gradient-to-l from-secondary/65 to-card p-5 sm:p-6">
-            <p className="eyebrow">ANNUAL PLAN · 2026 / 2027</p>
-            <h2 className="mt-1 text-xl font-bold">قبل ما نبني خطتك السنوية</h2>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">راجع البيانات التي ستدخل في التخطيط، ثم حدّد وقتك وإيقاعك. لن يُنشئ النظام خطة متراكمات منفصلة، ولن يعتبر وجود مهمة دليلًا على أنك أنهيت الدرس.</p>
+            <p className="eyebrow">SMART STUDY FLOW · NEXT PERIOD</p>
+            <h2 className="mt-1 text-xl font-bold">كيف تحب نرتّب مذاكرتك؟</h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">الاختيار الافتراضي يوازن بين المتراكم والجديد مع المدرس. التقدم والمهام والمواعيد تُقرأ تلقائيًا من ملفك.</p>
             <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
               <Metric label="المواد المختارة" value={(profile.data?.subjectIds?.length ?? 0).toLocaleString("ar-EG")} />
               <Metric label="المهام المفتوحة" value={(tasksQuery.data ?? []).filter((task: any) => task.status !== "done").length.toLocaleString("ar-EG")} />
@@ -420,175 +392,93 @@ export default function Planner() {
               <Metric label="فروع تقدم مقروءة" value={progressPreview.length.toLocaleString("ar-EG")} />
             </div>
           </header>
-
           <div className="grid gap-5 p-5 sm:p-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(280px,.85fr)]">
             <div className="space-y-4">
               <div>
-                <h3 className="font-bold">إعدادات الدراسة السنوية</h3>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">دي تفضيلات الخطة من البداية، ومش هنطلب منك تعيد إدخال تقدم أو مهام موجودة بالفعل.</p>
+                <h3 className="font-bold">نوع المساعدة</h3>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">الخطة الذكية هي الاختيار الافتراضي. غيّرها فقط لو محتاج تركيز مختلف.</p>
               </div>
-
-              <div>
-                <p className="mb-2 text-sm font-semibold">إيقاع الخطة</p>
-                <div className="grid gap-2 sm:grid-cols-3">
-                  {paceOptions.map(option => (
-                    <button
-                      type="button"
-                      key={option.value}
-                      onClick={() => setPace(option.value)}
-                      aria-pressed={pace === option.value}
-                      className={"rounded-xl border p-3 text-right transition " + (pace === option.value
-                        ? "border-primary bg-primary/5 ring-1 ring-primary/20"
-                        : "border-border bg-muted/20 hover:border-primary/40")}
-                    >
-                      <span className="block text-sm font-bold">{option.title}</span>
-                      <span className="mt-1 block text-xs leading-5 text-muted-foreground">{option.subtitle}</span>
-                    </button>
-                  ))}
-                </div>
+              <div className="grid gap-2">
+                {planningModeOptions.map((option, index) => (
+                  <button type="button" key={option.value} onClick={() => setPlanningMode(option.value)} aria-pressed={planningMode === option.value}
+                    className={"group flex items-start gap-3 rounded-2xl border p-4 text-right transition-all duration-300 " + (planningMode === option.value ? "border-primary/45 bg-primary/[.07] shadow-[0_14px_35px_-27px_rgba(168,200,78,.6)]" : "border-border bg-card hover:-translate-y-0.5 hover:border-primary/30")}>
+                    <span className={"mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl " + (planningMode === option.value ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground")}>
+                      {index === 0 ? <Sparkles className="size-4" /> : index === 1 ? <RefreshCw className="size-4" /> : <CalendarClock className="size-4" />}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex flex-wrap items-center gap-2 text-sm font-bold">{option.title}{index === 0 && <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[9px] text-primary">{option.marker}</span>}</span>
+                      <span className="mt-1 block text-xs leading-6 text-muted-foreground">{option.description}</span>
+                    </span>
+                    <span className={"mt-1 size-4 shrink-0 rounded-full border " + (planningMode === option.value ? "border-primary bg-primary shadow-[inset_0_0_0_4px_var(--card)]" : "border-border")} />
+                  </button>
+                ))}
               </div>
-
-              <div>
-                <p className="mb-2 text-sm font-semibold">درجة الكثافة</p>
-                <div className="grid gap-2 sm:grid-cols-3">
-                  {paceLevelOptions[pace].map(option => (
-                    <button
-                      type="button"
-                      key={option.value}
-                      onClick={() => setPaceLevel(option.value)}
-                      aria-pressed={paceLevel === option.value}
-                      className={"rounded-xl border p-3 text-right transition " + (paceLevel === option.value
-                        ? "border-primary bg-primary/5 ring-1 ring-primary/20"
-                        : "border-border bg-muted/20 hover:border-primary/40")}
-                    >
-                      <span className="block text-sm font-bold">{option.title}</span>
-                      <span className="mt-1 block text-xs leading-5 text-muted-foreground">{option.description}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="block">
-                  <span className="mb-2 block text-sm font-semibold">وقت المذاكرة في اليوم</span>
-                  <select
-                    value={dailyMinutes}
-                    onChange={event => setDailyMinutes(Number(event.target.value))}
-                    className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm"
-                  >
-                    {[60, 90, 120, 150, 180, 210, 240, 300, 360, 420].map(value => (
-                      <option key={value} value={value}>{formatStudyDuration(value)}</option>
-                    ))}
+              <div className="grid gap-3 sm:grid-cols-3">
+                <label className="block"><span className="mb-2 block text-sm font-semibold">وقت المذاكرة يوميًا</span>
+                  <select value={dailyMinutes} onChange={event => setDailyMinutes(Number(event.target.value))} className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm">
+                    {[60,90,120,150,180,210,240,300,360].map(value => <option key={value} value={value}>{formatStudyDuration(value)}</option>)}
                   </select>
                 </label>
-                <label className="block">
-                  <span className="mb-2 block text-sm font-semibold">أيام الدراسة في الأسبوع</span>
-                  <select
-                    value={daysPerWeek}
-                    onChange={event => setDaysPerWeek(Number(event.target.value) as 5 | 6 | 7)}
-                    className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm"
-                  >
-                    <option value={5}>5 أيام + يومان راحة</option>
-                    <option value={6}>6 أيام + يوم راحة</option>
-                    <option value={7}>7 أيام</option>
+                <label className="block"><span className="mb-2 block text-sm font-semibold">أيام المذاكرة أسبوعيًا</span>
+                  <select value={daysPerWeek} onChange={event => setDaysPerWeek(Number(event.target.value) as 5 | 6 | 7)} className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm">
+                    <option value={5}>5 أيام</option><option value={6}>6 أيام</option><option value={7}>7 أيام</option>
+                  </select>
+                </label>
+                <label className="block"><span className="mb-2 block text-sm font-semibold">الفترة التي نرتّبها</span>
+                  <select value={horizonDays} onChange={event => setHorizonDays(Number(event.target.value) as 7 | 14)} className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm">
+                    <option value={7}>الأسبوع القادم</option><option value={14}>الأسبوعان القادمان</option>
                   </select>
                 </label>
               </div>
-
-              <div>
-                <p className="mb-2 text-sm font-semibold">هل عندك موعد شخصي قبل الامتحانات؟</p>
-                <label className="flex min-h-11 items-center gap-2 rounded-xl border border-border bg-muted/20 px-3 text-sm">
-                  <input type="checkbox" checked={usePersonalDeadline} onChange={event => setUsePersonalDeadline(event.target.checked)} className="size-4 accent-primary" />
-                  نعم، عندي موعد إضافي
-                </label>
-                {usePersonalDeadline && (
-                  <input
-                    type="date"
-                    min={todayCairo}
-                    max={PLANNING_READY_BY}
-                    value={personalDeadline}
-                    onChange={event => setPersonalDeadline(event.target.value)}
-                    className="mt-2 h-11 w-full rounded-xl border border-border bg-background px-3 text-sm"
-                  />
-                )}
-              </div>
-
-              <div className="rounded-xl border border-primary/15 bg-primary/[0.04] p-3 text-xs leading-6 text-muted-foreground">
-                الهدف الافتراضي: إنهاء الاستعداد الأساسي قبل 11 يونيو 2027، مع نافذة امتحانات تقريبية من 12 إلى 22 يونيو 2027. اليوميات والمهام الحالية ستبقى منفصلة عن الخطة السنوية.
+              <div className="rounded-xl border border-primary/15 bg-primary/[.045] p-3 text-xs leading-6 text-muted-foreground">
+                مواعيد حصص المدرسين تُقرأ من ملفك الدراسي. أي تغيير موثوق في موعد محاضرة سيُستخدم عند تجديد الخطة، ولن نعتبر غياب إعلان دليلًا على إلغاء الحصة.
               </div>
               <div className="flex flex-col gap-2 border-t border-border/70 pt-4 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-xs leading-5 text-muted-foreground">الخطة ستغطي كل الموضوعات غير المكتملة وتُظهر المهام الموجودة بدل نسخها.</p>
-                <Button
-                  className="rounded-xl px-5"
-                  onClick={() => runGeneration(pace, paceLevel, dailyMinutes, daysPerWeek, usePersonalDeadline ? personalDeadline : null)}
-                  disabled={!isPreflightReady || generate.isPending || (usePersonalDeadline && !personalDeadline)}
-                >
-                  {generate.isPending ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
-                  {loadedSavedDraft ? "إعادة بناء الخطة السنوية" : "إنشاء الخطة السنوية"}
+                <p className="text-xs leading-5 text-muted-foreground">المحرك يقرأ التقدم والمهام والمواعيد، ثم يقترح توزيعًا قابلًا للتعديل قبل الاعتماد.</p>
+                <Button className="rounded-xl px-5" onClick={() => runGeneration(planningMode, horizonDays, dailyMinutes, daysPerWeek)} disabled={!isPreflightReady || generate.isPending}>
+                  {generate.isPending ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}{loadedSavedDraft ? "جدّد خطة مذاكرتي" : "رتّب مذاكرتي"}
                 </Button>
               </div>
             </div>
-
             <aside className="space-y-3">
               <div className="rounded-xl border border-border/70 bg-muted/15 p-4">
                 <h3 className="font-bold">ما تقرأه المنصة الآن</h3>
-                {profile.isLoading || learning.isLoading || tasksQuery.isLoading ? (
-                  <p className="mt-2 text-xs text-muted-foreground">جارٍ قراءة الملف والتقدم والمهام...</p>
-                ) : (
-                  <>
-                    <p className="mt-2 text-xs leading-5 text-muted-foreground">الموضوع التالي محسوب بعد آخر موضوع مكتمل، ومرجع المدرس ظاهر للمقارنة فقط.</p>
+                {profile.isLoading || learning.isLoading || tasksQuery.isLoading ? <p className="mt-2 text-xs text-muted-foreground">جارٍ قراءة الملف والتقدم والمهام...</p> : (
+                  <><p className="mt-2 text-xs leading-5 text-muted-foreground">الموضوع التالي محسوب بعد آخر موضوع مكتمل، ومرجع المدرس ظاهر للمقارنة فقط.</p>
                     <div className="mt-3 max-h-64 space-y-2 overflow-y-auto">
-                      {progressPreview.slice(0, 12).map(item => (
-                        <div key={item.key} className="rounded-lg border border-border/70 bg-card p-3">
-                          <p className="text-xs font-bold">{item.subject} · {item.branch}</p>
-                          <p className="mt-1 text-[11px] text-muted-foreground">آخر موضوع مكتمل: {item.lastCompleted}</p>
-                          <p className="mt-1 text-xs font-semibold text-primary">التالي: {item.next}</p>
-                          <p className="mt-1 text-[10px] text-muted-foreground">مرجع المدرس: {item.reference}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </>
+                      {progressPreview.slice(0, 12).map(item => <div key={item.key} className="rounded-lg border border-border/70 bg-card p-3">
+                        <p className="text-xs font-bold">{item.subject} · {item.branch}</p>
+                        <p className="mt-1 text-[11px] text-muted-foreground">آخر موضوع مكتمل: {item.lastCompleted}</p>
+                        <p className="mt-1 text-xs font-semibold text-primary">التالي: {item.next}</p>
+                        <p className="mt-1 text-[10px] text-muted-foreground">مرجع المدرس: {item.reference}</p>
+                      </div>)}
+                    </div></>
                 )}
               </div>
               <div className="rounded-xl border border-border/70 bg-muted/15 p-4">
                 <h3 className="font-bold">المهام التي ستُدمج</h3>
                 <p className="mt-1 text-xs leading-5 text-muted-foreground">{curriculumLinkedTasks.length} مهمة مفتوحة تطابقت مع موضوعات المنهج؛ سيتم إظهارها بدل إنشاء نسخ أخرى.</p>
-                {curriculumLinkedTasks.slice(0, 5).map(({ task, match }) => (
-                  <p key={task.id} className="mt-2 rounded-lg bg-card px-3 py-2 text-xs">
-                    <b>{task.title}</b>
-                    {match && <span className="block mt-1 text-muted-foreground">{getSIESubject(match.subjectId)?.nameAr} · {match.branchTitle} · {match.title}</span>}
-                  </p>
-                ))}
+                {curriculumLinkedTasks.slice(0,5).map(({task,match}) => <p key={task.id} className="mt-2 rounded-lg bg-card px-3 py-2 text-xs"><b>{task.title}</b>{match && <span className="mt-1 block text-muted-foreground">{getSIESubject(match.subjectId)?.nameAr} · {match.branchTitle} · {match.title}</span>}</p>)}
               </div>
-              {taskProgressConflicts.length > 0 && (
-                <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.04] p-4">
-                  <h3 className="text-sm font-bold">تعارض يحتاج مراجعة</h3>
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground">فيه مهمة مفتوحة مرتبطة بموضوع مسجل كمكتمل. المنصة لن تغيّر التقدم تلقائيًا.</p>
-                  {taskProgressConflicts.slice(0,3).map(({ task, match }) => <p key={task.id} className="mt-2 text-xs">{task.title} — {match?.title}</p>)}
-                  <a href="/study" className="mt-2 inline-flex text-xs font-semibold text-primary">مراجعة تقدم المنهج</a>
-                </div>
-              )}
-              {(profile.isError || learning.isError || tasksQuery.isError) && (
-                <div className="rounded-xl border border-destructive/25 bg-destructive/5 p-3 text-xs text-destructive">تعذر قراءة كل البيانات الحالية؛ أعد المحاولة قبل إنشاء الخطة حتى لا تُبنى على بيانات ناقصة.</div>
-              )}
+              {taskProgressConflicts.length > 0 && <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.04] p-4"><h3 className="text-sm font-bold">تعارض يحتاج مراجعة</h3><p className="mt-1 text-xs leading-5 text-muted-foreground">فيه مهمة مفتوحة مرتبطة بموضوع مسجل كمكتمل. المنصة لن تغيّر التقدم تلقائيًا.</p>{taskProgressConflicts.slice(0,3).map(({task,match}) => <p key={task.id} className="mt-2 text-xs">{task.title} — {match?.title}</p>)}<a href="/study" className="mt-2 inline-flex text-xs font-semibold text-primary">مراجعة تقدم المنهج</a></div>}
+              {(profile.isError || learning.isError || tasksQuery.isError) && <div className="rounded-xl border border-destructive/25 bg-destructive/5 p-3 text-xs text-destructive">تعذر قراءة كل البيانات الحالية؛ أعد المحاولة قبل إنشاء الخطة حتى لا تُبنى على بيانات ناقصة.</div>}
             </aside>
           </div>
         </section>
-
         {generate.isPending && !plan && <PlanLoading progress={generationProgress.data ?? null} />}
         {!generate.isPending && !plan && !history.isLoading && !profile.isLoading && profile.data?.subjectIds?.length && (
           <section className="app-card rounded-2xl p-4 text-sm text-muted-foreground">
-            لم تُنشأ مسودة سنوية بعد. أكمل إعدادات الخطة أعلاه ثم ابدأ التوليد.
+            لم تُرتّب خطة مذاكرة بعد. اضغط «رتّب مذاكرتي» ليقرأ النظام بياناتك ويقترح توزيع الأيام.
           </section>
         )}
 
         {plan && (
           <>
             {loadedSavedDraft && !approved && (
-              <section className="app-card flex flex-col gap-3 rounded-2xl border border-blue-500/20 bg-blue-500/[0.04] p-4 sm:flex-row sm:items-center sm:justify-between">
+              <section className="app-card flex flex-col gap-3 rounded-2xl border border-primary/20 bg-primary/[0.04] p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
-                  <h3 className="text-sm font-bold">أنت تعرض مسودة محفوظة من زيارة سابقة</h3>
-                  <p className="mt-1 text-xs leading-6 text-muted-foreground">قد لا تعكس آخر تقدم سجلته في الفروع. حدّثها الآن ليُعاد حساب الدروس المتبقية وترتيب الأولويات من ملفك الحالي.</p>
+                  <h3 className="text-sm font-bold">أنت تعرض خطة مذاكرة محفوظة من زيارة سابقة</h3>
+                  <p className="mt-1 text-xs leading-6 text-muted-foreground">قد لا تعكس آخر تقدم أو تغييرات جدول حصصك. جدّدها ليُعاد ترتيب المتراكم والاستعداد للمحاضرات القادمة.</p>
                 </div>
                 <Button
                   type="button"
@@ -603,7 +493,7 @@ export default function Planner() {
             )}
             <PlanCard
               plan={plan}
-              title={approved ? "الخطة السنوية المعتمدة" : loadedSavedDraft ? "آخر مسودة سنوية محفوظة" : "مسودة الخطة السنوية"}
+              title={approved ? "خطة المذاكرة المعتمدة" : loadedSavedDraft ? "خطة مذاكرة محفوظة" : "مقترح خطة مذاكرة"}
               studentName={profile.data?.studentName}
               editable={!approved}
               onChange={updatePlan}
@@ -623,7 +513,7 @@ export default function Planner() {
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="eyebrow">PLAN HISTORY</p>
-                <h3 className="mt-1 text-lg font-bold">المسودات السابقة</h3>
+                <h3 className="mt-1 text-lg font-bold">خططك السابقة</h3>
                 <p className="mt-1 text-xs text-muted-foreground">اختر مسودة قديمة لفتحها ومراجعتها من جديد.</p>
               </div>
               <div className="flex items-center gap-2">
@@ -669,7 +559,7 @@ export default function Planner() {
         {(savedPlans.length === 0 && !history.isLoading) && (
           <div className="flex justify-end">
             <Button type="button" variant="ghost" className="text-xs text-muted-foreground" onClick={handleDeleteAll} disabled={deleteAllPlans.isPending}>
-              مسح بيانات الخطط والمهام المولّدة القديمة
+              مسح بيانات خطط المذاكرة السابقة
             </Button>
           </div>
         )}
@@ -765,7 +655,7 @@ function PlanCard({
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <p className="eyebrow">{title}</p>
-            <h2 className="mt-1 text-xl font-bold sm:text-2xl">الخطة السنوية 2026–2027</h2>
+            <h2 className="mt-1 text-xl font-bold sm:text-2xl">برنامج المذاكرة للفترة القادمة</h2>
             <p className="mt-2 max-w-3xl text-sm leading-7 text-muted-foreground">{plan.summary}</p>
             {studentName && <p className="mt-2 text-xs text-primary">خطة مخصصة لـ {studentName}</p>}
           </div>
@@ -777,14 +667,14 @@ function PlanCard({
 
         <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
           <Metric label="نقاط المنهج المغطاة" value={coveredTopics.toLocaleString("ar-EG")} />
-          <Metric label="أسابيع الخطة" value={dayCount.toLocaleString("ar-EG")} />
+          <Metric label="أيام التنفيذ" value={dayCount.toLocaleString("ar-EG")} />
           <Metric label="إجمالي وقت الدراسة" value={formatStudyDuration(totalMinutes)} />
           <Metric label="أولوية عالية أو عاجلة" value={highPriorityCount.toLocaleString("ar-EG")} />
         </div>
 
         {plan.taskSync && (
           <div className="mt-4 flex flex-col gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2 text-sm font-semibold"><CheckCircle2 className="size-4 text-emerald-600" />تم اعتماد الخطة السنوية</div>
+            <div className="flex items-center gap-2 text-sm font-semibold"><CheckCircle2 className="size-4 text-emerald-600" />تم اعتماد خطة المذاكرة</div>
             <a href="/tasks" className="inline-flex items-center gap-1 text-xs font-semibold text-primary">فتح قائمة المهام <ArrowUpRight className="size-3.5" /></a>
           </div>
         )}
@@ -804,8 +694,8 @@ function PlanCard({
         <main className="min-w-0">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div>
-              <h3 className="font-bold">المراحل الأسبوعية</h3>
-              <p className="mt-1 text-xs text-muted-foreground">{editable ? "راجع الموضوعات وزمنها وترتيبها قبل اعتماد الخطة السنوية." : "توزيع الموضوعات على أسابيع الخطة."}</p>
+              <h3 className="font-bold">توزيع الأيام</h3>
+              <p className="mt-1 text-xs text-muted-foreground">{editable ? "راجع الخطوات والوقت قبل إضافتها لمهامك." : "توزيع المهام على الأيام القادمة."}</p>
             </div>
             {editable && <Button type="button" size="sm" variant="outline" className="rounded-lg" onClick={onAddStep}><Plus className="size-4" />إضافة موضوع</Button>}
           </div>
