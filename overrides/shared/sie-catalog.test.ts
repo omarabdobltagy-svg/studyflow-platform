@@ -196,18 +196,25 @@ describe("Arabic course taxonomy", () => {
       expect(rawChoices.some(choice => choice.nodeId === id)).toBe(true);
       expect(spellingIds).not.toContain(id);
     }
-    expect(spellingIds).toEqual(["ARB_C09_TAA_MARBUTA", "ARB_C20_HAMZA"]);
+    expect(spellingIds).toEqual(["ARB_C09_TAA_MARBUTA", "ARB_SPELL_U2_MIDDLE_HAMZA", "ARB_C20_HAMZA"]);
+    expect(spelling?.choices.find(choice => choice.nodeId === "ARB_SPELL_U2_MIDDLE_HAMZA")).toMatchObject({
+      title: "رسم الهمزة المتوسطة", unitNumber: 2, lessonType: "spelling", sourceLabel: "كتاب الطالب - الجزء الأول، الوحدة الثانية",
+    });
     expect(expression?.choices.find(choice => choice.nodeId === "ARB_EXP_U1_CRITICAL_PARAGRAPH")?.sourceLabel).toContain("ص36");
     expect(expression?.choices.find(choice => choice.nodeId === "ARB_EXP_U2_ANALYTICAL_PARAGRAPH")?.sourceLabel).toContain("ص85");
     expect(new Set([...expressionIds, ...spellingIds]).size).toBe(expressionIds.length + spellingIds.length);
   });
 
-  it("shows only the two actual spelling course lessons in student and teacher progress selectors", () => {
+  it("shows the actual spelling course lessons and the extra Ministry topic in progress selectors", () => {
     const options = getSIECheckpointProgressOptions("ARB_G2_BAC", "ARB_SPELLING");
-    expect(options).toHaveLength(2);
-    expect(options.map(option => option.value)).toEqual(["ARB_C09_TAA_MARBUTA", "ARB_C20_HAMZA"]);
-    expect(options.every(option => option.description?.includes("كورس المدرس"))).toBe(true);
+    expect(options).toHaveLength(3);
+    expect(options.map(option => option.value)).toEqual(["ARB_C09_TAA_MARBUTA", "ARB_SPELL_U2_MIDDLE_HAMZA", "ARB_C20_HAMZA"]);
+    expect(options[0].description).toContain("كورس المدرس");
+    expect(options[1].description).toContain("الوحدة 2");
+    expect(options[1].description).toContain("كتاب الطالب");
+    expect(options[2].description).toContain("كورس المدرس");
     expect(options.some(option => option.label.includes("تطبيق") || option.description?.includes("تطبيق إملائي"))).toBe(false);
+    expect(getSIECheckpointUnits("ARB_G2_BAC").find(unit => unit.unitNumber === 2)?.branches.find(item => item.branchId === "ARB_SPELLING")?.choices.map(choice => choice.title)).toContain("رسم الهمزة المتوسطة");
     // Legacy exercise records remain addressable for previously saved progress.
     expect(getSIECheckpointChoices("ARB_G2_BAC").some(choice => choice.nodeId === "ARB_SPELL_U1_TAA_MARBUTA")).toBe(true);
   });
@@ -277,6 +284,21 @@ describe("subject curriculum layouts", () => {
     expect(choices.some(choice => choice.lessonType === "grammar")).toBe(true);
   });
 
+  it("exposes all ten English units with their four real lessons and separate Vocabulary and Grammar entries", () => {
+    const units = getSIECheckpointUnits("ENG1_G2_BAC").filter(unit => unit.isOfficialUnit);
+    expect(units).toHaveLength(10);
+    for (let unitNumber = 1; unitNumber <= 10; unitNumber += 1) {
+      const unit = units.find(item => item.unitNumber === unitNumber);
+      expect(unit).toBeDefined();
+      const choices = unit!.branches.flatMap(item => item.choices);
+      const topics = choices.filter(choice => choice.lessonType === "topic");
+      expect(topics).toHaveLength(4);
+      expect(topics.map(choice => choice.lessonNumber)).toEqual([unitNumber + ".1", unitNumber + ".2", unitNumber + ".3", unitNumber + ".4"]);
+      expect(topics.every(choice => Boolean(choice.title.trim()))).toBe(true);
+      expect(choices.filter(choice => choice.lessonType === "vocabulary")).toHaveLength(1);
+      expect(choices.filter(choice => choice.lessonType === "grammar")).toHaveLength(1);
+    }
+  });
   it("keeps History as one complete linear list rather than chapter branches", () => {
     const branches = getSIECheckpointBranches("HIS_G2_BAC");
     expect(branches).toHaveLength(1);
