@@ -1,33 +1,29 @@
 import { describe, expect, it } from "vitest";
 import { buildExamBlueprintContext, getExamComponentForText, getSubjectExamBlueprint } from "./exam-blueprints";
 
-describe("second-year baccalaureate exam blueprints", () => {
-  it("uses the current first-term English component marks without promoting the story", () => {
+describe("second-year baccalaureate annual exam planning", () => {
+  it("uses the year-end exam as the sole exam target and does not import term-specific English weights", () => {
     const blueprint = getSubjectExamBlueprint("ENG_G2_BAC", "اللغة الإنجليزية");
     expect(blueprint?.subjectKey).toBe("english");
-    expect(blueprint?.appliesTo).toBe("first_term_2026_2027");
+    expect(blueprint?.appliesTo).toBe("annual_baccalaureate_exam");
     expect(blueprint?.annualSubjectMarks).toBe(100);
-    expect(blueprint?.paperMarks).toBe(30);
-    expect(blueprint?.components.map(component => component.marks)).toEqual([8, 7, 4, 3, 8]);
-    expect(blueprint?.components.find(component => component.id === "story")?.assessmentShare).toBe(0.1);
-    expect(blueprint?.components.find(component => component.id === "vocabulary_grammar")?.assessmentShare)
-      .toBeCloseTo(8 / 30);
+    expect(blueprint?.paperMarks).toBeNull();
+    expect(blueprint?.components).toEqual([]);
+    expect(getExamComponentForText("ENG_G2_BAC", "اللغة الإنجليزية", "القصة story")).toBeNull();
+    expect(getExamComponentForText("ENG_G2_BAC", "اللغة الإنجليزية", "القواعد والمفردات")).toBeNull();
   });
 
-  it("shows the published partial Arabic breakdown without using inconsistent marks as weights", () => {
+  it("does not import the inconsistent term-specific Arabic mark breakdown into annual priorities", () => {
     const blueprint = getSubjectExamBlueprint("ARB_G2_BAC", "اللغة العربية");
+    expect(blueprint?.appliesTo).toBe("annual_baccalaureate_exam");
     expect(blueprint?.annualSubjectMarks).toBe(100);
-    expect(blueprint?.paperMarks).toBe(60);
-    expect(blueprint?.components.map(component => component.marks)).toEqual([8, 7, 15, 9, 10, 3, 7]);
-    expect(blueprint?.components.every(component => component.assessmentShare === null)).toBe(true);
-    expect(blueprint?.components.reduce((sum, component) => sum + (component.marks ?? 0), 0)).toBe(59);
-    expect(blueprint?.unverified.some(note => note.includes("59 لا 60"))).toBe(true);
-    expect(getExamComponentForText("ARB_G2_BAC", "اللغة العربية", "قصة وا إسلاماه والنص الأدبي")?.marks).toBe(7);
-    expect(getExamComponentForText("ARB_G2_BAC", "اللغة العربية", "النحو")?.marks).toBe(10);
-    expect(getExamComponentForText("ARB_G2_BAC", "اللغة العربية", "النصوص الشعرية والنثرية")?.marks).toBe(15);
+    expect(blueprint?.paperMarks).toBeNull();
+    expect(blueprint?.components).toEqual([]);
+    expect(getExamComponentForText("ARB_G2_BAC", "اللغة العربية", "قصة وا إسلاماه والنص الأدبي")).toBeNull();
+    expect(getExamComponentForText("ARB_G2_BAC", "اللغة العربية", "النحو")).toBeNull();
   });
 
-  it("keeps history and programming unit weights unknown instead of treating units as equal official weights", () => {
+  it("keeps annual history and programming paper weights unknown until matching official specifications exist", () => {
     const history = getSubjectExamBlueprint("HIS_G2_BAC", "التاريخ المصري");
     const programming = getSubjectExamBlueprint("PROG_AI_G2_BAC", "البرمجة والذكاء الاصطناعي");
     expect(history?.annualSubjectMarks).toBe(100);
@@ -38,17 +34,17 @@ describe("second-year baccalaureate exam blueprints", () => {
     expect(programming?.mcqShare).toBeNull();
     expect(history?.components).toEqual([]);
     expect(programming?.components).toEqual([]);
-    expect(history?.status).toBe("partial_official_evidence");
-    expect(programming?.status).toBe("partial_official_evidence");
   });
 
-  it("makes the period limitation explicit in planner context", () => {
+  it("makes the annual goal and no-first-term-exam rule explicit in the planner context", () => {
     const context = buildExamBlueprintContext([
       { id: "ENG_G2_BAC", name: "اللغة الإنجليزية" },
+      { id: "ARB_G2_BAC", name: "اللغة العربية" },
       { id: "HIS_G2_BAC", name: "التاريخ" },
     ]);
-    expect(context).toContain("الفصل الأول 2026/2027 فقط");
-    expect(context).toContain("لا تنقلها إلى النهائي السنوي");
+    expect(context).toContain("الاستعداد للامتحان السنوي");
+    expect(context).toContain("لا يوجد امتحان ترم أول");
+    expect(context).toContain("لا تستخدم مواصفات ترم أول");
     expect(context).toContain("لا تخترع توزيع درجات");
     expect(context).toContain("لا توجد أوزان فرعية موثقة");
   });
