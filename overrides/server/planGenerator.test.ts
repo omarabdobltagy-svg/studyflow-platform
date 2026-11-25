@@ -24,7 +24,6 @@ describe("AI planner response normalization", () => {
         },
       ],
       habits: [],
-      reviewQuestion: "ما العلامة التي تميز الاسم الممنوع من الصرف؟",
     }));
 
     expect(plan.steps).toHaveLength(2);
@@ -59,7 +58,7 @@ describe("AI planner response normalization", () => {
       day: "اليوم 1",
     });
     expect(plan.habits).toEqual([]);
-    expect(plan.reviewQuestion).toContain("ثلاث أفكار");
+    expect(plan).not.toHaveProperty("reviewQuestion");
   });
 
   it("does not fabricate an empty task list", () => {
@@ -69,7 +68,6 @@ describe("AI planner response normalization", () => {
       durationLabel: "يوم",
       steps: [],
       habits: [],
-      reviewQuestion: "ما الذي ستراجعه؟",
     }))).toThrow();
   });
 });
