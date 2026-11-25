@@ -161,7 +161,8 @@ describe("Arabic course taxonomy", () => {
     expect(getSIECheckpointChoiceDisplayLabel(stories[2])).toContain("المؤلف: نجيب محفوظ");
   });
 
-  it("includes the textbook's expression and spelling applications with printed-page evidence", () => {
+  it("keeps expression activities in the catalog and preserves legacy spelling IDs without showing them as lessons", () => {
+    const rawChoices = getSIECheckpointChoices("ARB_G2_BAC");
     const branches = getSIECheckpointBranches("ARB_G2_BAC");
     const expression = branches.find(branch => branch.branchId === "ARB_EXPRESSION");
     const spelling = branches.find(branch => branch.branchId === "ARB_SPELLING");
@@ -183,43 +184,32 @@ describe("Arabic course taxonomy", () => {
       "ARB_EXP_U2_ANALYTICAL_PARAGRAPH",
     ]) expect(expressionIds).toContain(id);
 
-    for (const id of [
+    const legacySpellingIds = [
       "ARB_SPELL_U1_HAMZA_PRACTICE",
       "ARB_SPELL_U1_TAA_MARBUTA",
       "ARB_SPELL_U1_CORRECT_WRITING",
       "ARB_SPELL_U1_TAA_TYPES",
       "ARB_SPELL_U2_HAMZA_CORRECTION",
       "ARB_SPELL_U2_ORTHOGRAPHY_REVIEW",
-    ]) expect(spellingIds).toContain(id);
-
+    ];
+    for (const id of legacySpellingIds) {
+      expect(rawChoices.some(choice => choice.nodeId === id)).toBe(true);
+      expect(spellingIds).not.toContain(id);
+    }
+    expect(spellingIds).toEqual(["ARB_C09_TAA_MARBUTA", "ARB_C20_HAMZA"]);
     expect(expression?.choices.find(choice => choice.nodeId === "ARB_EXP_U1_CRITICAL_PARAGRAPH")?.sourceLabel).toContain("ص36");
     expect(expression?.choices.find(choice => choice.nodeId === "ARB_EXP_U2_ANALYTICAL_PARAGRAPH")?.sourceLabel).toContain("ص85");
-    expect(spelling?.choices.find(choice => choice.nodeId === "ARB_SPELL_U1_HAMZA_PRACTICE")?.unitNumber).toBe(2);
-    expect(spelling?.choices.find(choice => choice.nodeId === "ARB_SPELL_U1_TAA_MARBUTA")?.sourceLabel).toContain("ص22");
-    expect(spelling?.choices.find(choice => choice.nodeId === "ARB_SPELL_U2_ORTHOGRAPHY_REVIEW")?.sourceLabel).toContain("ص87");
     expect(new Set([...expressionIds, ...spellingIds]).size).toBe(expressionIds.length + spellingIds.length);
   });
 
-  it("distinguishes spelling course lessons from textbook applications without changing saved IDs", () => {
+  it("shows only the two actual spelling course lessons in student and teacher progress selectors", () => {
     const options = getSIECheckpointProgressOptions("ARB_G2_BAC", "ARB_SPELLING");
-    expect(options).toHaveLength(8);
-    const teacherCourseOptions = options.filter(option =>
-      option.value === "ARB_C09_TAA_MARBUTA" || option.value === "ARB_C20_HAMZA"
-    );
-    expect(teacherCourseOptions).toHaveLength(2);
-    expect(teacherCourseOptions.every(option => option.description?.includes("كورس المدرس"))).toBe(true);
-    const textbookApplications = options.filter(option => option.value.startsWith("ARB_SPELL_"));
-    expect(textbookApplications).toHaveLength(6);
-    expect(textbookApplications.every(option =>
-      option.description?.includes("تطبيق إملائي") && option.description.includes("كتاب الطالب")
-    )).toBe(true);
-    expect(options.some(option => option.description?.includes("الدرس تطبيق"))).toBe(false);
-    const legacyApplication = getSIECheckpointChoices("ARB_G2_BAC")
-      .find(choice => choice.nodeId === "ARB_SPELL_U1_TAA_MARBUTA")!;
-    const displayLabel = getSIECheckpointChoiceDisplayLabel(legacyApplication);
-    expect(displayLabel).toContain("تطبيق إملائي");
-    expect(displayLabel).toContain("كتاب الطالب");
-    expect(displayLabel).not.toContain("الدرس تطبيق");
+    expect(options).toHaveLength(2);
+    expect(options.map(option => option.value)).toEqual(["ARB_C09_TAA_MARBUTA", "ARB_C20_HAMZA"]);
+    expect(options.every(option => option.description?.includes("كورس المدرس"))).toBe(true);
+    expect(options.some(option => option.label.includes("تطبيق") || option.description?.includes("تطبيق إملائي"))).toBe(false);
+    // Legacy exercise records remain addressable for previously saved progress.
+    expect(getSIECheckpointChoices("ARB_G2_BAC").some(choice => choice.nodeId === "ARB_SPELL_U1_TAA_MARBUTA")).toBe(true);
   });
 
   it("uses the student's visible Arabic topic units to match existing tasks without changing progress", () => {
@@ -277,6 +267,16 @@ describe("English curriculum selector metadata", () => {
 
 
 describe("subject curriculum layouts", () => {
+  it("exposes each English unit's four textbook topics plus Vocabulary and Grammar checkpoints", () => {
+    const units = getSIECheckpointUnits("ENG1_G2_BAC");
+    const unitOne = units.find(unit => unit.unitNumber === 1);
+    expect(unitOne).toBeDefined();
+    const choices = unitOne!.branches.flatMap(branch => branch.choices);
+    expect(choices.filter(choice => choice.lessonType === "topic").map(choice => choice.lessonNumber)).toEqual(["1.1", "1.2", "1.3", "1.4"]);
+    expect(choices.some(choice => choice.lessonType === "vocabulary")).toBe(true);
+    expect(choices.some(choice => choice.lessonType === "grammar")).toBe(true);
+  });
+
   it("keeps History as one complete linear list rather than chapter branches", () => {
     const branches = getSIECheckpointBranches("HIS_G2_BAC");
     expect(branches).toHaveLength(1);

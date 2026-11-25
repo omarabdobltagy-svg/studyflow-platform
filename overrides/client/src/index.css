@@ -1035,3 +1035,44 @@ html body .sf-login-screen.sf-shell-v3:has(.sf-login-3d canvas) .sf-login-graphi
     transform:translate(-20%,-12%) !important;
   }
 }
+
+
+/* StudyFlow shared interaction palette: native select menus and selected states. */
+@layer base {
+  select {
+    color: var(--foreground);
+    background-color: var(--background);
+    border-color: var(--input);
+  }
+  html:not(.dark) select { color-scheme: light; }
+  html.dark select { color-scheme: dark; }
+  select option,
+  select optgroup {
+    color: var(--popover-foreground);
+    background-color: var(--popover);
+  }
+  select option:checked {
+    color: var(--accent-foreground);
+    background-color: var(--accent);
+  }
+}
+
+/* Legacy page-level blue, indigo and violet accents now inherit StudyFlow's palette. */
+.sf-main [class*="border-blue-"],
+.sf-main [class*="border-indigo-"],
+.sf-main [class*="border-violet-"],
+.sf-main [class*="border-purple-"] {
+  border-color: color-mix(in srgb, var(--primary) 38%, var(--border)) !important;
+}
+.sf-main [class*="bg-blue-"],
+.sf-main [class*="bg-indigo-"],
+.sf-main [class*="bg-violet-"],
+.sf-main [class*="bg-purple-"] {
+  background-color: color-mix(in srgb, var(--accent) 62%, var(--card)) !important;
+}
+.sf-main [class*="text-blue-"],
+.sf-main [class*="text-indigo-"],
+.sf-main [class*="text-violet-"],
+.sf-main [class*="text-purple-"] {
+  color: var(--accent-foreground) !important;
+}

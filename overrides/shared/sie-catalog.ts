@@ -1148,6 +1148,9 @@ export function getSIECheckpointBranches(subjectId: string): SIECheckpointBranch
   ]);
   const filteredChoices = choices.filter(choice =>
     !(subjectId === "ARB_G2_BAC" && choice.branchId === "ARB_READING" && readingSkillNodeIds.has(choice.nodeId))
+    // Keep legacy exercise IDs in raw catalog records, but do not expose practice activities
+    // as standalone lessons in the student-facing spelling branch.
+    && !(subjectId === "ARB_G2_BAC" && choice.branchId === "ARB_SPELLING" && choice.nodeId.startsWith("ARB_SPELL_"))
   );
   const groups = new Map<string, SIECheckpointBranch>();
   for (const choice of filteredChoices) {

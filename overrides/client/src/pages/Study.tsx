@@ -433,18 +433,17 @@ export default function Study() {
             animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
             exit={{ opacity: 0, y: -8, scale: .985, filter: "blur(4px)" }}
             transition={{ duration: .42, ease: [.22, 1, .36, 1] }}
-            className="relative mb-4 overflow-hidden rounded-2xl border border-primary/25 bg-[#151D12] p-4 text-[#F1F0E8] shadow-[0_24px_60px_-42px_rgba(0,0,0,.8)]"
+            className="relative mb-4 overflow-hidden rounded-2xl border border-primary/25 bg-primary/[0.045] p-4 text-foreground shadow-sm"
           >
-            <div className="pointer-events-none absolute -left-12 -top-14 size-40 rounded-full bg-[#C9ED62]/12 blur-3xl" />
             <div className="relative flex items-center gap-3">
               <motion.span initial={{ rotate: -30, scale: .65 }} animate={{ rotate: 0, scale: 1 }} transition={{ type: "spring", stiffness: 240, damping: 16 }}
-                className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#C9ED62]/15 text-[#C9ED62]"><Check className="size-5" /></motion.span>
+                className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Check className="size-5" /></motion.span>
               <div className="min-w-0 flex-1">
-                <p className="text-[10px] font-bold tracking-[.12em] text-[#C9ED62]">تم حفظ موضعك بنجاح</p>
+                <p className="text-[10px] font-bold tracking-[.12em] text-primary">تم حفظ موضعك بنجاح</p>
                 <p className="mt-1 text-sm font-bold">الانتقال إلى الفرع التالي</p>
-                <p className="mt-1 text-xs text-[#C0C7B4]">{branchTransition.from} <span className="mx-1 text-[#C9ED62]">←</span> {branchTransition.to}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{branchTransition.from} <span className="mx-1 text-primary">←</span> {branchTransition.to}</p>
               </div>
-              <button type="button" className="rounded-lg px-2 py-1 text-xs text-[#C0C7B4] hover:bg-white/10" onClick={() => setBranchTransition(null)}>إخفاء</button>
+              <button type="button" className="rounded-lg px-2 py-1 text-xs text-muted-foreground hover:bg-muted" onClick={() => setBranchTransition(null)}>إخفاء</button>
             </div>
           </motion.div>
         )}
@@ -506,9 +505,41 @@ export default function Study() {
                     <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
                       <motion.div className="h-full rounded-full bg-primary" initial={false} animate={{ width: percent + "%" }} transition={{ duration: .55, ease: "easeOut" }} />
                     </div>
-                    <div className="mt-3 flex flex-wrap gap-1.5">
-                      {unitBranchState.map(item => <span key={item.branchId} className="rounded-lg border border-border/70 bg-background/70 px-2 py-1 text-[10px] text-muted-foreground">{item.branchTitle}</span>)}
-                    </div>
+                    {subjectId === "ENG1_G2_BAC" && unit.isOfficialUnit ? (
+                      <div className="mt-4 rounded-xl border border-border/70 bg-background/70 p-3">
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <p className="text-[11px] font-bold text-foreground">دروس الوحدة</p>
+                          <span className="text-[10px] text-muted-foreground">{unit.lessonCount} عناصر في الفهرس</span>
+                        </div>
+                        <div className="grid gap-2">
+                          {unit.branches.flatMap(unitBranch => unitBranch.choices.map(choice => ({
+                            ...choice,
+                            displayBranchId: unitBranch.branchId,
+                          }))).sort((left, right) => {
+                            const order: Record<string, number> = { topic: 0, vocabulary: 1, grammar: 2, story: 3 };
+                            const typeOrder = (order[left.lessonType || ""] ?? 9) - (order[right.lessonType || ""] ?? 9);
+                            if (typeOrder) return typeOrder;
+                            return String(left.lessonNumber || "").localeCompare(String(right.lessonNumber || ""), "en", { numeric: true });
+                          }).map(choice => {
+                            const lessonLabel = choice.lessonType === "topic"
+                              ? "Lesson " + (String(choice.lessonNumber || "").split(".").pop() || "")
+                              : choice.lessonType === "vocabulary" ? "Vocabulary"
+                                : choice.lessonType === "grammar" ? "Grammar"
+                                  : choice.lessonType || "درس";
+                            return (
+                              <div key={choice.nodeId} className="flex min-w-0 items-start gap-2 rounded-lg border border-border/60 bg-card px-3 py-2">
+                                <span className="mt-0.5 shrink-0 rounded-md bg-secondary px-2 py-1 text-[10px] font-bold text-secondary-foreground">{lessonLabel}</span>
+                                <span className="min-w-0 text-xs leading-5 text-foreground">{choice.title}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        {unitBranchState.map(item => <span key={item.branchId} className="rounded-lg border border-border/70 bg-background/70 px-2 py-1 text-[10px] text-muted-foreground">{item.branchTitle}</span>)}
+                      </div>
+                    )}
                     <div className="mt-4 grid grid-cols-2 gap-2">
                       <Button type="button" variant="outline" className="rounded-xl text-xs" onClick={() => openUnitLessons(unit)}>فتح الدروس</Button>
                       <Button type="button" className="rounded-xl text-xs" disabled={complete || saveUnitFrontier.isPending}
