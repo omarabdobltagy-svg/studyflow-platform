@@ -57,8 +57,13 @@ describe("annual plan curriculum coverage and progress alignment", () => {
       .filter(id => /^ARB_U[123]_N[123]$/.test(id));
 
     expect(grammarIds).toEqual(["ARB_U3_N1", "ARB_U3_N2"]);
-    expect(ranked.steps[0].priorityReason).toContain("الخطوة التالية مباشرة");
-    expect(ranked.steps[0].priorityReason).toContain("الفجوة الحالية: 1");
+    const nextGrammarStep = ranked.steps.find(step => step.curriculumNodeIds.includes("ARB_U3_N1"));
+    const nextStepIndex = ranked.steps.findIndex(step => step.curriculumNodeIds.includes("ARB_U3_N1"));
+    const followingGrammarIndex = ranked.steps.findIndex(step => step.curriculumNodeIds.includes("ARB_U3_N2"));
+    expect(nextStepIndex).toBeGreaterThanOrEqual(0);
+    expect(nextStepIndex).toBeLessThan(followingGrammarIndex);
+    expect(nextGrammarStep?.priorityReason).toContain("الخطوة التالية مباشرة");
+    expect(nextGrammarStep?.priorityReason).toContain("الفجوة الحالية: 1");
   });
 
   it("covers all remaining programming chapters, including chapters 5–7, once", () => {
