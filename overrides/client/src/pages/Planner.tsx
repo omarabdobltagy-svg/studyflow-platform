@@ -875,7 +875,7 @@ function PlanAssistantChat({ plan }: { plan: PlanView }) {
   ].join("\n").slice(0, 7_500), [plan]);
 
   const chat = trpc.ai.chat.useMutation({
-    onSuccess: result => setMessages(current => [...current, { role: "assistant", content: result.content }].slice(-20)),
+    onSuccess: result => setMessages(current => [...current, { role: "assistant" as const, content: result.content }].slice(-20)),
     onError: error => toast.error(error.message || "تعذّر الوصول إلى مساعد الخطة."),
   });
 
