@@ -38,7 +38,7 @@ const planSchema = z.object({
     }).optional(),
     printedPageRange: z.tuple([z.number().int().positive().max(5_000), z.number().int().positive().max(5_000)]).nullish().transform(range => range ?? undefined),
     sourcePages: z.array(z.number().int().positive().max(5_000)).max(20).default([]),
-  })).min(3).max(30),
+  })).min(1).max(30),
   habits: z.array(z.object({ title: z.string().trim().min(2).max(160), cue: z.string().trim().min(2).max(240) })).max(5).default([]),
   reviewQuestion: z.string().trim().min(5).max(600),
 });
@@ -399,6 +399,108 @@ function removeTrailingCommasOutsideStrings(json: string): string {
   return output;
 }
 
+function normalizedText(value: unknown, fallback: string, maxLength: number): string {
+  if (typeof value !== "string") return fallback;
+  const text = value.trim().slice(0, maxLength);
+  return text || fallback;
+}
+
+function allowedEnum<T extends string>(value: unknown, values: readonly T[], fallback: T): T {
+  return typeof value === "string" && (values as readonly string[]).includes(value) ? value as T : fallback;
+}
+
+function finiteInteger(value: unknown, fallback: number, min: number, max: number): number {
+  const numeric = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(numeric) ? Math.max(min, Math.min(max, Math.round(numeric))) : fallback;
+}
+
+function normalizePlanCandidate(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const source = value as Record<string, any>;
+  const rawSteps = Array.isArray(source.steps) ? source.steps
+    : Array.isArray(source.tasks) ? source.tasks
+    : Array.isArray(source.schedule) ? source.schedule : [];
+  const steps = rawSteps.slice(0, 30).map((raw: any, index: number) => {
+    const step = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+    const title = normalizedText(step.title ?? step.task ?? step.name, "", 180);
+    if (title.length < 2) return null;
+    const rawDetail = normalizedText(step.detail ?? step.description ?? step.notes, title, 1_200);
+    const detail = rawDetail.length >= 5 ? rawDetail : "تنفيذ ومراجعة: " + title;
+    const resource = step.resourceRecommendation && typeof step.resourceRecommendation === "object"
+      ? step.resourceRecommendation
+      : step.resource && typeof step.resource === "object" ? step.resource : null;
+    const resourceUrl = typeof resource?.url === "string" && resource.url.startsWith("https://")
+      ? resource.url.slice(0, 1_000)
+      : "";
+    const normalizedResource = resource && resourceUrl && typeof resource.title === "string"
+      ? {
+          title: normalizedText(resource.title, "مورد شرح إضافي", 240),
+          url: resourceUrl,
+          ...(typeof resource.teacherName === "string" ? { teacherName: resource.teacherName.slice(0, 120) } : {}),
+          reason: normalizedText(resource.reason, "يرتبط هذا المورد بدرس غير مكتمل.", 500),
+        }
+      : undefined;
+    const pageRange = Array.isArray(step.printedPageRange)
+      && step.printedPageRange.length === 2
+      && step.printedPageRange.every((item: unknown) => Number.isInteger(item) && Number(item) > 0)
+      ? [finiteInteger(step.printedPageRange[0], 1, 1, 5_000), finiteInteger(step.printedPageRange[1], 1, 1, 5_000)] as [number, number]
+      : undefined;
+    return {
+      day: normalizedText(step.day ?? step.date, "اليوم " + (index + 1), 60),
+      title,
+      detail,
+      minutes: finiteInteger(step.minutes ?? step.durationMinutes ?? step.duration, 30, 5, 480),
+      category: normalizedText(step.category ?? step.subject ?? step.course, "دراسة", 80),
+      curriculumNodeIds: Array.isArray(step.curriculumNodeIds)
+        ? step.curriculumNodeIds.filter((id: unknown) => typeof id === "string" && id.trim()).slice(0, 8).map((id: string) => id.trim().slice(0, 120))
+        : Array.isArray(step.nodeIds)
+          ? step.nodeIds.filter((id: unknown) => typeof id === "string" && id.trim()).slice(0, 8).map((id: string) => id.trim().slice(0, 120))
+          : [],
+      priority: allowedEnum(step.priority, ["critical", "high", "medium", "low"] as const, "medium"),
+      difficulty: allowedEnum(step.difficulty, ["easy", "medium", "hard", "unknown"] as const, "unknown"),
+      lessonSize: allowedEnum(step.lessonSize, ["small", "medium", "large", "unknown"] as const, "unknown"),
+      difficultyBasis: allowedEnum(step.difficultyBasis, ["student_report", "assessment_history", "curriculum_profile", "unknown"] as const, "unknown"),
+      difficultyConfidence: allowedEnum(step.difficultyConfidence, ["low", "medium", "high"] as const, "low"),
+      ...(typeof step.priorityScore === "number" && Number.isFinite(step.priorityScore) ? { priorityScore: Math.max(0, Math.min(100, step.priorityScore)) } : {}),
+      ...(typeof step.priorityReason === "string" ? { priorityReason: step.priorityReason.slice(0, 500) } : {}),
+      ...(typeof step.priorityEvidenceConfidence === "string" && ["low", "medium", "high"].includes(step.priorityEvidenceConfidence) ? { priorityEvidenceConfidence: step.priorityEvidenceConfidence } : {}),
+      ...(typeof step.examComponentLabel === "string" ? { examComponentLabel: step.examComponentLabel.slice(0, 120) } : {}),
+      ...(Number.isInteger(step.examComponentMarks) ? { examComponentMarks: finiteInteger(step.examComponentMarks, 0, 0, 100) } : {}),
+      ...(Number.isInteger(step.examPaperMarks) ? { examPaperMarks: finiteInteger(step.examPaperMarks, 1, 1, 100) } : {}),
+      ...(normalizedResource ? { resourceRecommendation: normalizedResource } : {}),
+      ...(pageRange ? { printedPageRange: pageRange } : {}),
+      sourcePages: Array.isArray(step.sourcePages)
+        ? step.sourcePages.filter((page: unknown) => Number.isInteger(page) && Number(page) > 0).slice(0, 20).map((page: unknown) => finiteInteger(page, 1, 1, 5_000))
+        : [],
+    };
+  }).filter((step: any) => step !== null);
+
+  const habits = Array.isArray(source.habits)
+    ? source.habits.slice(0, 5).map((habit: any) => typeof habit === "string"
+        ? { title: habit.slice(0, 160), cue: "بعد جلسة المذاكرة الأساسية" }
+        : {
+            title: normalizedText(habit?.title, "استراحة قصيرة", 160),
+            cue: normalizedText(habit?.cue, "بعد جلسة المذاكرة الأساسية", 240),
+          })
+    : [];
+  const totalMinutes = steps.reduce((sum: number, step: any) => sum + step.minutes, 0);
+  const normalizedTitle = normalizedText(source.title ?? source.name, "خطة الدراسة المقترحة", 160);
+  const normalizedSummary = normalizedText(
+    source.summary ?? source.description,
+    "خطة دراسية عملية مبنية على المنهج المتبقي ووقت الدراسة المتاح وموعد امتحان نهاية السنة.",
+    1_500,
+  );
+  const duration = normalizedText(source.durationLabel ?? source.duration, "", 100);
+  return {
+    title: normalizedTitle.length >= 3 ? normalizedTitle : "خطة الدراسة المقترحة",
+    summary: normalizedSummary.length >= 10 ? normalizedSummary : "خطة عملية مبنية على المنهج المتبقي ووقت الدراسة المتاح.",
+    durationLabel: duration || (totalMinutes > 0 ? "نحو " + Math.ceil(totalMinutes / 240) + " أيام من الجلسات" : "جلسات مرنة"),
+    steps,
+    habits,
+    reviewQuestion: normalizedText(source.reviewQuestion ?? source.review, "ما أهم فكرة تستطيع شرحها دون الرجوع إلى الكتاب؟", 600),
+  };
+}
+
 export function parseGeneratedPlan(content: string): GeneratedPlan {
   const normalized = content
     .replace(/^\uFEFF/, "")
@@ -424,11 +526,9 @@ export function parseGeneratedPlan(content: string): GeneratedPlan {
         continue;
       }
 
-      const parsed = planSchema.safeParse(value);
+      const parsed = planSchema.safeParse(normalizePlanCandidate(value));
       if (parsed.success) return parsed.data;
       lastSchemaIssues = parsed.error.issues;
-      // A preceding explanatory JSON object may not be the plan. Continue
-      // scanning for a later object that satisfies the complete plan schema.
       break;
     }
   }
@@ -443,8 +543,8 @@ export function parseGeneratedPlan(content: string): GeneratedPlan {
     throw new Error("تعذّر قراءة بيانات الخطة. حاول مرة أخرى.");
   }
 
-  console.error("[StudyFlow planner] No JSON object matched the plan schema:", lastSchemaIssues);
-  throw new Error("الاستجابة الذكية غير مكتملة أو لا تطابق تنسيق الخطة (تعذّر تحويل الخطة الذكية). لا تحتاج إلى تبسيط وصفك.");
+  console.error("[StudyFlow planner] No JSON object matched the plan schema:", JSON.stringify(lastSchemaIssues).slice(0, 1_800));
+  throw new Error("الاستجابة الذكية غير مكتملة أو لا تطابق تنسيق الخطة (تعذّر تحويل الخطة الذكية). لم يتم حفظ مسودة تالفة؛ حاول مرة أخرى.");
 }
 
 function getFirstPartBranches(subjectId: string) {
@@ -915,18 +1015,28 @@ export async function generatePersonalPlan(
     "قسّم الدرس الكبير إلى مهام فهم وتطبيق واسترجاع عند الحاجة. اجعل الدرس الصغير جلسة مركزة، ولا تضخم عدد المهام دون داعٍ.",
     "للدروس الصعبة أو الطويلة أنشئ أكثر من خطوة مترابطة عند الحاجة: فهم، حل، ثم استرجاع. لا تحشر درسًا كبيرًا في مهمة واحدة قصيرة. ادمج المهام الصغيرة المتشابهة فقط عندما يكون ذلك منطقيًا.",
     "أخرج خطة عملية مفصلة من 6 إلى 20 خطوة عادةً، ويمكن أن تصل إلى 30 خطوة عندما يتطلب التراكم ذلك. كل خطوة قصيرة وواضحة وقابلة للتنفيذ؛ لا تكتب فقرات طويلة.",
+    "موعد امتحان نهاية السنة الثابت هو 12 يونيو 2027 (2027-06-12). لا تستبدله بموعد آخر؛ جهّز الخطة للاستعداد قبل هذا التاريخ واترك هامش مراجعة.",
+    "إيقاع الخطة الذي اختاره الطالب: " + (constraints.pace === "intensive" ? "مكثفة؛ زد كثافة الجلسات ضمن وقت الطالب اليومي مع الحفاظ على فواصل المراجعة والراحة." : constraints.pace === "relaxed" ? "مريحة؛ وزع الحمل على فترة أطول وجلسات أخف مع عدم إسقاط المتطلبات الأساسية." : "متوازنة؛ تقدم ثابت وحمل يومي متوسط مع مساحة للمراجعة والتعويض.") + ".",
+    constraints.deadline ? "الموعد الشخصي الإضافي: " + constraints.deadline + ". إذا سبق موعد الامتحان فاجعله هدف الإنجاز الداخلي، مع بقاء 12 يونيو 2027 موعد الامتحان الرسمي؛ ولا تتجاوز الموعد الرسمي." : "لا يوجد موعد شخصي إضافي؛ اعتمد امتحان 12 يونيو 2027 موعدًا نهائيًا.",
     "الحد الأقصى لوقت الدراسة اليومي هو " + dailyMinutes + " دقيقة. مجموع دقائق الخطوات التي تحمل اسم اليوم نفسه يجب ألا يتجاوز هذا الحد، مع ترك هامش تعويض واقعي.",
     constraints.startDate ? "تاريخ بداية التنفيذ: " + constraints.startDate + "." : "تاريخ البداية يحدده الطالب عند اعتماد الخطة.",
     "احترم سعة اليوم المحددة من الطالب. لا تتجاوزها، ووزع الخطة واقعيًا مع هامش تعويض. إذا نقصت البيانات فاختر بداية تدريجية واذكر الافتراض في الملخص.",
     "كيّف الخطة مع ظروف الطالب المعلنة: الطاقة المنخفضة تعني جلسات أقصر وعدد أولويات أقل دون ترك الأساسيات، والحالة المعنوية المنخفضة تعني بداية سهلة وتدرجًا واقعيًا، وقيود الموارد تعني عدم تكليف الطالب بأداة أو كتاب أو اتصال غير متاح. لا تقدم تشخيصًا طبيًا أو نفسيًا.",
     "لا تعتبر غياب السجل دليلًا على الإنجاز، ولا توبّخ الطالب.",
     "لا تحوّل منظومة الأداءات الأسبوعية والشهرية إلى دروس منهجية؛ تعامل معها كالتزامات منفصلة يجب تتبع إنجازها لأن لها شرط أهلية مستقلًا، ولا تخلط نسبها مع توزيع درجات ورقة الامتحان.",
-    "أخرج JSON صحيحًا فقط بالعربية: title, summary, durationLabel, steps (3-30 عنصرًا، وكل عنصر فيه day,title,detail,minutes,category,curriculumNodeIds,priority,difficulty,lessonSize,difficultyBasis,difficultyConfidence,resourceRecommendation?,printedPageRange,sourcePages)، habits (0-5 فيها title,cue), reviewQuestion. resourceRecommendation اختياري ولا يُضاف إلا لمصدر مدرس موثق ومطابق حرفيًا لأحد تحديثات الصف الثاني بكالوريا ومفيد لدرس غير مكتمل؛ شكله {title,url,teacherName,reason}. يجب أن يحتوي curriculumNodeIds على معرف واحد أو أكثر من الدروس المتاحة التي ترتبط بها الخطوة. printedPageRange نطاق صفحات الكتاب المطبوع [البداية، النهاية] عند توافره فقط؛ sourcePages مراجع PDF المسترجعة فعليًا فقط وتكون [] في غير ذلك. اجعل الملخص واضحًا والتفاصيل مركزة.",
+    "أخرج JSON صحيحًا فقط بالعربية: title, summary, durationLabel, steps (1-30 عنصرًا، وكل عنصر فيه day,title,detail,minutes,category,curriculumNodeIds,priority,difficulty,lessonSize,difficultyBasis,difficultyConfidence,resourceRecommendation?,printedPageRange,sourcePages)، habits (0-5 فيها title,cue), reviewQuestion. resourceRecommendation اختياري ولا يُضاف إلا لمصدر مدرس موثق ومطابق حرفيًا لأحد تحديثات الصف الثاني بكالوريا ومفيد لدرس غير مكتمل؛ شكله {title,url,teacherName,reason}. يجب أن يحتوي curriculumNodeIds على معرف واحد أو أكثر من الدروس المتاحة التي ترتبط بها الخطوة. printedPageRange نطاق صفحات الكتاب المطبوع [البداية، النهاية] عند توافره فقط؛ sourcePages مراجع PDF المسترجعة فعليًا فقط وتكون [] في غير ذلك. اجعل الملخص واضحًا والتفاصيل مركزة.",
     "كل خطوة يجب أن تحدد المادة والوحدة/الفرع والدرس وطريقة مذاكرته، لا عنوانًا عامًا.",
   ].join("\n");
+  const paceLabel = constraints.pace === "intensive" ? "مكثفة"
+    : constraints.pace === "relaxed" ? "مريحة" : "متوازنة";
   const user = [
     "طلب الطالب أو هدفه الحالي:",
     prompt.slice(0, 1_200),
+    "تفضيلات الجدولة:",
+    "إيقاع الخطة: " + paceLabel,
+    "متوسط الوقت المتاح يوميًا: " + dailyMinutes + " دقيقة",
+    "الموعد الشخصي الإضافي: " + (constraints.deadline || "لا يوجد"),
+    "موعد امتحان نهاية السنة الثابت: 12 يونيو 2027 (2027-06-12)",
     additionalContext ? "\nالسياق الإضافي الذي يجب دمجه في القرار:\n" + additionalContext : "",
     "\nبيانات الملف الدراسي الحالية:",
     context,
