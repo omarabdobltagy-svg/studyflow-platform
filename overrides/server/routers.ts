@@ -1052,6 +1052,11 @@ export const appRouter = router({
         skippedTeacherSubjectIds: z.array(z.string().trim().min(1).max(80)).max(12).default([]),
         courseModes: z.record(z.string(), z.enum(["center", "online"])).default({}),
         customTeacherNames: z.record(z.string(), z.string().trim().max(120)).default({}),
+        teacherSchedules: z.record(z.string(), z.array(z.object({
+          dayOfWeek: z.number().int().min(0).max(6),
+          startTime: z.string().regex(/^([01]\\d|2[0-3]):[0-5]\\d$/),
+          durationMinutes: z.number().int().min(20).max(360),
+        })).max(14)).default({}),
         teacherFrontierReports: z.record(z.string(), z.string().trim().min(1).max(120)).default({}),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -1086,6 +1091,19 @@ export const appRouter = router({
         for (const subjectId of Object.keys(input.customTeacherNames)) {
           if (!input.subjectIds.includes(subjectId)) {
             throw new TRPCError({ code: "BAD_REQUEST", message: "اسم المدرس المرسل لا يخص مادة في الملف." });
+          }
+        }
+        for (const [subjectId, schedule] of Object.entries(input.teacherSchedules)) {
+          if (!input.subjectIds.includes(subjectId)) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "جدول المحاضرات لا يخص مادة في الملف." });
+          }
+          const seenSlots = new Set<string>();
+          for (const slot of schedule) {
+            const key = slot.dayOfWeek + "::" + slot.startTime;
+            if (seenSlots.has(key)) {
+              throw new TRPCError({ code: "BAD_REQUEST", message: "يوجد موعدين متطابقين في اليوم والوقت للمادة نفسها." });
+            }
+            seenSlots.add(key);
           }
         }
         const validFrontierSentinels = new Set(["__NOT_STARTED__", "__UNKNOWN__", "__DEFERRED__"]);
@@ -1136,6 +1154,12 @@ export const appRouter = router({
             teacherChoices,
             courseModes: Object.fromEntries(input.subjectIds.map(subjectId => [subjectId, input.courseModes[subjectId] ?? "online"])),
             customTeacherNames: Object.fromEntries(Object.entries(input.customTeacherNames).filter(([subjectId, name]) => input.subjectIds.includes(subjectId) && name.trim())),
+            teacherSchedules: Object.fromEntries(input.subjectIds.map(subjectId => [
+              subjectId,
+              (input.teacherSchedules[subjectId] ?? []).slice().sort((left, right) =>
+                left.dayOfWeek - right.dayOfWeek || left.startTime.localeCompare(right.startTime)
+              ),
+            ])),
             teacherProgressState: Object.fromEntries(Object.entries(input.teacherSelections).map(([subjectId, teacherId]) => {
               const teacher = getSIETeacher(teacherId);
               const report = input.teacherFrontierReports[subjectId] ?? (teacher?.studentInputRequired ? "__DEFERRED__" : "__NOT_REQUIRED__");
