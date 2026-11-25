@@ -1053,7 +1053,14 @@ export async function generatePersonalPlan(
   const paceLevelInstruction = paceLevelGuidance[selectedPace][paceLevel - 1];
   updatePlanGenerationProgress(userId, "profile");
   const additionalContext = String(constraints.context ?? "").trim().slice(0, 3_000);
-  const profile = includeStudentProfile ? await getStudentProfile(userId) : null;
+  const loadedProfile = includeStudentProfile ? await getStudentProfile(userId) : null;
+  const partOneSubjectIds = new Set(["ARB_G2_BAC", "ENG1_G2_BAC", "HIS_G2_BAC", "PROG_AI_G2_BAC"]);
+  const profile = loadedProfile
+    ? {
+        ...loadedProfile,
+        subjectIds: (loadedProfile.subjectIds || []).filter(subjectId => partOneSubjectIds.has(subjectId)),
+      }
+    : null;
   updatePlanGenerationProgress(userId, "curriculum");
   const curriculumTitles = profile
     ? (profile.subjectIds || []).flatMap(subjectId =>
