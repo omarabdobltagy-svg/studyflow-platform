@@ -27,7 +27,7 @@ const SOURCE_SCAN_INTERVAL_MS = 45 * 60 * 1_000;
 const MAX_UPDATES_PER_SCAN = 12;
 
 function decodeXml(value: string) {
-  return value
+  return value.replace(/<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>/g, "$1")
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
@@ -69,7 +69,7 @@ export function parseYoutubeAtomFeed(
 }
 
 export function parseYoutubeDurationMinutes(duration: string): number | undefined {
-  const match = duration.match(/^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/i);
+  const match = duration.match(/^P(?:(\d+)D)?T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/i);
   if (!match) return undefined;
   const totalSeconds = Number(match[1] ?? 0) * 3_600 + Number(match[2] ?? 0) * 60 + Number(match[3] ?? 0);
   return totalSeconds > 0 ? Math.ceil(totalSeconds / 60) : undefined;
