@@ -1218,6 +1218,108 @@ export function getSIECheckpointProgressOptions(
   return options;
 }
 
+/**
+ * Shared curriculum view used by progress, planning and priority surfaces.
+ * Multi-part lesson components are collapsed to the same topic options the
+ * student sees in the progress picker. This prevents the UI and planner from
+ * counting the same topic as several independent lessons.
+ */
+export function getSIECheckpointProgressBranches(subjectId: string): SIECheckpointBranch[] {
+  return getSIECheckpointBranches(subjectId).map(branch => {
+    const options = getSIECheckpointProgressOptions(subjectId, branch.branchId);
+    const choices = options.flatMap(option => {
+      const representative = branch.choices.find(choice => choice.nodeId === option.value)
+        ?? branch.choices.find(choice =>
+          normalizeSIECheckpointFrontier(subjectId, branch.branchId, choice.nodeId) === option.value
+        );
+      if (!representative) return [];
+      return [{
+        ...representative,
+        nodeId: option.value,
+        title: option.label,
+        branchId: branch.branchId,
+        branchTitle: branch.branchTitle,
+        branchType: branch.branchType,
+      }];
+    });
+    return { ...branch, choices };
+  });
+}
+
+export type SIECheckpointTaskMatch = {
+  subjectId: string;
+  branchId: string;
+  branchTitle: string;
+  nodeId: string;
+  title: string;
+  confidence: "exact" | "strong";
+};
+
+/**
+ * Matches an existing task to a visible curriculum topic without changing
+ * student progress. An open task is evidence of planned work, not evidence
+ * that the topic has been completed.
+ */
+export function matchSIECheckpointTask(
+  subjectIds: string[],
+  taskText: string,
+): SIECheckpointTaskMatch | null {
+  const normalize = (value: string) => value
+    .normalize("NFKD")
+    .replace(/[\u064B-\u065F\u0670]/g, "")
+    .replace(/[أإآ]/g, "ا")
+    .replace(/ى/g, "ي")
+    .replace(/ة/g, "ه")
+    .toLocaleLowerCase("ar")
+    .replace(/[^\u0600-\u06FFa-z0-9]+/gi, " ")
+    .trim();
+  const stopWords = new Set([
+    "درس", "الدرس", "نرس", "شرح", "محاضره", "محاضرة", "مذاكره", "مذاكرة",
+    "مراجعه", "مراجعة", "متابعه", "متابعة", "واجب", "واجبات", "حل", "تطبيق",
+    "على", "في", "من", "عن", "الي", "اليوم", "النهارده", "درسنا",
+  ]);
+  const tokens = (value: string) => normalize(value)
+    .split(/\s+/)
+    .filter(token => token.length > 1 && !stopWords.has(token));
+  const taskTokens = tokens(taskText);
+  if (!taskTokens.length) return null;
+  const taskNormalized = normalize(taskText);
+  const candidates: Array<SIECheckpointTaskMatch & { score: number }> = [];
+
+  for (const subjectId of subjectIds) {
+    for (const branch of getSIECheckpointProgressBranches(subjectId)) {
+      for (const choice of branch.choices) {
+        const titleNormalized = normalize(choice.title);
+        const titleTokens = tokens(choice.title);
+        const overlap = taskTokens.filter(token => titleTokens.includes(token)).length;
+        if (!overlap) continue;
+        const score = taskNormalized === titleNormalized
+          ? 1
+          : taskNormalized.includes(titleNormalized) || titleNormalized.includes(taskNormalized)
+            ? 0.98
+            : overlap / Math.max(taskTokens.length, titleTokens.length);
+        if (score < 0.58 || (taskTokens.length > 1 && overlap < 2)) continue;
+        candidates.push({
+          subjectId,
+          branchId: branch.branchId,
+          branchTitle: branch.branchTitle,
+          nodeId: choice.nodeId,
+          title: choice.title,
+          confidence: score >= 0.9 ? "exact" : "strong",
+          score,
+        });
+      }
+    }
+  }
+
+  candidates.sort((left, right) => right.score - left.score);
+  const best = candidates[0];
+  const second = candidates[1];
+  if (!best || (second && best.score - second.score < 0.14)) return null;
+  const { score: _score, ...match } = best;
+  return match;
+}
+
 export function getSIECheckpointChoicesPreview(subjectId: string, limit = 5): SIECheckpointChoice[] {
   return getSIECheckpointChoices(subjectId).slice(0, limit);
 }
