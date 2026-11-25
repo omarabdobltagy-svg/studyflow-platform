@@ -217,7 +217,7 @@ describe("metadata-only official first-part curriculum", () => {
     expect(note).toContain("Living Well in a Complex World");
     expect(note).toContain("Social Media and Self-Image");
     expect(note).toContain("صفحات مطبوعة 12–38");
-    expect(note).toContain("صعوبة كل موضوع تظل unknown");
+    expect(note).toContain("الصعوبة لكل موضوع تظل unknown");
     expect(note).toContain("نطاق مرئي تقديري");
     expect(note).toContain("ENG_U1_SEC_A_T1");
     expect(note).toContain("ENG_GRAMMAR_U1");
