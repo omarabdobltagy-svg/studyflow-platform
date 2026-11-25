@@ -37,6 +37,9 @@ import { useLocation, type RouteComponentProps } from "wouter";
 import { toast } from "sonner";
 
 type TeacherChoiceMap = Record<string, string>;
+type TeacherScheduleSlot = { dayOfWeek: number; startTime: string; durationMinutes: number };
+type TeacherScheduleMap = Record<string, TeacherScheduleSlot[]>;
+const WEEK_DAYS = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 type FormState = {
   studentName: string;
   phone: string;
@@ -47,6 +50,7 @@ type FormState = {
   checkpointSelections: Record<string, string>;
   courseModes: Record<string, "center" | "online">;
   customTeacherNames: Record<string, string>;
+  teacherSchedules: TeacherScheduleMap;
 };
 
 const steps = ["بياناتك", "النظام الدراسي", "المسار", "المواد", "طريقة الدراسة لكل مادة"];
@@ -111,6 +115,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
     checkpointSelections: {},
     courseModes: {},
     customTeacherNames: {},
+    teacherSchedules: {},
   });
 
   useEffect(() => {
@@ -235,6 +240,14 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
       skippedTeacherSubjectIds: selectedSubjects.filter(subject => !teacherSelections[subject.subjectId]).map(subject => subject.subjectId),
       courseModes: Object.fromEntries(selectedSubjects.map(subject => [subject.subjectId, form.courseModes[subject.subjectId] ?? "online"])),
       customTeacherNames: Object.fromEntries(Object.entries(form.customTeacherNames).filter(([id, name]) => selectedSubjects.some(subject => subject.subjectId === id) && name.trim()).map(([id, name]) => [id, name.trim()])),
+      teacherSchedules: Object.fromEntries(selectedSubjects.map(subject => [
+        subject.subjectId,
+        (form.teacherSchedules[subject.subjectId] ?? []).map(slot => ({
+          dayOfWeek: slot.dayOfWeek,
+          startTime: slot.startTime,
+          durationMinutes: slot.durationMinutes,
+        })),
+      ])),
       teacherFrontierReports: {},
     });
   };
@@ -511,6 +524,92 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                   {!form.courseModes[currentSetupSubjectId] && (
                     <p className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-3 text-sm text-muted-foreground">حدد طريقة دراسة المادة لاستكمال الإعداد.</p>
                   )}
+
+                  <section className="rounded-2xl border border-border/70 bg-muted/10 p-4 sm:p-5">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-bold">مواعيد محاضرات المدرس</p>
+                        <p className="mt-1 text-xs leading-6 text-muted-foreground">سجّل المواعيد المتكررة لهذه المادة. ده يساعد المنصة تحط مذاكرة الدرس قبل المحاضرة وتكتشف تعارضات الجدول. تقدر تضيف أو تعدّل المواعيد لاحقًا من ملفك الدراسي.</p>
+                      </div>
+                      <span className="rounded-full border border-primary/20 bg-primary/5 px-3 py-1.5 text-[10px] font-bold text-primary">اختياري</span>
+                    </div>
+                    <div className="mt-4 space-y-2.5">
+                      {(form.teacherSchedules[currentSetupSubjectId] ?? []).map((slot, slotIndex) => (
+                        <div key={slotIndex} className="grid gap-2 rounded-xl border border-border/70 bg-card p-3 sm:grid-cols-[1fr_1fr_.8fr_auto] sm:items-end">
+                          <label className="block text-xs font-semibold">
+                            اليوم
+                            <select
+                              value={slot.dayOfWeek}
+                              onChange={event => setForm(current => ({
+                                ...current,
+                                teacherSchedules: {
+                                  ...current.teacherSchedules,
+                                  [currentSetupSubjectId]: (current.teacherSchedules[currentSetupSubjectId] ?? []).map((item, index) => index === slotIndex ? { ...item, dayOfWeek: Number(event.target.value) } : item),
+                                },
+                              }))}
+                              className="mt-1.5 h-10 w-full rounded-lg border border-border bg-background px-2 text-sm"
+                            >
+                              {WEEK_DAYS.map((day, index) => <option key={day} value={index}>{day}</option>)}
+                            </select>
+                          </label>
+                          <label className="block text-xs font-semibold">
+                            وقت البداية
+                            <input
+                              type="time"
+                              value={slot.startTime}
+                              onChange={event => setForm(current => ({
+                                ...current,
+                                teacherSchedules: {
+                                  ...current.teacherSchedules,
+                                  [currentSetupSubjectId]: (current.teacherSchedules[currentSetupSubjectId] ?? []).map((item, index) => index === slotIndex ? { ...item, startTime: event.target.value } : item),
+                                },
+                              }))}
+                              className="mt-1.5 h-10 w-full rounded-lg border border-border bg-background px-2 text-sm"
+                            />
+                          </label>
+                          <label className="block text-xs font-semibold">
+                            المدة
+                            <select
+                              value={slot.durationMinutes}
+                              onChange={event => setForm(current => ({
+                                ...current,
+                                teacherSchedules: {
+                                  ...current.teacherSchedules,
+                                  [currentSetupSubjectId]: (current.teacherSchedules[currentSetupSubjectId] ?? []).map((item, index) => index === slotIndex ? { ...item, durationMinutes: Number(event.target.value) } : item),
+                                },
+                              }))}
+                              className="mt-1.5 h-10 w-full rounded-lg border border-border bg-background px-2 text-sm"
+                            >
+                              {[45,60,75,90,105,120,150,180].map(value => <option key={value} value={value}>{value} دقيقة</option>)}
+                            </select>
+                          </label>
+                          <Button type="button" size="icon" variant="ghost" className="size-10 rounded-lg text-muted-foreground hover:text-destructive" aria-label="حذف موعد المحاضرة"
+                            onClick={() => setForm(current => ({
+                              ...current,
+                              teacherSchedules: {
+                                ...current.teacherSchedules,
+                                [currentSetupSubjectId]: (current.teacherSchedules[currentSetupSubjectId] ?? []).filter((_, index) => index !== slotIndex),
+                              },
+                            }))}>
+                            <X className="size-4" />
+                          </Button>
+                        </div>
+                      ))}
+                      <Button type="button" variant="outline" className="w-full rounded-xl border-dashed" onClick={() => setForm(current => ({
+                        ...current,
+                        teacherSchedules: {
+                          ...current.teacherSchedules,
+                          [currentSetupSubjectId]: [
+                            ...(current.teacherSchedules[currentSetupSubjectId] ?? []),
+                            { dayOfWeek: 0, startTime: "18:00", durationMinutes: 90 },
+                          ],
+                        },
+                      }))}>
+                        <span className="text-base leading-none">+</span> إضافة موعد محاضرة
+                      </Button>
+                    </div>
+                    <p className="mt-3 text-[10px] leading-5 text-muted-foreground">المواعيد هنا أسبوعية ومتكررة. لو المحاضرة لها موعد استثنائي أو اتلغت، متابعة الإعلانات العامة ستتعامل معه بشكل منفصل.</p>
+                  </section>
 
                 </div>
               )}
