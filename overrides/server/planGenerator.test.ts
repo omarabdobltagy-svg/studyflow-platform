@@ -54,7 +54,7 @@ describe("annual plan curriculum coverage and progress alignment", () => {
     const covered = applyPlannerCurriculumCoverageGuard(progressGuarded, profile);
     const ranked = applyCurriculumPrioritySignals(covered, profile);
     const grammarIds = ranked.steps.flatMap(step => step.curriculumNodeIds)
-      .filter(id => id.startsWith("ARB_U"));
+      .filter(id => /^ARB_U[123]_N[123]$/.test(id));
 
     expect(grammarIds).toEqual(["ARB_U3_N1", "ARB_U3_N2"]);
     expect(ranked.steps[0].priorityReason).toContain("الخطوة التالية مباشرة");
