@@ -1421,9 +1421,12 @@ export async function generatePersonalPlan(
   const planningStart = constraints.startDate || new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
   const startUtc = Date.parse(planningStart + "T00:00:00.000Z");
   const endUtc = Date.parse(effectiveDeadline + "T00:00:00.000Z");
-  const availableDays = Number.isFinite(startUtc) && Number.isFinite(endUtc)
+  const calendarDays = Number.isFinite(startUtc) && Number.isFinite(endUtc)
     ? Math.max(0, Math.floor((endUtc - startUtc) / 86_400_000) + 1)
     : 0;
+  const fullWeeks = Math.floor(calendarDays / 7);
+  const remainingCalendarDays = calendarDays % 7;
+  const availableDays = fullWeeks * daysPerWeek + Math.min(daysPerWeek, remainingCalendarDays);
   const examWindowLabel = SECOND_YEAR_BAC_EXAM_WINDOW_2026_2027.start + " إلى " + SECOND_YEAR_BAC_EXAM_WINDOW_2026_2027.end;
   const feasibilityNote = scheduleDay > availableDays
     ? "تنبيه الجدوى: التوزيع الحالي يحتاج نحو " + scheduleDay + " أيام دراسة، بينما المتاح حتى هدف الجاهزية " + availableDays + " يومًا. لم نحذف دروسًا لإخفاء الفجوة. نافذة الامتحانات التقريبية " + examWindowLabel + "؛ راجع الوقت المتاح أو كثافة الخطة قبل الاعتماد."
