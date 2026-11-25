@@ -594,48 +594,120 @@ export function applyVerifiedExamComponentWeights(
   plan: GeneratedPlan,
   profile: NonNullable<Awaited<ReturnType<typeof getStudentProfile>>>,
 ): GeneratedPlan {
-  const nodeToSubject = new Map<string, string>();
+  const nodeLookup = new Map<string, { subjectId: string; branchId: string }>();
   for (const subjectId of profile.subjectIds || []) {
     for (const branch of getFirstPartBranches(subjectId)) {
-      for (const choice of branch.choices) nodeToSubject.set(choice.nodeId, subjectId);
+      for (const choice of branch.choices) {
+        nodeLookup.set(choice.nodeId, { subjectId, branchId: branch.branchId });
+      }
     }
   }
 
-  const steps = plan.steps.map(step => {
-    const subjectId = step.curriculumNodeIds.map(id => nodeToSubject.get(id)).find(Boolean);
-    if (!subjectId) return step;
+  const basePriorityScore = (value: unknown) =>
+    value === "critical" ? 1 : value === "high" ? 0.8 : value === "medium" ? 0.55 : value === "low" ? 0.3 : 0.5;
+
+  const ranked = plan.steps.map((step, index) => {
+    const curriculumLocation = step.curriculumNodeIds
+      .map(nodeId => nodeLookup.get(nodeId))
+      .find(Boolean);
+    if (!curriculumLocation) {
+      const score = basePriorityScore(step.priority);
+      return {
+        index,
+        groupKey: "__unmapped__" + index,
+        score,
+        step: {
+          ...step,
+          priorityScore: Math.round(score * 100),
+          priorityEvidenceConfidence: "low" as const,
+          priorityReason: step.priorityReason || "لا يوجد معرف منهجي كافٍ لربط الخطوة بوزن امتحان محدد؛ حافظ المخطط على تقديره العام.",
+        },
+      };
+    }
+
+    const { subjectId, branchId } = curriculumLocation;
     const subjectName = getSIESubject(subjectId)?.nameAr || subjectId;
     const sourceText = [step.title, step.category, step.detail].join(" ");
     const component = getExamComponentForText(subjectId, subjectName, sourceText);
-    if (!component || component.assessmentShare === null || component.marks === null) return step;
     const blueprint = getSubjectExamBlueprint(subjectId, subjectName);
-    if (!blueprint || blueprint.paperMarks === null) return step;
+    const originalScore = basePriorityScore(step.priority);
+
+    if (!component || component.assessmentShare === null || component.marks === null
+      || !blueprint || blueprint.paperMarks === null) {
+      return {
+        index,
+        groupKey: plannerBranchKey(subjectId, branchId),
+        score: originalScore,
+        step: {
+          ...step,
+          priorityScore: Math.round(originalScore * 100),
+          priorityEvidenceConfidence: "low" as const,
+          priorityReason: step.priorityReason
+            || "لا توجد أوزان فرعية موثقة لهذا الجزء في الفترة الحالية؛ استند الترتيب إلى فجوة المنهج ونتائجك وصعوبة الدرس.",
+        },
+      };
+    }
 
     const maximumShare = Math.max(...blueprint.components.map(item => item.assessmentShare ?? 0));
-    if (maximumShare <= 0) return step;
-    const relativeExamWeight = component.assessmentShare / maximumShare;
-    const originalPriority = prioritySignal(step.priority);
-    // Verified exam weight is a hard ranking signal, while model urgency still
-    // allows a personally weak component to rise when evidence supports it.
-    const score = 0.6 * relativeExamWeight + 0.4 * originalPriority;
-    const priority = score >= 0.78 ? "critical"
-      : score >= 0.62 ? "high"
+    if (maximumShare <= 0) {
+      return {
+        index,
+        groupKey: plannerBranchKey(subjectId, branchId),
+        score: originalScore,
+        step: { ...step, priorityScore: Math.round(originalScore * 100) },
+      };
+    }
+
+    const relativeExamWeight = Math.max(0, Math.min(1, component.assessmentShare / maximumShare));
+    // A verified mark share is the stronger signal; the model's urgency retains
+    // room for a student-specific weakness without letting a low-mark component
+    // dominate every other component by default.
+    const score = 0.45 * originalScore + 0.55 * relativeExamWeight;
+    const priority = score >= 0.85 ? "critical"
+      : score >= 0.65 ? "high"
         : score >= 0.42 ? "medium" : "low";
     return {
-      ...step,
-      priority,
-      priorityScore: Math.round(score * 100),
-      priorityReason:
-        "وزن المكوّن الموثق " + component.marks + "/" + blueprint.paperMarks
-        + " (" + Math.round(component.assessmentShare * 100) + "% من الورقة)؛ "
-        + "الوزن النسبي مقارنة بأعلى مكوّن " + Math.round(relativeExamWeight * 100) + "%"
-        + "؛ تمت موازنته مع إلحاح الطالب وتقييم النموذج.",
-      priorityEvidenceConfidence: "high" as const,
-      examComponentLabel: component.label,
-      examComponentMarks: component.marks,
-      examPaperMarks: blueprint.paperMarks,
+      index,
+      groupKey: plannerBranchKey(subjectId, branchId),
+      score,
+      step: {
+        ...step,
+        priority,
+        priorityScore: Math.round(score * 100),
+        priorityEvidenceConfidence: "high" as const,
+        priorityReason:
+          "وزن المكوّن الموثق " + component.marks + "/" + blueprint.paperMarks
+          + " (" + Math.round(component.assessmentShare * 100) + "% من الورقة)، "
+          + "والوزن النسبي مقارنة بأعلى مكوّن " + Math.round(relativeExamWeight * 100) + "%"
+          + "؛ تمت موازنته مع إلحاح هذه المهمة وفق فجوة الطالب ونتائجه.",
+        examComponentLabel: component.label,
+        examComponentMarks: component.marks,
+        examPaperMarks: blueprint.paperMarks,
+      },
     };
   });
+
+  // Reorder independent branch queues by their evidence score, but preserve
+  // the original lesson sequence and all sub-steps within each branch.
+  const groups = new Map<string, typeof ranked>();
+  for (const item of ranked) {
+    const group = groups.get(item.groupKey) ?? [];
+    group.push(item);
+    groups.set(item.groupKey, group);
+  }
+  const orderedGroups = [...groups.values()].sort((left, right) => {
+    const leftScore = left.reduce((sum, item) => sum + item.score, 0) / left.length;
+    const rightScore = right.reduce((sum, item) => sum + item.score, 0) / right.length;
+    return rightScore - leftScore || left[0].index - right[0].index;
+  });
+  const steps: GeneratedPlan["steps"] = [];
+  let round = 0;
+  while (orderedGroups.some(group => round < group.length)) {
+    for (const group of orderedGroups) {
+      if (round < group.length) steps.push(group[round].step);
+    }
+    round += 1;
+  }
   return { ...plan, steps };
 }
 
@@ -815,6 +887,9 @@ export async function generatePersonalPlan(
   }
   if (profile) {
     plan = applyPlannerProgressGuard(plan, profile);
+  }
+  if (profile) {
+    plan = applyVerifiedExamComponentWeights(plan, profile);
   }
   if (profile) {
     plan = applyVerifiedExamComponentWeights(plan, profile);
