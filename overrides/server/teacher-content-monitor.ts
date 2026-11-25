@@ -114,7 +114,7 @@ async function fetchJson(url: string) {
     signal: AbortSignal.timeout(8_000),
   });
   if (!response.ok) throw new Error("Public teacher page returned HTTP " + response.status);
-  return response.json() as Promise<{ data?: Array<Record<string, unknown>> }>;
+  return response.json() as Promise<Record<string, any>>;
 }
 
 export async function scanSelectedTeacherSources(
@@ -139,16 +139,17 @@ export async function scanSelectedTeacherSources(
     const teacher = getSIETeacher(teacherId);
     const teacherName = teacher?.nameAr ?? teacherId;
     const teacherYoutubeUrl = teacher?.profileUrl ?? "";
-    const directChannelId = YOUTUBE_CHANNEL_IDS[teacherId] ?? teacherYoutubeUrl.match(/youtube\\.com\\/channel\\/(UC[\\w-]+)/i)?.[1];
+    const directChannelId = YOUTUBE_CHANNEL_IDS[teacherId] ?? teacherYoutubeUrl.match(/youtube\.com\/channel\/(UC[\w-]+)/i)?.[1];
     const youtubeKey = teacherId + ":youtube";
     if (shouldScanTeacherSource(previousState[youtubeKey], now.getTime())) {
       tasks.push((async () => {
         let channelId = directChannelId;
-        const handle = teacherYoutubeUrl.match(/youtube\\.com\\/@([^/?]+)/i)?.[1];
+        const handle = teacherYoutubeUrl.match(/youtube\.com\/@([^/?]+)/i)?.[1];
         const apiKey = process.env.YOUTUBE_API_KEY;
         if (!channelId && handle && apiKey) {
           const channelResponse = await fetchJson("https://www.googleapis.com/youtube/v3/channels?part=id&forHandle=" + encodeURIComponent("@" + handle) + "&key=" + encodeURIComponent(apiKey));
-          channelId = typeof (channelResponse.data?.[0] as any)?.id === "string" ? String((channelResponse.data?.[0] as any).id) : undefined;
+          const channelItems = Array.isArray(channelResponse.items) ? channelResponse.items : [];
+          channelId = typeof channelItems[0]?.id === "string" ? String(channelItems[0].id) : undefined;
         }
         if (!channelId) return null;
         const xml = await fetchText("https://www.youtube.com/feeds/videos.xml?channel_id=" + encodeURIComponent(channelId));
