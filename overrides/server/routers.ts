@@ -1707,7 +1707,6 @@ export const appRouter = router({
         const branchRecords = subjectRecord.branches ?? {};
         const legacyStudentFrontier = legacyTeacherFrontiers[subjectId] || legacyTeacherState[subjectId]?.studentAttendedFrontier;
         const branches = getSIECheckpointProgressBranches(subjectId);
-        const rawBranches = getSIECheckpointBranches(subjectId);
         const selectedTeacherId = selection.teacherChoices?.[subjectId] ?? profile.teacherSelections?.[subjectId] ?? "__SKIP__";
         const selectedTeacherName = selection.customTeacherNames?.[subjectId] ?? "";
         const gaps = Object.fromEntries(branches.map(branch => {
