@@ -4,7 +4,7 @@ import { calculateLearningGap } from "@shared/sie-learning-progress";
 import { invokeLLM, invokeNvidiaLLM } from "./_core/llm";
 import { isPrimaryProviderFallbackEligible } from "./_core/llmFallback";
 import { getStudentProfile, saveAiPlan } from "./db";
-import { formatTextbookEvidence, retrieveTextbookEvidence } from "./textbook-retrieval";
+import { formatTextbookEvidence, getCurriculumBranchPriorityGuidance, retrieveTextbookEvidence } from "./textbook-retrieval";
 import { buildExamBlueprintContext, getExamComponentForText, getSubjectExamBlueprint } from "./exam-blueprints";
 import { isSecondYearBaccalaureateProfile, isSecondYearBaccalaureateUpdate, selectedTeacherIds } from "./teacher-content-monitor";
 
@@ -809,6 +809,15 @@ export function applyVerifiedExamComponentWeights(
     const branchProgress = progress.branches.get(plannerBranchKey(subjectId, branchId));
 
     const signals: Array<{ key: string; value: number; weight: number; label: string }> = [];
+    const branchPriorityGuidance = getCurriculumBranchPriorityGuidance(subjectId, branchId);
+    if (branchPriorityGuidance?.tier === "core") {
+      signals.push({
+        key: "curriculum_core",
+        value: 0.82,
+        weight: 0.18,
+        label: "أولوية تأسيسية معتمدة في توجيه التخطيط: " + (branchPriorityGuidance.rationale || "فرع أساسي") + "؛ هذه إشارة ترتيب داخلية وليست وزن درجات رسميًا.",
+      });
+    }
     const examWeightKnown = Boolean(
       component && component.assessmentShare !== null && component.marks !== null
         && blueprint && blueprint.paperMarks !== null
@@ -900,9 +909,10 @@ export function applyVerifiedExamComponentWeights(
         : score >= 0.42 ? "medium" : "low";
     const hasCalculatedGap = branchProgress?.gapCount !== null && branchProgress?.gapCount !== undefined;
     const hasAssessmentEvidence = scoreValues.length > 0 || Boolean(matchedWeakConcept);
-    const priorityEvidenceConfidence = examWeightKnown && (hasCalculatedGap || hasAssessmentEvidence)
+    const hasBranchPriorityGuidance = branchPriorityGuidance?.tier === "core";
+    const priorityEvidenceConfidence = examWeightKnown && (hasCalculatedGap || hasAssessmentEvidence || hasBranchPriorityGuidance)
       ? "high" as const
-      : hasCalculatedGap || hasAssessmentEvidence
+      : hasCalculatedGap || hasAssessmentEvidence || hasBranchPriorityGuidance
         ? "medium" as const
         : "low" as const;
     const partialExamMarkNote = component && component.marks !== null
@@ -1063,7 +1073,8 @@ export async function generatePersonalPlan(
     "عند وجود تقييم شخصي للدرس، اجعله المرجع الأول للصعوبة (difficultyBasis=student_report). إذا وُجدت نتيجة اختبار مرتبطة بالدرس، استخدمها بعد التقييم الشخصي (assessment_history). إذا غاب الاثنان استخدم تقدير المنهج المبدئي (curriculum_profile) مع ثقة منخفضة، وإلا unknown. لا تقدّم أي تقدير أولي على أنه تصنيف رسمي من الوزارة.",
     "رتّب الأولويات بمحرك متعدد المعايير، لا بترتيب فهرس الكتاب وحده: 35% لوزن المكوّن في ورقة امتحان نهاية السنة عندما يكون التوزيع السنوي معتمدًا وموثقًا، و25% لفجوة الطالب داخل الفرع والمتطلبات السابقة، و20% لنتائج الاختبارات ونقاط الضعف المسجلة، و10% لصعوبة المفهوم وحجم العبء، و10% لقرب الموعد والتغييرات الدراسية المؤكدة من المدرس. هذه أوزان داخلية لترتيب الخطة وليست توزيع درجات رسميًا. إذا كان وزن جزء غير معروف فلا تخترع رقمًا؛ أعد توزيع أثره على الأدلة المتاحة واخفض الثقة. طاقة الطالب تغيّر طول الجلسة وعدد المهام اليومية، ولا تلغي أهمية جزء امتحاني عالي الوزن.",
     "الهدف الامتحاني الافتراضي لكل المواد هو امتحان نهاية السنة في الصف الثاني بكالوريا. لا يوجد امتحان ترم أول في هذا المسار؛ لذلك لا تنشئ خطة أو أولوية على أساس امتحان ترم أول، ولا تستخدم توزيع درجات منشورًا لفترة أخرى. لا تضف وزنًا امتحانيًا رقميًا لأي فرع إلا إذا وُجدت مواصفة رسمية تخص الامتحان السنوي نفسه.",
-    "إذا لم تتوفر مواصفة تفصيلية للتاريخ أو البرمجة والذكاء الاصطناعي، لا تجعل كل وحدة متساوية على أنها حقيقة رسمية، ولا تخترع أعداد أسئلة. استخدم تغطية المنهج ومواضع الضعف والواجبات أو التقييمات السابقة المسجلة من المدرس أو من مصدر خارجي موثوق ومتطلبات الدروس السابقة، ووسم ثقة الوزن بأنها تقديرية إلى أن تتوفر المواصفة الرسمية. لا تنشئ اختبارًا تشخيصيًا جديدًا.",
+    "في العربي، احترم إشارة الأولوية التأسيسية لفرع النحو كما هي معرفة في بيانات المنتج، مع بقاء البلاغة والقراءة والنصوص والتعبير والإملاء والأدب فروعًا مستقلة كما في الكتالوج. في الإنجليزي، امنح القواعد والمفردات إشارة أولوية تأسيسية مستندة إلى توجيه المنتج وأنماط السؤال المهاري العامة في الثانوية العامة، دون نقل عدد الأسئلة أو توزيع درجات الصف الثالث إلى البكالوريا.",
+    "في التاريخ والبرمجة والذكاء الاصطناعي، كل الدروس غير المكتملة يجب أن تظل ضمن تغطية الخريطة السنوية؛ الأولوية تحدد ترتيب المتابعة وتقسيم الحمل فقط ولا تسمح بحذف درس أو وحدة. إذا لم تتوفر مواصفة امتحانية تفصيلية، استخدم مواضع الضعف والواجبات أو التقييمات السابقة المسجلة من المدرس أو من مصدر خارجي موثوق والمتطلبات السابقة، وصرّح بأن الوزن غير مثبت. لا تنشئ اختبارًا تشخيصيًا جديدًا.",
     "رتّب الأولويات لكل درس أيضًا وفق موعد الاختبار الموثق، والفجوة داخل الفرع نفسه بين آخر درس أنجزه الطالب وموضع المدرس، والمتطلبات السابقة، وحجم المحتوى، وصعوبة المفاهيم ونتائج الطالب. لا تخلط بين وحدات وفروع متوازية.",
     "حدّد difficulty: easy/medium/hard/unknown، وlessonSize: small/medium/large/unknown، وpriority: critical/high/medium/low لكل خطوة. أضف difficultyBasis وdifficultyConfidence. لا تجعل كل درس طويل صعبًا تلقائيًا؛ الحجم شيء والصعوبة شيء آخر.",
     "أدرج printedPageRange فقط عندما يكون نطاق الصفحة المطبوعة موثقًا في ملف المنهج؛ هذه أرقام الصفحات المطبوعة في الكتاب وليست أرقام صفحات PDF. لا تخترع نطاقات صفحات للإنجليزي أو الإيطالي إذا كانت متاحة على مستوى الوحدة فقط.",
