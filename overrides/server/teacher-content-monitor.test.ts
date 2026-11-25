@@ -77,6 +77,7 @@ describe("teacher public channel monitor", () => {
     expect(isSecondYearBaccalaureateUpdate({ title: "مراجعة نحو تانية بكالوريا 2027" })).toBe(true);
     expect(isSecondYearBaccalaureateUpdate({ title: "2 Bac 2027 - Unit 3 revision" })).toBe(true);
     expect(isSecondYearBaccalaureateUpdate({ title: "Baccalaureate الصف الثاني الثانوي" })).toBe(true);
+    expect(isSecondYearBaccalaureateUpdate({ title: "مراجعة تانية بكالوريا وتالتة بكالوريا" })).toBe(false);
   });
 
   it("rejects generic or other-grade posts even from a teacher selected for second-year Baccalaureate", () => {
