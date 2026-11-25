@@ -5,7 +5,7 @@ import { FixedWindowRateLimiter } from "./_core/authRateLimit";
 import { SignJWT } from "jose";
 import { TRPCError } from "@trpc/server";
 import { COOKIE_NAME } from "@shared/const";
-import { SIE_CATALOG_META, SIE_SYSTEMS, getSIEEducationSystem, getSIESubject, getSIETeacher, getSIETeachersForSubject, getSIETrack, getSIECheckpointChoices, getSIECheckpointBranches, validateSIESubjectSelection } from "@shared/sie-catalog";
+import { SIE_CATALOG_META, SIE_SYSTEMS, getSIEEducationSystem, getSIESubject, getSIETeacher, getSIETeachersForSubject, getSIETrack, getSIECheckpointChoices, getSIECheckpointBranches, normalizeSIECheckpointFrontier, validateSIESubjectSelection } from "@shared/sie-catalog";
 import { calculateLearningGap } from "@shared/sie-learning-progress";
 import {
   addChapter,
@@ -1733,30 +1733,34 @@ export const appRouter = router({
             : savedStudentFrontierValue === "__UNKNOWN__" && saved.studentFrontierConfirmedAt
               ? "__UNKNOWN__"
               : legacyLinear ? pickLegacyFrontier("lastCompletedLessonId") : undefined;
-          const studentFrontierId = savedStudentFrontier !== undefined
+          const resolvedStudentFrontierId = savedStudentFrontier !== undefined
             ? savedStudentFrontier
             : belongsToBranch(subjectRecord.lastCompletedLessonId)
               ? subjectRecord.lastCompletedLessonId
               : belongsToBranch(legacyStudentFrontier) ? legacyStudentFrontier : "__UNKNOWN__";
+          const studentFrontierId = normalizeSIECheckpointFrontier(subjectId, branch.branchId, resolvedStudentFrontierId);
           const savedTeacherFrontierValue = saved.teacherTeachingFrontierId;
           const savedTeacherFrontier = belongsToBranch(savedTeacherFrontierValue)
             ? savedTeacherFrontierValue
             : savedTeacherFrontierValue === "__UNKNOWN__" && saved.teacherFrontierConfirmedAt
               ? "__UNKNOWN__"
               : legacyLinear ? pickLegacyFrontier("teacherTeachingFrontierId", true) : undefined;
-          const teacherFrontierId = savedTeacherFrontier !== undefined
+          const resolvedTeacherFrontierId = savedTeacherFrontier !== undefined
             ? savedTeacherFrontier
             : belongsToBranch(subjectRecord.teacherTeachingFrontierId) ? subjectRecord.teacherTeachingFrontierId : "__UNKNOWN__";
+          const teacherFrontierId = normalizeSIECheckpointFrontier(subjectId, branch.branchId, resolvedTeacherFrontierId);
           const savedSchoolFrontierValue = saved.schoolClassFrontierId;
           const savedSchoolFrontier = belongsToBranch(savedSchoolFrontierValue)
             ? savedSchoolFrontierValue
             : savedSchoolFrontierValue === "__UNKNOWN__" && saved.schoolFrontierConfirmedAt
               ? "__UNKNOWN__"
               : legacyLinear ? pickLegacyFrontier("schoolClassFrontierId") : undefined;
-          const savedSchoolFrontierId = savedSchoolFrontier !== undefined
+          const resolvedSchoolFrontierId = savedSchoolFrontier !== undefined
             ? savedSchoolFrontier
             : belongsToBranch(subjectRecord.schoolClassFrontierId) ? subjectRecord.schoolClassFrontierId : "__UNKNOWN__";
-          const schoolFrontierId = subjectCourseMode === "center" ? savedSchoolFrontierId : "__UNKNOWN__";
+          const schoolFrontierId = subjectCourseMode === "center"
+            ? normalizeSIECheckpointFrontier(subjectId, branch.branchId, resolvedSchoolFrontierId)
+            : "__UNKNOWN__";
           return [branch.branchId, calculateLearningGap(branchChoices, {
             studentFrontierId,
             teacherTeachingFrontierId: teacherFrontierId,
@@ -1829,10 +1833,16 @@ export const appRouter = router({
         }
 
         const now = new Date().toISOString();
-        const nextStudentFrontier = input.studentFrontierId ?? previous.lastCompletedLessonId ?? "__UNKNOWN__";
-        const nextTeacherFrontier = input.teacherTeachingFrontierId ?? previous.teacherTeachingFrontierId ?? "__UNKNOWN__";
+        const nextStudentFrontier = normalizeSIECheckpointFrontier(
+          input.subjectId, input.branchId, input.studentFrontierId ?? previous.lastCompletedLessonId ?? "__UNKNOWN__",
+        );
+        const nextTeacherFrontier = normalizeSIECheckpointFrontier(
+          input.subjectId, input.branchId, input.teacherTeachingFrontierId ?? previous.teacherTeachingFrontierId ?? "__UNKNOWN__",
+        );
         const nextSchoolFrontier = courseMode === "center"
-          ? input.schoolClassFrontierId ?? previous.schoolClassFrontierId ?? "__UNKNOWN__"
+          ? normalizeSIECheckpointFrontier(
+              input.subjectId, input.branchId, input.schoolClassFrontierId ?? previous.schoolClassFrontierId ?? "__UNKNOWN__",
+            )
           : "__UNKNOWN__";
         const learningGap = calculateLearningGap(branchChoices, {
           studentFrontierId: nextStudentFrontier,
