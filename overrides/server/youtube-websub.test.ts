@@ -17,7 +17,7 @@ describe("YouTube WebSub verification", () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response("", { status: 202 }));
     vi.stubGlobal("fetch", fetchMock);
     const result = await subscribeSelectedYoutubeTeachers([
-      { teacherSelections: { Arabic: "T_AR_MOHAMED_SALAH" }, selection: {} },
+      { educationSystem: "baccalaureate", gradeYear: "الصف الثاني الثانوي – دفعة 2027", subjectIds: ["ARB_G2_BAC"], teacherSelections: { ARB_G2_BAC: "T_AR_MOHAMED_SALAH" }, selection: {} },
     ], {
       publicUrl: "https://studyflow.example",
       verifyToken: "test-verify-token",
@@ -63,7 +63,7 @@ describe("YouTube WebSub verification", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     const result = await subscribeSelectedYoutubeTeachers([
-      { teacherSelections: { Arabic: "T_AR_MOHAMED_SALAH" }, selection: {} },
+      { educationSystem: "baccalaureate", gradeYear: "الصف الثاني الثانوي – دفعة 2027", subjectIds: ["ARB_G2_BAC"], teacherSelections: { ARB_G2_BAC: "T_AR_MOHAMED_SALAH" }, selection: {} },
     ], {
       publicUrl: "",
       verifyToken: "test-verify-token",
