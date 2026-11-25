@@ -375,13 +375,13 @@ export default function Study() {
             <div>
               <p className="text-[10px] font-bold tracking-[0.14em] text-primary">اختيار التقدم</p>
               <h2 className="mt-1 text-xl font-bold">ابدأ من الوحدة، أو افتح الدروس</h2>
-              <p className="mt-1 text-sm leading-6 text-muted-foreground">تقدر تسجل إنك أنهيت وحدة كاملة بضغطة واحدة، أو تفتح دروسها لو لسه فيه جزء منها ما خلصتوش.</p>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">ابدأ بالوحدات الرسمية من الكتاب. فروع التعبير والإملاء والأدب والقصة تظهر كمسارات كورس المدرس بشكل مستقل. تقدر تسجل اكتمال وحدة أو تضغط «إظهار باقي الدروس» للتفصيل.</p>
             </div>
             <div className="inline-flex rounded-xl border border-border bg-muted/40 p-1">
               <button type="button" onClick={() => setStudyViewMode("units")} aria-pressed={studyViewMode === "units"}
                 className={"rounded-lg px-4 py-2 text-xs font-bold transition " + (studyViewMode === "units" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>الوحدات</button>
               <button type="button" onClick={() => setStudyViewMode("lessons")} aria-pressed={studyViewMode === "lessons"}
-                className={"rounded-lg px-4 py-2 text-xs font-bold transition " + (studyViewMode === "lessons" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>الدروس</button>
+                className={"rounded-lg px-4 py-2 text-xs font-bold transition " + (studyViewMode === "lessons" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>إظهار باقي الدروس</button>
             </div>
           </div>
         </header>
@@ -411,7 +411,7 @@ export default function Study() {
                   <div className="relative">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="text-[10px] font-bold tracking-[.12em] text-primary">{unit.isOfficialUnit ? "وحدة المنهج" : "مسار إضافي"}</p>
+                        <p className="text-[10px] font-bold tracking-[.12em] text-primary">{unit.isOfficialUnit ? "وحدة الكتاب الرسمي" : unit.unitId.startsWith("TOPICS_ARB_") ? "كورس المدرس" : "مسار إضافي"}</p>
                         <h3 className="mt-1 font-bold leading-7">{unit.title}</h3>
                       </div>
                       <span className={"flex size-9 shrink-0 items-center justify-center rounded-xl " + (complete ? "bg-primary text-primary-foreground" : "bg-secondary text-primary")}>
