@@ -156,8 +156,9 @@ export async function scanSelectedTeacherSources(
         const apiKey = process.env.YOUTUBE_API_KEY;
         if (!channelId && handle && apiKey) {
           const channelResponse = await fetchJson("https://www.googleapis.com/youtube/v3/channels?part=id&forHandle=" + encodeURIComponent("@" + handle) + "&key=" + encodeURIComponent(apiKey));
-          const channelItems = Array.isArray(channelResponse.items) ? channelResponse.items : [];
-          channelId = typeof channelItems[0]?.id === "string" ? String(channelItems[0].id) : undefined;
+          const channelItems = Array.isArray(channelResponse.items) ? channelResponse.items as Array<Record<string, unknown>> : [];
+          const resolvedChannelId = typeof channelItems[0]?.id === "string" ? channelItems[0].id : undefined;
+          if (resolvedChannelId) channelId = resolvedChannelId;
         }
         if (!channelId) return { key: youtubeKey, updates: [] };
         const xml = await fetchText("https://www.youtube.com/feeds/videos.xml?channel_id=" + encodeURIComponent(channelId));
@@ -174,7 +175,8 @@ export async function scanSelectedTeacherSources(
         url.searchParams.set("limit", "10");
         url.searchParams.set("access_token", pageToken);
         const payload = await fetchJson(url.toString());
-        const updates = (payload.data ?? []).flatMap(item => {
+        const posts = Array.isArray(payload.data) ? payload.data as Array<Record<string, unknown>> : [];
+        const updates = posts.flatMap((item: Record<string, unknown>) => {
           const externalId = typeof item.id === "string" ? item.id : "";
           const title = String(item.story ?? item.message ?? "").trim();
           const publishedAt = String(item.created_time ?? "");
