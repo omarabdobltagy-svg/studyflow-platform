@@ -27,7 +27,7 @@ const SOURCE_SCAN_INTERVAL_MS = 45 * 60 * 1_000;
 const MAX_UPDATES_PER_SCAN = 12;
 
 function decodeXml(value: string) {
-  return value.replace(/<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>/g, "$1")
+  return value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
