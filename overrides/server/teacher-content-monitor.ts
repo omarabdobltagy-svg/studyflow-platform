@@ -84,7 +84,7 @@ export function shouldScanTeacherSource(lastScannedAt: string | undefined, now =
   return !Number.isFinite(timestamp) || timestamp > now || now - timestamp >= SOURCE_SCAN_INTERVAL_MS;
 }
 
-function selectedTeacherIds(profile: {
+export function selectedTeacherIds(profile: {
   teacherSelections?: Record<string, string>;
   selection?: Record<string, any>;
 }) {
@@ -172,6 +172,25 @@ async function probeYoutubeApiKey(apiKey: string, now = Date.now()): Promise<voi
   } finally {
     if (youtubeApiKeyProbeInFlight === task) youtubeApiKeyProbeInFlight = null;
   }
+}
+
+export async function resolveTeacherYoutubeChannelId(teacherId: string): Promise<string | null> {
+  const known = YOUTUBE_CHANNEL_IDS[teacherId];
+  if (known) return known;
+  const teacher = getSIETeacher(teacherId);
+  const profileUrl = teacher?.profileUrl ?? "";
+  const directChannelId = profileUrl.match(/youtube\\.com\\/channel\\/(UC[\\w-]+)/i)?.[1];
+  if (directChannelId) return directChannelId;
+  const handle = profileUrl.match(/youtube\\.com\\/@([^/?]+)/i)?.[1];
+  const apiKey = process.env.YOUTUBE_API_KEY?.trim();
+  if (!handle || !apiKey) return null;
+  const result = await fetchJson(
+    "https://www.googleapis.com/youtube/v3/channels?part=id&forHandle="
+      + encodeURIComponent("@" + handle) + "&key=" + encodeURIComponent(apiKey)
+  );
+  const items = Array.isArray(result.items) ? result.items as Array<Record<string, unknown>> : [];
+  const channelId = items[0]?.id;
+  return typeof channelId === "string" && /^UC[\\w-]{20,}$/.test(channelId) ? channelId : null;
 }
 
 async function fetchJson(url: string, accessToken?: string) {
