@@ -33,8 +33,23 @@ export default function Planner() {
   const [startDate] = useState(todayCairo);
   const [dailyMinutes, setDailyMinutes] = useState(120);
   const history = trpc.plans.list.useQuery();
-  const profile = trpc.studentProfile.get.useQuery();
+  const profile = trpc.studentProfile.get.useQuery(undefined, {
+    refetchInterval: 180_000,
+    refetchOnWindowFocus: true,
+  });
   const learning = trpc.learning.get.useQuery();
+  const teacherPublicUpdates = useMemo(() => {
+    const selection = (profile.data as any)?.selection ?? {};
+    const updates = Array.isArray(selection.teacherPublicUpdates) ? selection.teacherPublicUpdates : [];
+    return [...updates].sort((left: any, right: any) =>
+      Date.parse(String(right.publishedAt || 0)) - Date.parse(String(left.publishedAt || 0))
+    ).slice(0, 6);
+  }, [profile.data]);
+  const teacherScanState = ((profile.data as any)?.selection?.teacherPublicScanState ?? {}) as Record<string, string>;
+  const latestTeacherScanAt = Object.values(teacherScanState)
+    .map(value => Date.parse(value))
+    .filter(Number.isFinite)
+    .sort((a, b) => b - a)[0] ?? null;
   const dailySnapshot = trpc.plans.currentDaily.useQuery(undefined, {
     staleTime: 10_000,
     refetchInterval: query => query.state.data?.needsRefresh || !query.state.data?.plan ? 15_000 : 180_000,
@@ -98,6 +113,62 @@ export default function Planner() {
     {profile.isError && <QueryErrorNotice onRetry={() => void profile.refetch()} label="تعذّر تحميل ملفك الدراسي؛ لا يمكن إنشاء خطة مخصصة قبل عودة بيانات الملف." />}
     {learning.isError && <QueryErrorNotice onRetry={() => void learning.refetch()} label="تعذّر تحميل مواضع الفروع؛ أعد المحاولة حتى يستطيع المخطط قراءة التراكم المحسوب." />}
     {dailySnapshot.isError && <QueryErrorNotice onRetry={() => void dailySnapshot.refetch()} label="تعذّر تحميل خطة اليوم التلقائية." />}
+    <section className="app-card sf-planner-surface mb-6 overflow-hidden">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 p-4 sm:p-5">
+        <div className="min-w-0">
+          <p className="eyebrow">TEACHER SIGNALS</p>
+          <h2 className="mt-1 text-lg font-bold">آخر تحديثات المدرسين</h2>
+          <p className="mt-1 max-w-2xl text-xs leading-6 text-muted-foreground">
+            دي التحديثات العامة التي استقبلها StudyFlow من مصادر المدرسين المختارين. وصول تحديث جديد يطلق مراجعة للخطة، لكنه لا يتحول تلقائيًا إلى واجب قبل مطابقته بالمنهج.
+          </p>
+        </div>
+        <span className="shrink-0 rounded-full border border-border bg-muted/40 px-3 py-1.5 text-xs font-semibold">
+          {teacherPublicUpdates.length} تحديثات محفوظة
+        </span>
+      </header>
+      <div className="p-4 sm:p-5">
+        <p className="text-[11px] text-muted-foreground">
+          آخر فحص مسجل: {latestTeacherScanAt
+            ? new Intl.DateTimeFormat("ar-EG", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Cairo" }).format(new Date(latestTeacherScanAt))
+            : "لم يُسجل فحص بعد"}
+          · YouTube: إشعارات فورية للقنوات التي قبلت الاشتراك، مع فحص دوري احتياطي
+        </p>
+        {teacherPublicUpdates.length ? (
+          <div className="mt-3 divide-y divide-border/60">
+            {teacherPublicUpdates.map((update: any, index: number) => (
+              <article key={String(update.externalId || index)} className="flex flex-wrap items-start justify-between gap-3 py-3 first:pt-0 last:pb-0">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
+                    <span className="rounded-md border border-border px-2 py-0.5">{update.sourceType === "youtube" ? "YouTube" : update.sourceType === "facebook" ? "Facebook" : "مصدر عام"}</span>
+                    <span>{update.teacherName || "مدرس مختار"}</span>
+                    <span>·</span>
+                    <span>{update.publishedAt && Number.isFinite(Date.parse(String(update.publishedAt)))
+                      ? new Intl.DateTimeFormat("ar-EG", { dateStyle: "medium", timeZone: "Africa/Cairo" }).format(new Date(update.publishedAt))
+                      : "تاريخ غير متاح"}</span>
+                  </div>
+                  <h3 className="mt-1 break-words text-sm font-semibold">{update.title || "تحديث جديد"}</h3>
+                  {update.durationMinutes ? <p className="mt-1 text-[11px] text-muted-foreground">مدة الفيديو: {update.durationMinutes} دقيقة</p> : null}
+                  {update.description ? <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{update.description}</p> : null}
+                </div>
+                {typeof update.url === "string" && /^https:\/\//i.test(update.url)
+                  ? <a href={update.url} target="_blank" rel="noreferrer" className="shrink-0 text-xs font-semibold text-primary hover:underline">فتح المصدر</a>
+                  : null}
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="mt-3 rounded-xl bg-muted/35 p-4">
+            <p className="text-sm font-semibold">لا توجد تحديثات جديدة محفوظة بعد.</p>
+            <p className="mt-1 text-xs leading-6 text-muted-foreground">
+              سيظهر هنا عنوان الفيديو وتاريخه ومدته عند وصول تحديث من قناة مدرس مختارة. إذا لم يظهر مدرس، فتأكد أن قناته العامة مرتبطة بملفك الدراسي.
+            </p>
+          </div>
+        )}
+        <p className="mt-3 border-t border-border/60 pt-3 text-[11px] leading-5 text-muted-foreground">
+          حدود الاتصال الحالية: YouTube مفعّل للقنوات التي اكتمل لها الاشتراك. Facebook يحتاج صلاحيات Page/App وبيانات وصول غير مهيأة في هذه المعاينة. WhatsApp الخاص أو مجموعات المدرسين ليست مصدرًا عامًا يمكن مسحه؛ يمكن التعامل فقط مع تكامل أعمال/رسائل مصرح بها.
+        </p>
+      </div>
+    </section>
     <section className="app-card sf-planner-surface mb-6 overflow-hidden">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 p-4 sm:p-5">
         <div className="min-w-0">
