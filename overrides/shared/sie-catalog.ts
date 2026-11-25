@@ -1246,6 +1246,70 @@ export function getSIECheckpointProgressBranches(subjectId: string): SIECheckpoi
   });
 }
 
+export type SIECurriculumUnitBranch = {
+  branchId: string;
+  branchTitle: string;
+  choices: SIECheckpointChoice[];
+};
+
+export type SIECurriculumUnit = {
+  unitId: string;
+  unitNumber?: number;
+  unitTitle: string;
+  title: string;
+  isOfficialUnit: boolean;
+  lessonCount: number;
+  branches: SIECurriculumUnitBranch[];
+};
+
+/**
+ * Build a student-facing unit view without flattening away branch-level progress.
+ * Official units are grouped across the subject's skill branches. Teacher-course
+ * topics without a ministry unit number remain in their own branch group.
+ */
+export function getSIECheckpointUnits(subjectId: string): SIECurriculumUnit[] {
+  const branches = getSIECheckpointProgressBranches(subjectId);
+  const units = new Map<string, SIECurriculumUnit>();
+  for (const branch of branches) {
+    for (const choice of branch.choices) {
+      const unitTitle = choice.unitTitle?.trim() || branch.branchTitle;
+      const isOfficialUnit = typeof choice.unitNumber === "number" && choice.unitNumber > 0;
+      const unitId = isOfficialUnit
+        ? `UNIT_${choice.unitNumber}_${unitTitle}`
+        : `TOPICS_${branch.branchId}_${unitTitle}`;
+      let unit = units.get(unitId);
+      if (!unit) {
+        unit = {
+          unitId,
+          ...(isOfficialUnit ? { unitNumber: choice.unitNumber } : {}),
+          unitTitle,
+          title: isOfficialUnit
+            ? `الوحدة ${choice.unitNumber}: ${unitTitle}`
+            : unitTitle,
+          isOfficialUnit,
+          lessonCount: 0,
+          branches: [],
+        };
+        units.set(unitId, unit);
+      }
+      let unitBranch = unit.branches.find(item => item.branchId === branch.branchId);
+      if (!unitBranch) {
+        unitBranch = { branchId: branch.branchId, branchTitle: branch.branchTitle, choices: [] };
+        unit.branches.push(unitBranch);
+      }
+      if (!unitBranch.choices.some(item => item.nodeId === choice.nodeId)) {
+        unitBranch.choices.push(choice);
+        unit.lessonCount += 1;
+      }
+    }
+  }
+  return [...units.values()].sort((left, right) => {
+    if (left.isOfficialUnit && right.isOfficialUnit) return (left.unitNumber ?? 0) - (right.unitNumber ?? 0);
+    if (left.isOfficialUnit !== right.isOfficialUnit) return left.isOfficialUnit ? -1 : 1;
+    return left.title.localeCompare(right.title, "ar");
+  });
+}
+
 export type SIECheckpointTaskMatch = {
   subjectId: string;
   branchId: string;
