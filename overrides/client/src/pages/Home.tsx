@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { AnimatePresence, motion, useReducedMotion, type Variants } from "framer-motion";
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -180,34 +180,51 @@ export default function Home() {
   const summary = trpc.dashboard.summary.useQuery({ timeZone });
   const learning = trpc.learning.get.useQuery();
   const profile = trpc.studentProfile.get.useQuery();
-  const autoPlanRequested = useRef(false);
+  const dailyPlanSnapshot = trpc.plans.currentDaily.useQuery(undefined, {
+    staleTime: 10_000,
+    refetchInterval: query => query.state.data?.plan ? 45_000 : 5_000,
+    refetchOnWindowFocus: true,
+    retry: 1,
+  });
   const dailyPlan = trpc.plans.ensureDaily.useMutation({
     onSuccess: () => {
+      void utils.plans.currentDaily.invalidate();
       void utils.dashboard.summary.invalidate();
       void utils.tasks.list.invalidate();
     },
     onError: error => toast.error("تعذّر تحديث خطة اليوم: " + error.message),
   });
+  const updateStudyConditions = trpc.plans.updateStudyConditions.useMutation({
+    onSuccess: () => {
+      toast.success("تم حفظ ظروف اليوم وسيُعاد ترتيب الخطة تلقائيًا.");
+      void profile.refetch();
+    },
+    onError: error => toast.error("تعذّر حفظ ظروف الدراسة: " + error.message),
+  });
   const toggleTask = trpc.tasks.toggle.useMutation({
     onSuccess: () => {
       void utils.dashboard.summary.invalidate();
-      dailyPlan.mutate({ dailyMinutes: 120 });
     },
   });
   const toggleRoutine = trpc.routines.toggleItem.useMutation({
     onSuccess: () => {
       void utils.dashboard.summary.invalidate();
-      dailyPlan.mutate({ dailyMinutes: 120 });
     },
   });
   const [openFolder, setOpenFolder] = useState<string | null>(null);
-  const data = summary.data;
-  const requestDailyPlan = dailyPlan.mutate;
+  const [energyLevel, setEnergyLevel] = useState<"low" | "normal" | "high">("normal");
+  const [moraleLevel, setMoraleLevel] = useState<"low" | "neutral" | "good">("neutral");
+  const [dailyMinutes, setDailyMinutes] = useState(120);
+  const [resourceConstraints, setResourceConstraints] = useState("");
   useEffect(() => {
-    if (!profile.isSuccess || !profile.data?.subjectIds?.length || autoPlanRequested.current) return;
-    autoPlanRequested.current = true;
-    requestDailyPlan({ dailyMinutes: 120 });
-  }, [profile.isSuccess, profile.data, requestDailyPlan]);
+    const saved = (profile.data?.selection as any)?.studyConditions;
+    if (!saved) return;
+    if (saved.energyLevel === "low" || saved.energyLevel === "normal" || saved.energyLevel === "high") setEnergyLevel(saved.energyLevel);
+    if (saved.moraleLevel === "low" || saved.moraleLevel === "neutral" || saved.moraleLevel === "good") setMoraleLevel(saved.moraleLevel);
+    if (Number.isInteger(saved.dailyMinutes) && saved.dailyMinutes >= 20 && saved.dailyMinutes <= 600) setDailyMinutes(saved.dailyMinutes);
+    if (typeof saved.resourceConstraints === "string") setResourceConstraints(saved.resourceConstraints);
+  }, [profile.data?.selection]);
+  const data = summary.data;
 
   const backlogBySubject = useMemo(
     () => buildLearningBacklogSummary(
@@ -392,25 +409,62 @@ export default function Home() {
               <div><span>STUDYFLOW / DAILY PLAN</span><h3>خطة الدراسة الحالية</h3><p>تُنشأ من مواضعك والتراكم تلقائيًا، وتُضاف خطواتها إلى مهامك من غير اعتماد يدوي أو تكرار.</p></div>
               <Sparkles size={19} />
             </div>
-            {dailyPlan.isPending ? <div className="sf-home-intelligence-loading">المخطط بيقرأ المنهج والتراكم ويرتب أولويات اليوم...</div>
-              : dailyPlan.isError ? <div className="sf-home-intelligence-empty">
-                  تعذّر إنشاء خطة اليوم: {dailyPlan.error.message}
-                  <Button type="button" onClick={() => dailyPlan.mutate({ dailyMinutes: 120 })} className="sf-home-plan-button mt-3">إعادة المحاولة <ArrowLeft size={14} /></Button>
+            {dailyPlanSnapshot.isLoading && !dailyPlanSnapshot.data ? <div className="sf-home-intelligence-loading">جارٍ تحميل آخر خطة محفوظة...</div>
+              : dailyPlanSnapshot.isError ? <div className="sf-home-intelligence-empty">
+                  تعذّر قراءة خطة اليوم: {dailyPlanSnapshot.error.message}
+                  <Button type="button" onClick={() => void dailyPlanSnapshot.refetch()} className="sf-home-plan-button mt-3">إعادة المحاولة <ArrowLeft size={14} /></Button>
                 </div>
-              : dailyPlan.data?.plan ? <><div className="sf-home-plan-status"><span className="sf-home-plan-status-dot" />{dailyPlan.data.generated ? "تم إنشاء خطة اليوم تلقائيًا" : "خطة اليوم محفوظة وجاهزة للمتابعة"}</div>
-                <h4>{dailyPlan.data.plan.title}</h4>
-                <p className="sf-home-plan-summary">{dailyPlan.data.plan.summary}</p>
-                <div className="sf-home-plan-steps">{dailyPlan.data.plan.steps.slice(0, 3).map((step, index) => <div key={index}><span>{step.day}</span><strong>{step.title}</strong><small>{step.minutes} دقيقة</small></div>)}</div>
+              : dailyPlanSnapshot.data?.plan ? <><div className="sf-home-plan-status"><span className="sf-home-plan-status-dot" />{dailyPlanSnapshot.data.needsRefresh || dailyPlan.isPending ? "الخطة المحفوظة — يتم تحديثها في الخلفية" : "الخطة محفوظة وجاهزة للمتابعة"}</div>
+                <h4>{dailyPlanSnapshot.data.plan.title}</h4>
+                <p className="sf-home-plan-summary">{dailyPlanSnapshot.data.plan.summary}</p>
+                <div className="sf-home-plan-steps">{dailyPlanSnapshot.data.plan.steps.slice(0, 3).map((step, index) => <div key={index}><span>{step.day}</span><strong>{step.title}</strong><small>{step.minutes} دقيقة</small></div>)}</div>
                 <div className="sf-home-plan-footer">
-                  <span>{dailyPlan.data.taskCount} مهمة متزامنة · أُضيفت {dailyPlan.data.tasksAdded} جديدة</span>
+                  <span>{dailyPlanSnapshot.data.taskCount} خطوة في الخطة · آخر حفظ {dailyPlanSnapshot.data.generatedAt ? shortDate(dailyPlanSnapshot.data.generatedAt) : "اليوم"}</span>
                   <div className="flex flex-wrap gap-2">
+                    {dailyPlan.isError && <Button type="button" onClick={() => dailyPlan.mutate({ dailyMinutes: dailyPlanSnapshot.data?.dailyMinutes ?? 120 })} className="sf-home-plan-button">إعادة المحاولة <ArrowLeft size={14} /></Button>}
                     <Button type="button" onClick={() => setLocation("/tasks")} className="sf-home-plan-button">فتح المهام <ArrowLeft size={14} /></Button>
                     <Button type="button" onClick={() => setLocation("/planner")} variant="ghost" className="sf-home-plan-secondary">تفاصيل الخطة</Button>
                   </div>
                 </div>
-              </> : <div className="sf-home-intelligence-empty">أكمل ملفك الدراسي وحدد المواد لبدء إنشاء خطتك التلقائية.</div>}
+              </> : dailyPlanSnapshot.data?.needsRefresh || dailyPlan.isPending
+                ? <div className="sf-home-intelligence-loading">جارٍ إعداد أول خطة على بياناتك الحالية...</div>
+                : <div className="sf-home-intelligence-empty">أكمل ملفك الدراسي وحدد المواد لبدء إنشاء خطتك التلقائية.</div>}
           </section>
         </motion.section>
+
+        <section className="app-card sf-planner-surface mt-5 p-5 sm:p-6">
+          <div className="mb-4">
+            <p className="eyebrow">DAILY ADAPTATION</p>
+            <h3 className="mt-1 font-bold">ظروفك وقدرتك اليوم</h3>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">حدّث الحالة البدنية والمعنوية والوقت والموارد المتاحة؛ المخطط سيعيد توزيع الحمل بدل إعادة بناء الخطة عند كل فتح للتطبيق.</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <label className="grid gap-1.5 text-sm font-medium">الطاقة البدنية
+              <select value={energyLevel} onChange={event => setEnergyLevel(event.target.value as typeof energyLevel)} className="h-11 rounded-xl border border-border bg-background px-3">
+                <option value="low">منخفضة / مرهق</option><option value="normal">طبيعية</option><option value="high">مرتفعة</option>
+              </select>
+            </label>
+            <label className="grid gap-1.5 text-sm font-medium">الحالة المعنوية
+              <select value={moraleLevel} onChange={event => setMoraleLevel(event.target.value as typeof moraleLevel)} className="h-11 rounded-xl border border-border bg-background px-3">
+                <option value="low">منخفضة</option><option value="neutral">عادية</option><option value="good">جيدة</option>
+              </select>
+            </label>
+            <label className="grid gap-1.5 text-sm font-medium">وقت الدراسة المتاح
+              <select value={dailyMinutes} onChange={event => setDailyMinutes(Number(event.target.value))} className="h-11 rounded-xl border border-border bg-background px-3">
+                <option value={45}>45 دقيقة</option><option value={60}>ساعة</option><option value={90}>ساعة ونصف</option><option value={120}>ساعتان</option><option value={150}>ساعتان ونصف</option><option value={180}>3 ساعات</option><option value={240}>4 ساعات</option><option value={300}>5 ساعات</option>
+              </select>
+            </label>
+            <label className="grid gap-1.5 text-sm font-medium sm:col-span-2 xl:col-span-1">قيود الموارد والأدوات
+              <input value={resourceConstraints} maxLength={500} onChange={event => setResourceConstraints(event.target.value)} placeholder="مثال: لا أملك كتابًا مطبوعًا أو الإنترنت محدود" className="h-11 rounded-xl border border-border bg-background px-3 text-sm font-normal" />
+            </label>
+          </div>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs text-muted-foreground">التغيير لا يمس المهام المكتملة، ويعيد ترتيب المهام المتبقية فقط.</p>
+            <Button type="button" disabled={updateStudyConditions.isPending} onClick={() => updateStudyConditions.mutate({ energyLevel, moraleLevel, dailyMinutes, resourceConstraints })}>
+              {updateStudyConditions.isPending ? "جارٍ الحفظ..." : "حفظ ظروف اليوم"}
+            </Button>
+          </div>
+        </section>
 
         <motion.section
           className="sf-metric-strip"
