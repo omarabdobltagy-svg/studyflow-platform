@@ -450,7 +450,7 @@ export default function Planner() {
                     <p className="mt-1.5 text-xs text-muted-foreground">الوقت ده هو متوسط متاح، مش إلزام يومي ثابت.</p>
                   </div>
                   <div>
-                    <p className="mb-2 text-sm font-semibold">3. هل عندك موعد شخصي تخلص قبله؟</p>
+                    <p className="mb-2 text-sm font-semibold">4. هل عندك موعد شخصي تخلص قبله؟</p>
                     <label className="flex min-h-11 items-center gap-2 rounded-xl border border-border bg-muted/20 px-3 text-sm">
                       <input type="checkbox" checked={usePersonalDeadline} onChange={event => setUsePersonalDeadline(event.target.checked)} className="size-4 accent-primary" />
                       عندي موعد نهائي إضافي
