@@ -1137,6 +1137,87 @@ export function getSIECheckpointBranches(subjectId: string): SIECheckpointBranch
   return result;
 }
 
+export type SIECheckpointProgressOption = {
+  value: string;
+  label: string;
+  description?: string;
+};
+
+const ARABIC_NAHW_TOPIC_GROUPS = [
+  {
+    groupId: "ARABIC_NAHW_AL_ASMAA_AL_KHAMSA",
+    nodeIds: ["ARB_U1_N1", "ARB_U1_N2", "ARB_U1_N3"],
+    value: "ARB_U1_N3",
+    label: "الأسماء الخمسة",
+    description: "الموضوع كاملًا: الدرس والتكملة والتطبيق",
+  },
+  {
+    groupId: "ARABIC_NAHW_AL_MAMNOO_MIN_AL_SARF",
+    nodeIds: ["ARB_U2_N1", "ARB_U2_N2", "ARB_U2_N3"],
+    value: "ARB_U2_N3",
+    label: "الممنوع من الصرف وعلل منعه",
+    description: "الموضوع كاملًا: الدرس والتكملة والتطبيق",
+  },
+] as const;
+
+/**
+ * A student-selected topic means the complete topic is finished. Some Arabic
+ * grammar topics have multiple textbook checkpoints (lesson, continuation,
+ * application); normalize every checkpoint in that topic to its final node.
+ * Existing persisted node IDs remain valid and are interpreted consistently.
+ */
+export function normalizeSIECheckpointFrontier(
+  subjectId: string,
+  branchId: string,
+  frontierId: string,
+): string {
+  if (subjectId !== "ARB_G2_BAC" || branchId !== "ARB_NAHW") return frontierId;
+  const group = ARABIC_NAHW_TOPIC_GROUPS.find(item => item.nodeIds.includes(frontierId as never));
+  return group?.value ?? frontierId;
+}
+
+/** Student/teacher pickers show coherent lessons, not internal textbook sub-parts. */
+export function getSIECheckpointProgressOptions(
+  subjectId: string,
+  branchId: string,
+): SIECheckpointProgressOption[] {
+  const branch = getSIECheckpointBranches(subjectId).find(item => item.branchId === branchId);
+  if (!branch) return [];
+  if (subjectId !== "ARB_G2_BAC" || branchId !== "ARB_NAHW") {
+    return branch.choices.map(choice => ({
+      value: choice.nodeId,
+      label: choice.title,
+      description: choice.lessonNumber
+        ? (choice.unitNumber ? "الوحدة " + choice.unitNumber + " · " : "") + "الدرس " + choice.lessonNumber
+        : choice.unitTitle || "",
+    }));
+  }
+
+  const emittedGroups = new Set<string>();
+  const options: SIECheckpointProgressOption[] = [];
+  for (const choice of branch.choices) {
+    const group = ARABIC_NAHW_TOPIC_GROUPS.find(item => item.nodeIds.includes(choice.nodeId as never));
+    if (group) {
+      if (emittedGroups.has(group.groupId)) continue;
+      emittedGroups.add(group.groupId);
+      options.push({
+        value: group.value,
+        label: group.label,
+        description: group.description,
+      });
+      continue;
+    }
+    options.push({
+      value: choice.nodeId,
+      label: choice.title,
+      description: choice.lessonNumber
+        ? (choice.unitNumber ? "الوحدة " + choice.unitNumber + " · " : "") + "الدرس " + choice.lessonNumber
+        : choice.unitTitle || "",
+    });
+  }
+  return options;
+}
+
 export function getSIECheckpointChoicesPreview(subjectId: string, limit = 5): SIECheckpointChoice[] {
   return getSIECheckpointChoices(subjectId).slice(0, limit);
 }
