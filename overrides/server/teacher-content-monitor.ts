@@ -71,7 +71,10 @@ export function parseYoutubeAtomFeed(
 export function parseYoutubeDurationMinutes(duration: string): number | undefined {
   const match = duration.match(/^P(?:(\d+)D)?T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/i);
   if (!match) return undefined;
-  const totalSeconds = Number(match[1] ?? 0) * 3_600 + Number(match[2] ?? 0) * 60 + Number(match[3] ?? 0);
+  const totalSeconds = Number(match[1] ?? 0) * 86_400
+    + Number(match[2] ?? 0) * 3_600
+    + Number(match[3] ?? 0) * 60
+    + Number(match[4] ?? 0);
   return totalSeconds > 0 ? Math.ceil(totalSeconds / 60) : undefined;
 }
 
