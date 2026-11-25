@@ -1143,6 +1143,9 @@ export function getSIECheckpointBranches(subjectId: string): SIECheckpointBranch
     }));
 
     return [
+      { branchId: "ENG_VOCABULARY", branchTitle: "دروس المفردات داخل الوحدات", branchType: "course_track", choices: vocabularyChoices },
+      { branchId: "ENG_GRAMMAR", branchTitle: "دروس القواعد داخل الوحدات", branchType: "course_track", choices: grammarChoices },
+      { branchId: "ENG_GRE", branchTitle: "GRE — مسار تكميلي", branchType: "course_track", choices: greChoices },
       {
         branchId: textbookBranchId,
         branchTitle: "الوحدات (Units)",
@@ -1154,9 +1157,6 @@ export function getSIECheckpointBranches(subjectId: string): SIECheckpointBranch
           branchType: "course_track",
         })),
       },
-      { branchId: "ENG_VOCABULARY", branchTitle: "دروس المفردات داخل الوحدات", branchType: "course_track", choices: vocabularyChoices },
-      { branchId: "ENG_GRAMMAR", branchTitle: "دروس القواعد داخل الوحدات", branchType: "course_track", choices: grammarChoices },
-      { branchId: "ENG_GRE", branchTitle: "GRE — مسار تكميلي", branchType: "course_track", choices: greChoices },
       {
         branchId: "ENG_STORY",
         branchTitle: "القصة - The Lost World",
@@ -1361,8 +1361,12 @@ export function getSIEStudentVisibleBranches(subjectId: string): SIECheckpointBr
     return branches.filter(branch => branch.branchId !== "ARB_READING");
   }
   if (subjectId === "ENG1_G2_BAC") {
-    // Vocabulary and Grammar are lessons inside each Unit, not separate top-level branches.
-    return branches.filter(branch => !["ENG_VOCABULARY", "ENG_GRAMMAR"].includes(branch.branchId));
+    // Show the official Units branch first; Vocabulary and Grammar stay as internal lesson trackers.
+    const units = branches.find(branch => branch.branchId === "ENG_TEXTBOOK");
+    return [
+      ...(units ? [units] : []),
+      ...branches.filter(branch => !["ENG_VOCABULARY", "ENG_GRAMMAR", "ENG_TEXTBOOK"].includes(branch.branchId)),
+    ];
   }
   return branches;
 }
