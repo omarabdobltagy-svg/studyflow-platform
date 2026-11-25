@@ -2662,7 +2662,7 @@ export const appRouter = router({
             }).optional(),
             printedPageRange: z.tuple([z.number().int().positive().max(5_000), z.number().int().positive().max(5_000)]).optional(),
             sourcePages: z.array(z.number().int().positive().max(5_000)).max(20).optional(),
-          })).min(1).max(30),
+          })).min(1).max(240),
         }),
         schedule: z.object({
           startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
