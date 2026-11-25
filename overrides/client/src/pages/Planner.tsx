@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import {
   getSIECheckpointProgressBranches,
+  getSIEStudentVisibleBranches,
   getSIESubject,
   matchSIECheckpointTask,
 } from "@shared/sie-catalog";
@@ -130,7 +131,7 @@ export default function Planner() {
     const subjects = profile.data?.subjectIds ?? [];
     const gaps = (learning.data as any)?.gapByBranch ?? {};
     return subjects.flatMap(subjectId =>
-      getSIECheckpointProgressBranches(subjectId).map(branch => {
+      getSIEStudentVisibleBranches(subjectId).map(branch => {
         const gap = gaps[subjectId]?.[branch.branchId];
         const nextIndex = gap?.studentPosition;
         const next = typeof nextIndex === "number" ? branch.choices[nextIndex] : null;
@@ -159,7 +160,7 @@ export default function Planner() {
   const curriculumLinkedTasks = mappedOpenTasks.filter(item => item.match);
   const taskProgressConflicts = curriculumLinkedTasks.filter(({ task, match }) => {
     if (!match) return false;
-    const branch = getSIECheckpointProgressBranches(match.subjectId).find(item => item.branchId === match.branchId);
+    const branch = getSIEStudentVisibleBranches(match.subjectId).find(item => item.branchId === match.branchId);
     const gap = (learning.data as any)?.gapByBranch?.[match.subjectId]?.[match.branchId];
     const index = branch?.choices.findIndex(choice => choice.nodeId === match.nodeId) ?? -1;
     return index >= 0 && typeof gap?.studentPosition === "number" && index < gap.studentPosition;
