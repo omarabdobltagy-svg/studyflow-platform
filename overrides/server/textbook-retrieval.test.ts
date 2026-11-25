@@ -15,8 +15,8 @@ describe("Part 1 textbook planning context", () => {
       4,
     );
     const context = result.coverageNotes.join("\\n");
-    expect(context).toContain("StudyFlow مخطط ومتابع للتقدم");
-    expect(context).toContain("لا ينشئ");
+    expect(context).toContain("StudyFlow ينظم عبء المذاكرة");
+    expect(context).toContain("ولا يختبر الطالب");
     expect(context).toContain("النحو");
     expect(context).toContain("Vocabulary");
     expect(context).toContain("الوثائق التاريخية");
