@@ -18,11 +18,10 @@ import { toast } from "sonner";
 type Priority = {
   subjectId: string; subjectName: string; branchId: string; branchTitle: string;
   gapCount: number; pointLabel: string; nextLesson: { nodeId: string; title: string } | null;
-  source?: "daily_plan" | "progress";
+  source?: "daily_plan" | "progress" | "task";
   priority?: string;
   priorityScore?: number;
   priorityReason?: string;
-  detail?: string;
   taskId?: number;
   taskTitle?: string;
 };
@@ -226,7 +225,6 @@ export default function Home() {
             priority: step.priority ?? "medium",
             priorityScore: typeof step.priorityScore === "number" ? step.priorityScore : undefined,
             priorityReason: step.priorityReason,
-            detail: undefined,
           };
         }
       }
