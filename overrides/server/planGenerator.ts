@@ -1089,6 +1089,52 @@ export function applyVerifiedTeacherResourceRecommendations(
     }),
   };
 }
+function formatUpcomingTeacherSessions(
+  profile: NonNullable<Awaited<ReturnType<typeof getStudentProfile>>> | null,
+  startDate: string,
+  horizonDays: number,
+): string {
+  if (!profile) return "لا يوجد ملف دراسي لقراءة مواعيد الحصص.";
+  const selection = (profile.selection ?? {}) as Record<string, any>;
+  const schedules = (selection.teacherSchedules ?? {}) as Record<string, Array<{ dayOfWeek: number; startTime: string; durationMinutes: number }>>;
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
+  const currentTime = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Africa/Cairo",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(new Date());
+  const base = new Date((startDate || today) + "T12:00:00.000Z");
+  if (Number.isNaN(base.getTime())) return "تعذر التحقق من تواريخ الحصص.";
+  const sameDayAsNow = (startDate || today) === today;
+  const dayNames = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+  const sessions: Array<{ date: string; time: string; label: string; duration: number }> = [];
+
+  for (const [subjectId, slots] of Object.entries(schedules)) {
+    if (!(profile.subjectIds ?? []).includes(subjectId) || !Array.isArray(slots)) continue;
+    const subjectName = getSIESubject(subjectId)?.nameAr ?? subjectId;
+    for (const slot of slots) {
+      if (!Number.isInteger(slot.dayOfWeek) || slot.dayOfWeek < 0 || slot.dayOfWeek > 6 || !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(slot.startTime)) continue;
+      let offset = (slot.dayOfWeek - base.getUTCDay() + 7) % 7;
+      if (offset === 0 && sameDayAsNow && slot.startTime <= currentTime) offset = 7;
+      if (offset >= horizonDays) continue;
+      const date = new Date(base);
+      date.setUTCDate(date.getUTCDate() + offset);
+      sessions.push({
+        date: date.toISOString().slice(0, 10),
+        time: slot.startTime,
+        label: subjectName + " · " + dayNames[slot.dayOfWeek],
+        duration: slot.durationMinutes,
+      });
+    }
+  }
+
+  sessions.sort((left, right) => left.date.localeCompare(right.date) || left.time.localeCompare(right.time));
+  return sessions.length
+    ? sessions.map(session => session.label + " · " + session.date + " · " + session.time + " · " + session.duration + " دقيقة").join("\\n")
+    : "لا توجد حصة مسجلة قادمة داخل أفق هذه الخطة.";
+}
+
 export async function generatePersonalPlan(
   userId: number,
   prompt: string,
@@ -1184,7 +1230,7 @@ export async function generatePersonalPlan(
     "في النمط الذكي الافتراضي: ابدأ بالمهام المفتوحة والمتأخرة التي تخص المنهج، ثم أضف الموضوع التالي الذي يشرحه المدرس قريبًا بما يسمح للطالب بالاستعداد قبل الحصة. لا تسمح للمتراكم أن يمحو مواكبة المدرس، ولا تسمح للجديد أن يزيح التزامًا متأخرًا عاجلًا.",
     "في نمط المتراكم فقط: ركّز على المهام القديمة المفتوحة والفجوة الحالية التي يؤكدها سجل الطالب والمدرس، ولا تضف دروسًا جديدة لمجرد أنها لاحقة في الفهرس إلا إذا كانت لازمة لإكمال التزام متراكم.",
     "في نمط مواكبة المدرس: احجز وقتًا قبل أقرب حصة مسجلة لمراجعة ما سيشرحه المدرس أو استكمال متطلباته، ووزّع موضوعات ما بعد الحصة بعد موعدها المتوقع. لا تعتبر الحصة قد حدثت أو اتلغت إلا بإعلان موثوق أو تحديث مؤكد.",
-    "اقرأ teacherSchedules لكل مادة كموعد أسبوعي محلي متكرر. احسب أقرب حصة تالية ضمن أفق الخطة، واجعل التحضير للموضوع القادم قبلها بوقت يسمح للطالب. تجنب جدولة مهمة أثناء وقت الحصة أو تكديس موضوعات جديدة بعد يوم مزدحم.",
+    "اقرأ teacherSchedules لكل مادة كموعد أسبوعي محلي متكرر. استخدم قائمة الحصص التالية المحسوبة بالتاريخ والساعة: " + formatUpcomingTeacherSessions(profile, constraints.startDate ?? new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date()), horizonDays) + ". اجعل التحضير للموضوع القادم قبل الحصة، ولا تضع مذاكرة أثناء وقت الحصة أو بعده كأن الحصة لم تقع.",
     "مهام الطالب الحالية ليست مجرد قائمة للتجاهل: إذا كانت مهمة مفتوحة ومطابقة لموضوع غير مكتمل، احتفظ بها واربط خطوة الخطة بها. لا تنشئ مهمة ثانية لنفس الموضوع. إذا لم تتطابق مهمة مع موضوع منهجي بثقة، اعرضها كالتزام مستقل ولا تخترع لها معرف منهج.",
     "المهام الحالية المعلّمة بأنها موجودة في بيانات السياق لا تُنشأ مرة ثانية. اربط كل خطوة بالموضوعات الصحيحة في curriculumNodeIds، وأعد existingTask فقط عند وجود مهمة مطابقة موثوقة في السياق؛ لا تخمن رقم مهمة أو حالتها.",
     "مصدر المرجع له أولوية صارمة داخل كل فرع: استخدم موضع المدرس إذا كان معروفًا، وإلا استخدم موضع الفصل في المدرسة داخل الفرع نفسه. موضع الطالب يظل مستقلًا عن الاثنين. لا تقارن أو تجمع فجوات فروع متوازية، ولا تستخدم رقم التراكم القديم كأنه فجوة مؤكدة.",
@@ -1208,7 +1254,7 @@ export async function generatePersonalPlan(
     "أدرج printedPageRange فقط عندما يكون نطاق الصفحة المطبوعة موثقًا في ملف المنهج؛ هذه أرقام الصفحات المطبوعة في الكتاب وليست أرقام صفحات PDF. لا تخترع نطاقات صفحات للإنجليزي أو الإيطالي إذا كانت متاحة على مستوى الوحدة فقط.",
     "قسّم عبء المتابعة بحسب حجم الدرس: مشاهدة المحاضرة على أجزاء، أو قراءة الصفحات التي عيّنها المدرس، أو مراجعة ملاحظات الطالب. لا تحوّل مهارات الدرس إلى أنشطة اختبار أو قياس إتقان من إنشاء النظام.",
     "يمكن إدراج الحل أو التدريب فقط عندما يكون واجبًا محددًا من المدرس أو مهمة ذكر الطالب أنه مكلف بها. لا تضف أسئلة أو أوراق عمل أو اختبارات تدريبية من عندك.",
-    "أخرج خطوات مركزة وواضحة مرتبطة بمعرفات المنهج. لا تختصر المنهج في عدد محدود من الخطوات: سيكمل النظام آليًا كل نقطة غير مكتملة لم تذكرها، لذلك لا تكرر الدرس ولا تجمع موضوعات غير مترابطة في خطوة واحدة.",
+    "أخرج فقط الخطوات ذات الأولوية والقابلة للتنفيذ داخل أفق هذه الخطة. لا تحاول تغطية المنهج كله دفعة واحدة، ولا تضف تلقائيًا كل نقطة غير مكتملة. اترك بقية الموضوعات لتجديد الخطة التالي بعد تحديث المهام والتقدم ومواعيد الحصص.",
     "موعد امتحانات نهاية السنة التقريبي يظل خلفية بعيدة المدى فقط، ولا يحوّل خطة الأيام القادمة إلى خطة سنوية أو إلى عدّ تنازلي يومي. ركّز على أفق التخطيط المحدد.",
     "إيقاع الخطة الذي اختاره الطالب: " + (constraints.pace === "intensive" ? "مكثفة؛ زد كثافة الجلسات ضمن وقت الطالب اليومي مع الحفاظ على فواصل المراجعة والراحة." : constraints.pace === "relaxed" ? "مريحة؛ وزع الحمل على فترة أطول وجلسات أخف مع عدم إسقاط المتطلبات الأساسية." : "متوازنة؛ تقدم ثابت وحمل يومي متوسط مع مساحة للمراجعة والتعويض.") + ".",
     constraints.deadline ? "الموعد الشخصي الإضافي: " + constraints.deadline + ". احسبه ضمن المهام الواقعة في أفق الخطة فقط." : "لا يوجد موعد شخصي إضافي مسجل.",
@@ -1229,14 +1275,14 @@ export async function generatePersonalPlan(
   const user = [
     "طلب الطالب أو هدفه الحالي:",
     prompt.slice(0, 1_200),
-    "نطاق الخطة: " + (planScope === "daily" ? "تشغيل يومي فقط" : "خريطة سنوية كاملة"),
+    "نطاق الخطة: " + (planScope === "daily" ? "خطة قصيرة المدى لمدة " + horizonDays + " أيام" : "خريطة سنوية توافقية قديمة"),
     "تفضيلات الجدولة:",
     "إيقاع الخطة: " + paceLabel,
     "درجة الإيقاع: " + paceLevel + " من 3 — " + paceLevelLabel + ". " + paceLevelInstruction,
     "متوسط الوقت المتاح يوميًا: " + dailyMinutes + " دقيقة",
     "أيام الدراسة الأسبوعية: " + daysPerWeek + " أيام",
     "الموعد الشخصي الإضافي: " + (constraints.deadline || "لا يوجد"),
-    "نافذة امتحانات نهاية السنة التقريبية: 12–22 يونيو 2027؛ هدف جاهزية المحتوى الأساسي: 11 يونيو 2027",
+    "الحصص القادمة داخل أفق الخطة: " + formatUpcomingTeacherSessions(profile, constraints.startDate ?? new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date()), horizonDays),
     existingCurriculumTasks.length
       ? "مهام حالية مرتبطة بالمنهج (وجود المهمة لا يعني اكتمال الدرس):\n" + existingCurriculumTasks.map(item =>
           [item.taskTitle, item.subjectId, item.branchTitle, item.title, item.nodeId, "الحالة: " + item.status, "المطابقة: " + item.confidence, "معرف المهمة: " + item.taskId].join(" | ")
