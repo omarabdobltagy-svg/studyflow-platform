@@ -182,7 +182,7 @@ export default function Home() {
   const profile = trpc.studentProfile.get.useQuery();
   const dailyPlanSnapshot = trpc.plans.currentDaily.useQuery(undefined, {
     staleTime: 10_000,
-    refetchInterval: query => query.state.data?.plan ? 45_000 : 5_000,
+    refetchInterval: query => query.state.data?.needsRefresh || !query.state.data?.plan ? 5_000 : 45_000,
     refetchOnWindowFocus: true,
     retry: 1,
   });
@@ -197,6 +197,7 @@ export default function Home() {
   const updateStudyConditions = trpc.plans.updateStudyConditions.useMutation({
     onSuccess: () => {
       toast.success("تم حفظ ظروف اليوم وسيُعاد ترتيب الخطة تلقائيًا.");
+      void utils.plans.currentDaily.invalidate();
       void profile.refetch();
     },
     onError: error => toast.error("تعذّر حفظ ظروف الدراسة: " + error.message),
