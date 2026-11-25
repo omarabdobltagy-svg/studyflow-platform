@@ -93,6 +93,13 @@ export function classifyTeacherPublicUpdate<T extends TeacherPublicUpdate>(updat
   return { ...update, ...classified };
 }
 
+export function isHighConfidenceScheduleAnnouncement(
+  update: Pick<TeacherPublicUpdate, "announcementType" | "confidence">,
+): boolean {
+  return update.confidence === "high"
+    && ["lecture_cancelled", "class_suspended", "schedule_changed"].includes(update.announcementType ?? "");
+}
+
 export type TeacherSourceScanResult = {
   updates: TeacherPublicUpdate[];
   scanState: Record<string, string>;
@@ -400,7 +407,7 @@ export async function scanSelectedTeacherSources(
   }
   let orderedUpdates = updates
     .map(classifyTeacherPublicUpdate)
-    .filter(isSecondYearBaccalaureateUpdate)
+    .filter(update => isSecondYearBaccalaureateUpdate(update) || isHighConfidenceScheduleAnnouncement(update))
     .filter(update => now.getTime() - Date.parse(update.publishedAt) <= 30 * 24 * 60 * 60 * 1_000)
     .sort((left, right) => Date.parse(right.publishedAt) - Date.parse(left.publishedAt))
     .slice(0, MAX_UPDATES_PER_SCAN);
