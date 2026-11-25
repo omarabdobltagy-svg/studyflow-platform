@@ -5,7 +5,7 @@ import { FixedWindowRateLimiter } from "./_core/authRateLimit";
 import { SignJWT } from "jose";
 import { TRPCError } from "@trpc/server";
 import { COOKIE_NAME } from "@shared/const";
-import { SIE_CATALOG_META, SIE_SYSTEMS, getSIEEducationSystem, getSIESubject, getSIETeacher, getSIETeachersForSubject, getSIETrack, getSIECheckpointChoices, getSIECheckpointBranches, normalizeSIECheckpointFrontier, validateSIESubjectSelection } from "@shared/sie-catalog";
+import { SIE_CATALOG_META, SIE_SYSTEMS, getSIEEducationSystem, getSIESubject, getSIETeacher, getSIETeachersForSubject, getSIETrack, getSIECheckpointChoices, getSIECheckpointBranches, normalizeSIECheckpointFrontier, getSIECheckpointProgressBranches, validateSIESubjectSelection } from "@shared/sie-catalog";
 import { calculateLearningGap } from "@shared/sie-learning-progress";
 import {
   addChapter,
@@ -1690,7 +1690,8 @@ export const appRouter = router({
         const subjectCourseMode = selection.courseModes?.[subjectId] ?? subjectRecord.courseMode ?? "online";
         const branchRecords = subjectRecord.branches ?? {};
         const legacyStudentFrontier = legacyTeacherFrontiers[subjectId] || legacyTeacherState[subjectId]?.studentAttendedFrontier;
-        const branches = getSIECheckpointBranches(subjectId);
+        const branches = getSIECheckpointProgressBranches(subjectId);
+        const rawBranches = getSIECheckpointBranches(subjectId);
         const selectedTeacherId = selection.teacherChoices?.[subjectId] ?? profile.teacherSelections?.[subjectId] ?? "__SKIP__";
         const selectedTeacherName = selection.customTeacherNames?.[subjectId] ?? "";
         const gaps = Object.fromEntries(branches.map(branch => {
@@ -1704,10 +1705,12 @@ export const appRouter = router({
               ))
             : undefined;
           const saved = branchRecords[branch.branchId] ?? legacyArabicRecord ?? {};
-          const belongsToBranch = (frontierId: unknown) =>
-            typeof frontierId === "string" &&
-            (frontierId === "__NOT_STARTED__" ||
-              branchChoices.some(choice => choice.nodeId === frontierId));
+          const belongsToBranch = (frontierId: unknown) => {
+            if (typeof frontierId !== "string") return false;
+            if (frontierId === "__NOT_STARTED__" || frontierId === "__UNKNOWN__") return true;
+            const normalized = normalizeSIECheckpointFrontier(subjectId, branch.branchId, frontierId);
+            return branchChoices.some(choice => choice.nodeId === normalized);
+          };
           const legacyLinear = subjectId === "HIS_G2_BAC" || subjectId === "PROG_AI_G2_BAC";
           const legacyRecords = legacyLinear ? Object.values(branchRecords) as Array<Record<string, any>> : [];
           const pickLegacyFrontier = (field: "lastCompletedLessonId" | "teacherTeachingFrontierId" | "schoolClassFrontierId", teacherOnly = false) => {
@@ -1722,8 +1725,10 @@ export const appRouter = router({
             const positioned = candidates
               .filter(value => value !== "__UNKNOWN__")
               .sort((left, right) => {
-                const leftIndex = left === "__NOT_STARTED__" ? -1 : branchChoices.findIndex(choice => choice.nodeId === left);
-                const rightIndex = right === "__NOT_STARTED__" ? -1 : branchChoices.findIndex(choice => choice.nodeId === right);
+                const leftNormalized = normalizeSIECheckpointFrontier(subjectId, branch.branchId, left);
+                const rightNormalized = normalizeSIECheckpointFrontier(subjectId, branch.branchId, right);
+                const leftIndex = left === "__NOT_STARTED__" ? -1 : branchChoices.findIndex(choice => choice.nodeId === leftNormalized);
+                const rightIndex = right === "__NOT_STARTED__" ? -1 : branchChoices.findIndex(choice => choice.nodeId === rightNormalized);
                 return leftIndex - rightIndex;
               });
             return positioned.length ? positioned[positioned.length - 1] : candidates.length ? "__UNKNOWN__" : undefined;
@@ -1808,11 +1813,12 @@ export const appRouter = router({
           throw new TRPCError({ code: "BAD_REQUEST", message: "هذه المادة ليست ضمن مواد ملفك الدراسي." });
         }
 
-        const branch = getSIECheckpointBranches(input.subjectId).find(item => item.branchId === input.branchId);
-        if (!branch) throw new TRPCError({ code: "BAD_REQUEST", message: "مسار المنهج غير موجود في فهرس المادة." });
+        const rawBranch = getSIECheckpointBranches(input.subjectId).find(item => item.branchId === input.branchId);
+        const branch = getSIECheckpointProgressBranches(input.subjectId).find(item => item.branchId === input.branchId);
+        if (!rawBranch || !branch) throw new TRPCError({ code: "BAD_REQUEST", message: "مسار المنهج غير موجود في فهرس المادة." });
         const selection = (profile.selection ?? {}) as Record<string, any>;
         const branchChoices = branch.choices;
-        const allowed = new Set(branchChoices.map(choice => choice.nodeId));
+        const allowed = new Set([...rawBranch.choices, ...branchChoices].map(choice => choice.nodeId));
         const validFrontier = (value: string) => value === "__UNKNOWN__" || value === "__NOT_STARTED__" || allowed.has(value);
         for (const value of [input.studentFrontierId, input.teacherTeachingFrontierId, input.schoolClassFrontierId]) {
           if (value !== undefined && !validFrontier(value)) {
@@ -1928,7 +1934,7 @@ export const appRouter = router({
           throw new TRPCError({ code: "BAD_REQUEST", message: "هذه المادة ليست ضمن ملفك الدراسي." });
         }
         const branch = input.branchId
-          ? getSIECheckpointBranches(input.subjectId).find(item => item.branchId === input.branchId)
+          ? getSIECheckpointProgressBranches(input.subjectId).find(item => item.branchId === input.branchId)
           : undefined;
         if (input.branchId && !branch) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "فرع المنهج غير موجود في فهرس المادة." });
