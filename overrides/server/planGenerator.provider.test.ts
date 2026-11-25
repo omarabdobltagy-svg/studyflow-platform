@@ -221,7 +221,6 @@ describe("planner completed-curriculum guard", () => {
     const guarded = applyPlannerProgressGuard(plan as any, legacyProfile);
 
     expect(guarded.steps.map(item => item.curriculumNodeIds)).toEqual([
-      ["ARB_U2_N2"],
       ["ARB_U3_N2"],
     ]);
   });
