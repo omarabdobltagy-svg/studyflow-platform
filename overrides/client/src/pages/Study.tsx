@@ -163,10 +163,27 @@ export default function Study() {
   }, [subjectId, branches, branchId]);
 
   const saveBranchFrontier = trpc.learning.updateBranchFrontier.useMutation({
-    onSuccess: async result => {
+    onSuccess: async (result, variables) => {
       await Promise.all([utils.studentProfile.get.invalidate(), utils.learning.get.invalidate()]);
-      const clearDraft = (drafts: Record<string, string>) => { const next = { ...drafts }; delete next[studentFrontierDraftKey]; return next; };
-      setStudentFrontierDrafts(clearDraft); setTeacherFrontierDrafts(clearDraft); setSchoolFrontierDrafts(clearDraft);
+      const savedDraftKey = variables.subjectId + "::" + variables.branchId;
+      const clearSavedDraft = (drafts: Record<string, string>) => {
+        const next = { ...drafts };
+        if (Object.prototype.hasOwnProperty.call(variables, "studentFrontierId")) delete next[savedDraftKey];
+        return next;
+      };
+      const clearTeacherDraft = (drafts: Record<string, string>) => {
+        const next = { ...drafts };
+        if (Object.prototype.hasOwnProperty.call(variables, "teacherTeachingFrontierId")) delete next[savedDraftKey];
+        return next;
+      };
+      const clearSchoolDraft = (drafts: Record<string, string>) => {
+        const next = { ...drafts };
+        if (Object.prototype.hasOwnProperty.call(variables, "schoolClassFrontierId")) delete next[savedDraftKey];
+        return next;
+      };
+      setStudentFrontierDrafts(clearSavedDraft);
+      setTeacherFrontierDrafts(clearTeacherDraft);
+      setSchoolFrontierDrafts(clearSchoolDraft);
       if (result.savedStudent && result.learningGap?.studentPosition === branchChoices.length && branchChoices.length > 0) {
         const nextTarget = getNextLearningTarget(subjects, subjectId, branches, currentBranchId);
         if (nextTarget) {
@@ -224,28 +241,29 @@ export default function Study() {
   const canMovePrevious = (value: string) => frontierIndex(value) >= 0;
   const canMoveNext = (value: string) => branchChoices.length > 0 && value !== branchChoices[branchChoices.length - 1]?.nodeId;
   useEffect(() => {
-    const hasDraft = Object.prototype.hasOwnProperty.call(studentFrontierDrafts, studentFrontierDraftKey)
-      || Object.prototype.hasOwnProperty.call(teacherFrontierDrafts, studentFrontierDraftKey)
-      || (courseMode === "center" && Object.prototype.hasOwnProperty.call(schoolFrontierDrafts, studentFrontierDraftKey));
-    if (!hasDraft || !subjectId || !currentBranchId || !branchChoices.length
-      || !hasStudentFrontierSelection || !hasTeacherFrontierSelection
+    // Each frontier is an independent student-owned fact. Saving the student's
+    // last completed lesson must not wait for a teacher or school position.
+    const studentDrafted = Object.prototype.hasOwnProperty.call(studentFrontierDrafts, studentFrontierDraftKey);
+    const teacherDrafted = Object.prototype.hasOwnProperty.call(teacherFrontierDrafts, studentFrontierDraftKey);
+    const schoolDrafted = courseMode === "center"
+      && Object.prototype.hasOwnProperty.call(schoolFrontierDrafts, studentFrontierDraftKey);
+    if ((!studentDrafted && !teacherDrafted && !schoolDrafted)
+      || !subjectId || !currentBranchId || !branchChoices.length
       || saveBranchFrontier.isPending || profile.isLoading) return;
-    const fingerprint = [
-      subjectId, currentBranchId, lastCompletedLessonId, teacherTeachingFrontierId,
-      courseMode, courseMode === "center" && hasSchoolFrontierSelection ? schoolClassFrontierId : "",
-    ].join("::");
-    if (autoSaveFingerprintRef.current === fingerprint) return;
-    autoSaveFingerprintRef.current = fingerprint;
-    saveBranchFrontier.mutate({
+
+    const input = {
       subjectId,
       branchId: currentBranchId,
-      studentFrontierId: lastCompletedLessonId,
-      teacherTeachingFrontierId,
-      ...(courseMode === "center" && hasSchoolFrontierSelection ? { schoolClassFrontierId } : {}),
-    });
+      ...(studentDrafted ? { studentFrontierId: lastCompletedLessonId } : {}),
+      ...(teacherDrafted ? { teacherTeachingFrontierId } : {}),
+      ...(schoolDrafted ? { schoolClassFrontierId } : {}),
+    };
+    const fingerprint = JSON.stringify(input);
+    if (autoSaveFingerprintRef.current === fingerprint) return;
+    autoSaveFingerprintRef.current = fingerprint;
+    saveBranchFrontier.mutate(input);
   }, [
-    subjectId, currentBranchId, branchChoices.length, hasStudentFrontierSelection,
-    hasTeacherFrontierSelection, hasSchoolFrontierSelection, lastCompletedLessonId,
+    subjectId, currentBranchId, branchChoices.length, lastCompletedLessonId,
     teacherTeachingFrontierId, schoolClassFrontierId, courseMode,
     studentFrontierDrafts, teacherFrontierDrafts, schoolFrontierDrafts, studentFrontierDraftKey,
     saveBranchFrontier.isPending, profile.isLoading,
