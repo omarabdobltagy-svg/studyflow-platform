@@ -174,10 +174,10 @@
         }
       ],
       "learningIntent": [
-        "The book integrates authentic informational, prose, and poetry texts with listening, speaking, reading, writing, critical thinking, creativity, and aesthetic appreciation.",
-        "Grammar is presented as functional language use that organizes thought and controls meaning in coherent argumentative and creative writing, not as isolated memorization.",
-        "Rhetoric supports discourse analysis and persuasive communication.",
-        "Use the existing Arabic branches in the catalog unchanged. The book's learning outcomes explain lesson context; the teacher remains responsible for teaching and practicing the skills."
+        "يجمع الكتاب بين النص المعلوماتي والنثر الأدبي والشعر، ويربطها بمهارات الاستماع والتحدث والقراءة والكتابة والتفكير النقدي والإبداعي والتذوق الجمالي.",
+        "يعرض الكتاب النحو بوصفه استخدامًا وظيفيًا للغة ينظم الفكر ويضبط المعنى داخل الكتابة الحجاجية والإبداعية، وليس قواعد منفصلة للحفظ.",
+        "تُستخدم البلاغة في تحليل الخطاب والتأثير والإقناع.",
+        "تظل فروع العربي الحالية كما هي في المنصة (النحو والبلاغة والقراءة والنصوص والتعبير وغيرها). أهداف الكتاب تشرح طبيعة الدرس فقط؛ والمدرس مسؤول عن شرح المهارات والتدريب عليها."
       ]
     },
     "HIS_G2_BAC": {
@@ -374,10 +374,10 @@
         }
       ],
       "learningIntent": [
-        "The introduction explicitly moves beyond memorizing dates and narratives toward understanding historical change, causes, effects, and connections between past and present.",
-        "The book uses historical documents, official records, correspondence, maps, photographs, and infographics as learning sources.",
-        "The student is expected to build an evidence-based understanding of national identity, international relations, and historical decisions through teacher-led instruction.",
-        "Keep History as its existing single linear progress branch. Do not create chapter branches or label units as unimportant."
+        "مقدمة الكتاب تنقل دراسة التاريخ من حفظ الأحداث والتواريخ إلى فهم التغيرات وأسبابها ونتائجها والربط بين الماضي والحاضر.",
+        "يعتمد الكتاب على الوثائق التاريخية والسجلات والمضابط والمراسلات والخرائط والصور والإنفوجراف.",
+        "الأهداف المعلنة تركز على تكوين وعي قائم على الدليل وفهم الهوية الوطنية والعلاقات الدولية والقرارات التاريخية من خلال شرح المدرس وأنشطة الكتاب.",
+        "يظل التاريخ في فرعه الخطي الواحد الحالي كما هو؛ لا تُنشأ فروع جديدة لكل وحدة ولا تُصنّف وحداته على أنها غير مهمة."
       ]
     },
     "PROG_AI_G2_BAC": {
@@ -664,10 +664,10 @@
         }
       ],
       "learningIntent": [
-        "The Part 1 course moves progressively from foundational concepts to applications, using everyday situations, practical activities, discussion, and collaboration.",
-        "The Ministry introduction highlights critical thinking, problem solving, practical application, verification of information, responsible technology use, privacy, and digital safety.",
-        "Topics include information technology and society, AI concepts and ethics, cybersecurity, web applications, and web/media design.",
-        "Keep Programming and AI as its existing single linear progress branch. Use the book to understand the topic and sequence; do not generate coding quizzes, tests, or skill assessments for the student."
+        "ينتقل الجزء الأول تدريجيًا من المفاهيم الأساسية إلى التطبيقات، ويستخدم مواقف حياتية وأنشطة عملية ومناقشات ومهام تعاونية.",
+        "تؤكد مقدمة الوزارة على التفكير النقدي وحل المشكلات والتطبيق العملي والتحقق من المعلومات والاستخدام المسؤول للتكنولوجيا والخصوصية والأمان الرقمي.",
+        "تغطي الفصول تكنولوجيا المعلومات والمجتمع والذكاء الاصطناعي وأخلاقياته، والأمن السيبراني، وتطبيقات الويب، وتصميم الويب والوسائط.",
+        "تظل البرمجة والذكاء الاصطناعي في فرعها الخطي الواحد الحالي. يفهم StudyFlow موضوع الدرس وتسلسله، لكنه لا ينشئ اختبارات برمجة أو أسئلة لقياس مهارات الطالب."
       ]
     },
     "ENG1_G2_BAC": {
@@ -774,11 +774,11 @@
       ],
       "limitation": "The scanned PDF's unit contents are verified visually; lesson-level page ranges and the complete text are not indexed. Do not invent individual topic sizes or difficulty.",
       "learningIntent": [
-        "The five Part 1 units integrate reading, listening, speaking, and writing around real-world topics.",
-        "Vocabulary and grammar are studied in context and remain separate tracking branches as already defined by the catalog.",
-        "Reading activities involve identifying main ideas and details, interpreting a writer's viewpoint, distinguishing fact and opinion, and supporting a position with evidence.",
-        "Writing includes organized analytical, discursive, opinion, and argumentative paragraphs. These are teacher-led skills, not StudyFlow-generated tests.",
-        "The story and GRE branches are separate existing catalog tracks; this Part 1 textbook profile does not assign them an exam weight or redefine their status."
+        "تدمج وحدات الجزء الأول مهارات القراءة والاستماع والتحدث والكتابة حول موضوعات من الحياة الواقعية.",
+        "تبقى المفردات (Vocabulary) والقواعد (Grammar) مسارين منفصلين كما هما في فروع المنصة الحالية، وتُدرس المفردات والقواعد داخل سياق الاستخدام.",
+        "تتضمن أنشطة القراءة تحديد الفكرة الرئيسية والتفاصيل ووجهة نظر الكاتب والتمييز بين الحقيقة والرأي، مع الاستدلال من النص.",
+        "تتضمن مهام الكتابة فقرات تحليلية ونقاشية وتعبيرًا عن الرأي وكتابة حجاجية منظمة. هذه مهارات يدرّب عليها المدرس، وليست اختبارات ينشئها StudyFlow.",
+        "تظل فروع القصة وGRE وفروع الكتاب الحالية منفصلة كما هي في كتالوج المنصة. هذا الملف لا يحدد وزنًا امتحانيًا للقصة أو المسارات الإضافية."
       ]
     },
     "SECOND_LANGUAGE_G2_BAC_PENDING": {
@@ -804,23 +804,23 @@
     }
   },
   "planningPolicy": {
-    "scope": "Part 1 / First-term textbooks only. This is a pedagogical reference, not a new curriculum taxonomy.",
-    "platformRole": "StudyFlow plans workload, follows teacher/course progress, schedules recorded lectures and already-assigned work. It is not the teacher and is not an examination platform.",
-    "teacherOwnsInstruction": "Subject skills and learning outcomes are taught and worked on by the teacher. StudyFlow may understand these outcomes to identify what a lesson is about, but must not teach, test, quiz, examine, or grade the student on them.",
+    "scope": "نطاق هذه البيانات هو كتب الجزء الأول / الترم الأول للمواد الأربع فقط. وهي مرجع تربوي لفهم المحتوى وليست تصنيفًا جديدًا لفروع المواد.",
+    "platformRole": "StudyFlow ينظم عبء المذاكرة ويتابع موضع الطالب والمدرس، ويخطط للمحاضرات المسجلة والواجبات المعروفة فقط. ليس مدرسًا ولا منصة امتحانات.",
+    "teacherOwnsInstruction": "المعلم هو المسؤول عن شرح المهارات والأهداف التعليمية والتدريب عليها وتقييمها. يفهم StudyFlow هذه الأهداف ليعرف طبيعة الدرس وعلاقته بما قبله، لكنه لا يشرح بدلًا من المعلم ولا يختبر الطالب فيها ولا يمنحه درجات أو حكم إتقان.",
     "allowedPlanTasks": [
-      "Watch a known teacher lecture or a verified lesson resource.",
-      "Read or review the exact assigned textbook pages or the student's existing notes.",
-      "Complete homework or practice explicitly assigned by the teacher and already known to the student or platform.",
-      "Prepare materials for a known lesson and record actual progress or delays."
+      "متابعة محاضرة معروفة للمدرس أو مورد شرح موثوق مرتبط بالدرس.",
+      "قراءة أو مراجعة صفحات الكتاب التي حددها المدرس أو الملاحظات التي سجلها الطالب.",
+      "تنفيذ واجب أو تدريب عيّنه المدرس بالفعل، بشرط وجوده في سجل معروف أو أن الطالب أبلغ عنه.",
+      "تجهيز الكتاب والملاحظات للمحاضرة وتسجيل التقدم أو التأخير الفعلي."
     ],
     "prohibitedPlanTasks": [
-      "AI-generated quizzes, tests, mock exams, diagnostic exams, or question banks.",
-      "AI-generated review questions or self-test prompts.",
-      "Tasks that ask StudyFlow to measure, grade, or certify mastery of curriculum skills.",
-      "Invented homework or practice questions that were not assigned by the teacher."
+      "إنشاء اختبارات أو كويزات أو امتحانات تجريبية أو تشخيصية أو بنوك أسئلة بواسطة الذكاء الاصطناعي.",
+      "إنشاء أسئلة مراجعة أو استرجاع أو اختبار ذاتي يجيب عنها الطالب.",
+      "تكليف الطالب بإثبات إتقان مهارة عبر أسئلة ينشئها StudyFlow أو منحه درجة بناءً عليها.",
+      "اختراع واجب أو تدريب أو مجموعة أسئلة لم يعيّنها المدرس."
     ],
-    "assessmentEvidence": "Existing teacher or external-platform scores may be stored and used as historical evidence when their source is known. They are not permission for StudyFlow to generate a new assessment.",
-    "branchTaxonomyPolicy": "Do not create, rename, merge, split, or reorder subject branches based on this file. The existing branch IDs, labels, and ordering in shared/sie-catalog.ts remain authoritative.",
-    "coverageBoundary": "This file describes learning intent for Part 1 only. It does not claim that Part 2 or the complete year has been analyzed."
+    "assessmentEvidence": "يمكن استخدام نتيجة اختبار أو تقييم سابق سجله المدرس أو منصة خارجية كدليل تاريخي على مستوى الطالب إذا كان مصدره معروفًا. هذا لا يسمح لـStudyFlow بإنشاء تقييم جديد.",
+    "branchTaxonomyPolicy": "لا تنشئ ولا تسمِّ ولا تدمج ولا تقسّم ولا تعِد ترتيب فروع المواد بناءً على هذا الملف. معرّفات الفروع وتسمياتها وترتيبها الحالية في shared/sie-catalog.ts هي المرجع المعتمد.",
+    "coverageBoundary": "هذه البيانات تصف أهداف التعلم ومحتوى الجزء الأول فقط. لا تدّعي أنها تحليل كامل للجزء الثاني أو للسنة الدراسية كلها."
   }
 }
