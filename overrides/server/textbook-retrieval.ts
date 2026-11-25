@@ -119,7 +119,7 @@ function getCurriculumIntelligenceNotes(subjectIds: string[]): string[] {
       policy.coverageBoundary,
       ...(policy.allowedPlanTasks?.length ? ["أنواع مهام التخطيط المسموح بها: " + policy.allowedPlanTasks.join(" | ")] : []),
       ...(policy.prohibitedPlanTasks?.length ? ["أنواع مهام التخطيط المحظورة: " + policy.prohibitedPlanTasks.join(" | ")] : []),
-    ].filter(Boolean) : [];
+    ].filter((line): line is string => typeof line === "string" && line.length > 0) : [];
     const subjectLines = subjectIds.flatMap(subjectId => {
       const subject = catalogue.subjects[subjectId];
       if (!subject) return [];
