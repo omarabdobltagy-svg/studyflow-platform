@@ -594,6 +594,7 @@ export type ApprovedPlanStep = {
   minutes: number;
   category: string;
   priority?: "critical" | "high" | "medium" | "low";
+  existingTask?: { id: number; title: string; status: "todo" | "done"; confidence: "exact" | "strong" };
   resourceRecommendation?: { title: string; url: string; teacherName?: string; reason: string };
 };
 
@@ -727,6 +728,7 @@ export async function syncDailyPlanGoalTree(
       minutes: number;
       category: string;
       priority?: "critical" | "high" | "medium" | "low";
+      existingTask?: { id: number; title: string; status: "todo" | "done"; confidence: "exact" | "strong" };
       resourceRecommendation?: { title: string; url: string; teacherName?: string; reason: string };
     }>;
   },
@@ -885,6 +887,12 @@ export async function syncDailyPlanGoalTree(
         ? "high" as const
         : step.priority === "low" ? "low" as const : "medium" as const;
       const stage = pendingStages[index];
+      const linkedExistingTask = step.existingTask
+        ? (await tx.select({ id: tasks.id, status: tasks.status })
+            .from(tasks)
+            .where(and(eq(tasks.id, step.existingTask.id), eq(tasks.userId, userId)))
+            .limit(1))[0]
+        : undefined;
 
       if (stage) {
         await tx.update(goals).set({
@@ -897,7 +905,7 @@ export async function syncDailyPlanGoalTree(
         }).where(and(eq(goals.id, stage.id), eq(goals.userId, userId)));
 
         const task = (tasksByStage.get(stage.id) ?? []).find(item => item.status === "todo");
-        if (task) {
+        if (task && !linkedExistingTask) {
           await tx.update(tasks).set({
             title: step.title,
             notes: taskNotes(step),
@@ -910,17 +918,19 @@ export async function syncDailyPlanGoalTree(
           continue;
         }
 
-        await tx.insert(tasks).values({
-          userId,
-          goalId: stage.id,
-          title: step.title,
-          notes: taskNotes(step),
-          category: step.category || "دراسة",
-          priority,
-          estimatedMinutes: step.minutes,
-          dueAt,
-        });
-        createdTaskCount += 1;
+        if (!linkedExistingTask) {
+          await tx.insert(tasks).values({
+            userId,
+            goalId: stage.id,
+            title: step.title,
+            notes: taskNotes(step),
+            category: step.category || "دراسة",
+            priority,
+            estimatedMinutes: step.minutes,
+            dueAt,
+          });
+          createdTaskCount += 1;
+        }
         continue;
       }
 
@@ -937,17 +947,19 @@ export async function syncDailyPlanGoalTree(
         sortOrder: 100 + index,
       });
       const stageGoalId = Number(stageInsert[0].insertId);
-      await tx.insert(tasks).values({
-        userId,
-        goalId: stageGoalId,
-        title: step.title,
-        notes: taskNotes(step),
-        category: step.category || "دراسة",
-        priority,
-        estimatedMinutes: step.minutes,
-        dueAt,
-      });
-      createdTaskCount += 1;
+      if (!linkedExistingTask) {
+        await tx.insert(tasks).values({
+          userId,
+          goalId: stageGoalId,
+          title: step.title,
+          notes: taskNotes(step),
+          category: step.category || "دراسة",
+          priority,
+          estimatedMinutes: step.minutes,
+          dueAt,
+        });
+        createdTaskCount += 1;
+      }
     }
 
     for (const stageId of completedStageIds) {
