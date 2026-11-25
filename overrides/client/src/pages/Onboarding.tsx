@@ -8,6 +8,7 @@ import {
   SIE_SYSTEMS,
   getSIEElectiveGroups,
   getSIECheckpointBranches,
+  getSIECheckpointProgressOptions,
   getSIECheckpointChoices,
   getSIECheckpointChoicesForTeacher,
   getSIETeacher,
@@ -634,11 +635,25 @@ function StudentProfileOverview({
                 <div className="mt-3 space-y-2">
                   {branches.length ? branches.map(branch => {
                     const gap = subjectGaps[branch.branchId];
+                    const options = getSIECheckpointProgressOptions(subjectId, branch.branchId);
+                    const visiblePosition = (position: number | null | undefined) => position == null
+                      ? null
+                      : options.filter(option => {
+                          const rawIndex = branch.choices.findIndex(choice => choice.nodeId === option.value);
+                          return rawIndex >= 0 && rawIndex < position;
+                        }).length;
+                    const studentPosition = visiblePosition(gap?.studentPosition);
+                    const referencePosition = visiblePosition(gap?.referencePosition);
+                    const visibleGap = studentPosition === null || referencePosition === null
+                      ? null : Math.max(0, referencePosition - studentPosition);
+                    const visibleAhead = studentPosition === null || referencePosition === null
+                      ? null : Math.max(0, studentPosition - referencePosition);
+                    const pointLabel = branch.branchType === "official_section" ? "موضوع" : "درس";
                     const reference = gap?.referenceSource === "teacher" ? "المدرس"
                       : gap?.referenceSource === "school" ? "المدرسة" : "لا يوجد مرجع";
                     const result = gap?.status === "calculated"
-                      ? (gap.gapCount > 0 ? `متأخر بـ ${gap.gapCount} درس`
-                        : gap.aheadCount > 0 ? `متقدم بـ ${gap.aheadCount} درس` : "مواكب للمرجع")
+                      ? (visibleGap! > 0 ? `متأخر بـ ${visibleGap} ${pointLabel}`
+                        : visibleAhead! > 0 ? `متقدم بـ ${visibleAhead} ${pointLabel}` : "مواكب للمرجع")
                       : gap?.status === "student_position_missing"
                         ? "موضعك الدراسي غير محدد"
                         : "موضع المدرس والمدرسة غير مكتمل";
