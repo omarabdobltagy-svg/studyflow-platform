@@ -1490,14 +1490,14 @@ export function matchSIECheckpointTask(
     taskTokens.some(token => token === term || token === `و${term}`)
   );
   if (subjectIds.includes("ARB_G2_BAC") && hasLegacyCombinedGrammarTitle) {
-    const legacyMatch = getSIECheckpointProgressBranches("ARB_G2_BAC")
-      .find(branch => branch.branchId === "ARB_NAHW")
-      ?.choices.find(choice => choice.nodeId === "ARB_U3_N1_TAMYIZ");
-    if (legacyMatch) {
+    const legacyBranch = getSIECheckpointProgressBranches("ARB_G2_BAC")
+      .find(branch => branch.branchId === "ARB_NAHW");
+    const legacyMatch = legacyBranch?.choices.find(choice => choice.nodeId === "ARB_U3_N1_TAMYIZ");
+    if (legacyBranch && legacyMatch) {
       return {
         subjectId: "ARB_G2_BAC",
         branchId: "ARB_NAHW",
-        branchTitle: legacyMatch.branchTitle,
+        branchTitle: legacyBranch.branchTitle,
         nodeId: legacyMatch.nodeId,
         title: legacyMatch.title,
         confidence: "strong",
