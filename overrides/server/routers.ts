@@ -2629,6 +2629,8 @@ export const appRouter = router({
         includeStudentProfile: z.boolean().default(true),
         dailyMinutes: z.number().int().min(20).max(600).default(120),
         daysPerWeek: z.union([z.literal(5), z.literal(6), z.literal(7)]).default(6),
+        planningMode: z.enum(["smart", "backlog", "teacher_sync"]).default("smart"),
+        horizonDays: z.union([z.literal(7), z.literal(14)]).default(7),
         startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
         pace: z.enum(["intensive", "balanced", "relaxed"]).default("balanced"),
         paceLevel: z.number().int().min(1).max(3).default(2),
@@ -2661,36 +2663,37 @@ export const appRouter = router({
                 }] : [];
               })
             : [];
-          const annualPrompt = input.prompt.startsWith(ANNUAL_PLAN_PREFIX)
+          const studyPrompt = input.prompt.startsWith(STUDY_PLAN_PREFIX)
             ? input.prompt
-            : ANNUAL_PLAN_PREFIX + startDate + ": " + input.prompt;
+            : STUDY_PLAN_PREFIX + startDate + ": " + input.prompt;
           const result = await generatePersonalPlan(
             ctx.user.id,
-            annualPrompt,
+            studyPrompt,
             input.includeStudentProfile,
             {
-              scope: "annual",
+              scope: "daily",
+              planningMode: input.planningMode,
+              horizonDays: input.horizonDays,
               dailyMinutes: input.dailyMinutes,
               daysPerWeek: input.daysPerWeek,
               startDate,
               pace: input.pace,
               paceLevel: input.paceLevel as 1 | 2 | 3,
               deadline: input.deadline,
-              context: "هذه خطة سنوية كاملة وليست قائمة متراكمات. ادمج المهام الحالية كما هي، ولا تعتبر المهمة المنتهية أو المفتوحة وحدها دليلًا على اكتمال موضوع المنهج. لا تنشئ مهمة ثانية لنفس الموضوع إذا كانت له مهمة مطابقة بالفعل.\n\n" + currentOperationalContext,
+              context: "هذه خطة تشغيلية قصيرة المدى وليست الخطة السنوية أو مجرد متراكمات. نمط الطالب: "
+                + (input.planningMode === "backlog" ? "المتراكم أولًا" : input.planningMode === "teacher_sync" ? "مواكبة حصص المدرسين" : "ذكي متوازن")
+                + "، والأفق " + input.horizonDays + " يومًا. ادمج المهام الحالية، اقرأ مواعيد الحصص، ولا تعتبر المهمة دليلًا على اكتمال الدرس. لا تنشئ مهمة ثانية لنفس الموضوع إذا كانت له مهمة مطابقة.\n\n"
+                + currentOperationalContext,
               existingCurriculumTasks,
             },
           );
           await logStudentActivity(ctx.user.id, "plan.draft_generated", "ai_plan", null, "أنشأ المخطط الذكي مسودة للمراجعة قبل الاعتماد", {
             title: result.title,
             stepCount: result.steps.length,
-            pace: input.pace,
-            paceLevel: input.paceLevel,
+            planningMode: input.planningMode,
+            horizonDays: input.horizonDays,
             dailyMinutes: input.dailyMinutes,
             daysPerWeek: input.daysPerWeek,
-            examWindowStart: "2027-06-12",
-            examWindowEnd: "2027-06-22",
-            examReadinessTarget: "2027-06-11",
-            personalDeadline: input.deadline,
           });
           // A draft is stored as an AI plan, but does not change the task list.
           return result;
@@ -2779,9 +2782,9 @@ export const appRouter = router({
           approvedPlan,
           schedule,
           {
-            goalTitle: "خطة StudyFlow السنوية",
-            goalCategory: "خطة سنوية",
-            supersedeCategories: ["خطة سنوية"],
+            goalTitle: "خطة المذاكرة",
+            goalCategory: "خطة مذاكرة",
+            supersedeCategories: ["خطة مذاكرة"],
           },
         );
         const fingerprint = await getDailyPlanSourceFingerprint(
@@ -2790,14 +2793,14 @@ export const appRouter = router({
           schedule.startDate,
         );
         await saveAiPlan(ctx.user.id, {
-          prompt: ANNUAL_PLAN_PREFIX + fingerprint + ":",
-          title: "الخطة السنوية 2026–2027",
+          prompt: STUDY_PLAN_PREFIX + fingerprint + ":",
+          title: "خطة المذاكرة",
           planJson: JSON.stringify(approvedPlan),
         });
-        await logStudentActivity(ctx.user.id, "plan.approved", "ai_plan", null, "اعتمد الطالب مسودة المخطط وأنشئت المهام بعد مراجعته", {
-          title: "الخطة السنوية 2026–2027",
+        await logStudentActivity(ctx.user.id, "plan.approved", "ai_plan", null, "اعتمد الطالب خطة المذاكرة وأنشئت المهام بعد مراجعته", {
+          title: "خطة المذاكرة",
           taskCount: synced.taskCount,
-          officialExamDate: "2027-06-12",
+          planningHorizon: "short_term",
         });
         return {
           parentGoalId: synced.parentGoalId,
