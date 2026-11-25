@@ -1126,6 +1126,7 @@ export const appRouter = router({
           startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
           durationMinutes: z.number().int().min(20).max(360),
         })).max(14)).default({}),
+        teacherScheduleUnfixedSubjectIds: z.array(z.string().trim().min(1).max(120)).max(20).default([]),
         teacherFrontierReports: z.record(z.string(), z.string().trim().min(1).max(120)).default({}),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -1173,6 +1174,22 @@ export const appRouter = router({
               throw new TRPCError({ code: "BAD_REQUEST", message: "يوجد موعدين متطابقين في اليوم والوقت للمادة نفسها." });
             }
             seenSlots.add(key);
+          }
+        }
+        const unfixedScheduleIds = new Set(input.teacherScheduleUnfixedSubjectIds);
+        if (input.teacherScheduleUnfixedSubjectIds.some(subjectId => !input.subjectIds.includes(subjectId))) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "حالة مواعيد المحاضرات لا تخص مادة في الملف." });
+        }
+        const existingStudentProfile = await getStudentProfile(ctx.user.id);
+        if (!existingStudentProfile) {
+          const subjectsMissingSchedule = input.subjectIds.filter(subjectId =>
+            !(input.teacherSchedules[subjectId] ?? []).length && !unfixedScheduleIds.has(subjectId)
+          );
+          if (subjectsMissingSchedule.length) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "سجّل موعد محاضرة لكل مادة أو حدّد أن مواعيدها غير ثابتة حاليًا.",
+            });
           }
         }
         const validFrontierSentinels = new Set(["__NOT_STARTED__", "__UNKNOWN__", "__DEFERRED__"]);
@@ -1229,6 +1246,7 @@ export const appRouter = router({
                 left.dayOfWeek - right.dayOfWeek || left.startTime.localeCompare(right.startTime)
               ),
             ])),
+            teacherScheduleUnfixedSubjectIds: input.teacherScheduleUnfixedSubjectIds.filter(subjectId => input.subjectIds.includes(subjectId)),
             teacherProgressState: Object.fromEntries(Object.entries(input.teacherSelections).map(([subjectId, teacherId]) => {
               const teacher = getSIETeacher(teacherId);
               const report = input.teacherFrontierReports[subjectId] ?? (teacher?.studentInputRequired ? "__DEFERRED__" : "__NOT_REQUIRED__");
