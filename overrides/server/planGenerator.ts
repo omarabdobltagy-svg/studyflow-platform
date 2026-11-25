@@ -578,7 +578,7 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
       "المدرس المختار: " + ((teacher && teacher.nameAr) || teacherId || "لم يحدد"),
       "الدروس المتاحة للخطوات الجديدة ومعرفاتها (لا تختر غيرها): " + (lessonList || "فهرس المنهج غير محمّل"),
       "أحدث محتوى عام معروف للمدرس (ليس مرجع تقدم مدفوع): " + ((teacher && teacher.latestPublicCheckpoint) || "غير متاح"),
-      "منشورات المدرس العامة الحديثة الملتقطة من المصدر (تحتاج مطابقة مع المنهج وليست تكليفًا تلقائيًا): " + (publicUpdates.join(" | ") || "لا توجد تحديثات جديدة موثقة"),
+      "آخر تحديثات المدرسين (سياق داخلي للذكاء الاصطناعي فقط، ولا يُعرض للطالب): " + (publicUpdates.join(" | ") || "لا توجد إشارة حديثة مطابقة لهذا الصف والمدرس"),
       "فهرس الكورس المدفوع: " + ((teacher && teacher.paidCourseCatalogFrontier) ? JSON.stringify(teacher.paidCourseCatalogFrontier) : "غير موثق"),
       "دروس المنهج بحسب الفروع: " + (lessonList || "فهرس المنهج غير محمّل"),
     ].join("\n");
