@@ -821,7 +821,7 @@ export async function syncDailyPlanGoalTree(
         description: plan.summary.trim() || "خطة يومية مبنية على ملف الدراسة والتراكم.",
         targetDate: startDate,
         status: "active",
-        color: "amber",
+        color: "gold",
       }).where(and(eq(goals.id, parentGoalId), eq(goals.userId, userId)));
     } else {
       const parentInsert = await tx.insert(goals).values({
@@ -830,7 +830,7 @@ export async function syncDailyPlanGoalTree(
         description: plan.summary.trim() || "خطة دراسية مبنية على ملف الدراسة والتراكم.",
         kind: "long",
         category: goalCategory,
-        color: "amber",
+        color: "gold",
         targetDate: startDate,
         status: "active",
         sortOrder: -100,
@@ -908,7 +908,7 @@ export async function syncDailyPlanGoalTree(
           targetDate: dueAt,
           status: "active",
           sortOrder: 100 + index,
-          color: "amber",
+          color: "gold",
         }).where(and(eq(goals.id, stage.id), eq(goals.userId, userId)));
 
         const task = (tasksByStage.get(stage.id) ?? []).find(item => item.status === "todo");
@@ -951,7 +951,7 @@ export async function syncDailyPlanGoalTree(
         description: step.detail,
         kind: "short",
         category: "جلسة يومية",
-        color: "amber",
+        color: "gold",
         targetDate: dueAt,
         status: "active",
         sortOrder: 100 + index,
