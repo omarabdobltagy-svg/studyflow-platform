@@ -77,6 +77,12 @@ export default function Home() {
     refetchOnWindowFocus: true,
   });
 
+  // Refresh the profile after the daily-plan query finishes its automatic public teacher scan.
+  useEffect(() => {
+    if (dailyPlan.data?.generatedAt) void profile.refetch();
+  }, [dailyPlan.data?.generatedAt]);
+
+
   const ensurePlan = trpc.plans.ensureDaily.useMutation({
     onSuccess: result => {
       void utils.plans.currentDaily.invalidate();
