@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseYoutubeAtomFeed, parseYoutubeDurationMinutes, shouldScanTeacherSource } from "./teacher-content-monitor";
+import { isSecondYearBaccalaureateProfile, parseYoutubeAtomFeed, parseYoutubeDurationMinutes, selectedTeacherIds, shouldScanTeacherSource } from "./teacher-content-monitor";
 
 describe("teacher public channel monitor", () => {
   it("parses public YouTube upload entries and decodes Arabic metadata", () => {
@@ -42,5 +42,35 @@ describe("teacher public channel monitor", () => {
     expect(shouldScanTeacherSource("2026-11-25T00:10:00Z", now)).toBe(true);
     expect(shouldScanTeacherSource("2026-11-24T23:30:00Z", now)).toBe(false);
     expect(shouldScanTeacherSource("2026-11-24T23:00:00Z", now)).toBe(true);
+  });
+  it("accepts only selected teachers mapped to second-year Egyptian Baccalaureate subjects", () => {
+    const profile = {
+      educationSystem: "baccalaureate",
+      gradeYear: "الصف الثاني الثانوي – دفعة 2027",
+      subjectIds: ["ARB_G2_BAC", "ENG1_G2_BAC", "HIS_G2_BAC"],
+      teacherSelections: {
+        ARB_G2_BAC: "T_AR_MOHAMED_SALAH",
+        ENG1_G2_BAC: "T_EN_MAHMOUD_RADWAN",
+        HIS_G2_BAC: "T_AR_MOHAMED_SALAH",
+      },
+    };
+    expect(isSecondYearBaccalaureateProfile(profile)).toBe(true);
+    expect(selectedTeacherIds(profile)).toEqual(expect.arrayContaining(["T_AR_MOHAMED_SALAH", "T_EN_MAHMOUD_RADWAN"]));
+    expect(selectedTeacherIds(profile)).not.toContain("T_AR_REDA_FAROUK");
+  });
+
+  it("rejects second-year general secondary, other grades, and teacher-to-subject mismatches", () => {
+    const base = {
+      gradeYear: "الصف الثاني الثانوي – دفعة 2027",
+      subjectIds: ["ARB_G2_BAC"],
+      teacherSelections: { ARB_G2_BAC: "T_AR_MOHAMED_SALAH" },
+    };
+    expect(selectedTeacherIds({ ...base, educationSystem: "general_secondary" })).toEqual([]);
+    expect(selectedTeacherIds({ ...base, educationSystem: "baccalaureate", gradeYear: "الصف الأول الثانوي" })).toEqual([]);
+    expect(selectedTeacherIds({
+      ...base,
+      educationSystem: "baccalaureate",
+      teacherSelections: { ENG1_G2_BAC: "T_AR_MOHAMED_SALAH" },
+    })).toEqual([]);
   });
 });
