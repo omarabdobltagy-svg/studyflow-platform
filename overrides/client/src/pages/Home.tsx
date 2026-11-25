@@ -177,7 +177,7 @@ export default function Home() {
       .flatMap((task: any) => {
         const match = matchSIECheckpointTask(subjectIds, [task.title, task.notes || ""].join(" "));
         if (!match) return [];
-        const branch = getSIECheckpointProgressBranches(match.subjectId)
+        const branch = getSIEStudentVisibleBranches(match.subjectId)
           .find(item => item.branchId === match.branchId);
         const gap = (learning.data as any)?.gapByBranch?.[match.subjectId]?.[match.branchId];
         if (!branch || typeof gap?.studentPosition !== "number") return [];
