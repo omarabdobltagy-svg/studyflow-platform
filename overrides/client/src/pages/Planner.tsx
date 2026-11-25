@@ -348,7 +348,7 @@ export default function Planner() {
         )}
 
         {generate.isPending && !plan && <PlanLoading progress={generationProgress.data ?? null} />}
-        {!generate.isPending && !plan && !profile.isLoading && profile.data?.subjectIds?.length && !profile.isError && (
+        {!generate.isPending && !plan && !history.isLoading && !profile.isLoading && profile.data?.subjectIds?.length && !profile.isError && (
           <section className="app-card rounded-2xl p-5">
             <div className="flex items-center gap-3">
               <span className="flex size-10 items-center justify-center rounded-xl bg-secondary text-primary"><BrainCircuit className="size-5" /></span>
@@ -610,6 +610,10 @@ function PlanCard({
   approved: boolean;
 }) {
   const totalMinutes = plan.steps.reduce((sum, step) => sum + step.minutes, 0);
+  const coveredTopics = new Set(plan.steps.flatMap(step => step.curriculumNodeIds ?? [])).size;
+  const dayCount = new Set(plan.steps.map(step => step.day || "غير مجدول")).size;
+  const highPriorityCount = plan.steps.filter(step => step.priority === "critical" || step.priority === "high").length;
+  const firstStep = plan.steps[0];
   const priorityLabel = (value?: string) => value === "critical" ? "عاجل" : value === "high" ? "أولوية عالية" : value === "low" ? "منخفضة" : "متوسطة";
   const difficultyLabel = (value?: string) => value === "hard" ? "صعب" : value === "easy" ? "سهل" : value === "medium" ? "متوسط" : "غير محدد";
   return (
@@ -635,16 +639,27 @@ function PlanCard({
         </div>
 
         <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <Metric label="خطوات" value={plan.steps.length.toString()} />
-          <Metric label="إجمالي الوقت" value={formatStudyDuration(totalMinutes)} />
-          <Metric label="خطوات عالية الأولوية" value={plan.steps.filter(step => step.priority === "critical" || step.priority === "high").length.toString()} />
-          <Metric label="دروس صعبة" value={plan.steps.filter(step => step.difficulty === "hard").length.toString()} />
+          <Metric label="نقاط المنهج المغطاة" value={coveredTopics.toLocaleString("ar-EG")} />
+          <Metric label="أيام التنفيذ" value={dayCount.toLocaleString("ar-EG")} />
+          <Metric label="إجمالي وقت الدراسة" value={formatStudyDuration(totalMinutes)} />
+          <Metric label="أولوية عالية أو عاجلة" value={highPriorityCount.toLocaleString("ar-EG")} />
         </div>
 
         {plan.taskSync && (
           <div className="mt-4 flex flex-col gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2 text-sm font-semibold"><CheckCircle2 className="size-4 text-emerald-600" />تم اعتماد الخطة وإنشاء المهام</div>
             <a href="/tasks" className="inline-flex items-center gap-1 text-xs font-semibold text-primary">فتح قائمة المهام <ArrowUpRight className="size-3.5" /></a>
+          </div>
+        )}
+        {firstStep && !approved && (
+          <div className="mx-4 mt-4 rounded-2xl border border-primary/25 bg-primary/[0.06] p-4 sm:mx-6">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-bold tracking-wide text-primary">ابدأ من هنا · أعلى خطوة في الأولوية</p>
+              <span className="rounded-lg border border-primary/20 bg-background px-2.5 py-1 text-[11px] font-semibold">{firstStep.minutes} دقيقة</span>
+            </div>
+            <h3 className="mt-2 text-base font-bold leading-7">{firstStep.title}</h3>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">{firstStep.detail}</p>
+            <p className="mt-2 text-[11px] text-muted-foreground">{firstStep.category} · {priorityLabel(firstStep.priority)}</p>
           </div>
         )}
       </div>
@@ -661,10 +676,18 @@ function PlanCard({
 
           <div className="space-y-3">
             {plan.steps.map((step, index) => (
-              <article key={`${step.day}-${index}`} className="rounded-xl border border-border/70 bg-muted/15 p-4">
+              <div key={`step-group-${index}`}>
+                {(index === 0 || plan.steps[index - 1]?.day !== step.day) && (
+                  <div className="mb-3 mt-5 flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2">
+                    <h4 className="text-sm font-bold">{step.day || `اليوم ${index + 1}`}</h4>
+                    <span className="text-[11px] text-muted-foreground">
+                      {plan.steps.filter(item => (item.day || "غير مجدول") === (step.day || "غير مجدول")).length} مهام · {formatStudyDuration(plan.steps.filter(item => (item.day || "غير مجدول") === (step.day || "غير مجدول")).reduce((sum, item) => sum + item.minutes, 0))}
+                    </span>
+                  </div>
+                )}
+              <article className="rounded-xl border border-border/70 bg-muted/15 p-4">
                 <div className="flex flex-wrap items-center gap-2 text-xs">
-                  <span className="rounded-lg bg-secondary px-2 py-1 font-semibold text-primary">{step.day || `اليوم ${index + 1}`}</span>
-                  <span className="text-muted-foreground">{step.category}</span>
+                  <span className="rounded-lg bg-secondary px-2 py-1 font-semibold text-primary">{step.category}</span>
                   {step.priority && <span className="mr-auto rounded-lg border border-border bg-background px-2 py-1">{priorityLabel(step.priority)}</span>}
                 </div>
 
@@ -728,6 +751,7 @@ function PlanCard({
                   {step.printedPageRange && <span className="rounded-md border border-border bg-background px-2 py-1">صفحات {step.printedPageRange[0]}–{step.printedPageRange[1]}</span>}
                 </div>
               </article>
+              </div>
             ))}
           </div>
           {editable && (
