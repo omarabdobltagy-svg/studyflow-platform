@@ -8,6 +8,76 @@ import { formatTextbookEvidence, getCurriculumBranchPriorityGuidance, orderPlanS
 import { buildExamBlueprintContext, SECOND_YEAR_BAC_EXAM_WINDOW_2026_2027 } from "./exam-blueprints";
 import { isSecondYearBaccalaureateProfile, isSecondYearBaccalaureateUpdate, selectedTeacherIds } from "./teacher-content-monitor";
 
+
+export type PlanGenerationStage = "profile" | "curriculum" | "model" | "validation" | "saving" | "complete";
+export type PlanGenerationProgress = {
+  status: "running" | "complete" | "failed";
+  currentStage: PlanGenerationStage;
+  completedStages: PlanGenerationStage[];
+  detail: string;
+  updatedAt: number;
+  error?: string;
+};
+
+const PLAN_GENERATION_STAGES: PlanGenerationStage[] = [
+  "profile", "curriculum", "model", "validation", "saving", "complete",
+];
+const planGenerationProgressByUser = new Map<number, PlanGenerationProgress & { expiresAt: number }>();
+
+const PLAN_GENERATION_STAGE_DETAILS: Record<PlanGenerationStage, string> = {
+  profile: "قراءة ملف الطالب والتقدم المسجل",
+  curriculum: "تحميل خريطة الكتب والفروع والمتطلبات",
+  model: "تحليل الأولويات وتكوين المسودة",
+  validation: "مراجعة المسودة ومنع المهام والاختبارات غير المسموحة",
+  saving: "حفظ المسودة قبل عرضها",
+  complete: "اكتملت المسودة وأصبحت جاهزة للمراجعة",
+};
+
+function updatePlanGenerationProgress(
+  userId: number,
+  stage: PlanGenerationStage,
+  status: PlanGenerationProgress["status"] = stage === "complete" ? "complete" : "running",
+  detail?: string,
+): void {
+  const stageIndex = PLAN_GENERATION_STAGES.indexOf(stage);
+  const completedStages = status === "complete"
+    ? [...PLAN_GENERATION_STAGES]
+    : PLAN_GENERATION_STAGES.slice(0, Math.max(0, stageIndex));
+  planGenerationProgressByUser.set(userId, {
+    status,
+    currentStage: stage,
+    completedStages,
+    detail: detail || PLAN_GENERATION_STAGE_DETAILS[stage],
+    updatedAt: Date.now(),
+    expiresAt: Date.now() + 2 * 60 * 1000,
+  });
+}
+
+export function getPlanGenerationProgress(userId: number): PlanGenerationProgress | null {
+  const progress = planGenerationProgressByUser.get(userId);
+  if (!progress) return null;
+  if (progress.expiresAt <= Date.now()) {
+    planGenerationProgressByUser.delete(userId);
+    return null;
+  }
+  const { expiresAt: _expiresAt, ...snapshot } = progress;
+  return snapshot;
+}
+
+export function markPlanGenerationFailed(userId: number): void {
+  const current = getPlanGenerationProgress(userId);
+  const lastCompletedIndex = current ? PLAN_GENERATION_STAGES.indexOf(current.currentStage) - (current.status === "running" ? 1 : 0) : -1;
+  planGenerationProgressByUser.set(userId, {
+    status: "failed",
+    currentStage: current?.currentStage ?? "profile",
+    completedStages: lastCompletedIndex >= 0 ? PLAN_GENERATION_STAGES.slice(0, lastCompletedIndex + 1) : [],
+    detail: "تعذّر إكمال هذه المرحلة. لم يتم اعتماد أو نشر الخطة تلقائيًا.",
+    updatedAt: Date.now(),
+    expiresAt: Date.now() + 2 * 60 * 1000,
+    error: "تعذّر إنشاء المسودة.",
+  });
+}
+
 const planSchema = z.object({
   title: z.string().trim().min(3).max(160),
   summary: z.string().trim().min(10).max(1_500),
@@ -950,12 +1020,41 @@ export async function generatePersonalPlan(
     startDate?: string;
     context?: string;
     pace?: "intensive" | "balanced" | "relaxed";
+    paceLevel?: 1 | 2 | 3;
     deadline?: string | null;
   } = {}
 ): Promise<GeneratedPlan> {
   const dailyMinutes = Math.max(20, Math.min(600, Math.trunc(constraints.dailyMinutes ?? 120)));
+  const selectedPace = constraints.pace ?? "balanced";
+  const paceLevel = Math.max(1, Math.min(3, Math.trunc(constraints.paceLevel ?? 2))) as 1 | 2 | 3;
+  const paceLevelLabels: Record<typeof selectedPace, [string, string, string]> = {
+    intensive: ["مكثفة محسوبة", "مكثفة عالية", "مكثفة قصوى"],
+    balanced: ["متوازنة خفيفة", "متوازنة نشطة", "متوازنة سريعة"],
+    relaxed: ["مرنة جدًا", "راحة نشطة", "مرنة قوية"],
+  };
+  const paceLevelGuidance: Record<typeof selectedPace, [string, string, string]> = {
+    intensive: [
+      "زيادة إنجاز محسوبة مع الحفاظ على جلسات الفهم والراحة وعدم ضغط كل يوم.",
+      "حمل مرتفع وتقدم أسرع مع هامش تعويض أصغر، دون تجاوز الوقت اليومي.",
+      "أعلى كثافة قابلة للتنفيذ فقط؛ لا تضف مهامًا تتجاوز قدرة الطالب أو تلغِ المتطلبات السابقة.",
+    ],
+    balanced: [
+      "حمل خفيف نسبيًا وتقدم ثابت مع مساحة واسعة للتعويض.",
+      "توازن بين الإنجاز والفهم ووقت المراجعة والتعويض.",
+      "تقدم أسرع من المتوازن المعتاد دون تحويل كل الأيام إلى ضغط مكثف.",
+    ],
+    relaxed: [
+      "مرونة كبيرة وجلسات أقل في البداية مع تقدم أبطأ.",
+      "راحة نشطة: حمل مريح لكن منتظم، مع هدف يومي واضح من غير ضغط زائد.",
+      "مرونة في التوقيت مع عدد مهام أعلى قليلًا، مع الحفاظ على وقت الاستيعاب.",
+    ],
+  };
+  const paceLevelLabel = paceLevelLabels[selectedPace][paceLevel - 1];
+  const paceLevelInstruction = paceLevelGuidance[selectedPace][paceLevel - 1];
+  updatePlanGenerationProgress(userId, "profile");
   const additionalContext = String(constraints.context ?? "").trim().slice(0, 3_000);
   const profile = includeStudentProfile ? await getStudentProfile(userId) : null;
+  updatePlanGenerationProgress(userId, "curriculum");
   const curriculumTitles = profile
     ? (profile.subjectIds || []).flatMap(subjectId =>
         getFirstPartBranches(subjectId).flatMap(branch =>
@@ -1015,13 +1114,14 @@ export async function generatePersonalPlan(
     "أخرج JSON صحيحًا فقط بالعربية: title, summary, durationLabel, steps (1-30 عنصرًا، وكل عنصر فيه day,title,detail,minutes,category,curriculumNodeIds,priority,difficulty,lessonSize,difficultyBasis,difficultyConfidence,resourceRecommendation?,printedPageRange,sourcePages)، habits (0-5 فيها title,cue). resourceRecommendation اختياري ولا يُضاف إلا لمصدر مدرس موثق ومطابق حرفيًا لأحد تحديثات الصف الثاني بكالوريا ومفيد لدرس غير مكتمل؛ شكله {title,url,teacherName,reason}. يجب أن يحتوي curriculumNodeIds على معرف واحد أو أكثر من الدروس المتاحة التي ترتبط بها الخطوة. printedPageRange نطاق صفحات الكتاب المطبوع [البداية، النهاية] عند توافره فقط؛ sourcePages مراجع PDF المسترجعة فعليًا فقط وتكون [] في غير ذلك. اجعل الملخص واضحًا والتفاصيل مركزة.",
     "كل خطوة يجب أن تحدد المادة والوحدة/الفرع والدرس وطريقة مذاكرته، لا عنوانًا عامًا.",
   ].join("\n");
-  const paceLabel = constraints.pace === "intensive" ? "مكثفة"
-    : constraints.pace === "relaxed" ? "مريحة" : "متوازنة";
+  const paceLabel = selectedPace === "intensive" ? "مكثفة"
+    : selectedPace === "relaxed" ? "مرنة ومريحة" : "متوازنة";
   const user = [
     "طلب الطالب أو هدفه الحالي:",
     prompt.slice(0, 1_200),
     "تفضيلات الجدولة:",
     "إيقاع الخطة: " + paceLabel,
+    "درجة الإيقاع: " + paceLevel + " من 3 — " + paceLevelLabel + ". " + paceLevelInstruction,
     "متوسط الوقت المتاح يوميًا: " + dailyMinutes + " دقيقة",
     "الموعد الشخصي الإضافي: " + (constraints.deadline || "لا يوجد"),
     "نافذة امتحانات نهاية السنة التقريبية: 12–22 يونيو 2027؛ هدف جاهزية المحتوى الأساسي: 11 يونيو 2027",
@@ -1029,6 +1129,7 @@ export async function generatePersonalPlan(
     "\nبيانات الملف الدراسي الحالية:",
     context,
   ].join("\n");
+  updatePlanGenerationProgress(userId, "model");
   let response: Awaited<ReturnType<typeof invokeLLM>>;
   const invokeCompact = async (
     provider: typeof invokeLLM,
@@ -1135,6 +1236,7 @@ export async function generatePersonalPlan(
   if (providerUsed === "NVIDIA") {
     plan = parseProviderResponse(response, "NVIDIA");
   }
+  updatePlanGenerationProgress(userId, "validation");
   if (!plan) {
     throw new Error("تعذّر إنشاء خطة دراسية صالحة. لم يتم حفظ أي بيانات ناقصة.");
   }
@@ -1193,6 +1295,8 @@ export async function generatePersonalPlan(
     ...plan,
     summary: (plan.summary + "\\n\\n" + feasibilityNote).slice(0, 1_500),
   };
+  updatePlanGenerationProgress(userId, "saving");
   await saveAiPlan(userId, { prompt, title: plan.title, planJson: JSON.stringify(plan) });
+  updatePlanGenerationProgress(userId, "complete");
   return plan;
 }
