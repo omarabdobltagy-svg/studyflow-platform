@@ -335,7 +335,7 @@ describe("subject curriculum layouts", () => {
   it("organizes English lessons under the ten textbook units, with one Vocabulary lesson and the curriculum Grammar lessons inside each unit", () => {
     const branches = getSIECheckpointBranches("ENG1_G2_BAC");
     expect(branches.map(branch => branch.branchId)).toEqual([
-      "ENG_TEXTBOOK", "ENG_VOCABULARY", "ENG_GRAMMAR", "ENG_GRE", "ENG_STORY",
+      "ENG_VOCABULARY", "ENG_GRAMMAR", "ENG_GRE", "ENG_TEXTBOOK", "ENG_STORY",
     ]);
     expect(branches.find(branch => branch.branchId === "ENG_VOCABULARY")?.choices).toHaveLength(10);
     expect(branches.find(branch => branch.branchId === "ENG_GRAMMAR")?.choices).toHaveLength(21);
