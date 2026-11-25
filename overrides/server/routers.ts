@@ -1180,17 +1180,14 @@ export const appRouter = router({
         if (input.teacherScheduleUnfixedSubjectIds.some(subjectId => !input.subjectIds.includes(subjectId))) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "حالة مواعيد المحاضرات لا تخص مادة في الملف." });
         }
-        const existingStudentProfile = await getStudentProfile(ctx.user.id);
-        if (!existingStudentProfile) {
-          const subjectsMissingSchedule = input.subjectIds.filter(subjectId =>
-            !(input.teacherSchedules[subjectId] ?? []).length && !unfixedScheduleIds.has(subjectId)
-          );
-          if (subjectsMissingSchedule.length) {
-            throw new TRPCError({
-              code: "BAD_REQUEST",
-              message: "سجّل موعد محاضرة لكل مادة أو حدّد أن مواعيدها غير ثابتة حاليًا.",
-            });
-          }
+        const subjectsMissingSchedule = input.subjectIds.filter(subjectId =>
+          !(input.teacherSchedules[subjectId] ?? []).length && !unfixedScheduleIds.has(subjectId)
+        );
+        if (subjectsMissingSchedule.length) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "سجّل موعد محاضرة لكل مادة أو حدّد أن مواعيدها غير ثابتة حاليًا.",
+          });
         }
         const validFrontierSentinels = new Set(["__NOT_STARTED__", "__UNKNOWN__", "__DEFERRED__"]);
         for (const [subjectId, report] of Object.entries(input.teacherFrontierReports)) {
