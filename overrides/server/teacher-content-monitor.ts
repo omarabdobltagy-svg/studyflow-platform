@@ -11,7 +11,87 @@ export type TeacherPublicUpdate = {
   publishedAt: string;
   observedAt: string;
   durationMinutes?: number;
+  announcementType?: "new_content" | "lecture_cancelled" | "class_suspended" | "schedule_changed" | "revision" | "general";
+  confidence?: "high" | "medium" | "low";
+  affectedDate?: string;
 };
+
+export type TeacherAnnouncementType = NonNullable<TeacherPublicUpdate["announcementType"]>;
+
+function normalizeAnnouncementText(value: string): string {
+  return value.normalize("NFKC")
+    .toLocaleLowerCase("ar")
+    .replace(/[أإآٱ]/g, "ا")
+    .replace(/[ً-ٰٟـ]/g, "")
+    .replace(/[ـً-ٟ]/g, "")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Only explicit, unambiguous teacher statements can change a student's timetable.
+ * New YouTube uploads are content updates, not evidence of a cancelled class.
+ */
+export function classifyTeacherAnnouncement(
+  title: string,
+  description: string,
+  sourceType: "youtube" | "facebook",
+): { announcementType: TeacherAnnouncementType; confidence: "high" | "medium" | "low" } {
+  const text = normalizeAnnouncementText(title + " " + description);
+  const cancelled = [
+    /تم الغاء المحاضره/,
+    /المحاضره اتلغت/,
+    /المحاضره ملغيه/,
+    /مش هيكون فيه محاضره/,
+    /مفيش محاضره اليوم/,
+    /لا توجد محاضره اليوم/,
+    /no class today/,
+    /class cancelled/,
+    /class canceled/,
+    /lecture cancelled/,
+    /lecture canceled/,
+  ];
+  const suspended = [
+    /اجازه من المحاضرات/,
+    /راحه من المحاضرات/,
+    /توقف المحاضرات/,
+    /وقف المحاضرات/,
+    /تعليق المحاضرات/,
+    /classes are suspended/,
+    /classes suspended/,
+    /break from lectures/,
+  ];
+  const changed = [
+    /تغيير موعد المحاضره/,
+    /المحاضره اتنقلت/,
+    /تأجيل المحاضره/,
+    /تم تأجيل المحاضره/,
+    /ميعاد المحاضره اتغير/,
+    /موعد المحاضره الجديد/,
+    /lecture rescheduled/,
+    /class rescheduled/,
+    /new lecture time/,
+  ];
+  const revision = [
+    /مراجعه نهائيه/,
+    /مراجعه شامله/,
+    /مراجعه على/,
+    /revision session/,
+    /final revision/,
+  ];
+  if (cancelled.some(pattern => pattern.test(text))) return { announcementType: "lecture_cancelled", confidence: "high" };
+  if (suspended.some(pattern => pattern.test(text))) return { announcementType: "class_suspended", confidence: "high" };
+  if (changed.some(pattern => pattern.test(text))) return { announcementType: "schedule_changed", confidence: "high" };
+  if (revision.some(pattern => pattern.test(text))) return { announcementType: "revision", confidence: sourceType === "youtube" ? "medium" : "low" };
+  if (sourceType === "youtube") return { announcementType: "new_content", confidence: "medium" };
+  return { announcementType: "general", confidence: "low" };
+}
+
+export function classifyTeacherPublicUpdate<T extends TeacherPublicUpdate>(update: T): T {
+  const classified = classifyTeacherAnnouncement(update.title, update.description, update.sourceType);
+  return { ...update, ...classified };
+}
 
 export type TeacherSourceScanResult = {
   updates: TeacherPublicUpdate[];
@@ -319,6 +399,7 @@ export async function scanSelectedTeacherSources(
     updates.push(...item.updates);
   }
   let orderedUpdates = updates
+    .map(classifyTeacherPublicUpdate)
     .filter(isSecondYearBaccalaureateUpdate)
     .filter(update => now.getTime() - Date.parse(update.publishedAt) <= 30 * 24 * 60 * 60 * 1_000)
     .sort((left, right) => Date.parse(right.publishedAt) - Date.parse(left.publishedAt))
