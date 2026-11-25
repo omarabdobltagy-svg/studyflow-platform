@@ -12,7 +12,7 @@ const STORAGE_KEY = "studyflow.assistant.conversations.v2";
 const SELECTED_KEY = "studyflow.assistant.selected.v2";
 const suggestions = [
   "اشرح لي درسًا من منهج المادة التي أدرسها خطوة بخطوة.",
-  "اختبر فهمي في آخر درس وصلت إليه، ولا تعرض الإجابة قبل محاولتي.",
+  "وضّح لي فكرة في آخر درس وصلت إليه، واربطها بشرح المدرس.",
   "ما الفرق بين المفاهيم الأساسية في هذا الموضوع؟",
 ];
 
@@ -161,7 +161,7 @@ export default function Assistant() {
               isLoading={chat.isPending}
               height="min(72vh, 760px)"
               placeholder="اسأل عن درس أو مفهوم في منهجك..."
-              emptyStateMessage="ابدأ بسؤال عن أي درس أو اطلب اختبارًا سريعًا."
+              emptyStateMessage="ابدأ بسؤال عن درس أو مفهوم، أو اطلب توضيحًا لشرح المدرس."
               suggestedPrompts={suggestions}
             />
           </div>
