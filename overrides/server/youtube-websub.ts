@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { resolveTeacherYoutubeChannelId } from "./teacher-content-monitor";
+import { resolveTeacherYoutubeChannelId, selectedTeacherIds, type TeacherMonitoringProfile } from "./teacher-content-monitor";
 
 const YOUTUBE_WEBSUB_HUB = "https://pubsubhubbub.appspot.com/subscribe";
 const RENEW_AFTER_MS = 6 * 24 * 60 * 60 * 1_000;
@@ -26,7 +26,7 @@ export function getYoutubeWebhookSubscription(channelId: string) {
 }
 
 export async function subscribeSelectedYoutubeTeachers(
-  profiles: Array<{ teacherSelections?: Record<string, string>; selection?: Record<string, any> }>,
+  profiles: TeacherMonitoringProfile[],
   options: { publicUrl: string; verifyToken: string; secret: string },
 ) {
   if (syncInFlight) return syncInFlight;
@@ -40,17 +40,7 @@ export async function subscribeSelectedYoutubeTeachers(
   syncInFlight = (async () => {
     const teacherIds = new Set<string>();
     for (const profile of profiles) {
-      const choices = {
-        ...(profile.teacherSelections ?? {}),
-        ...((profile.selection?.teacherChoices && typeof profile.selection.teacherChoices === "object")
-          ? profile.selection.teacherChoices as Record<string, string>
-          : {}),
-      };
-      for (const teacherId of Object.values(choices)) {
-        if (typeof teacherId === "string" && teacherId && teacherId !== "__SKIP__" && teacherId !== "__DEFERRED__") {
-          teacherIds.add(teacherId);
-        }
-      }
+      for (const teacherId of selectedTeacherIds(profile)) teacherIds.add(teacherId);
     }
 
     let subscribed = 0;
