@@ -146,14 +146,16 @@ describe("planner completed-curriculum guard", () => {
         step("الممنوع من الصرف وعلل منعه", "ARB_U2_N1"),
         step("تابع الممنوع من الصرف وعلل منعه", "ARB_U2_N2"),
         step("تطبيق على الممنوع من الصرف وعلل منعه", "ARB_U2_N3"),
+        step("النعت والبدل والتمييز بينهما", "ARB_U3_N1"),
+        step("العطف", "ARB_U3_N2"),
       ],
     };
 
     const guarded = applyPlannerProgressGuard(plan as any, profile);
 
     expect(guarded.steps.map(item => item.curriculumNodeIds)).toEqual([
-      ["ARB_U2_N2"],
-      ["ARB_U2_N3"],
+      ["ARB_U3_N1"],
+      ["ARB_U3_N2"],
     ]);
   });
 
@@ -186,7 +188,6 @@ describe("planner completed-curriculum guard", () => {
     const guarded = applyPlannerProgressGuard(plan as any, legacyProfile);
 
     expect(guarded.steps.map(item => item.curriculumNodeIds)).toEqual([
-      ["ARB_U2_N2"],
       ["ARB_U3_N2"],
     ]);
   });
