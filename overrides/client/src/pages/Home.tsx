@@ -174,7 +174,9 @@ export default function Home() {
     return null;
   }, [dailyPlan.data, profile.data?.subjectIds]);
 
-  const activePriority = dailyPlanPriority ?? priority;
+  const activePriority = dailyPlan.data?.needsRefresh
+    ? priority ?? dailyPlanPriority
+    : dailyPlanPriority ?? priority;
 
   const plan = dailyPlan.data?.plan;
   const tasks = summary.data?.tasks ?? [];
@@ -335,7 +337,15 @@ export default function Home() {
                   </article>
                 ))}
               </div>
-              {dailyPlan.data?.needsRefresh && <p className="mt-4 text-xs text-muted-foreground">يوجد تحديث جارٍ لخطتك بناءً على بياناتك الأخيرة.</p>}
+              {dailyPlan.data?.needsRefresh && (
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/20 bg-amber-500/[0.04] px-3 py-2.5">
+                  <p className="text-xs leading-5 text-muted-foreground">تغير تقدمك أو مهامك منذ آخر إنشاء للخطة؛ الأولوية القديمة لن تُعرض باعتبارها الحالية.</p>
+                  <Button size="sm" variant="outline" className="rounded-lg" onClick={() => ensurePlan.mutate({ dailyMinutes: 120 })} disabled={ensurePlan.isPending}>
+                    {ensurePlan.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
+                    تحديث خطة اليوم
+                  </Button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex flex-col items-start gap-3 p-5 sm:p-6">
