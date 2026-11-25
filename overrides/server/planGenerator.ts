@@ -791,6 +791,13 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
   return [
     "اسم الطالب: " + profile.studentName,
     "النظام: " + profile.educationSystem + "؛ الصف: " + profile.gradeYear + "؛ المسار: " + profile.track,
+    "مواعيد حصص المدرسين الأسبوعية التي سجلها الطالب (مرجع تخطيط ملزم، وليست إعلان إلغاء): " + Object.entries((selection.teacherSchedules || {}) as Record<string, Array<{dayOfWeek:number;startTime:string;durationMinutes:number}>>)
+      .filter(([subjectId]) => (profile.subjectIds || []).includes(subjectId))
+      .flatMap(([subjectId, slots]) => (Array.isArray(slots) ? slots : []).map(slot =>
+        (getSIESubject(subjectId)?.nameAr ?? subjectId) + " — " +
+        ["الأحد","الإثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"][slot.dayOfWeek] + " الساعة " + slot.startTime +
+        " — " + slot.durationMinutes + " دقيقة"
+      )).join("؛ ") || "لم يسجل الطالب مواعيد حصص أسبوعية بعد.",
     "المواد ومواضعها: \n" + (subjectContext || "لا توجد مواد مسجلة"),
     "مرجع مواصفات الامتحان وتوزيع الأسئلة/الدرجات (التزم بحدود كل مستند):\n" + examBlueprintContext,
     "قيم التراكم القديمة (تُعامل كمدخلات غير مؤكدة فقط): " + Object.entries(profile.backlog).map(entry => entry[0] + ": " + entry[1]).join("، "),
@@ -1090,6 +1097,8 @@ export async function generatePersonalPlan(
     dailyMinutes?: number;
     daysPerWeek?: 5 | 6 | 7;
     scope?: "annual" | "daily";
+    planningMode?: "smart" | "backlog" | "teacher_sync";
+    horizonDays?: 7 | 14;
     existingCurriculumTasks?: Array<SIECheckpointTaskMatch & {
       taskId: number;
       taskTitle: string;
@@ -1105,6 +1114,8 @@ export async function generatePersonalPlan(
   const dailyMinutes = Math.max(20, Math.min(600, Math.trunc(constraints.dailyMinutes ?? 120)));
   const planScope = constraints.scope ?? "daily";
   const daysPerWeek = constraints.daysPerWeek ?? 6;
+  const planningMode = constraints.planningMode ?? "smart";
+  const horizonDays = constraints.horizonDays ?? 7;
   const existingCurriculumTasks = constraints.existingCurriculumTasks ?? [];
   const selectedPace = constraints.pace ?? "balanced";
   const paceLevel = Math.max(1, Math.min(3, Math.trunc(constraints.paceLevel ?? 2))) as 1 | 2 | 3;
@@ -1169,7 +1180,12 @@ export async function generatePersonalPlan(
     "لا تستخدم أي درجات أو نتائج اختبار في حساب الأولوية ما لم يكن مصدرها موثقًا بوضوح على أنها من المدرس أو منصة تعليمية خارجية. في هذه المرحلة لا يعتمد المحرك على نتائج غير موثقة المصدر، ولا ينشئ تقييمًا جديدًا للحصول على بيانات عن الطالب.",
     "قاعدة إلزامية: موضع الطالب هو آخر نقطة مكتملة بالفعل، ويبدأ التراكم من النقطة التالية. كل ما يظهر تحت (دروس مكتملة) مستبعد من مهام الدراسة الجديدة. لا تعِد شرح درس مكتمل ولا تنشئ له مهمة حل من البداية. اختر حصريًا من (دروس متاحة للتخطيط الجديد فقط)، وأرفق مع كل خطوة معرف المنهج الصحيح داخل curriculumNodeIds. لا تخترع معرفات ولا تستخدم معرف درس مكتمل.",
     "افصل بين تقدم المنهج وقائمة المهام: موضع الطالب هو حقيقة ما أكمله بالفعل؛ المهمة المفتوحة في قائمة المهام تعني التزامًا قائمًا فقط ولا تعني أن الدرس اكتمل. لا تغيّر موضع الطالب بسبب وجود مهمة مفتوحة أو منتهية. قبل إنشاء خطوة جديدة، طابق المهام الحالية مع الموضوعات المتاحة؛ إذا وُجدت مهمة مطابقة للموضوع نفسه فأشر إلى المهمة الموجودة ولا تنشئ نسخة ثانية. إذا كانت المهمة منتهية والموضوع ما زال غير مكتمل في موضع التقدم، أظهر التعارض للمراجعة ولا تعتبر الدرس مكتملًا تلقائيًا.",
-    "هذه خريطة سنوية كاملة للعام الدراسي حتى هدف الجاهزية قبل 11 يونيو 2027، وليست خطة متراكمات. يجب أن تغطي كل موضوع غير مكتمل في كل المواد والفروع المختارة، موزعة على مراحل وأسابيع حتى الامتحانات. تشمل التعلم الجديد، المراجعات المخططة، وهوامش التعويض، وتراعي مهام الطالب الحالية ومواعيده. لا تختزل الخطة في المتأخر عن المدرس فقط ولا تعتبر الموضوعات المستقبلية خارج الخطة.",
+    "هذه خطة تشغيلية للفترة القادمة فقط، وليست خطة سنوية ولا قائمة متراكمات منفصلة. التزم بأفق " + horizonDays + " أيام من تاريخ اليوم، ووزع الحمل على الأيام المتاحة. لا تحاول تغطية المنهج كله في كل توليد؛ اختر الخطوات التي يمكن تنفيذها داخل هذه الفترة ثم جدّد الخطة عند تغيّر المهام والتقدم ومواعيد الحصص.",
+    "في النمط الذكي الافتراضي: ابدأ بالمهام المفتوحة والمتأخرة التي تخص المنهج، ثم أضف الموضوع التالي الذي يشرحه المدرس قريبًا بما يسمح للطالب بالاستعداد قبل الحصة. لا تسمح للمتراكم أن يمحو مواكبة المدرس، ولا تسمح للجديد أن يزيح التزامًا متأخرًا عاجلًا.",
+    "في نمط المتراكم فقط: ركّز على المهام القديمة المفتوحة والفجوة الحالية التي يؤكدها سجل الطالب والمدرس، ولا تضف دروسًا جديدة لمجرد أنها لاحقة في الفهرس إلا إذا كانت لازمة لإكمال التزام متراكم.",
+    "في نمط مواكبة المدرس: احجز وقتًا قبل أقرب حصة مسجلة لمراجعة ما سيشرحه المدرس أو استكمال متطلباته، ووزّع موضوعات ما بعد الحصة بعد موعدها المتوقع. لا تعتبر الحصة قد حدثت أو اتلغت إلا بإعلان موثوق أو تحديث مؤكد.",
+    "اقرأ teacherSchedules لكل مادة كموعد أسبوعي محلي متكرر. احسب أقرب حصة تالية ضمن أفق الخطة، واجعل التحضير للموضوع القادم قبلها بوقت يسمح للطالب. تجنب جدولة مهمة أثناء وقت الحصة أو تكديس موضوعات جديدة بعد يوم مزدحم.",
+    "مهام الطالب الحالية ليست مجرد قائمة للتجاهل: إذا كانت مهمة مفتوحة ومطابقة لموضوع غير مكتمل، احتفظ بها واربط خطوة الخطة بها. لا تنشئ مهمة ثانية لنفس الموضوع. إذا لم تتطابق مهمة مع موضوع منهجي بثقة، اعرضها كالتزام مستقل ولا تخترع لها معرف منهج.",
     "المهام الحالية المعلّمة بأنها موجودة في بيانات السياق لا تُنشأ مرة ثانية. اربط كل خطوة بالموضوعات الصحيحة في curriculumNodeIds، وأعد existingTask فقط عند وجود مهمة مطابقة موثوقة في السياق؛ لا تخمن رقم مهمة أو حالتها.",
     "مصدر المرجع له أولوية صارمة داخل كل فرع: استخدم موضع المدرس إذا كان معروفًا، وإلا استخدم موضع الفصل في المدرسة داخل الفرع نفسه. موضع الطالب يظل مستقلًا عن الاثنين. لا تقارن أو تجمع فجوات فروع متوازية، ولا تستخدم رقم التراكم القديم كأنه فجوة مؤكدة.",
     "لا تخلط بين آخر محتوى عام للمدرس، محتوى الكورس المدفوع، موضع ما شرحه المدرس، موضع المدرسة، وما أتمه الطالب. لا تخترع أرقام محاضرات أو أسماء دروس أو مواضع غير مسجلة.",
@@ -1182,20 +1198,20 @@ export async function generatePersonalPlan(
     "إذا توفرت مقتطفات مسترجعة من كتاب رسمي، اجعلها المرجع الأول عند تحديد موضوعات الخطة واذكر صفحات PDF في التفاصيل عند الاستناد إليها. المعرفة العامة تستخدم لسد المتطلبات السابقة غير المشروحة وتوضع بوضوح كتمهيد مساند، ولا تنسب للكتاب. إذا كان فهرس مادة غير محمّل فاذكر هذا القيد ولا تخترع محتوى منهجيًا لها.",
     "استخدم ملف المنهج المشتق لكل مادة: أسماء الوحدات والدروس، عدد الصفحات المطبوعة، مؤشر حجم الدرس، وسبب التقدير وطريقة المذاكرة المقترحة. هذا الملف بيانات تحليلية مشتقة من الفهرس وليس نص الكتاب.",
     "عند وجود صعوبة صرّح بها الطالب، استخدمها أولًا (difficultyBasis=student_report) وثقة مرتفعة كمعلومة ذاتية. إذا لم توجد، استخدم تقدير حجم/كثافة المحتوى المستنتج من الكتاب فقط مع difficultyBasis=curriculum_profile وثقة منخفضة. لا تقدّم أي تقدير أولي على أنه تصنيف رسمي من الوزارة، ولا تستنتج صعوبة الطالب من نتائج لم يصرّح بها.",
-    "رتّب الأولويات دون اختراع أوزان امتحانية: ابدأ بموضع الطالب مقابل موضع المدرس داخل الفرع، ثم المتطلبات المعرفية الحقيقية، والتكليفات المعروفة وموعدها، وقواعد أولوية الفرع التي أكدها المنتج، ثم حجم المحتوى والصعوبة التي سجلها الطالب. عندما لا توجد مواصفة رسمية للدرجات، لا تستخدم أي نسبة أو عدد أسئلة كعامل رقمي. في التاريخ والبرمجة يجب أن تبقى كل الدروس غير المكتملة ضمن التغطية السنوية. طاقة الطالب تحدد عدد المهام وطول الجلسة، ولا تحذف المحتوى.",
+    "رتّب أولويات الفترة القادمة دون اختراع أوزان امتحانية: (1) المهام المفتوحة المتأخرة ومواعيد استحقاقها، (2) الموضوع التالي في الفرع الذي يدرّسه المدرس قريبًا، (3) مراجعة أو مورد موثوق مرتبط بفجوة فعلية، (4) متطلبات الدرس السابق. لا تستخدم نسبة درجات غير موثقة. طاقة الطالب ووقت الحصص يحددان عدد المهام وطول الجلسة، ولا تحذف موضوعًا مطلوبًا من المنهج لمجرد ضيق اليوم.",
     "الهدف الامتحاني الافتراضي لكل المواد هو امتحان نهاية السنة في الصف الثاني بكالوريا. لا يوجد امتحان ترم أول في هذا المسار؛ لذلك لا تنشئ خطة أو أولوية على أساس امتحان ترم أول، ولا تستخدم توزيع درجات منشورًا لفترة أخرى. لا تضف وزنًا امتحانيًا رقميًا لأي فرع إلا إذا وُجدت مواصفة رسمية تخص الامتحان السنوي نفسه.",
     "استخدم توجيهات أنماط السؤال في بيانات الكتب كإشارات نوعية لمعرفة المهارات التي تحظى باهتمام، وليس لنسخ شكل امتحان: لا تنقل عدد الأسئلة أو نوعها أو توزيع الدرجات أو نسب الاختياري والمقالي أو أوزان الصف الثالث إلى البكالوريا، ولا تستنتج درجة غير موثقة للفقرة أو القصة. لا تنشئ أسئلة من أي نمط مهما كانت أهميته؛ دور هذه البيانات هو ترتيب متابعة المحتوى فقط.",
     "في العربي، احترم إشارة الأولوية التأسيسية لفرع النحو كما هي معرفة في بيانات المنتج، مع بقاء البلاغة والقراءة والنصوص والتعبير والإملاء والأدب فروعًا مستقلة كما في الكتالوج. في الإنجليزي، امنح القواعد والمفردات إشارة أولوية تأسيسية مستندة إلى توجيه المنتج وأنماط السؤال المهاري العامة في الثانوية العامة، دون نقل عدد الأسئلة أو توزيع درجات الصف الثالث إلى البكالوريا.",
-    "في التاريخ والبرمجة والذكاء الاصطناعي، كل الدروس غير المكتملة يجب أن تظل ضمن تغطية الخريطة السنوية؛ الأولوية تحدد ترتيب المتابعة وتقسيم الحمل فقط ولا تسمح بحذف درس أو وحدة. إذا لم تتوفر مواصفة امتحانية تفصيلية، استخدم مواضع الضعف والواجبات أو التقييمات السابقة المسجلة من المدرس أو من مصدر خارجي موثوق والمتطلبات السابقة، وصرّح بأن الوزن غير مثبت. لا تنشئ اختبارًا تشخيصيًا جديدًا.",
+    "في التاريخ والبرمجة والذكاء الاصطناعي لا تتجاهل الدروس غير المكتملة، لكن خطّط فقط للجزء الذي يمكن تنفيذه داخل أفق هذه الخطة، مع إبقاء بقية المنهج لعمليات التجديد اللاحقة. لا تصنع تغطية سنوية داخل خطة أسبوعية.",
     "رتّب الأولويات لكل درس أيضًا وفق موعد الاختبار الموثق، والفجوة داخل الفرع نفسه بين آخر درس أنجزه الطالب وموضع المدرس، والمتطلبات السابقة، وحجم المحتوى، وصعوبة المفاهيم ونتائج الطالب. لا تخلط بين وحدات وفروع متوازية.",
     "حدّد difficulty: easy/medium/hard/unknown، وlessonSize: small/medium/large/unknown، وpriority: critical/high/medium/low لكل خطوة. أضف difficultyBasis وdifficultyConfidence. لا تجعل كل درس طويل صعبًا تلقائيًا؛ الحجم شيء والصعوبة شيء آخر.",
     "أدرج printedPageRange فقط عندما يكون نطاق الصفحة المطبوعة موثقًا في ملف المنهج؛ هذه أرقام الصفحات المطبوعة في الكتاب وليست أرقام صفحات PDF. لا تخترع نطاقات صفحات للإنجليزي أو الإيطالي إذا كانت متاحة على مستوى الوحدة فقط.",
     "قسّم عبء المتابعة بحسب حجم الدرس: مشاهدة المحاضرة على أجزاء، أو قراءة الصفحات التي عيّنها المدرس، أو مراجعة ملاحظات الطالب. لا تحوّل مهارات الدرس إلى أنشطة اختبار أو قياس إتقان من إنشاء النظام.",
     "يمكن إدراج الحل أو التدريب فقط عندما يكون واجبًا محددًا من المدرس أو مهمة ذكر الطالب أنه مكلف بها. لا تضف أسئلة أو أوراق عمل أو اختبارات تدريبية من عندك.",
     "أخرج خطوات مركزة وواضحة مرتبطة بمعرفات المنهج. لا تختصر المنهج في عدد محدود من الخطوات: سيكمل النظام آليًا كل نقطة غير مكتملة لم تذكرها، لذلك لا تكرر الدرس ولا تجمع موضوعات غير مترابطة في خطوة واحدة.",
-    "نافذة الامتحانات التقريبية التي أكدها المستخدم من 12 يونيو 2027 إلى 22 يونيو 2027. ليست هذه مواصفة وزارة نهائية ولا يومًا واحدًا ثابتًا. استهدف إتمام التغطية الأساسية قبل 11 يونيو 2027 لتوفير هامش داخل النافذة، واذكر أن النافذة تقريبية.",
+    "موعد امتحانات نهاية السنة التقريبي يظل خلفية بعيدة المدى فقط، ولا يحوّل خطة الأيام القادمة إلى خطة سنوية أو إلى عدّ تنازلي يومي. ركّز على أفق التخطيط المحدد.",
     "إيقاع الخطة الذي اختاره الطالب: " + (constraints.pace === "intensive" ? "مكثفة؛ زد كثافة الجلسات ضمن وقت الطالب اليومي مع الحفاظ على فواصل المراجعة والراحة." : constraints.pace === "relaxed" ? "مريحة؛ وزع الحمل على فترة أطول وجلسات أخف مع عدم إسقاط المتطلبات الأساسية." : "متوازنة؛ تقدم ثابت وحمل يومي متوسط مع مساحة للمراجعة والتعويض.") + ".",
-    constraints.deadline ? "الموعد الشخصي الإضافي: " + constraints.deadline + ". إذا كان أسبق من 11 يونيو فاجعله هدف الإنجاز الداخلي؛ لا تعتبره موعد الامتحان الرسمي." : "لا يوجد موعد شخصي إضافي؛ استهدف إتمام المحتوى الأساسي قبل 11 يونيو 2027 تحسبًا لنافذة الامتحانات التقريبية من 12 إلى 22 يونيو 2027.",
+    constraints.deadline ? "الموعد الشخصي الإضافي: " + constraints.deadline + ". احسبه ضمن المهام الواقعة في أفق الخطة فقط." : "لا يوجد موعد شخصي إضافي مسجل.",
     "الحد الأقصى لوقت الدراسة اليومي هو " + dailyMinutes + " دقيقة. مجموع دقائق الخطوات التي تحمل اسم اليوم نفسه يجب ألا يتجاوز هذا الحد، مع ترك هامش تعويض واقعي.",
     constraints.startDate ? "تاريخ بداية التنفيذ: " + constraints.startDate + "." : "تاريخ البداية يحدده الطالب عند اعتماد الخطة.",
     "احترم سعة اليوم المحددة من الطالب. لا تتجاوزها، ووزع الخطة واقعيًا مع هامش تعويض. إذا نقصت البيانات فاختر بداية تدريجية واذكر الافتراض في الملخص.",
@@ -1205,8 +1221,8 @@ export async function generatePersonalPlan(
     "أخرج JSON صحيحًا فقط بالعربية: title, summary, durationLabel, steps (1-240 عنصرًا، وكل عنصر فيه day,title,detail,minutes,category,curriculumNodeIds,priority,difficulty,lessonSize,difficultyBasis,difficultyConfidence,resourceRecommendation?,printedPageRange,sourcePages)، habits (0-5 فيها title,cue). resourceRecommendation اختياري ولا يُضاف إلا لمصدر مدرس موثق ومطابق حرفيًا لأحد تحديثات الصف الثاني بكالوريا ومفيد لدرس غير مكتمل؛ شكله {title,url,teacherName,reason}. يجب أن يحتوي curriculumNodeIds على معرف واحد أو أكثر من الدروس المتاحة التي ترتبط بها الخطوة. printedPageRange نطاق صفحات الكتاب المطبوع [البداية، النهاية] عند توافره فقط؛ sourcePages مراجع PDF المسترجعة فعليًا فقط وتكون [] في غير ذلك. اجعل الملخص واضحًا والتفاصيل مركزة.",
     "كل خطوة يجب أن تحدد المادة والوحدة/الفرع والدرس وطريقة مذاكرته، لا عنوانًا عامًا.",
     planScope === "daily"
-      ? "نطاق هذه الخطة يومي: اختر فقط الخطوات القابلة للتنفيذ اليوم ضمن وقت الطالب، وابدأ بأقرب درس غير مكتمل بعد موضعه. لا تنشئ خريطة سنوية ولا تسرد كل المتبقي؛ التغطية السنوية محفوظة في المخطط السنوي المستقل."
-      : "نطاق هذه الخطة سنوي: ابنِ خارطة العام الدراسي 2026–2027 كاملة حتى الجاهزية في 11 يونيو 2027. وزّع كل الموضوعات غير المكتملة إلى أسابيع ومراحل تشمل التعلم والمراجعة والتعويض، ولا تقتصر على قائمة المتأخرات.",
+      ? "نطاق هذه الخطة تشغيل قصير الأمد لمدة " + horizonDays + " أيام. نمط التخطيط المختار: " + (planningMode === "backlog" ? "المتراكم أولًا فقط" : planningMode === "teacher_sync" ? "مواكبة حصص المدرسين" : "ذكي متوازن: إنهاء الالتزامات الحالية مع الاستعداد للحصة القادمة") + ". أخرج خطوات قليلة قابلة للتنفيذ، ولا تعرض اسمها كخطة سنوية."
+      : "نطاق هذه الخطة سنوي قديم للتوافق مع المسودات السابقة فقط.",
   ].join("\n");
   const paceLabel = selectedPace === "intensive" ? "مكثفة"
     : selectedPace === "relaxed" ? "مرنة ومريحة" : "متوازنة";
@@ -1353,7 +1369,7 @@ export async function generatePersonalPlan(
     plan = applyVerifiedTeacherResourceRecommendations(plan, profile);
     plan = orderPlanStepsByCurriculumDependencies(plan);
   }
-  if (planScope === "annual" && existingCurriculumTasks.length > 0) {
+  if (existingCurriculumTasks.length > 0) {
     const tasksByNode = new Map<string, typeof existingCurriculumTasks[number]>();
     for (const item of existingCurriculumTasks) {
       const current = tasksByNode.get(item.nodeId);
@@ -1361,7 +1377,7 @@ export async function generatePersonalPlan(
     }
     plan = {
       ...plan,
-      title: "الخطة السنوية 2026–2027",
+      title: planScope === "daily" ? "خطة المذاكرة" : "الخطة السنوية 2026–2027",
       steps: plan.steps.map(step => {
         const existing = step.curriculumNodeIds.map(nodeId => tasksByNode.get(nodeId)).find(Boolean);
         if (!existing) return step;
@@ -1376,7 +1392,9 @@ export async function generatePersonalPlan(
         };
       }),
     };
-  } else if (planScope === "annual") {
+  } else if (planScope === "daily") {
+    plan = { ...plan, title: "خطة المذاكرة" };
+  } else {
     plan = { ...plan, title: "الخطة السنوية 2026–2027" };
   }
 
@@ -1413,30 +1431,32 @@ export async function generatePersonalPlan(
   const totalPlannedMinutes = plan.steps.reduce((sum, step) => sum + step.minutes, 0);
   plan = {
     ...plan,
-    durationLabel: (planScope === "annual" ? Math.ceil(scheduleDay / daysPerWeek) + " أسبوعًا دراسيًا تقريبًا" : scheduleDay + " أيام دراسة تقريبًا") + " · " + totalPlannedMinutes + " دقيقة إجمالًا",
+    durationLabel: (planScope === "annual"
+      ? Math.ceil(scheduleDay / daysPerWeek) + " أسبوعًا دراسيًا تقريبًا"
+      : "فترة " + horizonDays + " أيام · " + scheduleDay + " أيام تنفيذ") + " · " + totalPlannedMinutes + " دقيقة",
   };
 
-  const examDeadline = SECOND_YEAR_BAC_EXAM_WINDOW_2026_2027.planningReadyBy;
-  const effectiveDeadline = constraints.deadline && constraints.deadline < examDeadline
-    ? constraints.deadline
-    : examDeadline;
-  const planningStart = constraints.startDate || new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
-  const startUtc = Date.parse(planningStart + "T00:00:00.000Z");
-  const endUtc = Date.parse(effectiveDeadline + "T00:00:00.000Z");
-  const calendarDays = Number.isFinite(startUtc) && Number.isFinite(endUtc)
-    ? Math.max(0, Math.floor((endUtc - startUtc) / 86_400_000) + 1)
-    : 0;
-  const fullWeeks = Math.floor(calendarDays / 7);
-  const remainingCalendarDays = calendarDays % 7;
-  const availableDays = fullWeeks * daysPerWeek + Math.min(daysPerWeek, remainingCalendarDays);
-  const examWindowLabel = SECOND_YEAR_BAC_EXAM_WINDOW_2026_2027.start + " إلى " + SECOND_YEAR_BAC_EXAM_WINDOW_2026_2027.end;
-  const feasibilityNote = scheduleDay > availableDays
-    ? "تنبيه الجدوى: التوزيع الحالي يحتاج نحو " + scheduleDay + " أيام دراسة، بينما المتاح حتى هدف الجاهزية " + availableDays + " يومًا. لم نحذف دروسًا لإخفاء الفجوة. نافذة الامتحانات التقريبية " + examWindowLabel + "؛ راجع الوقت المتاح أو كثافة الخطة قبل الاعتماد."
-    : "تقدير الجدوى: يمكن توزيع الخطوات على " + scheduleDay + " أيام دراسة حتى هدف الجاهزية " + effectiveDeadline + ". نافذة الامتحانات التقريبية " + examWindowLabel + "، وأُبقي هامش استعداد قبل بدايتها.";
-  plan = {
-    ...plan,
-    summary: (plan.summary + "\\n\\n" + feasibilityNote).slice(0, 1_500),
-  };
+  if (planScope === "annual") {
+    const examDeadline = SECOND_YEAR_BAC_EXAM_WINDOW_2026_2027.planningReadyBy;
+    const effectiveDeadline = constraints.deadline && constraints.deadline < examDeadline ? constraints.deadline : examDeadline;
+    const planningStart = constraints.startDate || new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
+    const startUtc = Date.parse(planningStart + "T00:00:00.000Z");
+    const endUtc = Date.parse(effectiveDeadline + "T00:00:00.000Z");
+    const calendarDays = Number.isFinite(startUtc) && Number.isFinite(endUtc) ? Math.max(0, Math.floor((endUtc - startUtc) / 86_400_000) + 1) : 0;
+    const fullWeeks = Math.floor(calendarDays / 7);
+    const remainingCalendarDays = calendarDays % 7;
+    const availableDays = fullWeeks * daysPerWeek + Math.min(daysPerWeek, remainingCalendarDays);
+    const examWindowLabel = SECOND_YEAR_BAC_EXAM_WINDOW_2026_2027.start + " إلى " + SECOND_YEAR_BAC_EXAM_WINDOW_2026_2027.end;
+    const feasibilityNote = scheduleDay > availableDays
+      ? "تنبيه الجدوى: التوزيع يحتاج " + scheduleDay + " أيام دراسة، بينما المتاح " + availableDays + " يومًا حتى " + effectiveDeadline + ". لم نحذف دروسًا لإخفاء الفجوة. نافذة الامتحانات التقريبية " + examWindowLabel + "."
+      : "تقدير الجدوى: يمكن توزيع الخطوات على " + scheduleDay + " أيام دراسة حتى " + effectiveDeadline + ". نافذة الامتحانات التقريبية " + examWindowLabel + ".";
+    plan = { ...plan, summary: (plan.summary + "\\n\\n" + feasibilityNote).slice(0, 1_500) };
+  } else {
+    plan = {
+      ...plan,
+      summary: (plan.summary + "\\n\\n" + "هذه خطة للفترة القادمة فقط. ستُعاد مواءمتها عند تغير المهام أو التقدم أو مواعيد الحصص.") .slice(0, 1_500),
+    };
+  }
   updatePlanGenerationProgress(userId, "saving");
   await saveAiPlan(userId, { prompt, title: plan.title, planJson: JSON.stringify(plan) });
   updatePlanGenerationProgress(userId, "complete");
