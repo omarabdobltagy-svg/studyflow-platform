@@ -468,6 +468,20 @@ export default function Study() {
         {studyViewMode === "units" ? (
           <div className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5 xl:grid-cols-3">
             {units.map((unit, unitIndex) => {
+              const unitChoices = unit.branches.flatMap(unitBranch => unitBranch.choices.map(choice => ({
+                ...choice,
+                displayBranchId: unitBranch.branchId,
+              })));
+              const unitSkillLessons = unitChoices
+                .filter(choice => choice.lessonType === "vocabulary" || choice.lessonType === "grammar")
+                .sort((left, right) => {
+                  const unitSequence = Number(left.lessonNumber ?? 0) - Number(right.lessonNumber ?? 0);
+                  if (unitSequence) return unitSequence;
+                  return left.lessonType === "vocabulary" ? -1 : right.lessonType === "vocabulary" ? 1 : 0;
+                });
+              const unitTextbookTopics = unitChoices
+                .filter(choice => choice.lessonType === "topic")
+                .sort((left, right) => String(left.lessonNumber || "").localeCompare(String(right.lessonNumber || ""), "en", { numeric: true }));
               const unitBranchState = unit.branches.map(unitBranch => {
                 const branch = allBranches.find(item => item.branchId === unitBranch.branchId);
                 const saved = branchProgressMap[unitBranch.branchId]?.lastCompletedLessonId;
@@ -509,36 +523,46 @@ export default function Study() {
                       <div className="sf-english-unit-map mt-4 rounded-2xl border border-border/70 bg-background/70 p-3.5" data-english-unit={unit.unitNumber}>
                         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                           <div>
-                            <p className="text-xs font-extrabold text-foreground">خريطة دروس الوحدة</p>
-                            <p className="mt-1 text-[10px] text-muted-foreground">الدروس الفعلية بالترتيب، ثم المفردات والقواعد</p>
+                            <p className="text-xs font-extrabold text-foreground">دروس الوحدة</p>
+                            <p className="mt-1 text-[10px] text-muted-foreground">كل درس برقمه ونوعه حسب محتوى الوحدة</p>
                           </div>
-                          <span className="rounded-full border border-border bg-card px-2.5 py-1 text-[10px] font-semibold text-muted-foreground">4 Lessons · Vocabulary · Grammar</span>
+                          <span className="rounded-full border border-border bg-card px-2.5 py-1 text-[10px] font-semibold text-muted-foreground">{unitSkillLessons.length} Lessons</span>
                         </div>
+
                         <div className="sf-english-unit-lessons grid gap-2">
-                          {unit.branches.flatMap(unitBranch => unitBranch.choices.map(choice => ({
-                            ...choice,
-                            displayBranchId: unitBranch.branchId,
-                          }))).sort((left, right) => {
-                            const order: Record<string, number> = { topic: 0, vocabulary: 1, grammar: 2, story: 3 };
-                            const typeOrder = (order[left.lessonType || ""] ?? 9) - (order[right.lessonType || ""] ?? 9);
-                            if (typeOrder) return typeOrder;
-                            return String(left.lessonNumber || "").localeCompare(String(right.lessonNumber || ""), "en", { numeric: true });
-                          }).map(choice => {
-                            const lessonLabel = choice.lessonType === "topic"
-                              ? "Lesson " + (String(choice.lessonNumber || "").split(".").pop() || "")
-                              : choice.lessonType === "vocabulary" ? "Vocabulary"
-                                : choice.lessonType === "grammar" ? "Grammar"
-                                  : choice.lessonType || "درس";
-                            const sectionLabel = choice.nodeId.includes("_SEC_A_") ? "Section A"
-                              : choice.nodeId.includes("_SEC_B_") ? "Section B" : "";
+                          {unitSkillLessons.map(choice => {
+                            const lessonKind = choice.lessonType === "vocabulary" ? "Vocabulary" : "Grammar";
+                            const lessonLabel = `Lesson ${choice.lessonNumber} · ${lessonKind}`;
+                            const helperText = choice.lessonType === "vocabulary"
+                              ? "مفردات وتعبيرات الوحدة"
+                              : choice.title;
                             return (
-                              <div key={choice.nodeId} className="sf-english-lesson-row flex min-w-0 items-start gap-2 rounded-xl border border-border/60 bg-card px-3 py-2.5">
-                                <span className="sf-english-lesson-type mt-0.5 shrink-0 rounded-lg bg-secondary px-2.5 py-1 text-[10px] font-extrabold text-secondary-foreground">{lessonLabel}</span>
-                                <span className="min-w-0 flex-1 text-xs font-semibold leading-6 text-foreground">{choice.title}</span>
-                                {sectionLabel && <span className="sf-english-section-tag shrink-0 rounded-md border border-border bg-muted px-2 py-1 text-[9px] font-semibold text-muted-foreground">{sectionLabel}</span>}
+                              <div key={choice.nodeId} className="sf-english-lesson-row flex min-w-0 items-center gap-2 rounded-xl border border-border/60 bg-card px-3 py-2.5">
+                                <span className="sf-english-lesson-type shrink-0 rounded-lg bg-secondary px-2.5 py-1 text-[10px] font-extrabold text-secondary-foreground">{lessonLabel}</span>
+                                <span className="min-w-0 flex-1 text-xs font-semibold leading-6 text-foreground">{helperText}</span>
                               </div>
                             );
                           })}
+                        </div>
+
+                        <div className="mt-4 border-t border-border/70 pt-3">
+                          <div className="mb-2 flex items-center justify-between gap-2">
+                            <p className="text-[11px] font-bold text-muted-foreground">موضوعات الكتاب</p>
+                            <span className="text-[10px] text-muted-foreground">{unitTextbookTopics.length} Topics</span>
+                          </div>
+                          <div className="grid gap-2">
+                            {unitTextbookTopics.map(choice => {
+                              const sectionLabel = choice.nodeId.includes("_SEC_A_") ? "Section A"
+                                : choice.nodeId.includes("_SEC_B_") ? "Section B" : "";
+                              return (
+                                <div key={choice.nodeId} className="sf-english-lesson-row flex min-w-0 items-start gap-2 rounded-xl border border-border/60 bg-card px-3 py-2">
+                                  <span className="sf-english-section-tag shrink-0 rounded-md border border-border bg-muted px-2 py-1 text-[9px] font-semibold text-muted-foreground">{`Topic ${choice.lessonNumber}`}</span>
+                                  <span className="min-w-0 flex-1 text-xs leading-6 text-foreground">{choice.title}</span>
+                                  {sectionLabel && <span className="sf-english-section-tag shrink-0 rounded-md border border-border bg-muted px-2 py-1 text-[9px] font-semibold text-muted-foreground">{sectionLabel}</span>}
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
                       </div>
                     ) : (
