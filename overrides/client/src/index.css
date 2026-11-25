@@ -768,3 +768,10 @@ body { background: var(--background); }
   .sf-login-form-card { animation:none !important; }
   .sf-main .app-card { transition:none !important; }
 }
+
+
+/* Keep warning/status accents inside the ivory-lime palette (no legacy blue/amber theme). */
+.sf-main [class*="border-amber-"] { border-color:rgba(209,183,123,.34) !important; }
+.sf-main [class*="bg-amber-"] { background-color:rgba(209,183,123,.085) !important; }
+.sf-main [class*="text-amber-"] { color:#9A7B3F !important; }
+.dark .sf-main [class*="text-amber-"] { color:#D1B77B !important; }
