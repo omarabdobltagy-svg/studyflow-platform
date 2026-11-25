@@ -5,7 +5,6 @@ import DashboardLayout from "@/components/DashboardLayout";
 import QueryErrorNotice from "@/components/QueryErrorNotice";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
 import { getSIECheckpointBranches, getSIESubject } from "@shared/sie-catalog";
@@ -197,8 +196,10 @@ export default function Home() {
                 <div className="mt-4 flex flex-wrap items-center gap-3">
                   <Button variant="outline" className="rounded-xl" onClick={() => openStudySteps(session.subjectId, session.branchId, session.lessonId)}>خطوات المذاكرة <ArrowLeft className="size-4" /></Button>
                   <div className="flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-2">
-                    <Checkbox id="mark-session-lesson" checked={markComplete} onCheckedChange={value => setMarkComplete(value === true)} />
-                    <label htmlFor="mark-session-lesson" className="cursor-pointer text-xs font-medium">سجّل الدرس كمكتمل</label>
+                    <label htmlFor="mark-session-lesson" className="flex cursor-pointer items-center gap-2 text-xs font-medium">
+                      <input id="mark-session-lesson" type="checkbox" checked={markComplete} onChange={event => setMarkComplete(event.target.checked)} className="size-4 accent-primary" />
+                      سجّل الدرس كمكتمل
+                    </label>
                   </div>
                 </div>
               </div>
