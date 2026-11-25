@@ -308,6 +308,20 @@ export async function getStudentProfile(userId: number) {
   };
 }
 
+export async function listStudentTeacherMonitoringProfiles() {
+  const database = await requireDb();
+  const rows = await database.select({
+    userId: studentProfiles.userId,
+    teacherSelectionsJson: studentProfiles.teacherSelectionsJson,
+    selectionJson: studentProfiles.selectionJson,
+  }).from(studentProfiles);
+  return rows.map(row => ({
+    userId: row.userId,
+    teacherSelections: parseJson<Record<string, string>>(row.teacherSelectionsJson, {}),
+    selection: parseJson<Record<string, unknown>>(row.selectionJson ?? "{}", {}),
+  }));
+}
+
 export async function saveStudentProfile(userId: number, data: StudentProfileInput) {
   const db = await requireDb();
   const values = {
