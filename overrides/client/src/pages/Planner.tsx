@@ -352,11 +352,11 @@ export default function Planner() {
       title="خطة المذاكرة"
       description="خطة قصيرة المدى تتوازن مع مهامك الحالية ومواعيد الحصص القادمة."
     >
-      <div className="space-y-5">
+      <div className="sf-planner-page space-y-6">
         {history.isError && <QueryErrorNotice onRetry={() => void history.refetch()} label="تعذّر تحميل خططك المحفوظة." />}
         {profile.isError && <QueryErrorNotice onRetry={() => void profile.refetch()} label="تعذّر تحميل ملفك الدراسي. أعد المحاولة قبل توليد الخطة." />}
 
-        <section className="relative overflow-hidden rounded-[1.8rem] border border-border bg-card p-6 text-card-foreground shadow-sm sm:p-8">
+        <section className="sf-planner-hero relative overflow-hidden rounded-[1.8rem] border border-border bg-card p-6 text-card-foreground shadow-sm sm:p-8">
           <div className="pointer-events-none absolute -right-16 -top-24 size-72 rounded-full bg-primary/10 blur-3xl" />
           <div className="relative flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
             <div className="max-w-2xl">
@@ -385,8 +385,8 @@ export default function Planner() {
           </section>
         )}
 
-        <section className="app-card overflow-hidden rounded-[1.6rem] border border-border/80">
-          <header className="border-b border-border/70 bg-gradient-to-l from-secondary/65 to-card p-5 sm:p-6">
+        <section className="sf-planner-setup app-card overflow-hidden rounded-[1.6rem] border border-border/80">
+          <header className="sf-planner-setup-header border-b border-border/70 bg-gradient-to-l from-secondary/65 to-card p-5 sm:p-6">
             <p className="eyebrow">SMART STUDY FLOW · NEXT PERIOD</p>
             <h2 className="mt-1 text-xl font-bold">كيف تحب نرتّب مذاكرتك؟</h2>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">الاختيار الافتراضي يوازن بين المتراكم والجديد مع المدرس. التقدم والمهام والمواعيد تُقرأ تلقائيًا من ملفك.</p>
@@ -397,16 +397,16 @@ export default function Planner() {
               <Metric label="فروع تقدم مقروءة" value={progressPreview.length.toLocaleString("ar-EG")} />
             </div>
           </header>
-          <div className="grid gap-5 p-5 sm:p-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(280px,.85fr)]">
+          <div className="sf-planner-setup-grid grid gap-5 p-5 sm:p-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(280px,.85fr)]">
             <div className="space-y-4">
               <div>
                 <h3 className="font-bold">نوع المساعدة</h3>
                 <p className="mt-1 text-xs leading-5 text-muted-foreground">الخطة الذكية هي الاختيار الافتراضي. غيّرها فقط لو محتاج تركيز مختلف.</p>
               </div>
-              <div className="grid gap-2">
+              <div className="sf-planner-mode-list grid gap-2">
                 {planningModeOptions.map((option, index) => (
                   <button type="button" key={option.value} onClick={() => setPlanningMode(option.value)} aria-pressed={planningMode === option.value}
-                    className={"group flex items-start gap-3 rounded-2xl border p-4 text-right transition-all duration-300 " + (planningMode === option.value ? "border-primary/45 bg-primary/[.07] shadow-[0_14px_35px_-27px_rgba(168,200,78,.6)]" : "border-border bg-card hover:-translate-y-0.5 hover:border-primary/30")}>
+                    className={"sf-planner-mode-card group flex items-start gap-3 rounded-2xl border p-4 text-right transition-all duration-300 " + (planningMode === option.value ? "border-primary/45 bg-primary/[.07] shadow-[0_14px_35px_-27px_rgba(168,200,78,.6)]" : "border-border bg-card hover:-translate-y-0.5 hover:border-primary/30")}>
                     <span className={"mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl " + (planningMode === option.value ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground")}>
                       {index === 0 ? <Sparkles className="size-4" /> : index === 1 ? <RefreshCw className="size-4" /> : <CalendarClock className="size-4" />}
                     </span>
@@ -418,7 +418,7 @@ export default function Planner() {
                   </button>
                 ))}
               </div>
-              <div className="grid gap-3 sm:grid-cols-3">
+              <div className="sf-planner-control-grid grid gap-3 sm:grid-cols-3">
                 <label className="block"><span className="mb-2 block text-sm font-semibold">وقت المذاكرة يوميًا</span>
                   <select value={dailyMinutes} onChange={event => setDailyMinutes(Number(event.target.value))} className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm">
                     {[60,90,120,150,180,210,240,300,360].map(value => <option key={value} value={value}>{formatStudyDuration(value)}</option>)}
@@ -445,7 +445,7 @@ export default function Planner() {
                 </Button>
               </div>
             </div>
-            <aside className="space-y-3">
+            <aside className="sf-planner-context space-y-3">
               <div className="rounded-xl border border-border/70 bg-muted/15 p-4">
                 <h3 className="font-bold">ما تقرأه المنصة الآن</h3>
                 {profile.isLoading || learning.isLoading || tasksQuery.isLoading ? <p className="mt-2 text-xs text-muted-foreground">جارٍ قراءة الملف والتقدم والمهام...</p> : (
@@ -662,8 +662,8 @@ function PlanCard({
   const difficultyBasisLabel = (value?: PlanStep["difficultyBasis"]) =>
     value === "student_report" ? "حسب تقييمك" : value === "curriculum_profile" ? "حسب طبيعة المنهج" : "";
   return (
-    <section className="app-card overflow-hidden rounded-2xl border border-border/80">
-      <div className="border-b border-border/70 bg-gradient-to-l from-secondary/60 to-card p-5 sm:p-6">
+    <section className="sf-plan-board app-card overflow-hidden rounded-2xl border border-border/80">
+      <div className="sf-plan-board-header border-b border-border/70 bg-gradient-to-l from-secondary/60 to-card p-5 sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <p className="eyebrow">{title}</p>
@@ -691,7 +691,7 @@ function PlanCard({
           </div>
         )}
         {firstStep && !approved && (
-          <div className="mx-4 mt-4 overflow-hidden rounded-2xl border border-primary/25 bg-primary/[0.06] p-4 sm:mx-6">
+          <div className="sf-plan-priority mx-4 mt-4 overflow-hidden rounded-2xl border border-primary/25 bg-primary/[0.06] p-4 sm:mx-6">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-xs font-bold tracking-wide text-primary">ابدأ من هنا · الخطوة الأعلى أولوية</p>
               <span className="rounded-lg border border-primary/20 bg-background px-2.5 py-1 text-[11px] font-semibold">وقت المذاكرة: {formatStudyDuration(firstStep.minutes)}</span>
@@ -704,9 +704,9 @@ function PlanCard({
         )}
       </div>
 
-      <div className="grid gap-5 p-4 sm:p-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(230px,.65fr)]">
-        <main className="min-w-0">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="sf-plan-layout grid gap-5 p-4 sm:p-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(230px,.65fr)]">
+        <main className="sf-plan-days min-w-0">
+          <div className="sf-plan-days-heading mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h3 className="font-bold">توزيع المذاكرة على الأيام</h3>
               <p className="mt-1 text-xs text-muted-foreground">{editable ? "كل يوم ظاهر بالكامل. عدّل أي مهمة قبل اعتماد الخطة." : "نظرة مباشرة على مهام كل يوم ووقتها."}</p>
@@ -714,10 +714,10 @@ function PlanCard({
             {editable && <Button type="button" size="sm" variant="outline" className="rounded-lg" onClick={onAddStep}><Plus className="size-4" />إضافة موضوع</Button>}
           </div>
 
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="sf-plan-days-grid grid gap-3 md:grid-cols-2">
             {dayGroups.map((group, groupIndex) => (
-              <section key={group.day} className="min-w-0 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-                <header className="border-b border-border/70 bg-muted/25 p-4">
+              <section key={group.day} className="sf-plan-day min-w-0 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+                <header className="sf-plan-day-header border-b border-border/70 bg-muted/25 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-3">
                       <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-sm font-bold text-primary">{String(groupIndex + 1).padStart(2, "0")}</span>
@@ -737,7 +737,7 @@ function PlanCard({
                 </header>
                 <div className="space-y-2.5 bg-muted/10 p-3 sm:p-4">
                   {group.steps.map(({ step, index }) => (
-                    <article key={`step-${index}-${step.curriculumNodeIds?.join("-") || "manual"}`} className="group rounded-xl border border-border/70 bg-background p-3.5 transition-colors hover:border-primary/30">
+                    <article key={`step-${index}-${step.curriculumNodeIds?.join("-") || "manual"}`} className="sf-plan-step group rounded-xl border border-border/70 bg-background p-3.5 transition-colors hover:border-primary/30">
                       <div className="flex items-start gap-3">
                         <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-secondary text-xs font-bold text-primary">{index + 1}</span>
                         <div className="min-w-0 flex-1">
@@ -834,7 +834,7 @@ function PlanCard({
           )}
         </main>
 
-        <aside className="space-y-3">
+        <aside className="sf-plan-aside space-y-3">
           <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
             <h3 className="flex items-center gap-2 font-bold"><BrainCircuit className="size-4 text-primary" />ملخص الخطة</h3>
             <p className="mt-2 text-sm leading-7 text-muted-foreground">{plan.summary}</p>
@@ -889,7 +889,7 @@ function PlanAssistantChat({ plan }: { plan: PlanView }) {
   };
 
   return (
-    <section className="lg:col-span-2 overflow-hidden rounded-2xl border border-border bg-card">
+    <section className="sf-plan-chat lg:col-span-2 overflow-hidden rounded-2xl border border-border bg-card">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 bg-muted/20 p-4 sm:p-5">
         <div className="flex min-w-0 items-center gap-3">
           <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><MessageCircle className="size-5" /></span>
