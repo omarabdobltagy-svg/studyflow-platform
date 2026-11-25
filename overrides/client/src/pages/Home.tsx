@@ -18,6 +18,11 @@ import { toast } from "sonner";
 type Priority = {
   subjectId: string; subjectName: string; branchId: string; branchTitle: string;
   gapCount: number; pointLabel: string; nextLesson: { nodeId: string; title: string } | null;
+  source?: "daily_plan" | "progress";
+  priority?: string;
+  priorityScore?: number;
+  priorityReason?: string;
+  detail?: string;
 };
 type ExternalSession = {
   sessionId: string; subjectId: string; branchId: string; lessonId: string;
@@ -136,8 +141,40 @@ export default function Home() {
       subjectId: first.subjectId, subjectName: first.subjectName, branchId: first.branchId,
       branchTitle: first.branchTitle, gapCount: first.gapCount, pointLabel: first.pointLabel,
       nextLesson: first.nextLesson,
+      source: "progress" as const,
     } : null;
   }, [learning.data]);
+
+  const dailyPlanPriority = useMemo<Priority | null>(() => {
+    const steps = dailyPlan.data?.plan?.steps ?? [];
+    const subjectIds = profile.data?.subjectIds ?? [];
+    for (const step of steps as any[]) {
+      const curriculumNodeIds = Array.isArray(step.curriculumNodeIds) ? step.curriculumNodeIds : [];
+      for (const subjectId of subjectIds) {
+        for (const branch of getSIECheckpointBranches(subjectId)) {
+          const choice = branch.choices.find(item => curriculumNodeIds.includes(item.nodeId));
+          if (!choice) continue;
+          return {
+            subjectId,
+            subjectName: getSIESubject(subjectId)?.nameAr ?? subjectId,
+            branchId: branch.branchId,
+            branchTitle: branch.branchTitle,
+            gapCount: 0,
+            pointLabel: branch.branchType === "official_section" ? "موضوع" : "درس",
+            nextLesson: { nodeId: choice.nodeId, title: step.title || choice.title },
+            source: "daily_plan",
+            priority: step.priority ?? "medium",
+            priorityScore: typeof step.priorityScore === "number" ? step.priorityScore : undefined,
+            priorityReason: step.priorityReason,
+            detail: step.detail,
+          };
+        }
+      }
+    }
+    return null;
+  }, [dailyPlan.data, profile.data?.subjectIds]);
+
+  const activePriority = dailyPlanPriority ?? priority;
 
   const plan = dailyPlan.data?.plan;
   const tasks = summary.data?.tasks ?? [];
@@ -220,34 +257,44 @@ export default function Home() {
             <div className="p-5 sm:p-7">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2 text-sm font-semibold text-primary"><Target className="size-4" />أولويتك الدراسية</div>
-                {priority && <Badge variant="secondary">{priority.gapCount} {priority.pointLabel} في الفجوة</Badge>}
+                {activePriority && (
+                  activePriority.source === "daily_plan"
+                    ? <Badge variant="secondary">من خطة اليوم · {activePriority.priority === "critical" ? "عاجلة" : activePriority.priority === "high" ? "عالية" : activePriority.priority === "low" ? "مرنة" : "متوسطة"}</Badge>
+                    : <Badge variant="secondary">{activePriority.gapCount} {activePriority.pointLabel} في الفجوة</Badge>
+                )}
               </div>
-              {learning.isLoading ? (
+              {learning.isLoading || (dailyPlan.isLoading && !priority) ? (
                 <div className="mt-8 space-y-3"><div className="h-5 w-32 animate-pulse rounded bg-muted" /><div className="h-8 w-3/4 animate-pulse rounded bg-muted" /><div className="h-4 w-full animate-pulse rounded bg-muted" /></div>
-              ) : priority?.nextLesson ? (
+              ) : activePriority?.nextLesson ? (
                 <>
-                  <p className="mt-6 text-xs font-semibold text-muted-foreground">{priority.subjectName} · {priority.branchTitle}</p>
-                  <h3 className="mt-2 text-2xl font-bold leading-tight sm:text-3xl">{priority.nextLesson.title}</h3>
+                  <p className="mt-6 text-xs font-semibold text-muted-foreground">{activePriority.subjectName} · {activePriority.branchTitle}</p>
+                  <h3 className="mt-2 text-2xl font-bold leading-tight sm:text-3xl">{activePriority.nextLesson.title}</h3>
                   <p className="mt-3 max-w-2xl text-sm leading-7 text-muted-foreground">
-                    دي الخطوة التالية حسب موضعك المسجل وموضع التدريس. ابدأ جلسة، وبعدها سجّل إنجازك لتحديث تقدمك وخطتك.
+                    {activePriority.detail || "دي الخطوة التالية حسب موضعك المسجل وموضع التدريس. ابدأ جلسة، وبعدها سجّل إنجازك لتحديث تقدمك وخطتك."}
                   </p>
+                  {activePriority.priorityReason && (
+                    <p className="mt-2 rounded-xl border border-primary/15 bg-primary/[0.04] px-3 py-2 text-xs leading-6 text-muted-foreground">
+                      سبب ترتيبها: {activePriority.priorityReason}
+                      {activePriority.priorityScore !== undefined ? " · " + activePriority.priorityScore + "/100" : ""}
+                    </p>
+                  )}
                   <div className="mt-6 flex flex-wrap gap-2">
                     <Button
-                      onClick={() => startSession.mutate({ subjectId: priority.subjectId, branchId: priority.branchId, lessonId: priority.nextLesson!.nodeId })}
+                      onClick={() => startSession.mutate({ subjectId: activePriority.subjectId, branchId: activePriority.branchId, lessonId: activePriority.nextLesson!.nodeId })}
                       disabled={Boolean(session) || startSession.isPending}
                       className="rounded-xl px-5"
                     >
                       {startSession.isPending ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
                       {session ? "أنهِ الجلسة الحالية أولًا" : "ابدأ جلسة مذاكرة"}
                     </Button>
-                    <Button variant="outline" onClick={() => openStudySteps(priority.subjectId, priority.branchId, priority.nextLesson!.nodeId)} className="rounded-xl">افتح خطوات المذاكرة</Button>
+                    <Button variant="outline" onClick={() => openStudySteps(activePriority.subjectId, activePriority.branchId, activePriority.nextLesson!.nodeId)} className="rounded-xl">افتح خطوات المذاكرة</Button>
                   </div>
                 </>
               ) : (
                 <div className="mt-6 rounded-2xl bg-muted/45 p-5">
                   <span className="flex size-11 items-center justify-center rounded-2xl bg-background text-primary"><GraduationCap className="size-5" /></span>
                   <h3 className="mt-4 text-lg font-bold">لسه مفيش أولوية محسوبة</h3>
-                  <p className="mt-2 text-sm leading-6 text-muted-foreground">سجّل آخر درس وصلت له وموضع المدرس في المادة علشان نحدد الخطوة التالية بدقة.</p>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">سجّل آخر موضوع وصلت له وموضع المدرس في المادة علشان نحدد الخطوة التالية بدقة.</p>
                   <Button variant="outline" onClick={() => setLocation("/study")} className="mt-4 rounded-xl">تحديث تقدمك الدراسي <ArrowLeft className="size-4" /></Button>
                 </div>
               )}
