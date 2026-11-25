@@ -38,7 +38,7 @@ import { useLocation, type RouteComponentProps } from "wouter";
 import { toast } from "sonner";
 
 type TeacherChoiceMap = Record<string, string>;
-type TeacherScheduleSlot = { dayOfWeek: number; startTime: string; durationMinutes: number };
+type TeacherScheduleSlot = { dayOfWeek: number; startTime: string };
 type TeacherScheduleMap = Record<string, TeacherScheduleSlot[]>;
 const WEEK_DAYS = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 type FormState = {
@@ -260,7 +260,6 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
         (form.teacherSchedules[subject.subjectId] ?? []).map(slot => ({
           dayOfWeek: slot.dayOfWeek,
           startTime: slot.startTime,
-          durationMinutes: slot.durationMinutes,
         })),
       ])),
       teacherScheduleUnfixedSubjectIds: selectedSubjects
@@ -573,7 +572,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                     )}
                     <div className="mt-4 space-y-2.5">
                       {!form.teacherScheduleUnfixed[currentSetupSubjectId] && (form.teacherSchedules[currentSetupSubjectId] ?? []).map((slot, slotIndex) => (
-                        <div key={slotIndex} className="grid gap-2 rounded-xl border border-border/70 bg-card p-3 sm:grid-cols-[1fr_1fr_.8fr_auto] sm:items-end">
+                        <div key={slotIndex} className="grid gap-2 rounded-xl border border-border/70 bg-card p-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
                           <label className="block text-xs font-semibold">
                             اليوم
                             <select
@@ -605,22 +604,6 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                               className="mt-1.5 h-10 w-full rounded-lg border border-border bg-background px-2 text-sm"
                             />
                           </label>
-                          <label className="block text-xs font-semibold">
-                            المدة
-                            <select
-                              value={slot.durationMinutes}
-                              onChange={event => setForm(current => ({
-                                ...current,
-                                teacherSchedules: {
-                                  ...current.teacherSchedules,
-                                  [currentSetupSubjectId]: (current.teacherSchedules[currentSetupSubjectId] ?? []).map((item, index) => index === slotIndex ? { ...item, durationMinutes: Number(event.target.value) } : item),
-                                },
-                              }))}
-                              className="mt-1.5 h-10 w-full rounded-lg border border-border bg-background px-2 text-sm"
-                            >
-                              {[45,60,75,90,105,120,150,180].map(value => <option key={value} value={value}>{value} دقيقة</option>)}
-                            </select>
-                          </label>
                           <Button type="button" size="icon" variant="ghost" className="size-10 rounded-lg text-muted-foreground hover:text-destructive" aria-label="حذف موعد المحاضرة"
                             onClick={() => setForm(current => ({
                               ...current,
@@ -639,7 +622,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                           ...current.teacherSchedules,
                           [currentSetupSubjectId]: [
                             ...(current.teacherSchedules[currentSetupSubjectId] ?? []),
-                            { dayOfWeek: 0, startTime: "18:00", durationMinutes: 90 },
+                            { dayOfWeek: 0, startTime: "18:00" },
                           ],
                         },
                       }))}>
