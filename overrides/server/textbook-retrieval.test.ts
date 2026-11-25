@@ -90,7 +90,7 @@ describe("Part 1 curriculum mapping and ordering", () => {
     expect(note).toContain("ENG_VOCABULARY");
     expect(note).toContain("ENG_GRAMMAR");
     expect(note).toContain("ENG_TEXTBOOK");
-    expect(note).toContain("same_unit_context_not_prerequisite");
+    expect(note).toContain("ربط مسارات الإنجليزي حسب الوحدة دون دمج الفروع");
   });
 });
 
