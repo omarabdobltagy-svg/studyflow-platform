@@ -201,6 +201,31 @@ export default function Home() {
     };
   }, [mappedOpenTasks]);
 
+  const nextTopicInTaskBranch = useMemo<Priority | null>(() => {
+    const candidates = mappedOpenTasks.flatMap(item => {
+      if (!item.isAlreadyCompleted) return [];
+      const nextChoice = item.branch.choices[item.gap.studentPosition];
+      if (!nextChoice) return [];
+      return [{
+        subjectId: item.match.subjectId,
+        subjectName: getSIESubject(item.match.subjectId)?.nameAr ?? item.match.subjectId,
+        branchId: item.match.branchId,
+        branchTitle: item.match.branchTitle,
+        gapCount: item.gap.gapCount ?? 0,
+        pointLabel: item.branch.branchType === "official_section" ? "موضوع" : "درس",
+        nextLesson: { nodeId: nextChoice.nodeId, title: nextChoice.title },
+        source: "progress" as const,
+        priority: item.task.priority ?? "medium",
+        priorityReason: "وجدنا مهمة مفتوحة لموضوع مسجل بالفعل كمكتمل؛ لم نعد إسنادها. الأولوية تنتقل للموضوع التالي في نفس الفرع.",
+      }];
+    });
+    candidates.sort((left, right) => {
+      const urgency = (value?: string) => value === "high" ? 3 : value === "medium" ? 2 : 1;
+      return urgency(right.priority) - urgency(left.priority);
+    });
+    return candidates[0] ?? null;
+  }, [mappedOpenTasks]);
+
   const dailyPlanPriority = useMemo<Priority | null>(() => {
     const steps = dailyPlan.data?.plan?.steps ?? [];
     const subjectIds = profile.data?.subjectIds ?? [];
@@ -232,7 +257,7 @@ export default function Home() {
     return null;
   }, [dailyPlan.data, profile.data?.subjectIds, learning.data]);
 
-  const activePriority = taskPriority ?? (dailyPlan.data?.needsRefresh
+  const activePriority = taskPriority ?? nextTopicInTaskBranch ?? (dailyPlan.data?.needsRefresh
     ? priority ?? dailyPlanPriority
     : dailyPlanPriority ?? priority);
   const completedTaskProgressConflicts = mappedOpenTasks.filter(item => item.isAlreadyCompleted);
