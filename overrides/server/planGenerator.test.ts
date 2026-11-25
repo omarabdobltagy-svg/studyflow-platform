@@ -88,7 +88,7 @@ describe("AI planner response normalization", () => {
       ],
       habits: [],
     }));
-    expect(() => applyTeacherLedPlanningGuard(parsed)).toThrow("StudyFlow");
+    expect(() => applyTeacherLedPlanningGuard(parsed)).toThrow("المسودة المقترحة تعتمد");
   });
 
   it("does not fabricate an empty task list", () => {
