@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
-import { getSIEStudentVisibleBranches, getSIESubject } from "@shared/sie-catalog";
+import { getSIECheckpointBranches, getSIEStudentVisibleBranches, getSIESubject } from "@shared/sie-catalog";
 import { BookOpenText, Check, CircleHelp, Eye, Mic2, RefreshCcw, Search, Sparkles, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -93,8 +93,12 @@ export default function SQ3R() {
   const [difficulty, setDifficulty] = useState<"unknown" | "easy" | "medium" | "hard">("unknown");
   const [notes, setNotes] = useState("");
 
+  const allBranches = useMemo(() => getSIECheckpointBranches(subjectId), [subjectId]);
   const branches = useMemo(() => getSIEStudentVisibleBranches(subjectId), [subjectId]);
-  const currentBranch = branches.find(branch => branch.branchId === branchId) ?? branches[0];
+  const currentBranch = allBranches.find(branch => branch.branchId === branchId) ?? branches[0];
+  const currentBranchTitle = subjectId === "ARB_G2_BAC" && currentBranch?.branchId === "ARB_READING"
+    ? "نصوص الوحدة"
+    : currentBranch?.branchTitle;
   const branchChoices = currentBranch?.choices ?? [];
   const currentBranchId = currentBranch?.branchId ?? "";
   const subjectRecords = sq3rMap[subjectId] || {};
@@ -121,8 +125,8 @@ export default function SQ3R() {
       setBranchId("");
       return;
     }
-    if (!branches.some(branch => branch.branchId === branchId)) setBranchId(branches[0].branchId);
-  }, [subjectId, branches, branchId]);
+    if (!allBranches.some(branch => branch.branchId === branchId)) setBranchId(branches[0].branchId);
+  }, [subjectId, branches, allBranches, branchId]);
 
   useEffect(() => {
     if (!branchChoices.length) {
