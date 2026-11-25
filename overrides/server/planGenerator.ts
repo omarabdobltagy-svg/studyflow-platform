@@ -1455,9 +1455,9 @@ export async function generatePersonalPlan(
         };
       }),
     };
-  } else if (planScope === "daily") {
+  } else if (planScope === "daily" && profile) {
     plan = { ...plan, title: "خطة المذاكرة" };
-  } else {
+  } else if (planScope === "annual") {
     plan = { ...plan, title: "الخطة السنوية 2026–2027" };
   }
 
