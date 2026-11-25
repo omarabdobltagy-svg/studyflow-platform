@@ -74,7 +74,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { generatePersonalPlan, getPlanGenerationProgress, markPlanGenerationFailed } from "./planGenerator";
-import { isSecondYearBaccalaureateUpdate, parseYoutubeAtomFeed, scanSelectedTeacherSources, selectedTeacherIds } from "./teacher-content-monitor";
+import { classifyTeacherPublicUpdate, isSecondYearBaccalaureateUpdate, parseYoutubeAtomFeed, scanSelectedTeacherSources, selectedTeacherIds } from "./teacher-content-monitor";
 import { isDailyPlanStale } from "./planLifecycle";
 import { createDailyPlanSourceFingerprint } from "./dailyPlanFingerprint";
 import { storageDelete, storagePut } from "./storage";
@@ -174,11 +174,13 @@ async function scanTeacherSourcesForStudent(userId: number): Promise<boolean> {
         && isSecondYearBaccalaureateUpdate(update)
       );
       const knownIds = new Set(previousUpdates.map(update => String(update.externalId ?? "")).filter(Boolean));
-      const newUpdates = result.updates.filter(update =>
-        allowedTeacherIds.has(update.teacherId)
-        && isSecondYearBaccalaureateUpdate(update)
-        && !knownIds.has(update.externalId)
-      );
+      const newUpdates = result.updates
+        .map(classifyTeacherPublicUpdate)
+        .filter(update =>
+          allowedTeacherIds.has(update.teacherId)
+          && isSecondYearBaccalaureateUpdate(update)
+          && !knownIds.has(update.externalId)
+        );
       const previousScanState = (latestSelection.teacherPublicScanState ?? {}) as Record<string, string>;
       const nextScanState = { ...previousScanState, ...result.scanState };
       const scanStateChanged = JSON.stringify(previousScanState) !== JSON.stringify(nextScanState);
@@ -204,9 +206,19 @@ async function scanTeacherSourcesForStudent(userId: number): Promise<boolean> {
           eventType: "teacher.public_update_detected",
           entityType: "teacher_source",
           summary: "تم رصد تحديث عام جديد من أحد المدرسين المختارين",
-          metadata: { count: newUpdates.length, sources: [...new Set(newUpdates.map(item => item.sourceType))] },
+          metadata: {
+            count: newUpdates.length,
+            sources: [...new Set(newUpdates.map(item => item.sourceType))],
+            announcementTypes: [...new Set(newUpdates.map(item => item.announcementType ?? "general"))],
+          },
         });
-        if (!dailyPlanLocks.has(userId)) queueDailyPlanReconciliation(userId);
+        const scheduleChanges = newUpdates.filter(update =>
+          update.confidence === "high"
+          && ["lecture_cancelled", "class_suspended", "schedule_changed"].includes(update.announcementType ?? "")
+        );
+        // Only explicit, high-confidence schedule announcements can trigger an automatic replan.
+        // Ordinary videos, revision posts and ambiguous messages must never cancel a class.
+        if (scheduleChanges.length && !dailyPlanLocks.has(userId)) queueDailyPlanReconciliation(userId);
       }
       return newUpdates.length > 0;
     } catch (error) {
@@ -229,7 +241,7 @@ export async function ingestYoutubeWebSubFeed(teacherId: string, xml: string) {
   const updates = parseYoutubeAtomFeed(xml, {
     teacherId,
     teacherName: teacher.nameAr,
-  }).filter(isSecondYearBaccalaureateUpdate);
+  }).map(classifyTeacherPublicUpdate).filter(isSecondYearBaccalaureateUpdate);
   if (!updates.length) return { received: 0, updatedProfiles: 0 };
 
   const profiles = await listStudentTeacherMonitoringProfiles();
