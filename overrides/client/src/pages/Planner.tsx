@@ -363,7 +363,7 @@ export default function Planner() {
 
   return (
     <DashboardLayout
-      title="المخطط الذكي"
+      title="الخطة السنوية"
       description="ابنِ خارطة العام الدراسي كاملة من بيانات المنصة، ثم اعتمد توزيعها على مراحل وأسابيع."
     >
       <div className="space-y-5">
@@ -375,9 +375,9 @@ export default function Planner() {
           <div className="relative flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
             <div className="max-w-2xl">
               <p className="text-[11px] font-bold tracking-[0.2em] text-blue-100/80">STUDYFLOW · AI STUDY PLAN</p>
-              <h2 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">خطة واحدة. قرار واضح. وتنفيذ تحت سيطرتك.</h2>
+              <h2 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">خارطة الدراسة السنوية 2026–2027</h2>
               <p className="mt-2 text-sm leading-7 text-slate-300">
-                الذكاء الاصطناعي يبني المسودة من موادك وتقدمك وتراكمك. أنت تراجع المهام وتغيّرها قبل أن تتحول إلى جدول تنفيذ.
+                تغطية كاملة للموضوعات في موادك، من آخر نقطة مكتملة حتى هدف الجاهزية قبل الامتحانات. تتوزع على أسابيع وتراعي المهام الموجودة ووقتك الفعلي.
               </p>
             </div>
             <div className="shrink-0 rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
@@ -779,7 +779,7 @@ function PlanCard({
 
         {plan.taskSync && (
           <div className="mt-4 flex flex-col gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2 text-sm font-semibold"><CheckCircle2 className="size-4 text-emerald-600" />تم اعتماد الخطة وإنشاء المهام</div>
+            <div className="flex items-center gap-2 text-sm font-semibold"><CheckCircle2 className="size-4 text-emerald-600" />تم اعتماد الخطة السنوية</div>
             <a href="/tasks" className="inline-flex items-center gap-1 text-xs font-semibold text-primary">فتح قائمة المهام <ArrowUpRight className="size-3.5" /></a>
           </div>
         )}
@@ -802,7 +802,7 @@ function PlanCard({
               <h3 className="font-bold">المراحل الأسبوعية</h3>
               <p className="mt-1 text-xs text-muted-foreground">{editable ? "راجع الموضوعات وزمنها وترتيبها قبل اعتماد الخطة السنوية." : "توزيع الموضوعات على أسابيع الخطة."}</p>
             </div>
-            {editable && <Button type="button" size="sm" variant="outline" className="rounded-lg" onClick={onAddStep}><Plus className="size-4" />إضافة مهمة</Button>}
+            {editable && <Button type="button" size="sm" variant="outline" className="rounded-lg" onClick={onAddStep}><Plus className="size-4" />إضافة موضوع</Button>}
           </div>
 
            <div className="space-y-3">
