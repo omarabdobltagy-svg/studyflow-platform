@@ -520,6 +520,13 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): 
 
 
 async function getCurrentDailyPlanForStudent(userId: number) {
+  // Scan selected public teacher channels during normal workspace refresh.
+  // The scanner enforces its own 45-minute per-source throttle.
+  try {
+    await scanTeacherSourcesForStudent(userId);
+  } catch (error) {
+    console.warn("[StudyFlow teacher updates] Non-blocking public source scan failed:", error);
+  }
   const profile = await getStudentProfile(userId);
   if (!profile || !Array.isArray(profile.subjectIds) || profile.subjectIds.length === 0) {
     return {
