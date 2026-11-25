@@ -201,15 +201,15 @@ export default function Planner() {
     if (history.isLoading || profile.isLoading || history.isError || profile.isError || autoStarted.current) return;
     if (!profile.data || !Array.isArray(profile.data.subjectIds) || profile.data.subjectIds.length === 0) return;
 
-    if (savedPlans.length > 0) {
-      setPlan(current => current ?? savedPlans[0].plan);
-      autoStarted.current = true;
-      return;
-    }
-
+    // Always build a fresh draft automatically when the student opens
+    // the planner. History is intentionally opt-in; it must not silently
+    // replace today's generated draft with an old saved plan.
     autoStarted.current = true;
-    runGeneration("balanced", 120, null);
-  }, [history.isLoading, history.isError, profile.isLoading, profile.isError, profile.data, savedPlans]);
+    const savedDailyMinutes = Number((profile.data as any)?.selection?.studyConditions?.dailyMinutes);
+    runGeneration("balanced", Number.isFinite(savedDailyMinutes) && savedDailyMinutes >= 20
+      ? Math.min(600, savedDailyMinutes)
+      : 120, null);
+  }, [history.isLoading, history.isError, profile.isLoading, profile.isError, profile.data]);
 
   const updatePlan = (next: PlanView) => {
     setPlan(next);
