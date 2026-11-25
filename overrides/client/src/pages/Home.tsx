@@ -205,11 +205,13 @@ export default function Home() {
   const toggleTask = trpc.tasks.toggle.useMutation({
     onSuccess: () => {
       void utils.dashboard.summary.invalidate();
+      void utils.plans.currentDaily.invalidate();
     },
   });
   const toggleRoutine = trpc.routines.toggleItem.useMutation({
     onSuccess: () => {
       void utils.dashboard.summary.invalidate();
+      void utils.plans.currentDaily.invalidate();
     },
   });
   const [openFolder, setOpenFolder] = useState<string | null>(null);
