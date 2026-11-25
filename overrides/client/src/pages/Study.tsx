@@ -672,7 +672,7 @@ export default function Study() {
                             onPrevious={() => setLastCompletedLessonId(stepFrontier(lastCompletedLessonId, "previous"))}
                             onNext={() => setLastCompletedLessonId(stepFrontier(lastCompletedLessonId || "__UNKNOWN__", "next"))}
                             previousDisabled={!canMovePrevious(lastCompletedLessonId)} nextDisabled={!canMoveNext(lastCompletedLessonId)}
-                            options={[{ value: "__NOT_STARTED__", label: "لم أبدأ هذا الفرع" },{ value: "__UNKNOWN__", label: "موضعي غير معروف" },...branchChoiceOptions]} />
+                            options={[{ value: "__NOT_STARTED__", label: "لم أبدأ هذا الفرع" },{ value: "__UNKNOWN__", label: "موضعي غير معروف" },...branchChoiceOptions]} visibleOptionLimit={subjectId === "ARB_G2_BAC" && currentBranchId === "ARB_SPELLING" ? 8 : 6} />
                           {hasStudentFrontierSelection && currentGap.studentPosition !== null && <div className="mt-3 rounded-xl border border-primary/15 bg-primary/[0.045] px-3 py-2.5">
                             <p className="text-[10px] font-semibold text-muted-foreground">الخطوة التالية عليك</p>
                             <p className="mt-1 text-sm font-bold text-foreground">{nextStudentLesson?.title || (isStudentDoneWithBranch ? "أنهيت كل الموضوعات المفهرسة في هذا الفرع" : "لم يتم تحديد الموضوع التالي")}</p>
@@ -687,7 +687,7 @@ export default function Study() {
                             onNext={() => setTeacherFrontier(stepFrontier(teacherTeachingFrontierId, "next"))}
                             previousDisabled={!canMovePrevious(teacherTeachingFrontierId)}
                             nextDisabled={!canMoveNext(teacherTeachingFrontierId)}
-                            options={[{ value: "__UNKNOWN__", label: "لا أعرف / غير متاح" },{ value: "__NOT_STARTED__", label: "لم يبدأ التدريس بعد" },...branchChoiceOptions]} />
+                            options={[{ value: "__UNKNOWN__", label: "لا أعرف / غير متاح" },{ value: "__NOT_STARTED__", label: "لم يبدأ التدريس بعد" },...branchChoiceOptions]} visibleOptionLimit={subjectId === "ARB_G2_BAC" && currentBranchId === "ARB_SPELLING" ? 8 : 6} />
                         </div>
                         {courseMode === "center" ? (
                           <div className="min-w-0 rounded-xl border border-border/70 bg-background/70 p-3 md:col-span-2">
@@ -696,7 +696,7 @@ export default function Study() {
                               onPrevious={() => setSchoolFrontier(stepFrontier(schoolClassFrontierId, "previous"))}
                               onNext={() => setSchoolFrontier(stepFrontier(schoolClassFrontierId, "next"))}
                               previousDisabled={!canMovePrevious(schoolClassFrontierId)} nextDisabled={!canMoveNext(schoolClassFrontierId)}
-                              options={[{ value: "__UNKNOWN__", label: "لا أعرف حتى الآن" },{ value: "__NOT_STARTED__", label: "لم يبدأ السنتر / المجموعة" },...branchChoiceOptions]} />
+                              options={[{ value: "__UNKNOWN__", label: "لا أعرف حتى الآن" },{ value: "__NOT_STARTED__", label: "لم يبدأ السنتر / المجموعة" },...branchChoiceOptions]} visibleOptionLimit={subjectId === "ARB_G2_BAC" && currentBranchId === "ARB_SPELLING" ? 8 : 6} />
                           </div>
                         ) : null}
                       </div>
@@ -796,11 +796,11 @@ function normalizeFrontierSearch(value: string) {
 }
 
 function SearchableFrontierPicker({
-  label, hint, value, onChange, options, disabled = false,
+  label, hint, value, onChange, options, disabled = false, visibleOptionLimit = 6,
   onPrevious, onNext, previousDisabled = false, nextDisabled = false,
 }: {
   label: string; hint?: string; value: string; onChange: (value: string) => void;
-  options: ChoiceButtonOption[]; disabled?: boolean;
+  options: ChoiceButtonOption[]; disabled?: boolean; visibleOptionLimit?: number;
   onPrevious?: () => void; onNext?: () => void;
   previousDisabled?: boolean; nextDisabled?: boolean;
 }) {
@@ -820,9 +820,9 @@ function SearchableFrontierPicker({
     ? options.filter(option => normalizeFrontierSearch(option.label + " " + (option.description ?? "")).includes(normalizedQuery))
     : [
         ...statusOptions,
-        ...(showAllOptions ? curriculumOptions : curriculumOptions.slice(0, 6)),
+        ...(showAllOptions ? curriculumOptions : curriculumOptions.slice(0, visibleOptionLimit)),
       ];
-  const hiddenOptionCount = Math.max(0, curriculumOptions.length - 6);
+  const hiddenOptionCount = Math.max(0, curriculumOptions.length - visibleOptionLimit);
   return (
     <div className="min-w-0 space-y-2.5">
       <div className="flex flex-wrap items-start justify-between gap-2">
