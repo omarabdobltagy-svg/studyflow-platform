@@ -11,6 +11,7 @@ import {
   addChapter,
   addLibraryAttachment,
   assertLibraryAttachmentTarget,
+  approvePlanAsGoalTree,
   syncDailyPlanGoalTree,
   completeStudyStep,
   createBook,
@@ -2650,10 +2651,22 @@ export const appRouter = router({
         }).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const schedule = input.schedule ?? {
-          startDate: new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date()),
-          dailyMinutes: 120,
-        };
+        // Preserve compatibility for older callers that submit no schedule.
+        // The new Planner UI always provides an explicit schedule and uses the
+        // synchronizing path below; this branch only serves legacy integrations.
+        if (!input.schedule) {
+          const legacyResult = await approvePlanAsGoalTree(ctx.user.id, {
+            title: input.plan.title,
+            summary: input.plan.summary,
+            steps: input.plan.steps.map((step, index) => ({ ...step, day: index + 1 })),
+          });
+          await logStudentActivity(ctx.user.id, "plan.approved", "ai_plan", null, "تم اعتماد خطة عبر واجهة التوافق القديمة", {
+            title: input.plan.title,
+            taskCount: legacyResult.taskCount,
+          });
+          return legacyResult;
+        }
+        const schedule = input.schedule;
         const approvedPlan = {
           ...input.plan,
           durationLabel: input.plan.durationLabel || "حتى امتحان نهاية السنة",
