@@ -99,6 +99,16 @@ export function isSecondYearBaccalaureateProfile(profile: TeacherMonitoringProfi
     && profile.subjectIds.some(subjectId => /_G2_BAC$/.test(subjectId));
 }
 
+export function isSecondYearBaccalaureateUpdate(update: { title?: unknown; description?: unknown }): boolean {
+  const text = (String(update.title ?? "") + " " + String(update.description ?? ""))
+    .normalize("NFKC")
+    .toLocaleLowerCase("ar")
+    .replace(/[أإآٱ]/g, "ا")
+    .replace(/[ً-ٰٟـ]/g, "");
+  const hasBaccalaureateMarker = /بكالوريا|baccalaureate|(?:^|\\W)2\\s*bac(?:calaureate)?(?:$|\\W)|(?:^|\\W)bac\\s*2(?:$|\\W)/iu.test(text);
+  const hasSecondYearMarker = /الصف\\s*الثاني|ثاني\\s*(?:ثانوي|الثانوي)|تاني(?:ة)?\\s*(?:ثانوي|بكالوريا)|الثانيه|الثانية|second\\s*(?:year|secondary)|2nd\\s*(?:year|secondary)|grade\\s*11|\\bg11\\b|(?:^|\\W)2\\s*bac(?:calaureate)?(?:$|\\W)/iu.test(text);
+  return hasBaccalaureateMarker && hasSecondYearMarker;
+}
 export function selectedTeacherIds(profile: TeacherMonitoringProfile): string[] {
   if (!isSecondYearBaccalaureateProfile(profile)) return [];
   const selection = profile.selection ?? {};
@@ -308,6 +318,7 @@ export async function scanSelectedTeacherSources(
     updates.push(...item.updates);
   }
   let orderedUpdates = updates
+    .filter(isSecondYearBaccalaureateUpdate)
     .filter(update => now.getTime() - Date.parse(update.publishedAt) <= 30 * 24 * 60 * 60 * 1_000)
     .sort((left, right) => Date.parse(right.publishedAt) - Date.parse(left.publishedAt))
     .slice(0, MAX_UPDATES_PER_SCAN);
