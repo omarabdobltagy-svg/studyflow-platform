@@ -81,6 +81,8 @@ describe("teacher public channel monitor", () => {
     const suspended = classifyTeacherAnnouncement("هنريح من المحاضرات الأسبوع ده", "", "facebook");
     expect(suspended).toEqual({ announcementType: "class_suspended", confidence: "high" });
     expect(isHighConfidenceScheduleAnnouncement(suspended)).toBe(true);
+    expect(classifyTeacherAnnouncement("مفيش محاضرات الأسبوع ده", "", "facebook"))
+      .toEqual({ announcementType: "class_suspended", confidence: "high" });
 
     const changed = classifyTeacherAnnouncement("تغيير موعد المحاضرة", "المحاضرة اتنقلت ليوم الخميس", "facebook");
     expect(changed).toEqual({ announcementType: "schedule_changed", confidence: "high" });
