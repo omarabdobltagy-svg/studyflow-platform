@@ -3,8 +3,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 import { trpc } from "@/lib/trpc";
-import { getSIECheckpointBranches, getSIESubject } from "@shared/sie-catalog";
-import { calculateLearningGap, getNextLearningTarget, moveLearningFrontier } from "@shared/sie-learning-progress";
+import {
+  getSIECheckpointBranches,
+  getSIECheckpointProgressOptions,
+  getSIESubject,
+  normalizeSIECheckpointFrontier,
+} from "@shared/sie-catalog";
+import { calculateLearningGap, getNextLearningTarget } from "@shared/sie-learning-progress";
 import { BookOpenText, Check, ChevronLeft, ChevronRight, Search, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -99,17 +104,17 @@ export default function Study() {
     if (branchValue === "__UNKNOWN__" && currentBranchProgress[confirmationKey]) return "__UNKNOWN__";
     return belongsToCurrentBranch(legacyValue) ? legacyValue : "__UNKNOWN__";
   };
-  const savedStudentFrontierId = resolveSavedFrontier(
+  const savedStudentFrontierId = normalizeSIECheckpointFrontier(subjectId, currentBranchId, resolveSavedFrontier(
     "lastCompletedLessonId", "studentFrontierConfirmedAt", legacyStudentFrontier,
-  );
-  const savedTeacherFrontierId = resolveSavedFrontier(
+  ));
+  const savedTeacherFrontierId = normalizeSIECheckpointFrontier(subjectId, currentBranchId, resolveSavedFrontier(
     "teacherTeachingFrontierId", "teacherFrontierConfirmedAt", currentCourseProgress.teacherTeachingFrontierId,
-  );
+  ));
   const teacherTeachingFrontierId = Object.prototype.hasOwnProperty.call(teacherFrontierDrafts, studentFrontierDraftKey)
     ? teacherFrontierDrafts[studentFrontierDraftKey] : savedTeacherFrontierId;
-  const savedSchoolFrontierId = resolveSavedFrontier(
+  const savedSchoolFrontierId = normalizeSIECheckpointFrontier(subjectId, currentBranchId, resolveSavedFrontier(
     "schoolClassFrontierId", "schoolFrontierConfirmedAt", currentCourseProgress.schoolClassFrontierId,
-  );
+  ));
   const schoolClassFrontierId = Object.prototype.hasOwnProperty.call(schoolFrontierDrafts, studentFrontierDraftKey)
     ? schoolFrontierDrafts[studentFrontierDraftKey] : savedSchoolFrontierId;
   const lastCompletedLessonId = Object.prototype.hasOwnProperty.call(studentFrontierDrafts, studentFrontierDraftKey)
@@ -124,13 +129,7 @@ export default function Study() {
   const hasSchoolFrontierSelection = schoolClassFrontierId !== "__UNKNOWN__"
     || Boolean(currentBranchProgress.schoolFrontierConfirmedAt)
     || Object.prototype.hasOwnProperty.call(schoolFrontierDrafts, studentFrontierDraftKey);
-  const branchChoiceOptions = branchChoices.map(choice => ({
-    value: choice.nodeId,
-    label: choice.title,
-    description: choice.lessonNumber
-      ? (choice.unitNumber ? "الوحدة " + choice.unitNumber + " · " : "") + "الدرس " + choice.lessonNumber
-      : choice.unitTitle || "",
-  }));
+  const branchChoiceOptions = getSIECheckpointProgressOptions(subjectId, currentBranchId);
   const currentBranchLastLessonId = branchChoices[branchChoices.length - 1]?.nodeId;
   const isCurrentBranchComplete = Boolean(currentBranchLastLessonId && lastCompletedLessonId === currentBranchLastLessonId);
   const autoSaveFingerprintRef = useRef("");
@@ -236,10 +235,21 @@ export default function Study() {
     autoSaveFingerprintRef.current = "";
     setSchoolFrontierDrafts(current => ({ ...current, [studentFrontierDraftKey]: value }));
   };
-  const stepFrontier = (value: string, direction: "previous" | "next") => moveLearningFrontier(branchChoices, value, direction);
-  const frontierIndex = (value: string) => branchChoices.findIndex(choice => choice.nodeId === value);
-  const canMovePrevious = (value: string) => frontierIndex(value) >= 0;
-  const canMoveNext = (value: string) => branchChoices.length > 0 && value !== branchChoices[branchChoices.length - 1]?.nodeId;
+  const frontierIndex = (value: string) => branchChoiceOptions.findIndex(option => option.value === value);
+  const stepFrontier = (value: string, direction: "previous" | "next") => {
+    const index = frontierIndex(value);
+    if (index < 0) return direction === "next" && value === "__NOT_STARTED__"
+      ? branchChoiceOptions[0]?.value ?? value
+      : value;
+    return branchChoiceOptions[index + (direction === "next" ? 1 : -1)]?.value ?? value;
+  };
+  const canMovePrevious = (value: string) => frontierIndex(value) > 0;
+  const canMoveNext = (value: string) => {
+    const index = frontierIndex(value);
+    return index >= 0
+      ? index < branchChoiceOptions.length - 1
+      : value === "__NOT_STARTED__" && branchChoiceOptions.length > 0;
+  };
   useEffect(() => {
     // Each frontier is an independent student-owned fact. Saving the student's
     // last completed lesson must not wait for a teacher or school position.
@@ -349,7 +359,10 @@ export default function Study() {
                   </div>
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
                     {branches.map((branch, index) => {
-                      const savedPosition = branchProgressMap[branch.branchId]?.lastCompletedLessonId;
+                      const rawSavedPosition = branchProgressMap[branch.branchId]?.lastCompletedLessonId;
+                      const savedPosition = typeof rawSavedPosition === "string"
+                        ? normalizeSIECheckpointFrontier(subjectId, branch.branchId, rawSavedPosition)
+                        : rawSavedPosition;
                       const hasProgress = typeof savedPosition === "string"
                         && savedPosition !== "__UNKNOWN__"
                         && savedPosition !== "__NOT_STARTED__"
