@@ -70,6 +70,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { generatePersonalPlan } from "./planGenerator";
+import { scanSelectedTeacherSources } from "./teacher-content-monitor";
 import { isDailyPlanStale } from "./planLifecycle";
 import { createDailyPlanSourceFingerprint } from "./dailyPlanFingerprint";
 import { storageDelete, storagePut } from "./storage";
@@ -92,10 +93,12 @@ type DailyPlanResult = {
   taskCount: number;
 };
 
-// V3 invalidates cached plans created before legacy-frontier fallback was aligned with learning.get.
-const DAILY_PLAN_PREFIX = "SIE_DAILY_PLAN_V3:";
+// V4 adds condition-aware planning and verified teacher public-update context.
+const DAILY_PLAN_PREFIX = "SIE_DAILY_PLAN_V4:";
 const dailyPlanLocks = new Map<number, Promise<DailyPlanResult>>();
 const dailyPlanDirtyUsers = new Set<number>();
+const dailyPlanReconcileTimers = new Map<number, ReturnType<typeof setTimeout>>();
+const teacherSourceScanLocks = new Map<number, Promise<boolean>>();
 
 async function getDailyPlanSourceFingerprint(userId: number, dailyMinutes: number, startDate: string) {
   const profile = await getStudentProfile(userId);
@@ -112,6 +115,8 @@ async function getDailyPlanSourceFingerprint(userId: number, dailyMinutes: numbe
     listRoutines(userId, "Africa/Cairo"),
     listBooks(userId),
   ]);
+  const fingerprintSelection = { ...((profile.selection ?? {}) as Record<string, unknown>) };
+  delete fingerprintSelection.teacherPublicScanState;
   const byId = <T extends { id: string | number }>(items: T[]) =>
     [...items].sort((left, right) => String(left.id).localeCompare(String(right.id)));
   return createDailyPlanSourceFingerprint({
@@ -128,7 +133,7 @@ async function getDailyPlanSourceFingerprint(userId: number, dailyMinutes: numbe
       teacherSelections: profile.teacherSelections,
       backlog: profile.backlog,
       obstacle: profile.obstacle,
-      selection: profile.selection,
+      selection: fingerprintSelection,
     },
     tasks: byId(tasks),
     goals: byId(goals),
@@ -138,11 +143,73 @@ async function getDailyPlanSourceFingerprint(userId: number, dailyMinutes: numbe
   });
 }
 
+
+async function scanTeacherSourcesForStudent(userId: number): Promise<boolean> {
+  const running = teacherSourceScanLocks.get(userId);
+  if (running) return running;
+
+  const task = (async () => {
+    try {
+      const profile = await getStudentProfile(userId);
+      if (!profile) return false;
+      const result = await scanSelectedTeacherSources(profile);
+      const latestProfile = await getStudentProfile(userId);
+      if (!latestProfile) return false;
+      const latestSelection = (latestProfile.selection ?? {}) as Record<string, any>;
+      const previousUpdates = Array.isArray(latestSelection.teacherPublicUpdates)
+        ? latestSelection.teacherPublicUpdates as Array<Record<string, any>>
+        : [];
+      const knownIds = new Set(previousUpdates.map(update => String(update.externalId ?? "")).filter(Boolean));
+      const newUpdates = result.updates.filter(update => !knownIds.has(update.externalId));
+      const previousScanState = (latestSelection.teacherPublicScanState ?? {}) as Record<string, string>;
+      const nextScanState = { ...previousScanState, ...result.scanState };
+      const scanStateChanged = JSON.stringify(previousScanState) !== JSON.stringify(nextScanState);
+      if (!newUpdates.length && !scanStateChanged) return false;
+
+      const mergedUpdates = [...newUpdates, ...previousUpdates]
+        .sort((left, right) => Date.parse(String(right.publishedAt)) - Date.parse(String(left.publishedAt)))
+        .slice(0, 36);
+      await updateStudentProfileSelection(userId, {
+        ...latestSelection,
+        teacherPublicUpdates: mergedUpdates,
+        teacherPublicScanState: nextScanState,
+      });
+      if (newUpdates.length) {
+        await recordStudentActivityEvent({
+          userId,
+          eventType: "teacher.public_update_detected",
+          entityType: "teacher_source",
+          summary: "تم رصد تحديث عام جديد من أحد المدرسين المختارين",
+          metadata: { count: newUpdates.length, sources: [...new Set(newUpdates.map(item => item.sourceType))] },
+        });
+        if (!dailyPlanLocks.has(userId)) queueDailyPlanReconciliation(userId);
+      }
+      return newUpdates.length > 0;
+    } catch (error) {
+      console.warn("[StudyFlow teacher sources] Public source scan failed:", error instanceof Error ? error.message : String(error));
+      return false;
+    }
+  })();
+
+  teacherSourceScanLocks.set(userId, task);
+  try {
+    return await task;
+  } finally {
+    if (teacherSourceScanLocks.get(userId) === task) teacherSourceScanLocks.delete(userId);
+  }
+}
+
+function queueTeacherSourceScan(userId: number) {
+  if (process.env.NODE_ENV === "test") return;
+  void scanTeacherSourcesForStudent(userId);
+}
+
 async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): Promise<DailyPlanResult> {
   const running = dailyPlanLocks.get(userId);
   if (running) return running;
 
   const task = (async (): Promise<DailyPlanResult> => {
+    await scanTeacherSourcesForStudent(userId);
     const profile = await getStudentProfile(userId);
     if (!profile || !Array.isArray(profile.subjectIds) || profile.subjectIds.length === 0) {
       throw new TRPCError({
@@ -164,19 +231,14 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): 
       try {
         const saved = JSON.parse(latestDailyPlan.planJson) as Awaited<ReturnType<typeof generatePersonalPlan>>;
         if (saved && typeof saved.title === "string" && Array.isArray(saved.steps) && saved.steps.length > 0) {
-          const taskSync = await syncDailyPlanGoalTree(userId, saved, { startDate, dailyMinutes });
-          const refreshedFingerprint = await getDailyPlanSourceFingerprint(userId, dailyMinutes, startDate);
-          if (refreshedFingerprint !== sourceFingerprint) {
-            await updateAiPlanPrompt(userId, latestDailyPlan.id, DAILY_PLAN_PREFIX + refreshedFingerprint + ":");
-          }
           return {
             plan: saved,
             generatedAt: new Date(latestDailyPlan.createdAt),
             generated: false,
-            tasksAdded: taskSync.createdTaskCount,
-            tasksRefreshed: taskSync.refreshedTaskCount,
-            preservedCompletedTaskCount: taskSync.preservedCompletedTaskCount,
-            taskCount: taskSync.taskCount,
+            tasksAdded: 0,
+            tasksRefreshed: 0,
+            preservedCompletedTaskCount: 0,
+            taskCount: saved.steps.length,
           };
         }
       } catch {
@@ -223,23 +285,82 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): 
   return result;
 }
 
+
+async function getCurrentDailyPlanForStudent(userId: number) {
+  const profile = await getStudentProfile(userId);
+  if (!profile || !Array.isArray(profile.subjectIds) || profile.subjectIds.length === 0) {
+    return {
+      plan: null,
+      generatedAt: null,
+      needsRefresh: false,
+      sourceFingerprint: null,
+      dailyMinutes: 120,
+      taskCount: 0,
+    };
+  }
+  const conditions = (profile.selection as Record<string, any> | undefined)?.studyConditions;
+  const dailyMinutes = Math.max(20, Math.min(600, Math.trunc(Number(conditions?.dailyMinutes) || 120)));
+  const startDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
+  const sourceFingerprint = await getDailyPlanSourceFingerprint(userId, dailyMinutes, startDate);
+  const saved = await getLatestAiPlanByPromptPrefix(userId, DAILY_PLAN_PREFIX);
+  let plan: Awaited<ReturnType<typeof generatePersonalPlan>> | null = null;
+  let generatedAt: Date | null = null;
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved.planJson) as Awaited<ReturnType<typeof generatePersonalPlan>>;
+      if (parsed && typeof parsed.title === "string" && Array.isArray(parsed.steps) && parsed.steps.length) {
+        plan = parsed;
+        generatedAt = new Date(saved.createdAt);
+      }
+    } catch {
+      // Treat invalid saved plans as missing and regenerate them on demand.
+    }
+  }
+  const latestPlanDay = generatedAt
+    ? new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(generatedAt)
+    : null;
+  const isCurrent = !!saved
+    && saved.prompt.startsWith(DAILY_PLAN_PREFIX + sourceFingerprint + ":")
+    && latestPlanDay === startDate
+    && !!generatedAt
+    && !isDailyPlanStale(generatedAt);
+  return {
+    plan,
+    generatedAt,
+    needsRefresh: !isCurrent,
+    sourceFingerprint,
+    dailyMinutes,
+    taskCount: plan?.steps.length ?? 0,
+  };
+}
+
 async function reconcileDailyPlanAfterChange(userId: number) {
-  const existingDailyPlan = await getLatestAiPlanByPromptPrefix(userId, DAILY_PLAN_PREFIX);
-  if (!existingDailyPlan) return;
   if (dailyPlanLocks.has(userId)) {
     dailyPlanDirtyUsers.add(userId);
     return;
   }
-  await ensureDailyPlanForStudent(userId, 120);
+  const existingDailyPlan = await getLatestAiPlanByPromptPrefix(userId, DAILY_PLAN_PREFIX);
+  if (!existingDailyPlan) return;
+  const profile = await getStudentProfile(userId);
+  const conditions = (profile?.selection as Record<string, any> | undefined)?.studyConditions;
+  const dailyMinutes = Math.max(20, Math.min(600, Math.trunc(Number(conditions?.dailyMinutes) || 120)));
+  await ensureDailyPlanForStudent(userId, dailyMinutes);
 }
 
 function queueDailyPlanReconciliation(userId: number) {
-  // Router unit tests use focused database mocks; background reconciliation is
-  // covered by its isolated service tests and must not issue unrelated queries.
+  // Coalesce rapid task/profile changes into one reconciliation instead of
+  // firing multiple expensive plan generations for the same student.
   if (process.env.NODE_ENV === "test") return;
-  void reconcileDailyPlanAfterChange(userId).catch(error => {
-    console.error("[StudyFlow daily plan] Automatic reconciliation failed:", error instanceof Error ? error.message : String(error));
-  });
+  const existingTimer = dailyPlanReconcileTimers.get(userId);
+  if (existingTimer) clearTimeout(existingTimer);
+  const timer = setTimeout(() => {
+    dailyPlanReconcileTimers.delete(userId);
+    void reconcileDailyPlanAfterChange(userId).catch(error => {
+      console.error("[StudyFlow daily plan] Automatic reconciliation failed:", error instanceof Error ? error.message : String(error));
+    });
+  }, 1_500);
+  timer.unref?.();
+  dailyPlanReconcileTimers.set(userId, timer);
 }
 
 const LOCAL_AUTH_OPEN_ID = "studyflow-local-owner";
@@ -2184,6 +2305,43 @@ export const appRouter = router({
 
   plans: router({
     list: protectedProcedure.query(({ ctx }) => listAiPlans(ctx.user.id)),
+    currentDaily: protectedProcedure.query(async ({ ctx }) => {
+      const snapshot = await getCurrentDailyPlanForStudent(ctx.user.id);
+      queueTeacherSourceScan(ctx.user.id);
+      return snapshot;
+    }),
+    updateStudyConditions: protectedProcedure
+      .input(z.object({
+        energyLevel: z.enum(["low", "normal", "high"]),
+        moraleLevel: z.enum(["low", "neutral", "good"]),
+        dailyMinutes: z.number().int().min(20).max(600),
+        resourceConstraints: z.string().trim().max(500).default(""),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const profile = await getStudentProfile(ctx.user.id);
+        if (!profile) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "أكمل ملفك الدراسي أولًا." });
+        const selection = (profile.selection ?? {}) as Record<string, any>;
+        const previous = (selection.studyConditions ?? {}) as Record<string, unknown>;
+        const next = {
+          ...previous,
+          energyLevel: input.energyLevel,
+          moraleLevel: input.moraleLevel,
+          dailyMinutes: input.dailyMinutes,
+          resourceConstraints: input.resourceConstraints,
+        };
+        if (JSON.stringify(previous) !== JSON.stringify(next)) {
+          await updateStudentProfileSelection(ctx.user.id, { ...selection, studyConditions: next });
+          await recordStudentActivityEvent({
+            userId: ctx.user.id,
+            eventType: "planner.conditions_updated",
+            entityType: "study_conditions",
+            summary: "تم تحديث ظروف الدراسة اليومية",
+            metadata: { energyLevel: input.energyLevel, moraleLevel: input.moraleLevel, dailyMinutes: input.dailyMinutes },
+          });
+          queueDailyPlanReconciliation(ctx.user.id);
+        }
+        return next;
+      }),
     ensureDaily: protectedProcedure
       .input(z.object({
         dailyMinutes: z.number().int().min(20).max(600).default(120),
