@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getSIECheckpointProgressBranches, getSIESubject, getSIETeacher, normalizeSIECheckpointFrontier, type SIECheckpointTaskMatch } from "@shared/sie-catalog";
+import { getSIECheckpointProgressBranches, getSIEStudentVisibleBranches, getSIESubject, getSIETeacher, normalizeSIECheckpointFrontier, type SIECheckpointTaskMatch } from "@shared/sie-catalog";
 import { calculateLearningGap } from "@shared/sie-learning-progress";
 import { invokeLLM, invokeNvidiaLLM } from "./_core/llm";
 import { isPrimaryProviderFallbackEligible } from "./_core/llmFallback";
@@ -684,7 +684,7 @@ export function parseGeneratedPlan(content: string): GeneratedPlan {
 function getPlanningBranches(subjectId: string) {
   // Use exactly the topic units shown to the student. Multi-part topics such
   // as Arabic Nahw are one curriculum item in annual planning and progress.
-  return getSIECheckpointProgressBranches(subjectId);
+  return getSIEStudentVisibleBranches(subjectId);
 }
 
 function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof getStudentProfile>>>) {
