@@ -1001,7 +1001,7 @@ export function getSIECheckpointChoiceTypeLabel(choice: SIECheckpointChoice): st
 function getSIECheckpointSequenceLabel(choice: SIECheckpointChoice): string {
   const sequence = choice.lessonNumber?.trim();
   if (!sequence) return "";
-  if (/^\\d+(?:\\.\\d+)?$/.test(sequence)) {
+  if (/^\d+(?:\.\d+)?$/.test(sequence)) {
     if (choice.lessonType === "topic") return `Lesson ${sequence}`;
     if (choice.lessonType === "grammar") return `قاعدة نحوية ${sequence}`;
     return `الدرس ${sequence}`;
@@ -1017,7 +1017,7 @@ function getSIECheckpointProgressDescription(choice: SIECheckpointChoice): strin
     ? `الوحدة ${choice.unitNumber}: ${choice.unitTitle || ""}`
     : choice.unitTitle || "";
   const source = choice.sourceLabel || "";
-  const sourcePage = source.match(/ص\\s*\\d+/)?.[0];
+  const sourcePage = source.match(/ص\s*\d+/)?.[0];
   const sourceLabel = source.includes("فهرس منصة الشرح")
     ? "كورس المدرس"
     : source.includes("كتاب الطالب")
