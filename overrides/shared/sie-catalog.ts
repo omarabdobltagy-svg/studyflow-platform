@@ -1060,9 +1060,10 @@ export function getSIECheckpointBranches(subjectId: string): SIECheckpointBranch
     }];
   }
 
-  // English keeps distinct Vocabulary and Grammar tracking views grouped by
-  // the ten textbook units, the official textbook topics, and the story book.
-  // GRE is supplemental and is never represented as a Ministry textbook unit.
+  // English progress is organized around the ten official units. Vocabulary and
+  // Grammar remain separate internal trackers so existing progress stays intact,
+  // but the student-facing navigation exposes one "Units" branch.
+  // The per-unit lesson sequence below follows the 2026 Ministry textbook content.
   if (subjectId === "ENG1_G2_BAC") {
     const textbookBranchId = "ENG_TEXTBOOK";
     const textbookChoices = choices.filter(choice => !choice.nodeId.startsWith("ENG_LOST_WORLD_"));
@@ -1072,22 +1073,57 @@ export function getSIECheckpointBranches(subjectId: string): SIECheckpointBranch
       .map(choice => [choice.unitNumber!, { unitNumber: choice.unitNumber!, unitTitle: choice.unitTitle! }]))
       .values()]
       .sort((left, right) => left.unitNumber - right.unitNumber);
-    const streamChoices = (
-      streamId: "ENG_VOCABULARY" | "ENG_GRAMMAR",
-      streamTitle: string,
-      lessonType: "vocabulary" | "grammar",
-    ) => unitCatalog.map(unit => ({
-      nodeId: `${streamId}_U${unit.unitNumber}`,
-      title: `${streamTitle} — Unit ${unit.unitNumber}`,
+
+    const grammarLessonsByUnit: Record<number, string[]> = {
+      1: ["Participial Phrases and Relative Clauses", "Conditional Structures"],
+      2: ["Gerunds and Infinitives", "Narrative Tenses"],
+      3: ["Prepositional Phrases of Place and Time", "Concession Clauses", "Passive Voice for Formal Reporting"],
+      4: ["Present Perfect", "Linking Words and Logical Connectors", "Fronting for Emphasis"],
+      5: ["Modal Verbs", "Cause-and-Effect Structures", "Adverbials of Degree and Frequency"],
+      6: ["Reported Speech"],
+      7: ["Used to / Would (Past Habits)"],
+      8: ["Present Continuous", "Logical Connectors"],
+      9: ["Have / Get Something Done (Causative)", "So...that / Such...that"],
+      10: ["Stative Verbs vs. Action Verbs", "Quantifiers"],
+    };
+
+    const unitSource = (unitNumber: number) => unitNumber <= 5
+      ? "كتاب الطالب - الجزء الأول"
+      : "كتاب الطالب - الجزء الثاني";
+
+    const vocabularyChoices = unitCatalog.map(unit => ({
+      // Keep the legacy ID so already-saved vocabulary progress is still recognized.
+      nodeId: `ENG_VOCABULARY_U${unit.unitNumber}`,
+      title: "Vocabulary",
+      note: "مفردات وتعابير الوحدة",
       unitTitle: unit.unitTitle,
       unitNumber: unit.unitNumber,
-      lessonNumber: `${unit.unitNumber}.1`,
-      lessonType,
-      sourceLabel: unit.unitNumber <= 5 ? "تجميع متابعة Vocabulary حسب وحدات الكتاب - الجزء الأول" : "تجميع متابعة Vocabulary حسب وحدات الكتاب - الجزء الثاني",
-      branchId: streamId,
-      branchTitle: streamTitle === "Vocabulary" ? "المفردات (Vocabulary)" : "القواعد (Grammar)",
+      lessonNumber: "1",
+      lessonType: "vocabulary" as const,
+      sourceLabel: unitSource(unit.unitNumber),
+      branchId: "ENG_VOCABULARY",
+      branchTitle: "دروس المفردات داخل الوحدات",
       branchType: "course_track" as const,
     }));
+
+    const grammarChoices = unitCatalog.flatMap(unit =>
+      (grammarLessonsByUnit[unit.unitNumber] ?? []).map((title, index) => ({
+        // Preserve the former one-per-unit grammar IDs for the first focus.
+        nodeId: index === 0
+          ? `ENG_GRAMMAR_U${unit.unitNumber}`
+          : `ENG_GRAMMAR_U${unit.unitNumber}_${index + 1}`,
+        title,
+        unitTitle: unit.unitTitle,
+        unitNumber: unit.unitNumber,
+        lessonNumber: String(index + 2),
+        lessonType: "grammar" as const,
+        sourceLabel: unitSource(unit.unitNumber),
+        branchId: "ENG_GRAMMAR",
+        branchTitle: "دروس القواعد داخل الوحدات",
+        branchType: "course_track" as const,
+      }))
+    );
+
     const greTitles = [
       "المفردات الأكاديمية وفهمها من السياق",
       "إكمال النصوص (Text Completion)",
@@ -1105,21 +1141,22 @@ export function getSIECheckpointBranches(subjectId: string): SIECheckpointBranch
       branchTitle: "GRE — مسار تكميلي",
       branchType: "course_track" as const,
     }));
+
     return [
-      { branchId: "ENG_VOCABULARY", branchTitle: "المفردات (Vocabulary)", branchType: "course_track", choices: streamChoices("ENG_VOCABULARY", "Vocabulary", "vocabulary") },
-      { branchId: "ENG_GRAMMAR", branchTitle: "القواعد (Grammar)", branchType: "course_track", choices: streamChoices("ENG_GRAMMAR", "Grammar", "grammar") },
-      { branchId: "ENG_GRE", branchTitle: "GRE — مسار تكميلي", branchType: "course_track", choices: greChoices },
       {
         branchId: textbookBranchId,
-        branchTitle: "موضوعات الكتاب",
+        branchTitle: "الوحدات (Units)",
         branchType: "course_track",
         choices: textbookChoices.map(choice => ({
           ...choice,
           branchId: textbookBranchId,
-          branchTitle: "موضوعات الكتاب",
+          branchTitle: "الوحدات (Units)",
           branchType: "course_track",
         })),
       },
+      { branchId: "ENG_VOCABULARY", branchTitle: "دروس المفردات داخل الوحدات", branchType: "course_track", choices: vocabularyChoices },
+      { branchId: "ENG_GRAMMAR", branchTitle: "دروس القواعد داخل الوحدات", branchType: "course_track", choices: grammarChoices },
+      { branchId: "ENG_GRE", branchTitle: "GRE — مسار تكميلي", branchType: "course_track", choices: greChoices },
       {
         branchId: "ENG_STORY",
         branchTitle: "القصة - The Lost World",
@@ -1320,9 +1357,14 @@ export function getSIECheckpointProgressBranches(subjectId: string): SIECheckpoi
  */
 export function getSIEStudentVisibleBranches(subjectId: string): SIECheckpointBranch[] {
   const branches = getSIECheckpointProgressBranches(subjectId);
-  return subjectId === "ARB_G2_BAC"
-    ? branches.filter(branch => branch.branchId !== "ARB_READING")
-    : branches;
+  if (subjectId === "ARB_G2_BAC") {
+    return branches.filter(branch => branch.branchId !== "ARB_READING");
+  }
+  if (subjectId === "ENG1_G2_BAC") {
+    // Vocabulary and Grammar are lessons inside each Unit, not separate top-level branches.
+    return branches.filter(branch => !["ENG_VOCABULARY", "ENG_GRAMMAR"].includes(branch.branchId));
+  }
+  return branches;
 }
 
 export type SIECurriculumUnitBranch = {
