@@ -93,12 +93,14 @@ export default function Study() {
     ? branchProgressMap[currentBranchId] || legacyLinearProgress
     : {};
   const subjectIndex = Math.max(0, subjects.indexOf(subjectId));
-  const allBranchIndex = Math.max(0, allBranches.findIndex(branch => branch.branchId === currentBranchId));
-  const visibleBranchPosition = branches.filter(branch =>
-    allBranches.findIndex(item => item.branchId === branch.branchId) <= allBranchIndex
-  ).length;
-  const nextVisibleBranch = allBranches.slice(allBranchIndex + 1)
-    .find(candidate => branches.some(branch => branch.branchId === candidate.branchId));
+  const isEnglishSkillBranch = subjectId === "ENG1_G2_BAC"
+    && (currentBranchId === "ENG_VOCABULARY" || currentBranchId === "ENG_GRAMMAR");
+  const visibleBranchAnchor = isEnglishSkillBranch ? "ENG_TEXTBOOK" : currentBranchId;
+  const visibleBranchIndex = branches.findIndex(branch => branch.branchId === visibleBranchAnchor);
+  const visibleBranchPosition = visibleBranchIndex >= 0 ? visibleBranchIndex + 1 : 0;
+  const nextVisibleBranch = !isEnglishSkillBranch && visibleBranchIndex >= 0
+    ? branches[visibleBranchIndex + 1]
+    : undefined;
   const branchDisplayTitle = subjectId === "ARB_G2_BAC" && currentBranchId === "ARB_READING"
     ? "نصوص الوحدة"
     : currentBranch?.branchTitle || "الفرع الحالي";
@@ -695,7 +697,7 @@ export default function Study() {
                       <p className="mt-1 text-xs leading-5 text-muted-foreground">{branchChoiceOptions.length} {currentBranchPointLabel} في فهرس هذا الفرع.</p>
                     </div>
                     <span className="rounded-lg border border-border bg-background px-3 py-2 text-[11px] font-semibold text-muted-foreground">
-                      {nextVisibleBranch ? "التالي: " + nextVisibleBranch.branchTitle : currentBranchId === "ARB_READING" ? "نصوص الوحدة داخل وحداتها" : "آخر فرع في المادة"}
+                      {isEnglishSkillBranch ? "متابعة داخل فرع الوحدات" : nextVisibleBranch ? "التالي: " + nextVisibleBranch.branchTitle : currentBranchId === "ARB_READING" ? "نصوص الوحدة داخل وحداتها" : "آخر فرع في المادة"}
                     </span>
                   </div>
                   <div className="h-1.5 overflow-hidden rounded-full bg-muted">
@@ -795,7 +797,8 @@ export default function Study() {
                           </div>
                           <p className="mt-1 pr-8 text-xs leading-5 text-muted-foreground">
                             {isCurrentBranchComplete
-                              ? nextVisibleBranch ? "اكتمل الفرع؛ يتم الانتقال تلقائيًا إلى الفرع التالي." : "اكتملت الفروع الظاهرة في هذه المادة."
+                              ? isEnglishSkillBranch ? "اكتمل هذا المسار داخل الوحدات. يمكنك متابعة نوع الدرس الآخر أو العودة إلى الوحدات."
+                                : nextVisibleBranch ? "اكتمل الفرع؛ يتم الانتقال تلقائيًا إلى الفرع التالي." : "اكتملت الفروع الظاهرة في هذه المادة."
                               : "يمكنك تعديل أي موضع في أي وقت، وسيُحفظ التحديث تلقائيًا."}
                           </p>
                         </motion.div>
