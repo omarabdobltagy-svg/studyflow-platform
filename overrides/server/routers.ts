@@ -94,7 +94,8 @@ type DailyPlanResult = {
   taskCount: number;
 };
 
-// V4 adds condition-aware planning and verified teacher public-update context.
+// V5 makes the year-end baccalaureate policy and May 2027 readiness date part of daily-plan identity.
+const DAILY_PLANNER_POLICY_VERSION = "annual-exam-may-2027-v1";
 const DAILY_PLAN_PREFIX = "SIE_DAILY_PLAN_V4:";
 const dailyPlanLocks = new Map<number, Promise<DailyPlanResult>>();
 const dailyPlanDirtyUsers = new Set<number>();
@@ -121,6 +122,7 @@ async function getDailyPlanSourceFingerprint(userId: number, dailyMinutes: numbe
   const byId = <T extends { id: string | number }>(items: T[]) =>
     [...items].sort((left, right) => String(left.id).localeCompare(String(right.id)));
   return createDailyPlanSourceFingerprint({
+    plannerPolicyVersion: DAILY_PLANNER_POLICY_VERSION,
     catalogVersion: SIE_CATALOG_META.packageVersion,
     startDate,
     dailyMinutes,
