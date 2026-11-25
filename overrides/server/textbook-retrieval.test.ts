@@ -1,11 +1,22 @@
 import { describe, expect, it } from "vitest";
 import {
   formatTextbookEvidence,
+  getCurriculumBranchPriorityGuidance,
   inspectTextbookIndex,
   rankTextbookPassages,
   retrieveTextbookEvidence,
   splitTextbookPages,
 } from "./textbook-retrieval";
+
+describe("branch-specific planning priority guidance", () => {
+  it("boosts only the configured Arabic and English branches without creating exam-mark weights", () => {
+    expect(getCurriculumBranchPriorityGuidance("ARB_G2_BAC", "ARB_NAHW")?.tier).toBe("core");
+    expect(getCurriculumBranchPriorityGuidance("ENG1_G2_BAC", "ENG_GRAMMAR")?.tier).toBe("core");
+    expect(getCurriculumBranchPriorityGuidance("ENG1_G2_BAC", "ENG_VOCABULARY")?.tier).toBe("core");
+    expect(getCurriculumBranchPriorityGuidance("ARB_G2_BAC", "ARB_TEXTS")).toBeNull();
+    expect(getCurriculumBranchPriorityGuidance("ENG1_G2_BAC", "ENG_STORY")).toBeNull();
+  });
+});
 
 describe("Part 1 textbook planning context", () => {
   it("provides the teacher-led policy and learning intent for the four supported subjects", () => {
