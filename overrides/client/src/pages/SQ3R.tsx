@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
-import { getSIECheckpointBranches, getSIESubject } from "@shared/sie-catalog";
+import { getSIEStudentVisibleBranches, getSIESubject } from "@shared/sie-catalog";
 import { BookOpenText, Check, CircleHelp, Eye, Mic2, RefreshCcw, Search, Sparkles, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -93,7 +93,7 @@ export default function SQ3R() {
   const [difficulty, setDifficulty] = useState<"unknown" | "easy" | "medium" | "hard">("unknown");
   const [notes, setNotes] = useState("");
 
-  const branches = useMemo(() => getSIECheckpointBranches(subjectId), [subjectId]);
+  const branches = useMemo(() => getSIEStudentVisibleBranches(subjectId), [subjectId]);
   const currentBranch = branches.find(branch => branch.branchId === branchId) ?? branches[0];
   const branchChoices = currentBranch?.choices ?? [];
   const currentBranchId = currentBranch?.branchId ?? "";
