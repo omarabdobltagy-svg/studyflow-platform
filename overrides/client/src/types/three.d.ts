@@ -94,6 +94,8 @@ declare module "three" {
   }
 
   export class Mesh extends Object3D {
+    geometry: BufferGeometry;
+    material: Material;
     constructor(geometry: BufferGeometry, material: Material);
   }
 
@@ -104,6 +106,8 @@ declare module "three" {
   }
 
   export class Points extends Object3D {
+    geometry: BufferGeometry;
+    material: Material;
     constructor(geometry: BufferGeometry, material: Material);
   }
 }
