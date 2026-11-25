@@ -203,6 +203,22 @@ function queueTeacherSourceScan(userId: number) {
   if (process.env.NODE_ENV === "test") return;
   void scanTeacherSourcesForStudent(userId);
 }
+const dailyPlanAutomaticRetryAt = new Map<number, number>();
+
+function queueDailyPlanEnsure(userId: number, dailyMinutes: number) {
+  if (process.env.NODE_ENV === "test" || dailyPlanLocks.has(userId)) return;
+  const retryAfter = dailyPlanAutomaticRetryAt.get(userId) ?? 0;
+  if (Date.now() < retryAfter) return;
+  const timer = setTimeout(() => {
+    void ensureDailyPlanForStudent(userId, dailyMinutes)
+      .then(() => dailyPlanAutomaticRetryAt.delete(userId))
+      .catch(error => {
+        dailyPlanAutomaticRetryAt.set(userId, Date.now() + 60_000);
+        console.error("[StudyFlow daily plan] Background generation failed:", error instanceof Error ? error.message : String(error));
+      });
+  }, 0);
+  timer.unref?.();
+}
 
 async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): Promise<DailyPlanResult> {
   const running = dailyPlanLocks.get(userId);
@@ -2308,6 +2324,9 @@ export const appRouter = router({
     currentDaily: protectedProcedure.query(async ({ ctx }) => {
       const snapshot = await getCurrentDailyPlanForStudent(ctx.user.id);
       queueTeacherSourceScan(ctx.user.id);
+      if (snapshot.needsRefresh && snapshot.dailyMinutes) {
+        queueDailyPlanEnsure(ctx.user.id, snapshot.dailyMinutes);
+      }
       return snapshot;
     }),
     updateStudyConditions: protectedProcedure
