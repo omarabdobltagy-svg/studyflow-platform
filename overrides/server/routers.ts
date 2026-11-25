@@ -72,7 +72,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { generatePersonalPlan } from "./planGenerator";
-import { parseYoutubeAtomFeed, scanSelectedTeacherSources, selectedTeacherIds } from "./teacher-content-monitor";
+import { isSecondYearBaccalaureateUpdate, parseYoutubeAtomFeed, scanSelectedTeacherSources, selectedTeacherIds } from "./teacher-content-monitor";
 import { isDailyPlanStale } from "./planLifecycle";
 import { createDailyPlanSourceFingerprint } from "./dailyPlanFingerprint";
 import { storageDelete, storagePut } from "./storage";
@@ -167,10 +167,13 @@ async function scanTeacherSourcesForStudent(userId: number): Promise<boolean> {
         : [];
       const previousUpdates = rawPreviousUpdates.filter(update =>
         typeof update.teacherId === "string" && allowedTeacherIds.has(update.teacherId)
+        && isSecondYearBaccalaureateUpdate(update)
       );
       const knownIds = new Set(previousUpdates.map(update => String(update.externalId ?? "")).filter(Boolean));
       const newUpdates = result.updates.filter(update =>
-        allowedTeacherIds.has(update.teacherId) && !knownIds.has(update.externalId)
+        allowedTeacherIds.has(update.teacherId)
+        && isSecondYearBaccalaureateUpdate(update)
+        && !knownIds.has(update.externalId)
       );
       const previousScanState = (latestSelection.teacherPublicScanState ?? {}) as Record<string, string>;
       const nextScanState = { ...previousScanState, ...result.scanState };
@@ -222,7 +225,7 @@ export async function ingestYoutubeWebSubFeed(teacherId: string, xml: string) {
   const updates = parseYoutubeAtomFeed(xml, {
     teacherId,
     teacherName: teacher.nameAr,
-  });
+  }).filter(isSecondYearBaccalaureateUpdate);
   if (!updates.length) return { received: 0, updatedProfiles: 0 };
 
   const profiles = await listStudentTeacherMonitoringProfiles();
