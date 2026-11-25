@@ -40,10 +40,53 @@ const planSchema = z.object({
     sourcePages: z.array(z.number().int().positive().max(5_000)).max(20).default([]),
   })).min(1).max(30),
   habits: z.array(z.object({ title: z.string().trim().min(2).max(160), cue: z.string().trim().min(2).max(240) })).max(5).default([]),
-  reviewQuestion: z.string().trim().min(5).max(600),
 });
 
 export type GeneratedPlan = z.infer<typeof planSchema>;
+
+const GENERATED_ASSESSMENT_PATTERNS = [
+  /اختبر\\s+نفسك/u,
+  /اختبار\\s+(?:ذاتي|قصير|تجريبي|تشخيصي)/u,
+  /(?:كويز|quiz)\\b/iu,
+  /\\b(?:self[- ]?test|mock\\s+(?:test|exam)|practice\\s+test|diagnostic\\s+test)\\b/iu,
+  /(?:سؤال|أسئلة)\\s+(?:مراجعة|استرجاع|تحقق|تقييم)/u,
+  /(?:قياس|تقييم)\\s+(?:الإتقان|المستوى|المهارات)/u,
+];
+
+function isGeneratedAssessmentText(value: string): boolean {
+  return GENERATED_ASSESSMENT_PATTERNS.some(pattern => pattern.test(value));
+}
+
+/**
+ * StudyFlow schedules teacher-led learning; it does not author tests.
+ * Remove explicit self-tests/quizzes and assessment prompts from model output.
+ * A task list made entirely of generated assessments is rejected rather than saved.
+ */
+export function applyTeacherLedPlanningGuard(plan: GeneratedPlan): GeneratedPlan {
+  const prohibitedCategories = new Set(["اختبار", "تقييم", "كويز", "quiz", "test", "assessment"]);
+  const steps = plan.steps.filter(step => {
+    const category = step.category.trim().toLocaleLowerCase("ar");
+    const taskText = [step.title, step.detail, step.category].join(" ");
+    return !prohibitedCategories.has(category) && !isGeneratedAssessmentText(taskText);
+  });
+  const habits = plan.habits.filter(habit =>
+    !isGeneratedAssessmentText(habit.title + " " + habit.cue)
+    && !/(?:اكتب|اذكر|استرجع)\\s+ما\\s+تتذكر/u.test(habit.title + " " + habit.cue)
+  );
+  const removedSteps = plan.steps.length - steps.length;
+  const removedHabits = plan.habits.length - habits.length;
+  if (steps.length === 0) {
+    throw new Error("المسودة المقترحة تعتمد على اختبارات أو أسئلة ينشئها النظام. لم يتم حفظها؛ المخطط ينظم متابعة شرح المدرس والواجبات المسجلة فقط.");
+  }
+  if (removedSteps || removedHabits) {
+    console.warn("[StudyFlow planner] Removed model-generated assessment tasks; StudyFlow does not test students.", {
+      removedSteps,
+      removedHabits,
+      retainedSteps: steps.length,
+    });
+  }
+  return { ...plan, steps, habits };
+}
 
 function mergeSubjectLessonProgress(legacyValue: unknown, currentValue: unknown): Record<string, Record<string, any>> {
   const legacy = legacyValue && typeof legacyValue === "object" && !Array.isArray(legacyValue)
@@ -497,7 +540,6 @@ function normalizePlanCandidate(value: unknown): unknown {
     durationLabel: duration || (totalMinutes > 0 ? "نحو " + Math.ceil(totalMinutes / 240) + " أيام من الجلسات" : "جلسات مرنة"),
     steps,
     habits,
-    reviewQuestion: normalizedText(source.reviewQuestion ?? source.review, "ما أهم فكرة تستطيع شرحها دون الرجوع إلى الكتاب؟", 600),
   };
 }
 
@@ -999,7 +1041,11 @@ export async function generatePersonalPlan(
     "أنت محرك التخطيط الدراسي داخل StudyFlow، ولست مساعد دردشة عام.",
     "جودة الخطة لا تعتمد على قوة صياغة الطالب أو طول طلبه. استخرج النية حتى لو كان الطلب قصيرًا أو عاميًا أو غير مرتب، ثم استعن تلقائيًا بكل بيانات الملف الدراسي والمنهج والتراكم والتقدم والتقييمات والسياق المتاح لبناء أفضل خطة عملية ممكنة.",
     "لا تطلب من الطالب إعادة كتابة بيانات موجودة في ملفه، ولا تنتظر منه هندسة برومبت احترافي. افترض أقل قدر ممكن، واذكر الافتراضات المؤثرة فقط داخل الملخص، ولا تخترع بيانات ناقصة.",
-    "حلّل فجوة المنهج المحسوبة تلقائيًا لكل فرع مستقل داخل المادة، وموضع الطالب وموضع التدريس المرجعي داخل الفرع نفسه، وتقدم SQ3R ونتائج التقييم وصعوبة الدروس؛ ثم ابنِ خطة عملية متوازنة.",
+    "حلّل فجوة المنهج المحسوبة تلقائيًا لكل فرع مستقل داخل المادة، وموضع الطالب وموضع التدريس المرجعي داخل الفرع نفسه، وسجل إنجاز المذاكرة وصعوبة الدروس والنتائج المحفوظة مسبقًا؛ ثم ابنِ خطة متابعة عملية.",
+    "حدود مسؤولية أساسية: StudyFlow مخطط ومتابع للتقدم، وليس مدرسًا أو منصة امتحانات. المهارات والأهداف التعليمية الواردة في الكتب تُستخدم لفهم طبيعة الدرس وترابطه فقط؛ المدرس هو من يشرح هذه المهارات ويدرّب الطالب عليها ويقيّمها.",
+    "ممنوع أن تنشئ للطالب اختبارًا أو كويزًا أو أسئلة مراجعة أو سؤال استرجاع أو اختبارًا تشخيصيًا أو مهمة لقياس إتقان مهارة. لا تطلب من الطالب الإجابة عن أسئلة من المنهج، ولا تمنحه درجة أو حكم إتقان من خلال أسئلة يولدها النظام.",
+    "المهام التي يجوز أن تقترحها: متابعة محاضرة مدرس معروفة، مراجعة الصفحات أو الملاحظات المرتبطة بشرح المدرس، أو تنفيذ واجب/تدريب عيّنه المدرس بالفعل وكان الطالب أو سجله قد أشار إليه. لا تخترع واجبًا أو مجموعة أسئلة أو تدريبًا من عندك. عند غياب واجب موثق لا تعوّضه باختبار من إنشاء النظام.",
+    "يمكن الاستفادة من نتيجة مسجلة سابقًا في الملف كإشارة تاريخية للتخطيط فقط؛ لا تنشئ تقييمًا جديدًا للحصول على هذه النتيجة ولا تدّعِ أن StudyFlow قاس مستوى الطالب.";
     "قاعدة إلزامية: موضع الطالب هو آخر نقطة مكتملة بالفعل، ويبدأ التراكم من النقطة التالية. كل ما يظهر تحت (دروس مكتملة) مستبعد من مهام الدراسة الجديدة. لا تعِد شرح درس مكتمل ولا تنشئ له مهمة حل من البداية. اختر حصريًا من (دروس متاحة للتخطيط الجديد فقط)، وأرفق مع كل خطوة معرف المنهج الصحيح داخل curriculumNodeIds. لا تخترع معرفات ولا تستخدم معرف درس مكتمل.",
     "مصدر المرجع له أولوية صارمة داخل كل فرع: استخدم موضع المدرس إذا كان معروفًا، وإلا استخدم موضع الفصل في المدرسة داخل الفرع نفسه. موضع الطالب يظل مستقلًا عن الاثنين. لا تقارن أو تجمع فجوات فروع متوازية، ولا تستخدم رقم التراكم القديم كأنه فجوة مؤكدة.",
     "لا تخلط بين آخر محتوى عام للمدرس، محتوى الكورس المدفوع، موضع ما شرحه المدرس، موضع المدرسة، وما أتمه الطالب. لا تخترع أرقام محاضرات أو أسماء دروس أو مواضع غير مسجلة.",
@@ -1018,8 +1064,8 @@ export async function generatePersonalPlan(
     "رتّب الأولويات لكل درس أيضًا وفق موعد الاختبار الموثق، والفجوة داخل الفرع نفسه بين آخر درس أنجزه الطالب وموضع المدرس، والمتطلبات السابقة، وحجم المحتوى، وصعوبة المفاهيم ونتائج الطالب. لا تخلط بين وحدات وفروع متوازية.",
     "حدّد difficulty: easy/medium/hard/unknown، وlessonSize: small/medium/large/unknown، وpriority: critical/high/medium/low لكل خطوة. أضف difficultyBasis وdifficultyConfidence. لا تجعل كل درس طويل صعبًا تلقائيًا؛ الحجم شيء والصعوبة شيء آخر.",
     "أدرج printedPageRange فقط عندما يكون نطاق الصفحة المطبوعة موثقًا في ملف المنهج؛ هذه أرقام الصفحات المطبوعة في الكتاب وليست أرقام صفحات PDF. لا تخترع نطاقات صفحات للإنجليزي أو الإيطالي إذا كانت متاحة على مستوى الوحدة فقط.",
-    "قسّم الدرس الكبير إلى مهام فهم وتطبيق واسترجاع عند الحاجة. اجعل الدرس الصغير جلسة مركزة، ولا تضخم عدد المهام دون داعٍ.",
-    "للدروس الصعبة أو الطويلة أنشئ أكثر من خطوة مترابطة عند الحاجة: فهم، حل، ثم استرجاع. لا تحشر درسًا كبيرًا في مهمة واحدة قصيرة. ادمج المهام الصغيرة المتشابهة فقط عندما يكون ذلك منطقيًا.",
+    "قسّم عبء المتابعة بحسب حجم الدرس: مشاهدة المحاضرة على أجزاء، أو قراءة الصفحات التي عيّنها المدرس، أو مراجعة ملاحظات الطالب. لا تحوّل مهارات الدرس إلى أنشطة اختبار أو قياس إتقان من إنشاء النظام.",
+    "يمكن إدراج الحل أو التدريب فقط عندما يكون واجبًا محددًا من المدرس أو مهمة ذكر الطالب أنه مكلف بها. لا تضف أسئلة أو أوراق عمل أو اختبارات تدريبية من عندك.",
     "أخرج خطة عملية مفصلة من 6 إلى 20 خطوة عادةً، ويمكن أن تصل إلى 30 خطوة عندما يتطلب التراكم ذلك. كل خطوة قصيرة وواضحة وقابلة للتنفيذ؛ لا تكتب فقرات طويلة.",
     "موعد امتحان نهاية السنة الثابت هو 12 يونيو 2027 (2027-06-12). لا تستبدله بموعد آخر؛ جهّز الخطة للاستعداد قبل هذا التاريخ واترك هامش مراجعة.",
     "إيقاع الخطة الذي اختاره الطالب: " + (constraints.pace === "intensive" ? "مكثفة؛ زد كثافة الجلسات ضمن وقت الطالب اليومي مع الحفاظ على فواصل المراجعة والراحة." : constraints.pace === "relaxed" ? "مريحة؛ وزع الحمل على فترة أطول وجلسات أخف مع عدم إسقاط المتطلبات الأساسية." : "متوازنة؛ تقدم ثابت وحمل يومي متوسط مع مساحة للمراجعة والتعويض.") + ".",
@@ -1030,7 +1076,7 @@ export async function generatePersonalPlan(
     "كيّف الخطة مع ظروف الطالب المعلنة: الطاقة المنخفضة تعني جلسات أقصر وعدد أولويات أقل دون ترك الأساسيات، والحالة المعنوية المنخفضة تعني بداية سهلة وتدرجًا واقعيًا، وقيود الموارد تعني عدم تكليف الطالب بأداة أو كتاب أو اتصال غير متاح. لا تقدم تشخيصًا طبيًا أو نفسيًا.",
     "لا تعتبر غياب السجل دليلًا على الإنجاز، ولا توبّخ الطالب.",
     "لا تحوّل منظومة الأداءات الأسبوعية والشهرية إلى دروس منهجية؛ تعامل معها كالتزامات منفصلة يجب تتبع إنجازها لأن لها شرط أهلية مستقلًا، ولا تخلط نسبها مع توزيع درجات ورقة الامتحان.",
-    "أخرج JSON صحيحًا فقط بالعربية: title, summary, durationLabel, steps (1-30 عنصرًا، وكل عنصر فيه day,title,detail,minutes,category,curriculumNodeIds,priority,difficulty,lessonSize,difficultyBasis,difficultyConfidence,resourceRecommendation?,printedPageRange,sourcePages)، habits (0-5 فيها title,cue), reviewQuestion. resourceRecommendation اختياري ولا يُضاف إلا لمصدر مدرس موثق ومطابق حرفيًا لأحد تحديثات الصف الثاني بكالوريا ومفيد لدرس غير مكتمل؛ شكله {title,url,teacherName,reason}. يجب أن يحتوي curriculumNodeIds على معرف واحد أو أكثر من الدروس المتاحة التي ترتبط بها الخطوة. printedPageRange نطاق صفحات الكتاب المطبوع [البداية، النهاية] عند توافره فقط؛ sourcePages مراجع PDF المسترجعة فعليًا فقط وتكون [] في غير ذلك. اجعل الملخص واضحًا والتفاصيل مركزة.",
+    "أخرج JSON صحيحًا فقط بالعربية: title, summary, durationLabel, steps (1-30 عنصرًا، وكل عنصر فيه day,title,detail,minutes,category,curriculumNodeIds,priority,difficulty,lessonSize,difficultyBasis,difficultyConfidence,resourceRecommendation?,printedPageRange,sourcePages)، habits (0-5 فيها title,cue). resourceRecommendation اختياري ولا يُضاف إلا لمصدر مدرس موثق ومطابق حرفيًا لأحد تحديثات الصف الثاني بكالوريا ومفيد لدرس غير مكتمل؛ شكله {title,url,teacherName,reason}. يجب أن يحتوي curriculumNodeIds على معرف واحد أو أكثر من الدروس المتاحة التي ترتبط بها الخطوة. printedPageRange نطاق صفحات الكتاب المطبوع [البداية، النهاية] عند توافره فقط؛ sourcePages مراجع PDF المسترجعة فعليًا فقط وتكون [] في غير ذلك. اجعل الملخص واضحًا والتفاصيل مركزة.",
     "كل خطوة يجب أن تحدد المادة والوحدة/الفرع والدرس وطريقة مذاكرته، لا عنوانًا عامًا.",
   ].join("\n");
   const paceLabel = constraints.pace === "intensive" ? "مكثفة"
@@ -1156,6 +1202,7 @@ export async function generatePersonalPlan(
   if (!plan) {
     throw new Error("تعذّر إنشاء خطة دراسية صالحة. لم يتم حفظ أي بيانات ناقصة.");
   }
+  plan = applyTeacherLedPlanningGuard(plan);
   if (profile) {
     plan = applyPlannerProgressGuard(plan, profile);
   }
