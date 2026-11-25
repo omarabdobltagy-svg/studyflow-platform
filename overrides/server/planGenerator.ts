@@ -1131,7 +1131,7 @@ function formatUpcomingTeacherSessions(
 
   sessions.sort((left, right) => left.date.localeCompare(right.date) || left.time.localeCompare(right.time));
   return sessions.length
-    ? sessions.map(session => session.label + " · " + session.date + " · " + session.time + " · " + session.duration + " دقيقة").join("\\n")
+    ? sessions.map(session => session.label + " · " + session.date + " · " + session.time + " · " + session.duration + " دقيقة").join("\n")
     : "لا توجد حصة مسجلة قادمة داخل أفق هذه الخطة.";
 }
 
