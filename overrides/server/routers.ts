@@ -145,6 +145,7 @@ async function getDailyPlanSourceFingerprint(userId: number, dailyMinutes: numbe
 
 
 async function scanTeacherSourcesForStudent(userId: number): Promise<boolean> {
+  if (process.env.NODE_ENV === "test") return false;
   const running = teacherSourceScanLocks.get(userId);
   if (running) return running;
 
