@@ -971,3 +971,67 @@ html body .sf-login-screen.sf-shell-v3 .sf-login-security p {
   html body .sf-login-screen.sf-shell-v3 .sf-login-form-card { padding:27px 22px !important; border-radius:24px !important; }
   html body .sf-login-screen.sf-shell-v3 .sf-login-3d.sf-3d-scene { opacity:.58 !important; }
 }
+
+
+/* Always-rendered orbital illustration: visible even when WebGL is unavailable. */
+html body .sf-login-screen.sf-shell-v3 .sf-login-graphic-fallback {
+  position:fixed !important;
+  z-index:2 !important;
+  inset:0 !important;
+  display:grid !important;
+  place-items:center !important;
+  width:100vw !important;
+  height:100svh !important;
+  overflow:hidden !important;
+  pointer-events:none !important;
+  opacity:.72 !important;
+  transition:opacity .55s ease !important;
+}
+html body .sf-login-screen.sf-shell-v3 .sf-login-graphic-svg {
+  display:block !important;
+  width:min(76vw,760px) !important;
+  height:min(76vw,760px) !important;
+  max-height:92svh !important;
+  overflow:visible !important;
+  transform:translate(-18%,-1%) !important;
+  filter:drop-shadow(0 28px 80px rgba(201,237,98,.12)) !important;
+}
+html body .sf-login-screen.sf-shell-v3 .sf-login-frame-v4 {
+  z-index:5 !important;
+}
+html body .sf-login-screen.sf-shell-v3 .sf-login-graphic-svg [data-sf-orbit] {
+  transform-box:fill-box;
+  transform-origin:center;
+  animation:sf-orbit-spin 76s linear infinite;
+}
+html body .sf-login-screen.sf-shell-v3 .sf-login-graphic-svg [data-sf-float] {
+  transform-box:fill-box;
+  transform-origin:center;
+  animation:sf-orb-breathe 7s ease-in-out infinite;
+}
+html body .sf-login-screen.sf-shell-v3:has(.sf-login-3d canvas) .sf-login-graphic-fallback {
+  opacity:.12 !important;
+}
+@keyframes sf-orbit-spin {
+  from { transform:rotate(0deg); }
+  to { transform:rotate(360deg); }
+}
+@keyframes sf-orb-breathe {
+  0%,100% { transform:translateY(0) scale(1); }
+  50% { transform:translateY(-8px) scale(1.018); }
+}
+@media (prefers-reduced-motion: reduce) {
+  html body .sf-login-screen.sf-shell-v3 .sf-login-graphic-svg [data-sf-orbit],
+  html body .sf-login-screen.sf-shell-v3 .sf-login-graphic-svg [data-sf-float] {
+    animation:none !important;
+  }
+}
+@media (max-width:640px) {
+  html body .sf-login-screen.sf-shell-v3 .sf-login-graphic-fallback { opacity:.46 !important; }
+  html body .sf-login-screen.sf-shell-v3 .sf-login-graphic-svg {
+    width:125vw !important;
+    height:125vw !important;
+    max-height:75svh !important;
+    transform:translate(-20%,-12%) !important;
+  }
+}
