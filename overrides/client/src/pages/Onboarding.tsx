@@ -30,6 +30,7 @@ import {
   Loader2,
   Pencil,
   ShieldCheck,
+  X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
