@@ -45,6 +45,11 @@ export default function Study() {
   const branches = useMemo(() => getSIEStudentVisibleBranches(subjectId), [subjectId]);
   const units = useMemo(() => getSIECheckpointUnits(subjectId), [subjectId]);
   const [branchTransition, setBranchTransition] = useState<{ from: string; to: string } | null>(null);
+  useEffect(() => {
+    if (!branchTransition) return;
+    const timer = window.setTimeout(() => setBranchTransition(null), 3_200);
+    return () => window.clearTimeout(timer);
+  }, [branchTransition]);
   const currentBranch = branches.find(branch => branch.branchId === branchId) ?? branches[0];
   const branchChoices = currentBranch?.choices ?? [];
   const currentBranchId = currentBranch?.branchId ?? "";
