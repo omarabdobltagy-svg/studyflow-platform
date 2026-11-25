@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getSIECheckpointBranches, getSIESubject, getSIETeacher } from "@shared/sie-catalog";
+import { getSIECheckpointBranches, getSIESubject, getSIETeacher, normalizeSIECheckpointFrontier } from "@shared/sie-catalog";
 import { calculateLearningGap } from "@shared/sie-learning-progress";
 import { invokeLLM, invokeNvidiaLLM } from "./_core/llm";
 import { isPrimaryProviderFallbackEligible } from "./_core/llmFallback";
@@ -258,11 +258,12 @@ function buildPlannerProgressSnapshot(
         : savedStudentFrontierValue === "__UNKNOWN__" && saved.studentFrontierConfirmedAt
           ? "__UNKNOWN__"
           : undefined;
-      const studentFrontier = savedStudentFrontier !== undefined
+      const resolvedStudentFrontier = savedStudentFrontier !== undefined
         ? savedStudentFrontier
         : belongsToBranch(reported.lastCompletedLessonId)
           ? reported.lastCompletedLessonId
           : belongsToBranch(legacyFrontier) ? legacyFrontier : "__UNKNOWN__";
+      const studentFrontier = normalizeSIECheckpointFrontier(subjectId, branch.branchId, resolvedStudentFrontier);
 
       const savedTeacherFrontierValue = saved.teacherTeachingFrontierId;
       const savedTeacherFrontier = belongsToBranch(savedTeacherFrontierValue)
@@ -270,9 +271,10 @@ function buildPlannerProgressSnapshot(
         : savedTeacherFrontierValue === "__UNKNOWN__" && saved.teacherFrontierConfirmedAt
           ? "__UNKNOWN__"
           : undefined;
-      const teacherFrontier = savedTeacherFrontier !== undefined
+      const resolvedTeacherFrontier = savedTeacherFrontier !== undefined
         ? savedTeacherFrontier
         : belongsToBranch(reported.teacherTeachingFrontierId) ? reported.teacherTeachingFrontierId : "__UNKNOWN__";
+      const teacherFrontier = normalizeSIECheckpointFrontier(subjectId, branch.branchId, resolvedTeacherFrontier);
 
       const savedSchoolFrontierValue = saved.schoolClassFrontierId;
       const savedSchoolFrontier = belongsToBranch(savedSchoolFrontierValue)
@@ -283,7 +285,9 @@ function buildPlannerProgressSnapshot(
       const resolvedSchoolFrontier = savedSchoolFrontier !== undefined
         ? savedSchoolFrontier
         : belongsToBranch(reported.schoolClassFrontierId) ? reported.schoolClassFrontierId : "__UNKNOWN__";
-      const schoolFrontier = courseMode === "center" ? resolvedSchoolFrontier : "__UNKNOWN__";
+      const schoolFrontier = courseMode === "center"
+        ? normalizeSIECheckpointFrontier(subjectId, branch.branchId, resolvedSchoolFrontier)
+        : "__UNKNOWN__";
       const gap = calculateLearningGap(branch.choices, {
         studentFrontierId: studentFrontier,
         teacherTeachingFrontierId: teacherFrontier,
@@ -803,6 +807,7 @@ export function applyPlannerCurriculumCoverageGuard(
   const normalizedSteps: GeneratedPlan["steps"] = [];
 
   for (const step of plan.steps) {
+    if (step.curriculumNodeIds.length === 0) continue;
     const validIds = step.curriculumNodeIds.filter(nodeId =>
       snapshot.eligibleNodeIds.has(nodeId) && !seen.has(nodeId)
     );
