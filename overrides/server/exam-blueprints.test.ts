@@ -1,58 +1,58 @@
 import { describe, expect, it } from "vitest";
-import { buildExamBlueprintContext, getExamComponentForText, getSubjectExamBlueprint } from "./exam-blueprints";
+import {
+  buildExamBlueprintContext,
+  getExamComponentForText,
+  getSubjectExamBlueprint,
+  SECOND_YEAR_BAC_EXAM_WINDOW_2026_2027,
+} from "./exam-blueprints";
 
-describe("second-year baccalaureate annual exam planning", () => {
-  it("uses the annual exam format without importing term-specific English weights", () => {
-    const blueprint = getSubjectExamBlueprint("ENG_G2_BAC", "اللغة الإنجليزية");
-    expect(blueprint?.subjectKey).toBe("english");
-    expect(blueprint?.appliesTo).toBe("annual_baccalaureate_exam");
-    expect(blueprint?.annualSubjectMarks).toBe(100);
-    expect(blueprint?.paperMarks).toBeNull();
-    expect(blueprint?.mcqShare).toBe(0.5);
-    expect(blueprint?.essayShare).toBe(0.5);
-    expect(blueprint?.components).toEqual([]);
-    expect(getExamComponentForText("ENG_G2_BAC", "اللغة الإنجليزية", "القصة story")).toBeNull();
-    expect(getExamComponentForText("ENG_G2_BAC", "اللغة الإنجليزية", "القواعد والمفردات")).toBeNull();
-  });
+describe("second-year Baccalaureate exam planning", () => {
+  const subjectIds = [
+    ["ARB_G2_BAC", "اللغة العربية"],
+    ["ENG1_G2_BAC", "اللغة الإنجليزية"],
+    ["HIS_G2_BAC", "التاريخ المصري"],
+    ["PROG_AI_G2_BAC", "البرمجة والذكاء الاصطناعي"],
+  ] as const;
 
-  it("does not import term-specific Arabic mark breakdown into annual priorities", () => {
-    const blueprint = getSubjectExamBlueprint("ARB_G2_BAC", "اللغة العربية");
-    expect(blueprint?.appliesTo).toBe("annual_baccalaureate_exam");
-    expect(blueprint?.annualSubjectMarks).toBe(100);
-    expect(blueprint?.paperMarks).toBeNull();
-    expect(blueprint?.mcqShare).toBe(0.5);
-    expect(blueprint?.essayShare).toBe(0.5);
-    expect(blueprint?.components).toEqual([]);
-    expect(getExamComponentForText("ARB_G2_BAC", "اللغة العربية", "قصة وا إسلاماه والنص الأدبي")).toBeNull();
-    expect(getExamComponentForText("ARB_G2_BAC", "اللغة العربية", "النحو")).toBeNull();
-  });
-
-  it("applies the verified annual paper format to history and programming without inventing unit weights", () => {
-    const history = getSubjectExamBlueprint("HIS_G2_BAC", "التاريخ المصري");
-    const programming = getSubjectExamBlueprint("PROG_AI_G2_BAC", "البرمجة والذكاء الاصطناعي");
-    for (const blueprint of [history, programming]) {
+  it("does not invent paper format, question counts, or branch weights for any subject", () => {
+    for (const [id, name] of subjectIds) {
+      const blueprint = getSubjectExamBlueprint(id, name);
+      expect(blueprint).not.toBeNull();
       expect(blueprint?.annualSubjectMarks).toBe(100);
       expect(blueprint?.paperMarks).toBeNull();
-      expect(blueprint?.mcqShare).toBe(0.5);
-      expect(blueprint?.essayShare).toBe(0.5);
+      expect(blueprint?.durationMinutes).toBeNull();
+      expect(blueprint?.mcqShare).toBeNull();
+      expect(blueprint?.essayShare).toBeNull();
       expect(blueprint?.components).toEqual([]);
+      expect(getExamComponentForText(id, name, "قواعد ونصوص وقصة وتعبير")).toBeNull();
     }
   });
 
-  it("makes the May mandatory first attempt and July optional attempt explicit", () => {
-    const context = buildExamBlueprintContext([
-      { id: "ENG_G2_BAC", name: "اللغة الإنجليزية" },
-      { id: "ARB_G2_BAC", name: "اللغة العربية" },
-      { id: "HIS_G2_BAC", name: "التاريخ" },
-      { id: "PROG_AI_G2_BAC", name: "البرمجة والذكاء الاصطناعي" },
-    ]);
-    expect(context).toContain("الاستعداد للامتحان السنوي");
-    expect(context).toContain("لا يوجد امتحان ترم أول");
-    expect(context).toContain("50% اختيار من متعدد و50% مقالي");
-    expect(context).toContain("مايو 2027");
-    expect(context).toContain("يوليو 2027");
-    expect(context).toContain("لا تستخدم مواصفات ترم أول");
-    expect(context).toContain("لا تخترع توزيع درجات");
-    expect(context).toContain("لا توجد أوزان فرعية موثقة");
+  it("keeps qualitative third-year skill inspiration separate from second-year exam specifications", () => {
+    const context = buildExamBlueprintContext(subjectIds.map(([id, name]) => ({ id, name })));
+    expect(context).toContain("لا توجد حتى الآن نماذج استرشادية أو مواصفة تفصيلية معتمدة");
+    expect(context).toContain("عدد الأسئلة: غير معروف");
+    expect(context).toContain("توزيع الاختياري والمقالي: غير معروف");
+    expect(context).toContain("الاستلهام النوعي فقط");
+    expect(context).toContain("Grammar وVocabulary");
+    expect(context).toContain("لا يحوّل هذا الاستلهام إلى اختبارات أو أسئلة");
+    expect(context).not.toContain("50% اختيار من متعدد و50% مقالي");
+    expect(context).not.toContain("مايو 2027");
+    expect(context).not.toContain("يوليو 2027");
+  });
+
+  it("uses the user-confirmed approximate exam window and readiness target", () => {
+    expect(SECOND_YEAR_BAC_EXAM_WINDOW_2026_2027).toMatchObject({
+      academicYear: "2026/2027",
+      start: "2027-06-12",
+      end: "2027-06-22",
+      planningReadyBy: "2027-06-11",
+      precision: "approximate_user_confirmed",
+      source: "user_confirmed",
+    });
+    const context = buildExamBlueprintContext(subjectIds.map(([id, name]) => ({ id, name })));
+    expect(context).toContain("12 يونيو 2027");
+    expect(context).toContain("22 يونيو 2027");
+    expect(context).toContain("11 يونيو 2027");
   });
 });
