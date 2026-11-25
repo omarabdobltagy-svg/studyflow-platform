@@ -143,6 +143,23 @@ export function getSubjectExamBlueprint(subjectId: string, subjectName = ""): Su
   return match ? blueprints[match.key] : null;
 }
 
+export function getExamComponentForText(subjectId: string, subjectName: string, text: string): ExamComponent | null {
+  const blueprint = getSubjectExamBlueprint(subjectId, subjectName);
+  if (!blueprint || blueprint.subjectKey !== "english" || blueprint.appliesTo !== "first_term_2026_2027") return null;
+  const normalized = text.normalize("NFKC").toLocaleLowerCase("ar")
+    .replace(/[ً-ٰٟـ]/g, "")
+    .replace(/[أإآ]/g, "ا")
+    .replace(/ى/g, "ي");
+  const componentId =
+    /قصة|story|novel|رواية/u.test(normalized) ? "story"
+      : /ترجم|translation/u.test(normalized) ? "translation"
+        : /قراءة|فهم|reading|passage/u.test(normalized) ? "reading"
+          : /تعبير|كتابة|writing|rewrite|اعادة صياغة/u.test(normalized) ? "writing"
+            : /قواعد|نحو|مفردات|تراكيب|grammar|vocabulary/u.test(normalized) ? "vocabulary_grammar"
+              : null;
+  return componentId ? blueprint.components.find(component => component.id === componentId) ?? null : null;
+}
+
 export function buildExamBlueprintContext(subjects: Array<{ id: string; name: string }>): string {
   const subjectLines = subjects.map(subject => {
     const blueprint = getSubjectExamBlueprint(subject.id, subject.name);
