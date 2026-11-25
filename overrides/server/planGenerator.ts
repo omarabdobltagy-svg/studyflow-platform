@@ -253,7 +253,9 @@ function buildPlannerProgressSnapshot(
       const saved = branchRecords[branch.branchId] || legacyArabicReadingRecord || {};
       const belongsToBranch = (value: unknown) =>
         typeof value === "string" &&
-        (value === "__NOT_STARTED__" || branch.choices.some(choice => choice.nodeId === value));
+        (value === "__NOT_STARTED__" || branch.choices.some(choice =>
+          choice.nodeId === normalizeSIECheckpointFrontier(subjectId, branch.branchId, value)
+        ));
 
       // Match the learning.get resolver: an unconfirmed legacy "__UNKNOWN__"
       // in the branch record must not hide a valid subject-level saved frontier.
@@ -1101,7 +1103,7 @@ export async function generatePersonalPlan(
   } = {}
 ): Promise<GeneratedPlan> {
   const dailyMinutes = Math.max(20, Math.min(600, Math.trunc(constraints.dailyMinutes ?? 120)));
-  const planScope = constraints.scope ?? "annual";
+  const planScope = constraints.scope ?? "daily";
   const daysPerWeek = constraints.daysPerWeek ?? 6;
   const existingCurriculumTasks = constraints.existingCurriculumTasks ?? [];
   const selectedPace = constraints.pace ?? "balanced";
