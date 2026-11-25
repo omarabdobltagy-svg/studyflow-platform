@@ -7,12 +7,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
-import { getSIECheckpointProgressBranches, getSIESubject, matchSIECheckpointTask, normalizeSIECheckpointFrontier } from "@shared/sie-catalog";
+import { getSIEStudentVisibleBranches, getSIECheckpointProgressBranches, getSIESubject, matchSIECheckpointTask, normalizeSIECheckpointFrontier } from "@shared/sie-catalog";
 import {
   ArrowLeft, BarChart3, BookOpenText, CalendarDays, Check, CheckCircle2,
   Clock3, Compass, GraduationCap, ListChecks, Loader2, MessageCircle,
   Play, RefreshCw, Sparkles, Target, Timer,
 } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
 
 type Priority = {
@@ -67,6 +68,15 @@ export default function Home() {
   const tasksQuery = trpc.tasks.list.useQuery();
   const learning = trpc.learning.get.useQuery();
   const profile = trpc.studentProfile.get.useQuery();
+  const [showWelcomeGuide, setShowWelcomeGuide] = useState(false);
+  const [welcomeGuideStep, setWelcomeGuideStep] = useState(0);
+  const completeWelcomeGuide = trpc.studentProfile.completeWelcomeGuide.useMutation({
+    onSuccess: async () => {
+      await utils.studentProfile.get.invalidate();
+      setShowWelcomeGuide(false);
+    },
+    onError: error => toast.error(error.message || "تعذّر حفظ إكمال دليل البداية."),
+  });
   const dailyPlan = trpc.plans.currentDaily.useQuery(undefined, {
     staleTime: 10_000,
     refetchInterval: query => query.state.data?.needsRefresh || !query.state.data?.plan ? 15_000 : 180_000,
@@ -76,6 +86,12 @@ export default function Home() {
     refetchInterval: query => query.state.data ? 5_000 : false,
     refetchOnWindowFocus: true,
   });
+
+  useEffect(() => {
+    if (profile.isSuccess && profile.data && !profile.data.selection?.welcomeGuideCompletedAt) {
+      setShowWelcomeGuide(true);
+    }
+  }, [profile.isSuccess, profile.data?.selection?.welcomeGuideCompletedAt]);
 
   // Refresh the profile after the daily-plan query finishes its automatic public teacher scan.
   useEffect(() => {
@@ -132,7 +148,7 @@ export default function Home() {
   const priority = useMemo<Priority | null>(() => {
     const gaps = ((learning.data as any)?.gapByBranch ?? {}) as Record<string, Record<string, any>>;
     const candidates = Object.entries(gaps).flatMap(([subjectId, subjectGaps]) =>
-      getSIECheckpointProgressBranches(subjectId).flatMap(branch => {
+      getSIEStudentVisibleBranches(subjectId).flatMap(branch => {
         const gap = subjectGaps[branch.branchId];
         if (gap?.status !== "calculated" || gap.gapCount === null || gap.gapCount <= 0 || gap.referencePosition === null) return [];
         const next = typeof gap.studentPosition === "number" ? branch.choices[gap.studentPosition] : undefined;
@@ -238,7 +254,7 @@ export default function Home() {
     for (const step of steps as any[]) {
       const curriculumNodeIds = Array.isArray(step.curriculumNodeIds) ? step.curriculumNodeIds : [];
       for (const subjectId of subjectIds) {
-        for (const branch of getSIECheckpointProgressBranches(subjectId)) {
+        for (const branch of getSIEStudentVisibleBranches(subjectId)) {
           const gap = (learning.data as any)?.gapByBranch?.[subjectId]?.[branch.branchId];
           if (typeof gap?.studentPosition !== "number" || gap.referencePosition === null
             || gap.referencePosition <= gap.studentPosition) continue;
@@ -310,6 +326,44 @@ export default function Home() {
     if (session) finishSession.mutate({ sessionId: session.sessionId, markLessonCompleted: markComplete });
   };
 
+  const welcomeGuide = [
+    {
+      title: "خلّي StudyFlow يعرف نظامك الدراسي",
+      body: "من الملف الدراسي اختار الصف والمسار والمواد والمدرس لكل مادة، وسجّل مواعيد المحاضرات الأسبوعية أو حدّد إن المواعيد غير ثابتة. تقدر تعدّل البيانات دي في أي وقت.",
+      action: "فتح الملف الدراسي",
+      path: "/settings",
+      icon: GraduationCap,
+    },
+    {
+      title: "سجّل آخر نقطة وصلت لها",
+      body: "في صفحة المذاكرة اختار المادة والوحدة، وبعدها حدّد آخر موضوع أنهيته وموضع المدرس. المنصة تحسب المتراكم داخل كل فرع وتبدأ من الموضوع التالي، وتقدر تفتح تفاصيل الدروس وقت ما تحتاج.",
+      action: "فتح المذاكرة والتقدم",
+      path: "/study",
+      icon: BookOpenText,
+    },
+    {
+      title: "خلّي الخطة ترتّب القديم والجديد",
+      body: "الخطة الذكية توازن بين المهام المتراكمة والاستعداد للمحاضرة القادمة حسب جدول المدرس. تقدر تختار التركيز على المتراكم أو مواكبة المدرس، وتراجع التوزيع قبل اعتماد المهام.",
+      action: "فتح خطة المذاكرة",
+      path: "/planner",
+      icon: Sparkles,
+    },
+    {
+      title: "ابدأ من خطوة واحدة",
+      body: "لو فيه مهمة جاهزة ابدأ بها من مساحة اليوم. سجّل جلسة المذاكرة، وحدّث تقدم الدرس بعد ما تخلص. لو المدرس أعلن تغييرًا واضحًا في الموعد، المنصة تستخدم الإعلان في إعادة ترتيب الخطة.",
+      action: "ابدأ من مساحة اليوم",
+      path: "/",
+      icon: Play,
+    },
+  ];
+  const finishWelcomeGuide = (path?: string) => {
+    completeWelcomeGuide.mutate(undefined, {
+      onSuccess: () => {
+        if (path && path !== "/") setLocation(path);
+      },
+    });
+  };
+
   return (
     <DashboardLayout
       title="مساحة اليوم"
@@ -325,7 +379,12 @@ export default function Home() {
               ابدأ بخطوة واحدة واضحة. خطتك ومهامك وتقدمك موجودين هنا من غير ما تحتاج تدور بينهم.
             </p>
           </div>
-          <Badge variant="outline" className="rounded-full px-3 py-1.5 text-xs">مساحتك الدراسية</Badge>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="outline" size="sm" className="rounded-full" onClick={() => { setWelcomeGuideStep(0); setShowWelcomeGuide(true); }}>
+              <Compass className="size-4" /> دليل البداية
+            </Button>
+            <Badge variant="outline" className="rounded-full px-3 py-1.5 text-xs">مساحتك الدراسية</Badge>
+          </div>
         </header>
 
         {teacherScheduleAnnouncements.length > 0 && (
@@ -563,6 +622,85 @@ export default function Home() {
           </section>
         </div>
       </div>
+        <AnimatePresence>
+          {showWelcomeGuide && (
+            <motion.div
+              className="fixed inset-0 z-[90] flex items-center justify-center bg-[#070A06]/75 p-4 backdrop-blur-md"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              role="dialog" aria-modal="true" aria-labelledby="welcome-guide-title"
+              onClick={event => { if (event.target === event.currentTarget) setShowWelcomeGuide(false); }}
+            >
+              <motion.section
+                className="relative w-full max-w-xl overflow-hidden rounded-[1.8rem] border border-[#C9ED62]/25 bg-[#151C13] text-[#F1F0E8] shadow-[0_40px_130px_-45px_rgba(0,0,0,.95)]"
+                initial={{ opacity: 0, y: 28, scale: .96, filter: "blur(8px)" }}
+                animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+                exit={{ opacity: 0, y: 16, scale: .98, filter: "blur(6px)" }}
+                transition={{ duration: .38, ease: [.22, 1, .36, 1] }}
+              >
+                <div className="pointer-events-none absolute -right-20 -top-24 size-72 rounded-full bg-[#C9ED62]/10 blur-3xl" />
+                <header className="relative flex items-start justify-between gap-3 border-b border-white/10 px-5 py-5 sm:px-7">
+                  <div>
+                    <p className="text-[10px] font-bold tracking-[.2em] text-[#C9ED62]">YOUR FIRST 4 STEPS</p>
+                    <h2 id="welcome-guide-title" className="mt-2 text-xl font-bold sm:text-2xl">أهلاً بك في StudyFlow</h2>
+                    <p className="mt-1 text-xs leading-6 text-[#AAB09E]">دليل عملي سريع يوضح تبدأ منين وإزاي تخلي المنصة تشتغل معاك.</p>
+                  </div>
+                  <button type="button" onClick={() => finishWelcomeGuide()} className="rounded-lg px-2 py-1 text-xs text-[#AAB09E] transition hover:bg-white/10 hover:text-white">تخطي</button>
+                </header>
+                <div className="relative px-5 py-6 sm:px-7">
+                  <div className="mb-5 flex items-center gap-2">
+                    {welcomeGuide.map((item, index) => (
+                      <button type="button" key={item.title} onClick={() => setWelcomeGuideStep(index)}
+                        aria-label={"الخطوة " + (index + 1)}
+                        className={"h-1.5 flex-1 rounded-full transition-all duration-300 " + (index <= welcomeGuideStep ? "bg-[#C9ED62]" : "bg-white/15")} />
+                    ))}
+                    <span className="mr-1 text-[10px] tabular-nums text-[#AAB09E]">{welcomeGuideStep + 1}/4</span>
+                  </div>
+                  <AnimatePresence mode="wait" initial={false}>
+                    {(() => {
+                      const step = welcomeGuide[welcomeGuideStep];
+                      const StepIcon = step.icon;
+                      return (
+                        <motion.div key={welcomeGuideStep}
+                          initial={{ opacity: 0, x: 18, filter: "blur(4px)" }}
+                          animate={{ opacity: 1, x: 0, filter: "blur(0px)" }}
+                          exit={{ opacity: 0, x: -18, filter: "blur(4px)" }}
+                          transition={{ duration: .27, ease: "easeOut" }}
+                        >
+                          <div className="flex size-14 items-center justify-center rounded-2xl border border-[#C9ED62]/25 bg-[#C9ED62]/10 text-[#C9ED62]">
+                            <StepIcon className="size-7" />
+                          </div>
+                          <h3 className="mt-5 text-xl font-bold leading-8">{step.title}</h3>
+                          <p className="mt-3 text-sm leading-8 text-[#C0C7B4]">{step.body}</p>
+                          <Button type="button" variant="outline" className="mt-5 rounded-xl border-[#C9ED62]/30 bg-white/[.04] text-[#DCE8B7] hover:bg-white/[.08] hover:text-white"
+                            onClick={() => { setShowWelcomeGuide(false); completeWelcomeGuide.mutate(undefined, { onSuccess: () => setLocation(step.path) }); }}>
+                            {step.action} <ArrowLeft className="size-4" />
+                          </Button>
+                        </motion.div>
+                      );
+                    })()}
+                  </AnimatePresence>
+                </div>
+                <footer className="relative flex items-center justify-between border-t border-white/10 px-5 py-4 sm:px-7">
+                  <Button type="button" variant="ghost" className="text-[#C0C7B4] hover:bg-white/10 hover:text-white"
+                    disabled={welcomeGuideStep === 0} onClick={() => setWelcomeGuideStep(value => Math.max(0, value - 1))}>
+                    السابق
+                  </Button>
+                  {welcomeGuideStep < welcomeGuide.length - 1 ? (
+                    <Button type="button" className="rounded-xl bg-[#C9ED62] text-[#111510] hover:bg-[#D8F27C]" onClick={() => setWelcomeGuideStep(value => Math.min(welcomeGuide.length - 1, value + 1))}>
+                      التالي <ArrowLeft className="size-4" />
+                    </Button>
+                  ) : (
+                    <Button type="button" className="rounded-xl bg-[#C9ED62] text-[#111510] hover:bg-[#D8F27C]" disabled={completeWelcomeGuide.isPending}
+                      onClick={() => finishWelcomeGuide()}>
+                      {completeWelcomeGuide.isPending ? "جارٍ الحفظ..." : "إنهاء الدليل"}
+                      <CheckCircle2 className="size-4" />
+                    </Button>
+                  )}
+                </footer>
+              </motion.section>
+            </motion.div>
+          )}
+        </AnimatePresence>
     </DashboardLayout>
   );
 }
