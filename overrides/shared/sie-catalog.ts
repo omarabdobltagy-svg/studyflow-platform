@@ -692,6 +692,7 @@ export type SIECheckpointChoice = {
   title: string;
   unitTitle: string;
   note?: string;
+  author?: string;
   unitNumber?: number;
   lessonNumber?: string;
   courseSequenceNumber?: number;
@@ -786,11 +787,11 @@ export const SIE_CHECKPOINT_CHOICES: Record<string, SIECheckpointChoice[]> = {
     { nodeId: "ARB_C09_TAA_MARBUTA", title: "التاء المربوطة والهاء المربوطة", unitTitle: "الترم الأول", courseSequenceNumber: 9, lessonType: "spelling", sourceLabel: "فهرس منصة الشرح", branchId: "ARB_SPELLING", branchTitle: "الإملاء", branchType: "course_track" },
     { nodeId: "ARB_C10_ARGUMENT_PARA", title: "كيفية كتابة فقرة حجاجية", unitTitle: "الترم الأول", courseSequenceNumber: 10, lessonType: "expression", sourceLabel: "فهرس منصة الشرح", branchId: "ARB_EXPRESSION", branchTitle: "التعبير", branchType: "course_track" },
     { nodeId: "ARB_C11_FIGURE", title: "الصورة الخيالية", unitTitle: "الترم الأول", courseSequenceNumber: 11, lessonType: "rhetoric", sourceLabel: "فهرس منصة الشرح", branchId: "ARB_BALAGHA", branchTitle: "البلاغة", branchType: "course_track" },
-    { nodeId: "ARB_C12_STORY1", title: "القصة الأولى: حكايات الغريب", unitTitle: "كتاب روائع الأدب العربي", courseSequenceNumber: 12, lessonType: "story", sourceLabel: "فهرس منصة الشرح", branchId: "ARB_LITERATURE", branchTitle: "الأدب والقصة", branchType: "course_track" },
+    { nodeId: "ARB_C12_STORY1", title: "حكايات الغريب", author: "جمال الغيطاني", unitTitle: "من روائع الأدب العربي", courseSequenceNumber: 12, lessonType: "story", sourceLabel: "كتاب من روائع الأدب العربي - 2027", branchId: "ARB_LITERATURE", branchTitle: "الأدب والقصة", branchType: "course_track" },
     { nodeId: "ARB_U1_L3", title: "العلم نور", unitTitle: "العلم والضمير", unitNumber: 1, lessonNumber: "3", courseSequenceNumber: 13, lessonType: "poetry", sourceLabel: "فهرس الدروس وكتاب الطالب", branchId: "ARB_TEXTS", branchTitle: "النصوص", branchType: "course_track" },
     { nodeId: "ARB_U2_L1", title: "التقنية وصناعة الرأي العام", unitTitle: "سلطان الكلمة الرقمية", unitNumber: 2, lessonNumber: "1", courseSequenceNumber: 14, lessonType: "reading", sourceLabel: "فهرس الدروس وكتاب الطالب", branchId: "ARB_READING", branchTitle: "القراءة", branchType: "course_track" },
     { nodeId: "ARB_U2_N1", title: "الممنوع من الصرف وعلل منعه", unitTitle: "سلطان الكلمة الرقمية", unitNumber: 2, lessonNumber: "1", courseSequenceNumber: 15, lessonType: "grammar", sourceLabel: "فهرس الدروس وكتاب الطالب", branchId: "ARB_NAHW", branchTitle: "النحو", branchType: "course_track" },
-    { nodeId: "ARB_C16_STORY2", title: "القصة الثانية: عودة الروح", unitTitle: "كتاب روائع الأدب العربي", courseSequenceNumber: 16, lessonType: "story", sourceLabel: "فهرس منصة الشرح", branchId: "ARB_LITERATURE", branchTitle: "الأدب والقصة", branchType: "course_track" },
+    { nodeId: "ARB_C16_STORY2", title: "عودة الروح", author: "توفيق الحكيم", unitTitle: "من روائع الأدب العربي", courseSequenceNumber: 16, lessonType: "story", sourceLabel: "كتاب من روائع الأدب العربي - 2027", branchId: "ARB_LITERATURE", branchTitle: "الأدب والقصة", branchType: "course_track" },
     { nodeId: "ARB_C17_TEXT_DISCOURSE", title: "أنواع الخطاب في النص المعلوماتي", unitTitle: "الترم الأول", courseSequenceNumber: 17, lessonType: "reading", sourceLabel: "فهرس منصة الشرح", branchId: "ARB_READING", branchTitle: "القراءة", branchType: "course_track" },
     { nodeId: "ARB_C18_IJAZ", title: "الإيجاز في البلاغة", unitTitle: "الترم الأول", courseSequenceNumber: 18, lessonType: "rhetoric", sourceLabel: "فهرس منصة الشرح", branchId: "ARB_BALAGHA", branchTitle: "البلاغة", branchType: "course_track" },
     { nodeId: "ARB_C19_ITNAB", title: "الإطناب", unitTitle: "الترم الأول", courseSequenceNumber: 19, lessonType: "rhetoric", sourceLabel: "فهرس منصة الشرح", branchId: "ARB_BALAGHA", branchTitle: "البلاغة", branchType: "course_track" },
@@ -819,6 +820,26 @@ export const SIE_CHECKPOINT_CHOICES: Record<string, SIECheckpointChoice[]> = {
     { nodeId: "ARB_U6_L1", title: "المثقف في العصر الرقمي", unitTitle: "الثقافة أسلوب حياة", unitNumber: 6, lessonNumber: "1", lessonType: "reading", sourceLabel: "كتاب الطالب - الجزء الثاني", branchId: "ARB_READING", branchTitle: "القراءة", branchType: "course_track" },
     { nodeId: "ARB_U6_L2", title: "الثقافة أداة لا حلية", unitTitle: "الثقافة أسلوب حياة", unitNumber: 6, lessonNumber: "2", lessonType: "reading", sourceLabel: "كتاب الطالب - الجزء الثاني", branchId: "ARB_READING", branchTitle: "القراءة", branchType: "course_track" },
     { nodeId: "ARB_U6_L3", title: "غُربة وحنين", unitTitle: "الثقافة أسلوب حياة", unitNumber: 6, lessonNumber: "3", lessonType: "poetry", sourceLabel: "كتاب الطالب - الجزء الثاني", branchId: "ARB_TEXTS", branchTitle: "النصوص", branchType: "course_track" },
+
+    // Additional writing checkpoints extracted from embedded Ministry textbook tasks.
+    { nodeId: "ARB_EXP_U1_POSITION_WRITE", title: "كتابة موقف نقدي موجز", unitTitle: "تطبيقات التعبير من الكتاب", lessonType: "expression", note: "تطبيق كتابي مدمج في كتاب الطالب، الجزء الأول، ص20؛ ليس درسًا وزاريًا مستقلًا.", sourceLabel: "كتاب الطالب - الجزء الأول، ص20", branchId: "ARB_EXPRESSION", branchTitle: "التعبير", branchType: "course_track" },
+    { nodeId: "ARB_EXP_U1_INFO_PARAGRAPH", title: "كتابة فقرة معلوماتية", unitTitle: "تطبيقات التعبير من الكتاب", lessonType: "expression", note: "نشاط كتابة فقرة معلوماتية عن مسؤولية العلم، الجزء الأول، ص21.", sourceLabel: "كتاب الطالب - الجزء الأول، ص21", branchId: "ARB_EXPRESSION", branchTitle: "التعبير", branchType: "course_track" },
+    { nodeId: "ARB_EXP_U1_INTERVIEW", title: "إعداد مقابلة قصيرة", unitTitle: "تطبيقات التعبير من الكتاب", lessonType: "expression", note: "نشاط محاكاة مقابلة قصيرة مع عالم، الجزء الأول، ص22.", sourceLabel: "كتاب الطالب - الجزء الأول، ص22", branchId: "ARB_EXPRESSION", branchTitle: "التعبير", branchType: "course_track" },
+    { nodeId: "ARB_EXP_U1_CRITICAL_PARAGRAPH", title: "كتابة فقرة نقدية", unitTitle: "تطبيقات التعبير من الكتاب", lessonType: "expression", note: "نشاط كتابة فقرة نقدية من 8 إلى 10 أسطر، الجزء الأول، ص36.", sourceLabel: "كتاب الطالب - الجزء الأول، ص36", branchId: "ARB_EXPRESSION", branchTitle: "التعبير", branchType: "course_track" },
+    { nodeId: "ARB_EXP_U1_OPINION_PARAGRAPH", title: "كتابة فقرة رأي", unitTitle: "تطبيقات التعبير من الكتاب", lessonType: "expression", note: "نشاط فقرة رأي بعنوان متى يصبح العلم سببًا لنهضة الأمة، الجزء الأول، ص49.", sourceLabel: "كتاب الطالب - الجزء الأول، ص49", branchId: "ARB_EXPRESSION", branchTitle: "التعبير", branchType: "course_track" },
+
+    // Spelling applications are kept distinct from the underlying lesson title.
+    { nodeId: "ARB_SPELL_U1_HAMZA_PRACTICE", title: "تطبيقات على كتابة الهمزة", unitTitle: "تطبيقات الإملاء من الكتاب", lessonType: "spelling", note: "تطبيق كتابي على تعليل كتابة الهمزة في كلمات مختارة، الجزء الأول، ص70.", sourceLabel: "كتاب الطالب - الجزء الأول، ص70", branchId: "ARB_SPELLING", branchTitle: "الإملاء", branchType: "course_track" },
+
+    // Complete the independent story book: ten works in total.
+    { nodeId: "ARB_C22_STORY3", title: "كفاح طيبة", author: "نجيب محفوظ", unitTitle: "من روائع الأدب العربي", courseSequenceNumber: 22, lessonType: "story", sourceLabel: "كتاب من روائع الأدب العربي - 2027", branchId: "ARB_LITERATURE", branchTitle: "الأدب والقصة", branchType: "course_track" },
+    { nodeId: "ARB_C23_STORY4", title: "الأرض", author: "عبد الرحمن الشرقاوي", unitTitle: "من روائع الأدب العربي", courseSequenceNumber: 23, lessonType: "story", sourceLabel: "كتاب من روائع الأدب العربي - 2027", branchId: "ARB_LITERATURE", branchTitle: "الأدب والقصة", branchType: "course_track" },
+    { nodeId: "ARB_C24_STORY5", title: "شمس وليل", author: "محمود تيمور", unitTitle: "من روائع الأدب العربي", courseSequenceNumber: 24, lessonType: "story", sourceLabel: "كتاب من روائع الأدب العربي - 2027", branchId: "ARB_LITERATURE", branchTitle: "الأدب والقصة", branchType: "course_track" },
+    { nodeId: "ARB_C25_STORY6", title: "العبرات", author: "مصطفى لطفي المنفلوطي", unitTitle: "من روائع الأدب العربي", courseSequenceNumber: 25, lessonType: "story", sourceLabel: "كتاب من روائع الأدب العربي - 2027", branchId: "ARB_LITERATURE", branchTitle: "الأدب والقصة", branchType: "course_track" },
+    { nodeId: "ARB_C26_STORY7", title: "وا إسلاماه", author: "علي أحمد باكثير", unitTitle: "من روائع الأدب العربي", courseSequenceNumber: 26, lessonType: "story", sourceLabel: "كتاب من روائع الأدب العربي - 2027", branchId: "ARB_LITERATURE", branchTitle: "الأدب والقصة", branchType: "course_track" },
+    { nodeId: "ARB_C27_STORY8", title: "عبقرية عمر", author: "عباس محمود العقاد", unitTitle: "من روائع الأدب العربي", courseSequenceNumber: 27, lessonType: "story", sourceLabel: "كتاب من روائع الأدب العربي - 2027", branchId: "ARB_LITERATURE", branchTitle: "الأدب والقصة", branchType: "course_track" },
+    { nodeId: "ARB_C28_STORY9", title: "رجل تحت الصفر", author: "مصطفى محمود", unitTitle: "من روائع الأدب العربي", courseSequenceNumber: 28, lessonType: "story", sourceLabel: "كتاب من روائع الأدب العربي - 2027", branchId: "ARB_LITERATURE", branchTitle: "الأدب والقصة", branchType: "course_track" },
+    { nodeId: "ARB_C29_STORY10", title: "صح النوم", author: "يحيى حقي", unitTitle: "من روائع الأدب العربي", courseSequenceNumber: 29, lessonType: "story", sourceLabel: "كتاب من روائع الأدب العربي - 2027", branchId: "ARB_LITERATURE", branchTitle: "الأدب والقصة", branchType: "course_track" },
   ],
   ENG1_G2_BAC: [
     { nodeId: "ENG_U1_SEC_A_T1", title: "Social Media and Self-Image", unitTitle: "Living Well in a Complex World", unitNumber: 1, lessonNumber: "1.1", lessonType: "topic" },
@@ -974,7 +995,8 @@ export function getSIECheckpointChoiceDisplayLabel(choice: SIECheckpointChoice):
   const unit = choice.unitNumber
     ? choice.lessonType === "topic" ? `Unit ${choice.unitNumber}: ${choice.unitTitle}` : `الوحدة ${choice.unitNumber}: ${choice.unitTitle}`
     : choice.unitTitle;
-  return [lessonNumber, choice.title, `النوع: ${getSIECheckpointChoiceTypeLabel(choice)}`,
+  return [lessonNumber, choice.title, choice.author ? "المؤلف: " + choice.author : "",
+    choice.note ?? "", `النوع: ${getSIECheckpointChoiceTypeLabel(choice)}`,
     `الفرع: ${choice.branchTitle ?? choice.unitTitle}`, unit,
     choice.sourceLabel ? `المصدر: ${choice.sourceLabel}` : ""].filter(Boolean).join(" · ");
 }
@@ -1126,11 +1148,11 @@ export function getSIECheckpointBranches(subjectId: string): SIECheckpointBranch
     const order: Record<string, number> = {
       ARB_NAHW: 0,
       ARB_BALAGHA: 1,
-      ARB_READING: 2,
-      ARB_TEXTS: 3,
-      ARB_EXPRESSION: 4,
-      ARB_SPELLING: 5,
-      ARB_LITERATURE: 6,
+      ARB_TEXTS: 2,
+      ARB_EXPRESSION: 3,
+      ARB_SPELLING: 4,
+      ARB_LITERATURE: 5,
+      ARB_READING: 99,
     };
     result.sort((left, right) => (order[left.branchId] ?? 99) - (order[right.branchId] ?? 99));
   }
@@ -1246,6 +1268,18 @@ export function getSIECheckpointProgressBranches(subjectId: string): SIECheckpoi
   });
 }
 
+/**
+ * Student-facing Arabic branch list. Named reading texts stay attached to
+ * their ministry units and legacy ARB_READING progress records are retained;
+ * the standalone Reading selector is hidden as requested.
+ */
+export function getSIEStudentVisibleBranches(subjectId: string): SIECheckpointBranch[] {
+  const branches = getSIECheckpointProgressBranches(subjectId);
+  return subjectId === "ARB_G2_BAC"
+    ? branches.filter(branch => branch.branchId !== "ARB_READING")
+    : branches;
+}
+
 export type SIECurriculumUnitBranch = {
   branchId: string;
   branchTitle: string;
@@ -1294,7 +1328,11 @@ export function getSIECheckpointUnits(subjectId: string): SIECurriculumUnit[] {
       }
       let unitBranch = unit.branches.find(item => item.branchId === branch.branchId);
       if (!unitBranch) {
-        unitBranch = { branchId: branch.branchId, branchTitle: branch.branchTitle, choices: [] };
+        unitBranch = {
+          branchId: branch.branchId,
+          branchTitle: subjectId === "ARB_G2_BAC" && branch.branchId === "ARB_READING" ? "نصوص الوحدة" : branch.branchTitle,
+          choices: [],
+        };
         unit.branches.push(unitBranch);
       }
       if (!unitBranch.choices.some(item => item.nodeId === choice.nodeId)) {
