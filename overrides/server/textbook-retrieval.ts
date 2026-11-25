@@ -59,9 +59,16 @@ const pageCache = new Map<string, TextbookPage[]>();
 type CurriculumLessonProfile = {
   id: string;
   title: string;
+  nodeId?: string;
+  branchId?: string;
+  catalogMapping?: { nodeId: string; branchId: string };
   pages?: [number, number];
   pageCount?: number;
+  pageRangeConfidence?: "low" | "medium" | "high";
+  pageRangeBasis?: string;
+  pageRangeEstimated?: boolean;
   size?: "small" | "medium" | "large" | "unknown";
+  sizeConfidence?: "low" | "medium" | "high";
   difficulty?: "easy" | "medium" | "hard" | "unknown";
   difficultyConfidence?: "low" | "medium" | "high";
   basis?: string;
@@ -81,6 +88,7 @@ type CurriculumUnitProfile = {
   basis?: string;
   strategy?: string;
   section?: string;
+  skillPageReferences?: Record<string, unknown>;
   lessons?: Array<CurriculumLessonProfile | string>;
 };
 
@@ -90,7 +98,34 @@ type CurriculumBranchPriorityGuidance = {
   rationale?: string;
 };
 
+type CurriculumDependencyEdge = {
+  subjectId: string;
+  fromNodeId: string;
+  toNodeId: string;
+  relationType: "prerequisite" | "curriculum_sequence" | "historical_context" | "same_unit_context";
+  strength: "strong" | "medium" | "soft";
+  confidence: "high" | "medium" | "low";
+  hardBlock: false;
+  reason: string;
+};
+
 type CurriculumIntelligence = {
+  sourceEvidence?: {
+    sourcePolicy?: string;
+    books?: Array<{
+      subjectId: string;
+      fileName: string;
+      pdfPages: number;
+      method: string;
+      pageMapConfidence: string;
+      limitations?: string[];
+    }>;
+  };
+  dependencyGraph?: {
+    version: number;
+    semantics?: string;
+    edges: CurriculumDependencyEdge[];
+  };
   planningPolicy?: {
     scope?: string;
     platformRole?: string;
@@ -116,6 +151,7 @@ type CurriculumIntelligence = {
     units: CurriculumUnitProfile[];
     limitation?: string;
     learningIntent?: string[];
+    branchContext?: Record<string, unknown>;
   }>;
 };
 
@@ -149,6 +185,16 @@ function getCurriculumIntelligenceNotes(subjectIds: string[]): string[] {
     const catalogue = loadCurriculumCatalog();
     if (!catalogue) return ["بيانات المنهج التفصيلية غير متاحة الآن؛ لا تخترع أسماء دروس أو صفحات أو أحكام صعوبة."];
     const policy = catalogue.planningPolicy;
+    const sourceLines = (catalogue.sourceEvidence?.books ?? [])
+      .filter(book => subjectIds.includes(book.subjectId))
+      .map(book => {
+        const method = book.method === "visual_page_inspection_scanned_images"
+          ? "فحص بصري لصفحات مصوّرة"
+          : "استخراج نصي مع مراجعة بصرية";
+        return "مصدر كتاب رسمي: " + book.fileName + "؛ " + book.pdfPages + " صفحة PDF؛ طريقة المعالجة: " + method
+          + "؛ ثقة خريطة الصفحات: " + book.pageMapConfidence
+          + (book.limitations?.length ? "؛ القيود: " + book.limitations.join(" | ") : "");
+      });
     const policyLines = policy ? [
       "سياسة استخدام المعرفة المنهجية داخل StudyFlow:",
       policy.scope,
@@ -179,22 +225,34 @@ function getCurriculumIntelligenceNotes(subjectIds: string[]): string[] {
       if (!subject) return [];
       const lines = [`المنهج المشتق — ${subject.title}:`];
       if (subject.learningIntent?.length) {
-        lines.push("الأهداف التربوية المعلنة في مقدمة/بنية الكتاب — للفهم السياقي فقط، وليست اختبارات ينشئها النظام:");
+        lines.push("أهداف الكتاب لفهم طبيعة المقرر فقط؛ المعلم يتولى الشرح والتدريب والتقييم، ولا يحولها StudyFlow إلى أسئلة أو واجبات مهارية:");
         for (const intent of subject.learningIntent) lines.push("- " + intent);
+      }
+      if (subject.branchContext) {
+        const context = subject.branchContext as Record<string, unknown>;
+        lines.push("خريطة الفروع المعتمدة: " + JSON.stringify(context) + "؛ لا تغيّر أسماء الفروع أو ترتيبها ولا تنشئ فروعًا جديدة.");
       }
       for (const unit of subject.units) {
         const unitRange = unit.pages ? `؛ صفحات مطبوعة ${unit.pages[0]}–${unit.pages[1]} (${unit.pageCount ?? unit.pages[1] - unit.pages[0] + 1} صفحة، ${unit.size ?? "حجم غير محدد"})` : "";
         lines.push(`الوحدة: ${unit.title}${unitRange}`);
+        if (unit.skillPageReferences) {
+          lines.push("مراجع مهارات الكتاب داخل الوحدة (للمعرفة السياقية فقط؛ لا ينشئ StudyFlow تدريبًا عليها): " + JSON.stringify(unit.skillPageReferences));
+        }
         if (unit.lessons?.length && typeof unit.lessons[0] !== "string") {
           for (const entry of unit.lessons) {
             if (typeof entry === "string") continue;
-            const range = entry.pages ? `؛ ص${entry.pages[0]}–${entry.pages[1]}، ${entry.pageCount ?? entry.pages[1] - entry.pages[0] + 1} صفحة` : "";
+            const range = entry.pages
+              ? `; ص${entry.pages[0]}–${entry.pages[1]}${entry.pageRangeEstimated ? " (نطاق مرئي تقديري)" : ""}، ${entry.pageCount ?? entry.pages[1] - entry.pages[0] + 1} صفحة`
+              : "";
             const size = entry.size && entry.size !== "unknown" ? entry.size : "غير محدد";
             const difficulty = entry.difficulty && entry.difficulty !== "unknown"
               ? `${entry.difficulty} (ثقة ${entry.difficultyConfidence ?? "low"})`
               : "غير محسوم";
-            const rationale = entry.basis ? `; سبب: ${entry.basis.slice(0, 58)}` : "";
-            lines.push(`- ${entry.title}${range}؛ الحجم ${size}؛ الصعوبة المبدئية ${difficulty}${rationale}`);
+            const mapping = entry.catalogMapping || (entry.nodeId ? { nodeId: entry.nodeId, branchId: entry.branchId } : null);
+            const mapText = mapping ? `; معرف المنهج ${mapping.nodeId}؛ الفرع ${mapping.branchId}` : "";
+            const rationale = entry.basis ? `; أساس التقدير: ${entry.basis.slice(0, 100)}` : "";
+            const strategy = entry.strategy ? `; توجيه تقسيم/متابعة: ${entry.strategy.slice(0, 180)}` : "";
+            lines.push(`- ${entry.title}${range}؛ الحجم ${size}؛ الصعوبة ${difficulty}${mapText}${rationale}${strategy}`);
           }
         } else if (unit.lessons?.length && typeof unit.lessons[0] === "string") {
           lines.push(`- الموضوعات: ${unit.lessons.join("؛ ")}؛ صفحات الوحدة وحجمها ${unitRange || "غير محددين"}؛ لا يوجد تقدير موثوق لصعوبة كل موضوع على حدة.`);
@@ -205,7 +263,15 @@ function getCurriculumIntelligenceNotes(subjectIds: string[]): string[] {
       if (subject.limitation) lines.push("حدود المصدر: " + subject.limitation);
       return lines;
     });
-    return [...policyLines, ...guidanceLines, ...subjectLines];
+    const dependencyLines = (catalogue.dependencyGraph?.edges ?? [])
+      .filter(edge => subjectIds.includes(edge.subjectId))
+      .map(edge => "علاقة منهجية " + edge.fromNodeId + " → " + edge.toNodeId
+        + "؛ النوع " + edge.relationType + "؛ القوة " + edge.strength
+        + "؛ الثقة " + edge.confidence + "؛ لا تمنع التوازي ولا تفرض حظرًا: " + edge.reason);
+    const dependencyHeader = dependencyLines.length
+      ? ["علاقات الدروس: prerequisite اعتماد مفاهيمي، curriculum_sequence ترتيب كتاب، historical_context سياق تاريخي. كلها تفضيلات ترتيب وليست أقفالًا؛ لا توقف درسًا لاحقًا إذا كان الوقت أو مسار المدرس يتطلب ذلك."]
+      : [];
+    return [...sourceLines, ...policyLines, ...guidanceLines, ...subjectLines, ...dependencyHeader, ...dependencyLines];
   } catch (error) {
     console.error("[StudyFlow curriculum] Could not load derived curriculum profile:", error instanceof Error ? error.message : "unknown error");
     return ["بيانات المنهج التفصيلية غير متاحة الآن؛ لا تخترع أسماء دروس أو صفحات أو أحكام صعوبة."];
@@ -430,6 +496,69 @@ export function rankTextbookPassages(
     }
   }
   return ranked.sort((a, b) => b.score - a.score || a.pdfPage - b.pdfPage).slice(0, Math.max(1, limit));
+}
+
+
+/**
+ * Stable topological ordering for plan steps that happen to contain linked curriculum nodes.
+ * Relationship edges are preferences only: none blocks a student's access to a later lesson.
+ */
+export function orderPlanStepsByCurriculumDependencies<
+  T extends { steps: Array<{ curriculumNodeIds?: string[] }> }
+>(plan: T): T {
+  const catalogue = loadCurriculumCatalog();
+  const edges = catalogue?.dependencyGraph?.edges ?? [];
+  if (!edges.length || plan.steps.length < 2) return plan;
+
+  const nodeToIndexes = new Map<string, number[]>();
+  plan.steps.forEach((step, index) => {
+    for (const nodeId of step.curriculumNodeIds ?? []) {
+      const indexes = nodeToIndexes.get(nodeId) ?? [];
+      indexes.push(index);
+      nodeToIndexes.set(nodeId, indexes);
+    }
+  });
+
+  const adjacency = Array.from({ length: plan.steps.length }, () => new Set<number>());
+  const indegree = Array.from({ length: plan.steps.length }, () => 0);
+  for (const edge of edges) {
+    if (edge.hardBlock !== false) continue;
+    // All current edges are ordering/context hints; same-unit context is not directional.
+    if (edge.relationType === "same_unit_context") continue;
+    const fromIndexes = nodeToIndexes.get(edge.fromNodeId) ?? [];
+    const toIndexes = nodeToIndexes.get(edge.toNodeId) ?? [];
+    for (const fromIndex of fromIndexes) {
+      for (const toIndex of toIndexes) {
+        if (fromIndex === toIndex || adjacency[fromIndex].has(toIndex)) continue;
+        adjacency[fromIndex].add(toIndex);
+        indegree[toIndex] += 1;
+      }
+    }
+  }
+
+  const orderedIndexes: number[] = [];
+  const available = new Set<number>();
+  for (let i = 0; i < indegree.length; i += 1) {
+    if (indegree[i] === 0) available.add(i);
+  }
+  while (available.size) {
+    const next = Math.min(...available);
+    available.delete(next);
+    orderedIndexes.push(next);
+    for (const target of adjacency[next]) {
+      indegree[target] -= 1;
+      if (indegree[target] === 0) available.add(target);
+    }
+  }
+
+  if (orderedIndexes.length !== plan.steps.length) {
+    console.warn("[StudyFlow curriculum] Dependency graph cycle detected; preserving model step order.");
+    return plan;
+  }
+  const steps = orderedIndexes.map(index => plan.steps[index]);
+  return orderedIndexes.every((index, position) => index === position)
+    ? plan
+    : { ...plan, steps };
 }
 
 export function retrieveTextbookEvidence(
