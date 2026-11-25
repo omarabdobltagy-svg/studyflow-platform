@@ -252,7 +252,15 @@ export default function Study() {
         });
       }
       await Promise.all([utils.studentProfile.get.invalidate(), utils.learning.get.invalidate()]);
-      toast.success("تم تسجيل إكمال " + unit.title + " في فروعها المرتبطة.");
+      const currentUnitIndex = units.findIndex(item => item.unitId === unit.unitId);
+      const nextUnit = currentUnitIndex >= 0 ? units[currentUnitIndex + 1] : undefined;
+      if (nextUnit) {
+        openUnitLessons(nextUnit);
+        toast.success("تم إكمال " + unit.title + " — انتقلنا إلى " + nextUnit.title + " مباشرةً.");
+      } else {
+        setStudyViewMode("units");
+        toast.success("تم تسجيل إكمال " + unit.title + ". انتهيت من الوحدات المفهرسة لهذه المادة.");
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "تعذّر تسجيل إكمال الوحدة.");
     }
