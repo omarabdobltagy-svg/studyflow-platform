@@ -122,8 +122,8 @@ describe("Arabic course taxonomy", () => {
     expect(new Set(teacherTopics.map(unit => unit.unitId)).size).toBe(teacherTopics.length);
     for (const unit of teacherTopics) expect(unit.branches).toHaveLength(1);
     expect(teacherTopics.find(unit => unit.title === "التعبير")?.lessonCount).toBe(7);
-    expect(teacherTopics.find(unit => unit.title === "الإملاء")?.lessonCount).toBe(3);
-    expect(teacherTopics.find(unit => unit.title === "الأدب والقصة")?.lessonCount).toBe(10);
+    expect(teacherTopics.find(unit => unit.title === "الإملاء")?.lessonCount).toBe(2);
+    expect(teacherTopics.find(unit => unit.title === "الأدب والقصة")?.lessonCount).toBe(12);
   });
 
   it("hides the standalone Reading branch while preserving legacy text IDs inside official units", () => {
@@ -143,28 +143,61 @@ describe("Arabic course taxonomy", () => {
     expect(firstUnitReading?.choices.map(choice => choice.nodeId)).toContain("ARB_U1_L1");
   });
 
-  it("includes all ten works from the independent Arabic literature book and their authors", () => {
+  it("includes the ten story works plus the book's literature-terms and general-exercise sections", () => {
     const literature = getSIECheckpointProgressBranches("ARB_G2_BAC")
       .find(branch => branch.branchId === "ARB_LITERATURE");
-    expect(literature?.choices).toHaveLength(10);
-    expect(literature?.choices.map(choice => choice.title)).toEqual([
+    const stories = literature?.choices.filter(choice => choice.lessonType === "story") ?? [];
+    const supportSections = literature?.choices.filter(choice => choice.lessonType === "topic") ?? [];
+    expect(stories).toHaveLength(10);
+    expect(stories.map(choice => choice.title)).toEqual([
       "حكايات الغريب", "عودة الروح", "كفاح طيبة", "الأرض", "شمس وليل",
       "العبرات", "وا إسلاماه", "عبقرية عمر", "رجل تحت الصفر", "صح النوم",
     ]);
-    expect(literature?.choices[2]).toMatchObject({ author: "نجيب محفوظ", lessonType: "story" });
-    expect(getSIECheckpointChoiceDisplayLabel(literature!.choices[2])).toContain("المؤلف: نجيب محفوظ");
+    expect(supportSections.map(choice => choice.title)).toEqual([
+      "مصطلحات النقد الأدبي",
+      "التدريبات العامة على الأعمال الأدبية",
+    ]);
+    expect(stories[2]).toMatchObject({ author: "نجيب محفوظ", lessonType: "story" });
+    expect(getSIECheckpointChoiceDisplayLabel(stories[2])).toContain("المؤلف: نجيب محفوظ");
   });
 
-  it("adds source-labelled expression and spelling applications without presenting them as official lesson headings", () => {
+  it("includes the textbook's expression and spelling applications with printed-page evidence", () => {
     const branches = getSIECheckpointBranches("ARB_G2_BAC");
     const expression = branches.find(branch => branch.branchId === "ARB_EXPRESSION");
     const spelling = branches.find(branch => branch.branchId === "ARB_SPELLING");
-    expect(expression?.choices.map(choice => choice.nodeId)).toContain("ARB_EXP_U1_INFO_PARAGRAPH");
-    expect(expression?.choices.find(choice => choice.nodeId === "ARB_EXP_U1_CRITICAL_PARAGRAPH")?.sourceLabel)
-      .toContain("ص36");
-    expect(spelling?.choices.map(choice => choice.nodeId)).toContain("ARB_SPELL_U1_HAMZA_PRACTICE");
-    expect(spelling?.choices.find(choice => choice.nodeId === "ARB_SPELL_U1_HAMZA_PRACTICE")?.note)
-      .toContain("ليس درسًا وزاريًا مستقلًا");
+    const expressionIds = expression?.choices.map(choice => choice.nodeId) ?? [];
+    const spellingIds = spelling?.choices.map(choice => choice.nodeId) ?? [];
+
+    for (const id of [
+      "ARB_EXP_U1_POSITION_WRITE",
+      "ARB_EXP_U1_INFO_PARAGRAPH",
+      "ARB_EXP_U1_INTERVIEW",
+      "ARB_EXP_U1_CRITICAL_PARAGRAPH",
+      "ARB_EXP_U1_OPINION_PARAGRAPH",
+      "ARB_EXP_U1_SHORT_POSITION",
+      "ARB_EXP_U1_DIALOGUE",
+      "ARB_EXP_U2_SHORT_STORY",
+      "ARB_EXP_U2_SUMMARY_REWRITE",
+      "ARB_EXP_U2_POSITION",
+      "ARB_EXP_U2_ORAL_PRESENTATION",
+      "ARB_EXP_U2_ANALYTICAL_PARAGRAPH",
+    ]) expect(expressionIds).toContain(id);
+
+    for (const id of [
+      "ARB_SPELL_U1_HAMZA_PRACTICE",
+      "ARB_SPELL_U1_TAA_MARBUTA",
+      "ARB_SPELL_U1_CORRECT_WRITING",
+      "ARB_SPELL_U1_TAA_TYPES",
+      "ARB_SPELL_U2_HAMZA_CORRECTION",
+      "ARB_SPELL_U2_ORTHOGRAPHY_REVIEW",
+    ]) expect(spellingIds).toContain(id);
+
+    expect(expression?.choices.find(choice => choice.nodeId === "ARB_EXP_U1_CRITICAL_PARAGRAPH")?.sourceLabel).toContain("ص36");
+    expect(expression?.choices.find(choice => choice.nodeId === "ARB_EXP_U2_ANALYTICAL_PARAGRAPH")?.sourceLabel).toContain("ص85");
+    expect(spelling?.choices.find(choice => choice.nodeId === "ARB_SPELL_U1_HAMZA_PRACTICE")?.unitNumber).toBe(2);
+    expect(spelling?.choices.find(choice => choice.nodeId === "ARB_SPELL_U1_TAA_MARBUTA")?.sourceLabel).toContain("ص22");
+    expect(spelling?.choices.find(choice => choice.nodeId === "ARB_SPELL_U2_ORTHOGRAPHY_REVIEW")?.sourceLabel).toContain("ص87");
+    expect(new Set([...expressionIds, ...spellingIds]).size).toBe(expressionIds.length + spellingIds.length);
   });
 
   it("uses the student's visible Arabic topic units to match existing tasks without changing progress", () => {
