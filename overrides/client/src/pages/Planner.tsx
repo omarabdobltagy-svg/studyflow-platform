@@ -483,7 +483,7 @@ export default function Planner() {
                 <Button
                   type="button"
                   className="shrink-0 rounded-xl"
-                  onClick={() => runGeneration(pace, paceLevel, dailyMinutes, daysPerWeek, usePersonalDeadline ? personalDeadline : null)}
+                  onClick={() => runGeneration(planningMode, horizonDays, dailyMinutes, daysPerWeek)}
                   disabled={generate.isPending}
                 >
                   {generate.isPending ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
