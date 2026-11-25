@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import {
   getSIECheckpointProgressBranches,
+  getSIEStudentVisibleBranches,
   getSIECheckpointProgressOptions,
   getSIECheckpointUnits,
   getSIESubject,
@@ -40,8 +41,10 @@ export default function Study() {
   const persistedCourseMode = savedCourseModes[subjectId] || currentCourseProgress.courseMode || "online";
   const [courseModeOverrides, setCourseModeOverrides] = useState<Record<string, "center" | "online">>({});
   const courseMode = courseModeOverrides[subjectId] ?? persistedCourseMode;
-  const branches = useMemo(() => getSIECheckpointProgressBranches(subjectId), [subjectId]);
+  const allBranches = useMemo(() => getSIECheckpointProgressBranches(subjectId), [subjectId]);
+  const branches = useMemo(() => getSIEStudentVisibleBranches(subjectId), [subjectId]);
   const units = useMemo(() => getSIECheckpointUnits(subjectId), [subjectId]);
+  const [branchTransition, setBranchTransition] = useState<{ from: string; to: string } | null>(null);
   const currentBranch = branches.find(branch => branch.branchId === branchId) ?? branches[0];
   const branchChoices = currentBranch?.choices ?? [];
   const currentBranchId = currentBranch?.branchId ?? "";
@@ -197,7 +200,26 @@ export default function Study() {
       setStudentFrontierDrafts(clearSavedDraft);
       setTeacherFrontierDrafts(clearTeacherDraft);
       setSchoolFrontierDrafts(clearSchoolDraft);
-      if (result.savedStudent && result.learningGap?.studentPosition === branchChoices.length && branchChoices.length > 0) {
+      if (result.savedStudent && variables.subjectId === "ARB_G2_BAC"
+        && Object.prototype.hasOwnProperty.call(variables, "studentFrontierId")) {
+        const savedBranchIndex = branches.findIndex(item => item.branchId === variables.branchId);
+        const nextBranch = savedBranchIndex >= 0 ? branches[savedBranchIndex + 1] : undefined;
+        if (nextBranch) {
+          const fromLabel = branches[savedBranchIndex]?.branchTitle ?? "الفرع الحالي";
+          setBranchTransition({ from: fromLabel, to: nextBranch.branchTitle });
+          setBranchId(nextBranch.branchId);
+          toast.success("تم حفظ موضعك — ننتقل الآن إلى فرع " + nextBranch.branchTitle + ".");
+          return;
+        }
+        const nextTarget = getNextLearningTarget(subjects, subjectId, branches, currentBranchId);
+        if (nextTarget) {
+          setSubjectId(nextTarget.subjectId);
+          setBranchId(nextTarget.branchId || "");
+          toast.success("اكتملت فروع العربي؛ انتقلنا إلى المادة التالية.");
+          return;
+        }
+        toast.success("تم حفظ آخر موضع في جميع فروع العربي.");
+      } else if (result.savedStudent && result.learningGap?.studentPosition === branchChoices.length && branchChoices.length > 0) {
         const nextTarget = getNextLearningTarget(subjects, subjectId, branches, currentBranchId);
         if (nextTarget) {
           setSubjectId(nextTarget.subjectId);
@@ -235,7 +257,7 @@ export default function Study() {
     if (saveUnitFrontier.isPending) return;
     try {
       for (const unitBranch of unit.branches) {
-        const branch = branches.find(item => item.branchId === unitBranch.branchId);
+        const branch = allBranches.find(item => item.branchId === unitBranch.branchId);
         if (!branch || !unitBranch.choices.length) continue;
         const finalNode = unitBranch.choices[unitBranch.choices.length - 1];
         const targetIndex = branch.choices.findIndex(item => item.nodeId === finalNode.nodeId);
@@ -376,6 +398,31 @@ export default function Study() {
           </div>
         </article>
       </section>
+
+      <AnimatePresence>
+        {branchTransition && subjectId === "ARB_G2_BAC" && (
+          <motion.div
+            key={branchTransition.to}
+            initial={{ opacity: 0, y: -12, scale: .97, filter: "blur(5px)" }}
+            animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+            exit={{ opacity: 0, y: -8, scale: .985, filter: "blur(4px)" }}
+            transition={{ duration: .42, ease: [.22, 1, .36, 1] }}
+            className="relative mb-4 overflow-hidden rounded-2xl border border-primary/25 bg-[#151D12] p-4 text-[#F1F0E8] shadow-[0_24px_60px_-42px_rgba(0,0,0,.8)]"
+          >
+            <div className="pointer-events-none absolute -left-12 -top-14 size-40 rounded-full bg-[#C9ED62]/12 blur-3xl" />
+            <div className="relative flex items-center gap-3">
+              <motion.span initial={{ rotate: -30, scale: .65 }} animate={{ rotate: 0, scale: 1 }} transition={{ type: "spring", stiffness: 240, damping: 16 }}
+                className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#C9ED62]/15 text-[#C9ED62]"><Check className="size-5" /></motion.span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-bold tracking-[.12em] text-[#C9ED62]">تم حفظ موضعك بنجاح</p>
+                <p className="mt-1 text-sm font-bold">الانتقال إلى الفرع التالي</p>
+                <p className="mt-1 text-xs text-[#C0C7B4]">{branchTransition.from} <span className="mx-1 text-[#C9ED62]">←</span> {branchTransition.to}</p>
+              </div>
+              <button type="button" className="rounded-lg px-2 py-1 text-xs text-[#C0C7B4] hover:bg-white/10" onClick={() => setBranchTransition(null)}>إخفاء</button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <section className="app-card mb-5 overflow-hidden rounded-[1.7rem]">
         <header className="border-b border-border/70 bg-card p-5 sm:p-6">
@@ -526,6 +573,7 @@ export default function Study() {
                       return (
                         <button key={branch.branchId} type="button" aria-pressed={active} aria-current={active ? "step" : undefined}
                           onClick={() => {
+                            setBranchTransition(null);
                             setBranchId(branch.branchId);
                           }}
                           className={"flex min-h-14 min-w-0 items-center gap-2 rounded-xl border px-3 py-2.5 text-right text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 " +
@@ -542,8 +590,8 @@ export default function Study() {
               )}
               {studyViewMode === "lessons" && <AnimatePresence mode="wait" initial={false}>
                 <motion.div key={subjectId + "::" + currentBranchId}
-                  initial={{ opacity: 0, x: 16, scale: 0.99 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={{ opacity: 0, x: -16, scale: 0.99 }}
-                  transition={{ duration: 0.3, ease: "easeInOut" }} className="space-y-4">
+                  initial={{ opacity: 0, x: 24, y: 10, scale: 0.975, filter: "blur(6px)" }} animate={{ opacity: 1, x: 0, y: 0, scale: 1, filter: "blur(0px)" }} exit={{ opacity: 0, x: -18, y: -5, scale: 0.985, filter: "blur(5px)" }}
+                  transition={{ duration: 0.42, ease: [.22, 1, .36, 1] }} className="space-y-4">
                   <div className="flex flex-wrap items-end justify-between gap-3">
                     <div>
                       <p className="text-[10px] font-bold tracking-[0.12em] text-primary">الفرع الحالي · {branchIndex + 1}</p>
