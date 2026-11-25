@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isSecondYearBaccalaureateProfile, isSecondYearBaccalaureateUpdate, parseYoutubeAtomFeed, parseYoutubeDurationMinutes, selectedTeacherIds, shouldScanTeacherSource } from "./teacher-content-monitor";
+import { classifyTeacherAnnouncement, isHighConfidenceScheduleAnnouncement, isSecondYearBaccalaureateProfile, isSecondYearBaccalaureateUpdate, parseYoutubeAtomFeed, parseYoutubeDurationMinutes, selectedTeacherIds, shouldScanTeacherSource } from "./teacher-content-monitor";
 
 describe("teacher public channel monitor", () => {
   it("parses public YouTube upload entries and decodes Arabic metadata", () => {
@@ -73,6 +73,30 @@ describe("teacher public channel monitor", () => {
       teacherSelections: { ENG1_G2_BAC: "T_AR_MOHAMED_SALAH" },
     })).toEqual([]);
   });
+  it("classifies explicit cancellation and schedule changes without requiring year keywords", () => {
+    const cancelled = classifyTeacherAnnouncement("المحاضرة اتلغت النهارده", "مفيش محاضرة اليوم", "facebook");
+    expect(cancelled).toEqual({ announcementType: "lecture_cancelled", confidence: "high" });
+    expect(isHighConfidenceScheduleAnnouncement(cancelled)).toBe(true);
+
+    const suspended = classifyTeacherAnnouncement("هنريح من المحاضرات الأسبوع ده", "", "facebook");
+    expect(suspended).toEqual({ announcementType: "class_suspended", confidence: "high" });
+    expect(isHighConfidenceScheduleAnnouncement(suspended)).toBe(true);
+
+    const changed = classifyTeacherAnnouncement("تغيير موعد المحاضرة", "المحاضرة اتنقلت ليوم الخميس", "facebook");
+    expect(changed).toEqual({ announcementType: "schedule_changed", confidence: "high" });
+    expect(isHighConfidenceScheduleAnnouncement(changed)).toBe(true);
+  });
+
+  it("does not treat a new YouTube video or an ambiguous Facebook post as a cancellation", () => {
+    const video = classifyTeacherAnnouncement("شرح الوحدة الثالثة", "محاضرة جديدة", "youtube");
+    expect(video).toEqual({ announcementType: "new_content", confidence: "medium" });
+    expect(isHighConfidenceScheduleAnnouncement(video)).toBe(false);
+
+    const ambiguous = classifyTeacherAnnouncement("مفيش جديد", "تابعونا قريبًا", "facebook");
+    expect(ambiguous).toEqual({ announcementType: "general", confidence: "low" });
+    expect(isHighConfidenceScheduleAnnouncement(ambiguous)).toBe(false);
+  });
+
   it("accepts teacher updates only when the post itself identifies second-year Baccalaureate", () => {
     expect(isSecondYearBaccalaureateUpdate({ title: "مراجعة نحو تانية بكالوريا 2027" })).toBe(true);
     expect(isSecondYearBaccalaureateUpdate({ title: "2 Bac 2027 - Unit 3 revision" })).toBe(true);
