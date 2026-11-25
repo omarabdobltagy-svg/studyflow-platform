@@ -22,14 +22,11 @@ const planSchema = z.object({
     priority: z.enum(["critical", "high", "medium", "low"]).default("medium"),
     difficulty: z.enum(["easy", "medium", "hard", "unknown"]).default("unknown"),
     lessonSize: z.enum(["small", "medium", "large", "unknown"]).default("unknown"),
-    difficultyBasis: z.enum(["student_report", "assessment_history", "curriculum_profile", "unknown"]).default("unknown"),
+    difficultyBasis: z.enum(["student_report", "curriculum_profile", "unknown"]).default("unknown"),
     difficultyConfidence: z.enum(["low", "medium", "high"]).default("low"),
     priorityScore: z.number().min(0).max(100).optional(),
     priorityReason: z.string().trim().max(500).optional(),
     priorityEvidenceConfidence: z.enum(["low", "medium", "high"]).optional(),
-    examComponentLabel: z.string().trim().max(120).optional(),
-    examComponentMarks: z.number().int().min(0).max(100).optional(),
-    examPaperMarks: z.number().int().min(1).max(100).optional(),
     resourceRecommendation: z.object({
       title: z.string().trim().min(2).max(240),
       url: z.string().trim().url().max(1_000).refine(value => value.startsWith("https://")),
@@ -505,14 +502,11 @@ function normalizePlanCandidate(value: unknown): unknown {
       priority: allowedEnum(step.priority, ["critical", "high", "medium", "low"] as const, "medium"),
       difficulty: allowedEnum(step.difficulty, ["easy", "medium", "hard", "unknown"] as const, "unknown"),
       lessonSize: allowedEnum(step.lessonSize, ["small", "medium", "large", "unknown"] as const, "unknown"),
-      difficultyBasis: allowedEnum(step.difficultyBasis, ["student_report", "assessment_history", "curriculum_profile", "unknown"] as const, "unknown"),
+      difficultyBasis: allowedEnum(step.difficultyBasis, ["student_report", "curriculum_profile", "unknown"] as const, "unknown"),
       difficultyConfidence: allowedEnum(step.difficultyConfidence, ["low", "medium", "high"] as const, "low"),
       ...(typeof step.priorityScore === "number" && Number.isFinite(step.priorityScore) ? { priorityScore: Math.max(0, Math.min(100, step.priorityScore)) } : {}),
       ...(typeof step.priorityReason === "string" ? { priorityReason: step.priorityReason.slice(0, 500) } : {}),
       ...(typeof step.priorityEvidenceConfidence === "string" && ["low", "medium", "high"].includes(step.priorityEvidenceConfidence) ? { priorityEvidenceConfidence: step.priorityEvidenceConfidence } : {}),
-      ...(typeof step.examComponentLabel === "string" ? { examComponentLabel: step.examComponentLabel.slice(0, 120) } : {}),
-      ...(Number.isInteger(step.examComponentMarks) ? { examComponentMarks: finiteInteger(step.examComponentMarks, 0, 0, 100) } : {}),
-      ...(Number.isInteger(step.examPaperMarks) ? { examPaperMarks: finiteInteger(step.examPaperMarks, 1, 1, 100) } : {}),
       ...(normalizedResource ? { resourceRecommendation: normalizedResource } : {}),
       ...(pageRange ? { printedPageRange: pageRange } : {}),
       sourcePages: Array.isArray(step.sourcePages)
@@ -745,14 +739,13 @@ export function applyVerifiedExamComponentWeights(
   const selection = (profile.selection || {}) as Record<string, any>;
   const progress = buildPlannerProgressSnapshot(profile);
   const lessonProgress = mergeSubjectLessonProgress(selection.subjectLessonProgress, selection.sq3rProgress);
-  const nodeLookup = new Map<string, { subjectId: string; branchId: string; lessonTitle: string; branchLength: number }>();
+  const nodeLookup = new Map<string, { subjectId: string; branchId: string; branchLength: number }>();
   for (const subjectId of profile.subjectIds || []) {
     for (const branch of getFirstPartBranches(subjectId)) {
       for (const choice of branch.choices) {
         nodeLookup.set(choice.nodeId, {
           subjectId,
           branchId: branch.branchId,
-          lessonTitle: choice.title,
           branchLength: branch.choices.length,
         });
       }
@@ -787,7 +780,7 @@ export function applyVerifiedExamComponentWeights(
       };
     }
 
-    const { subjectId, branchId, lessonTitle, branchLength } = curriculumLocation;
+    const { subjectId, branchId, branchLength } = curriculumLocation;
     const branchProgress = progress.branches.get(plannerBranchKey(subjectId, branchId));
 
     const signals: Array<{ key: string; value: number; weight: number; label: string }> = [];
@@ -974,10 +967,10 @@ export async function generatePersonalPlan(
   const textbookRetrieval = profile
     ? retrieveTextbookEvidence(profile.subjectIds || [], retrievalQuery, Math.max(6, (profile.subjectIds || []).length * 3))
     : { passages: [], coverageNotes: [] };
-  const textbookContext = formatTextbookEvidence(textbookRetrieval).slice(0, 7_200);
+  const textbookContext = formatTextbookEvidence(textbookRetrieval).slice(0, 10_000);
   const context = (profile
-    ? buildLearningContext(profile) + "\n\nمصادر نصية من كتب الجزء الأول المتاحة فعليًا:\n" + (textbookContext || "لم يُسترجع نص مطابق من الكتب المتاحة.")
-    : "لم يطلب المستخدم تخصيص الخطة بالملف الدراسي.").slice(0, 13_000);
+    ? buildLearningContext(profile) + "\\n\\nمعرفة الكتب الرسمية للجزء الأول وخريطة علاقات الدروس:\\n" + (textbookContext || "لم يُسترجع نص مطابق من الكتب المتاحة.")
+    : "لم يطلب المستخدم تخصيص الخطة بالملف الدراسي.").slice(0, 18_000);
   const system = [
     "أنت محرك التخطيط الدراسي داخل StudyFlow، ولست مساعد دردشة عام.",
     "جودة الخطة لا تعتمد على قوة صياغة الطالب أو طول طلبه. استخرج النية حتى لو كان الطلب قصيرًا أو عاميًا أو غير مرتب، ثم استعن تلقائيًا ببيانات الملف والمنهج والتراكم والتقدم وسجل تنفيذ المهام والصعوبة التي صرّح بها الطالب والسياق المتاح.",
