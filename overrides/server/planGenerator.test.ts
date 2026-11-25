@@ -159,6 +159,43 @@ describe("AI planner response normalization", () => {
     expect(plan).not.toHaveProperty("reviewQuestion");
   });
 
+  it("preserves actionable task details and evidence for the plan details view", () => {
+    const plan = parseGeneratedPlan(JSON.stringify({
+      title: "خطة تنفيذ واضحة",
+      summary: "خطة تعرض سبب كل خطوة ومصادرها.",
+      durationLabel: "3 أيام",
+      steps: [{
+        day: "اليوم الأول",
+        title: "تطبيقات على الهمزة",
+        detail: "اقرأ القاعدة، ثم حل تطبيقات الكتاب، وبعدها راجع مواضع الخطأ.",
+        minutes: 40,
+        category: "الإملاء",
+        priority: "high",
+        priorityReason: "هذا التطبيق مرتبط بموضوع لم يثبت إتقانه بعد.",
+        priorityEvidenceConfidence: "high",
+        difficulty: "hard",
+        lessonSize: "medium",
+        difficultyBasis: "student_report",
+        difficultyConfidence: "high",
+        printedPageRange: [70, 72],
+        sourcePages: [70, 71, 72],
+      }],
+      habits: [],
+    }));
+    expect(plan.steps[0]).toMatchObject({
+      detail: "اقرأ القاعدة، ثم حل تطبيقات الكتاب، وبعدها راجع مواضع الخطأ.",
+      minutes: 40,
+      priorityReason: "هذا التطبيق مرتبط بموضوع لم يثبت إتقانه بعد.",
+      priorityEvidenceConfidence: "high",
+      difficulty: "hard",
+      lessonSize: "medium",
+      difficultyBasis: "student_report",
+      difficultyConfidence: "high",
+      printedPageRange: [70, 72],
+      sourcePages: [70, 71, 72],
+    });
+  });
+
   it("removes model-generated self-tests while preserving teacher-led study tasks", () => {
     const parsed = parseGeneratedPlan(JSON.stringify({
       title: "خطة متابعة",
