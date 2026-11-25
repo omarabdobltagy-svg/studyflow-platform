@@ -271,7 +271,7 @@ export default function CurriculumMap() {
                   <div className="sf-map-branch-details">
                     <p>آخر نقطة لك: <b>{gap?.studentFrontierTitle || (gap?.studentPosition === 0 ? "لم تبدأ بعد" : "غير محدد")}</b></p>
                     <p>مرجع التدريس: <b>{gap?.referenceFrontierTitle || (gap?.referencePosition === 0 ? "لم يبدأ بعد" : "غير متاح")}</b><small>{gap?.referenceSource === "teacher" ? "المدرس" : gap?.referenceSource === "school" ? "الفصل" : "لا يوجد مرجع موثق"}</small></p>
-                    <p>مدة النقطة المتوقعة: <b>{branch.minutesPerLesson === null ? "غير محددة" : branch.minutesPerLesson + " دقيقة"}</b></p>
+                    <p>وقت دراسة الموضوع المتوقع: <b>{branch.minutesPerLesson === null ? "غير محدد" : branch.minutesPerLesson + " دقيقة"}</b></p>
                   </div>
                   <div className="sf-map-branch-actions">
                     <Button type="button" variant="outline" onClick={() => goToStudy(branch.branchId)} className="sf-map-update-button">تحديث تقدم الوحدة</Button>
