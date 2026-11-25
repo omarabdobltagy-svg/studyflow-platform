@@ -179,9 +179,9 @@ export async function resolveTeacherYoutubeChannelId(teacherId: string): Promise
   if (known) return known;
   const teacher = getSIETeacher(teacherId);
   const profileUrl = teacher?.profileUrl ?? "";
-  const directChannelId = profileUrl.match(/youtube\\.com\\/channel\\/(UC[\\w-]+)/i)?.[1];
+  const directChannelId = profileUrl.match(/youtube\.com\/channel\/(UC[\w-]+)/i)?.[1];
   if (directChannelId) return directChannelId;
-  const handle = profileUrl.match(/youtube\\.com\\/@([^/?]+)/i)?.[1];
+  const handle = profileUrl.match(/youtube\.com\/@([^/?]+)/i)?.[1];
   const apiKey = process.env.YOUTUBE_API_KEY?.trim();
   if (!handle || !apiKey) return null;
   const result = await fetchJson(
@@ -190,7 +190,7 @@ export async function resolveTeacherYoutubeChannelId(teacherId: string): Promise
   );
   const items = Array.isArray(result.items) ? result.items as Array<Record<string, unknown>> : [];
   const channelId = items[0]?.id;
-  return typeof channelId === "string" && /^UC[\\w-]{20,}$/.test(channelId) ? channelId : null;
+  return typeof channelId === "string" && /^UC[\w-]{20,}$/.test(channelId) ? channelId : null;
 }
 
 async function fetchJson(url: string, accessToken?: string) {
