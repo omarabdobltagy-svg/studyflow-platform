@@ -46,6 +46,7 @@ describe("second-year baccalaureate exam blueprints", () => {
     ]);
     expect(context).toContain("الفصل الأول 2026/2027 فقط");
     expect(context).toContain("لا تنقلها إلى النهائي السنوي");
-    expect(context).toContain("لا تخترع أوزانًا");
+    expect(context).toContain("لا تخترع توزيع درجات");
+    expect(context).toContain("لا توجد أوزان فرعية موثقة");
   });
 });
