@@ -245,8 +245,7 @@ describe("planner completed-curriculum guard", () => {
     const plan = {
       ...validPlan,
       steps: [
-        step("الممنوع من الصرف وعلل منعه", "ARB_U2_N1"),
-        step("تابع الممنوع من الصرف وعلل منعه", "ARB_U2_N2"),
+        step("الممنوع من الصرف وعلل منعه", "ARB_U2_N3"),
         step("العطف", "ARB_U3_N2"),
       ],
     };
@@ -254,8 +253,7 @@ describe("planner completed-curriculum guard", () => {
     const guarded = applyPlannerProgressGuard(plan as any, confirmedUnknownProfile);
 
     expect(guarded.steps.map(item => item.curriculumNodeIds)).toEqual([
-      ["ARB_U2_N1"],
-      ["ARB_U2_N2"],
+      ["ARB_U2_N3"],
       ["ARB_U3_N2"],
     ]);
   });
