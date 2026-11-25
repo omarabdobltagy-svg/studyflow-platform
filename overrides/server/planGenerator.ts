@@ -789,6 +789,65 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
   ].join("\n");
 }
 
+
+/**
+ * Curriculum coverage is enforced in code, not trusted to the model's token
+ * budget. Every eligible checkpoint appears once in the annual plan.
+ */
+export function applyPlannerCurriculumCoverageGuard(
+  plan: GeneratedPlan,
+  profile: NonNullable<Awaited<ReturnType<typeof getStudentProfile>>>,
+): GeneratedPlan {
+  const snapshot = buildPlannerProgressSnapshot(profile);
+  const seen = new Set<string>();
+  const normalizedSteps: GeneratedPlan["steps"] = [];
+
+  for (const step of plan.steps) {
+    const validIds = step.curriculumNodeIds.filter(nodeId =>
+      snapshot.eligibleNodeIds.has(nodeId) && !seen.has(nodeId)
+    );
+    for (const nodeId of validIds) seen.add(nodeId);
+    if (step.curriculumNodeIds.length > 0 && validIds.length === 0) continue;
+    normalizedSteps.push({ ...step, curriculumNodeIds: validIds });
+  }
+
+  const missingSteps: GeneratedPlan["steps"] = [];
+  for (const subjectId of profile.subjectIds || []) {
+    const subject = getSIESubject(subjectId);
+    for (const branch of getPlanningBranches(subjectId)) {
+      const branchProgress = snapshot.branches.get(plannerBranchKey(subjectId, branch.branchId));
+      for (const choice of branch.choices) {
+        if (!snapshot.eligibleNodeIds.has(choice.nodeId) || seen.has(choice.nodeId)) continue;
+        seen.add(choice.nodeId);
+        const index = branch.choices.findIndex(item => item.nodeId === choice.nodeId);
+        missingSteps.push({
+          day: "",
+          title: [subject?.nameAr ?? subjectId, branch.branchTitle, choice.title].join(" — "),
+          detail: "تابع شرح المدرس لهذا الموضوع، ثم راجع الجزء المرتبط به من الكتاب الرسمي أو ملاحظاتك. نفّذ فقط أي واجب كلّفك به المدرس بالفعل؛ لا يوجد اختبار أو تدريب مولّد من النظام.",
+          minutes: 45,
+          category: [subject?.nameAr ?? subjectId, branch.branchTitle].join(" · "),
+          curriculumNodeIds: [choice.nodeId],
+          priority: branchProgress?.nextEligiblePosition === index ? "high" : "medium",
+          difficulty: "unknown",
+          lessonSize: "unknown",
+          difficultyBasis: "unknown",
+          difficultyConfidence: "low",
+          sourcePages: [],
+        });
+      }
+    }
+  }
+
+  const steps = [...normalizedSteps, ...missingSteps];
+  if (steps.length === 0) {
+    throw new Error("لا توجد نقاط منهج غير مكتملة يمكن إضافتها إلى الخطة. راجع مواضع التقدم المسجلة قبل إنشاء خطة جديدة.");
+  }
+  const coveredNodeCount = new Set(steps.flatMap(step => step.curriculumNodeIds)).size;
+  const coverageNote = "تغطية المنهج: " + coveredNodeCount
+    + " نقطة منهجية غير مكتملة، مع منع تكرار معرف الدرس وإبقاء الدروس المكتملة خارج مهام الدراسة الجديدة.";
+  return { ...plan, summary: (plan.summary + "\n\n" + coverageNote).slice(0, 1_500), steps };
+}
+
 export function applyCurriculumPrioritySignals(
   plan: GeneratedPlan,
   profile: NonNullable<Awaited<ReturnType<typeof getStudentProfile>>>,
@@ -796,16 +855,23 @@ export function applyCurriculumPrioritySignals(
   const selection = (profile.selection || {}) as Record<string, any>;
   const progress = buildPlannerProgressSnapshot(profile);
   const lessonProgress = mergeSubjectLessonProgress(selection.subjectLessonProgress, selection.sq3rProgress);
-  const nodeLookup = new Map<string, { subjectId: string; branchId: string; branchLength: number }>();
+  const nodeLookup = new Map<string, {
+    subjectId: string;
+    branchId: string;
+    curriculumIndex: number;
+    branchLength: number;
+  }>();
+
   for (const subjectId of profile.subjectIds || []) {
     for (const branch of getPlanningBranches(subjectId)) {
-      for (const choice of branch.choices) {
+      branch.choices.forEach((choice, curriculumIndex) => {
         nodeLookup.set(choice.nodeId, {
           subjectId,
           branchId: branch.branchId,
+          curriculumIndex,
           branchLength: branch.choices.length,
         });
-      }
+      });
     }
   }
 
@@ -817,99 +883,97 @@ export function applyCurriculumPrioritySignals(
     value === "large" ? 1 : value === "medium" ? 0.65 : value === "small" ? 0.3 : 0.5;
 
   const ranked = plan.steps.map((step, index) => {
-    const curriculumLocation = step.curriculumNodeIds
+    const locations = step.curriculumNodeIds
       .map(nodeId => nodeLookup.get(nodeId))
-      .find(Boolean);
+      .filter((item): item is NonNullable<typeof item> => Boolean(item));
+    const curriculumLocation = locations[0];
 
     if (!curriculumLocation) {
       const score = prioritySignal(step.priority);
       return {
         index,
         groupKey: "__unmapped__" + index,
+        curriculumIndex: Number.MAX_SAFE_INTEGER,
         score,
         step: {
           ...step,
           priorityScore: Math.round(score * 100),
           priorityEvidenceConfidence: "low" as const,
           priorityReason: step.priorityReason
-            || "لم يُربط هذا الإجراء بمعرّف منهجي؛ حُفظ تقديره العام دون ادعاء وزن امتحاني.",
+            || "لم يُربط هذا الإجراء بنقطة منهج موثقة؛ لا يُقدّم على درس تالٍ معروف.",
         },
       };
     }
 
-    const { subjectId, branchId, branchLength } = curriculumLocation;
+    const { subjectId, branchId } = curriculumLocation;
     const branchProgress = progress.branches.get(plannerBranchKey(subjectId, branchId));
+    const sameBranchLocations = locations.filter(item =>
+      item.subjectId === subjectId && item.branchId === branchId
+    );
+    const curriculumIndex = Math.min(...sameBranchLocations.map(item => item.curriculumIndex));
+    const nextEligiblePosition = branchProgress?.nextEligiblePosition ?? null;
+    const referencePosition = branchProgress?.referencePosition ?? null;
+    const isNextLesson = nextEligiblePosition !== null && curriculumIndex === nextEligiblePosition;
+    const isInsideTeacherGap = referencePosition !== null
+      && nextEligiblePosition !== null
+      && curriculumIndex < referencePosition;
+    const distanceFromNext = nextEligiblePosition === null
+      ? null
+      : Math.max(0, curriculumIndex - nextEligiblePosition);
+    const frontierUrgency = nextEligiblePosition === null ? 0.45
+      : isNextLesson ? 1
+        : isInsideTeacherGap
+          ? Math.max(0.74, 0.94 - (distanceFromNext ?? 0) * 0.045)
+          : Math.max(0.34, 0.62 - (distanceFromNext ?? 0) * 0.012);
 
-    const signals: Array<{ key: string; value: number; weight: number; label: string }> = [];
     const branchPriorityGuidance = getCurriculumBranchPriorityGuidance(subjectId, branchId);
-    if (branchPriorityGuidance?.tier === "core") {
-      signals.push({
-        key: "curriculum_core",
-        value: 0.82,
-        weight: 0.25,
-        label: "أولوية تأسيسية معتمدة من توجيه المنتج: " + (branchPriorityGuidance.rationale || "فرع أساسي") + "؛ هذه إشارة ترتيب وليست وزن درجات.",
-      });
-    }
-    if (branchProgress?.gapCount !== null && branchProgress?.gapCount !== undefined) {
-      const value = Math.max(0, Math.min(1, branchProgress.gapCount / Math.max(1, branchLength)));
-      signals.push({
-        key: "gap",
-        value,
-        weight: 0.40,
-        label: "فجوة الفرع " + branchProgress.gapCount + " نقطة من " + branchLength,
-      });
-    }
-
+    const coreSignal = branchPriorityGuidance?.tier === "core" ? 0.82 : 0.5;
     const lessonRecord = step.curriculumNodeIds
       .map(nodeId => lessonProgress[subjectId]?.[nodeId])
       .find(Boolean) ?? {};
     const reportedDifficulty = lessonRecord.difficulty;
-    // Only student-reported difficulty can change priority. Low-confidence book-derived
-    // difficulty may help split/estimate a lesson, but must not outrank a teacher frontier.
     const difficulty = reportedDifficulty && reportedDifficulty !== "unknown"
       ? reportedDifficulty
-      : step.difficultyBasis === "student_report"
-        ? step.difficulty
-        : "unknown";
-    const difficultyValue = difficultySignal(difficulty);
-    const sizeValue = sizeSignal(step.lessonSize);
-    const effortValue = 0.6 * difficultyValue + 0.4 * sizeValue;
-    signals.push({
-      key: "effort",
-      value: effortValue,
-      weight: 0.15,
-      label: "الصعوبة " + (difficulty === "hard" ? "مرتفعة" : difficulty === "medium" ? "متوسطة" : difficulty === "easy" ? "منخفضة" : "غير محسومة")
-        + "؛ حجم المحتوى " + (step.lessonSize === "large" ? "كبير" : step.lessonSize === "medium" ? "متوسط" : step.lessonSize === "small" ? "صغير" : "غير محدد")
-        + (reportedDifficulty ? "؛ توجد إشارة مسجلة من الطالب" : "؛ لا توجد صعوبة مؤكدة من الطالب"),
-    });
+      : step.difficultyBasis === "student_report" ? step.difficulty : "unknown";
+    const effortSignal = 0.6 * difficultySignal(difficulty) + 0.4 * sizeSignal(step.lessonSize);
+    const modelUrgency = prioritySignal(step.priority);
 
-    signals.push({
-      key: "urgency",
-      value: prioritySignal(step.priority),
-      weight: 0.20,
-      label: "ترتيب المتابعة حسب موضع الطالب والمرجع التعليمي والوقت المتبقي، دون وزن امتحاني مفترض",
-    });
-
-    const totalWeight = signals.reduce((sum, signal) => sum + signal.weight, 0);
-    const score = totalWeight > 0
-      ? signals.reduce((sum, signal) => sum + signal.value * signal.weight, 0) / totalWeight
-      : prioritySignal(step.priority);
-    const priority: GeneratedPlan["steps"][number]["priority"] = score >= 0.82 ? "critical"
-      : score >= 0.65 ? "high"
-        : score >= 0.42 ? "medium" : "low";
+    // The first eligible checkpoint dominates. Teacher gap orders the near-term
+    // lessons; difficulty and model hints may only adjust, never skip branch order.
+    const score = 0.70 * frontierUrgency
+      + 0.10 * coreSignal
+      + 0.10 * effortSignal
+      + 0.10 * modelUrgency;
+    const priority: GeneratedPlan["steps"][number]["priority"] = score >= 0.86 ? "critical"
+      : score >= 0.70 ? "high"
+        : score >= 0.48 ? "medium" : "low";
     const hasCalculatedGap = branchProgress?.gapCount !== null && branchProgress?.gapCount !== undefined;
     const hasStudentDifficulty = Boolean(lessonRecord.difficulty && lessonRecord.difficulty !== "unknown");
-    const hasBranchPriorityGuidance = branchPriorityGuidance?.tier === "core";
-    const priorityEvidenceConfidence = hasCalculatedGap && (hasStudentDifficulty || hasBranchPriorityGuidance)
+    const priorityEvidenceConfidence = hasCalculatedGap && hasStudentDifficulty
       ? "high" as const
-      : hasCalculatedGap || hasStudentDifficulty || hasBranchPriorityGuidance
-        ? "medium" as const
-        : "low" as const;
-    const priorityReason = signals.map(signal => signal.label).join("؛ ").slice(0, 500);
+      : hasCalculatedGap || hasStudentDifficulty ? "medium" as const : "low" as const;
+    const frontierReason = isNextLesson
+      ? "الخطوة التالية مباشرة بعد آخر نقطة مكتملة"
+      : isInsideTeacherGap
+        ? "داخل الفجوة بين تقدم الطالب وموضع المدرس"
+        : "من بقية المنهج؛ يأتي بعد إنهاء النقاط الأقرب داخل الفرع";
+    const referenceReason = branchProgress?.referenceSource === "teacher"
+      ? "المرجع: موضع المدرس"
+      : branchProgress?.referenceSource === "school"
+        ? "المرجع: موضع الفصل"
+        : "موضع المدرس غير مسجل لهذا الفرع";
+    const priorityReason = [
+      frontierReason,
+      referenceReason,
+      "الفجوة الحالية: " + (branchProgress?.gapCount ?? "غير محسوبة"),
+      "الصعوبة المسجلة من الطالب: " + (difficulty === "unknown" ? "غير محددة" : difficulty),
+      branchPriorityGuidance?.tier === "core" ? "أولوية تأسيسية للفرع، وليست وزن درجات" : "",
+    ].filter(Boolean).join("؛ ").slice(0, 500);
 
     return {
       index,
       groupKey: plannerBranchKey(subjectId, branchId),
+      curriculumIndex,
       score,
       step: {
         ...step,
@@ -930,14 +994,17 @@ export function applyCurriculumPrioritySignals(
     group.push(item);
     groups.set(item.groupKey, group);
   }
-  const orderedGroups = [...groups.values()].sort((left, right) => {
-    const leftScore = left.reduce((sum, item) => sum + item.score, 0) / left.length;
-    const rightScore = right.reduce((sum, item) => sum + item.score, 0) / right.length;
-    return rightScore - leftScore || left[0].index - right[0].index;
-  });
+  const orderedGroups = [...groups.values()];
+  for (const group of orderedGroups) {
+    group.sort((left, right) =>
+      left.curriculumIndex - right.curriculumIndex || left.index - right.index
+    );
+  }
+  orderedGroups.sort((left, right) =>
+    right[0].score - left[0].score || left[0].index - right[0].index
+  );
 
-  // Preserve prerequisite order within each curriculum branch; interleave
-  // independent branches by their evidence-backed urgency.
+  // Keep the next lesson first inside each branch; interleave only independent branches.
   const steps: GeneratedPlan["steps"] = [];
   let round = 0;
   while (orderedGroups.some(group => round < group.length)) {
