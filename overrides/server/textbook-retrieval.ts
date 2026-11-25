@@ -38,7 +38,7 @@ const COVERAGE_ONLY: Record<string, { title: string; description: string }> = {
   },
   ENG1_G2_BAC: {
     title: "كتاب اللغة الإنجليزية الأولى - الجزء الأول",
-    description: "فهرس مرئي موثق: 5 وحدات و20 موضوعًا. نطاقات الصفحات متاحة على مستوى الوحدة فقط؛ صفحات الموضوعات وصعوبة كل موضوع غير محسومة.",
+    description: "فهرس مرئي موثق: 5 وحدات و20 موضوعًا، مع نطاقات صفحات تقديرية لكل موضوع مستخرجة من فواصل الأقسام المصوّرة. الصعوبة الفردية لكل موضوع غير محسومة.",
   },
   HIS_G2_BAC: {
     title: "كتاب التاريخ الوطني - الجزء الأول",
@@ -230,7 +230,18 @@ function getCurriculumIntelligenceNotes(subjectIds: string[]): string[] {
       }
       if (subject.branchContext) {
         const context = subject.branchContext as Record<string, unknown>;
-        lines.push("خريطة الفروع المعتمدة: " + JSON.stringify(context) + "؛ لا تغيّر أسماء الفروع أو ترتيبها ولا تنشئ فروعًا جديدة.");
+        const existingBranches = Array.isArray(context.branchIds)
+          ? context.branchIds.join("، ")
+          : [context.vocabularyBranchId, context.grammarBranchId, context.textbookBranchId, context.greBranchId, context.storyBranchId, context.branchId]
+              .filter(value => typeof value === "string").join("، ");
+        if (existingBranches) lines.push("معرفات الفروع الموجودة التي يجب الحفاظ عليها دون دمج أو إعادة تسمية: " + existingBranches + ".");
+        if (Array.isArray(context.unitLinks)) {
+          lines.push("ربط مسارات الإنجليزي حسب الوحدة دون دمج الفروع: " + context.unitLinks.map((item: any) =>
+            "U" + item.unitNumber + " (" + item.vocabularyNodeId + " / " + item.grammarNodeId + " / " + (item.textbookNodeIds?.length ?? 0) + " موضوعات كتاب)"
+          ).join(" | ") + ".");
+        }
+        if (context.requiredCoverage) lines.push("قاعدة التغطية: لا يُحذف أي درس غير مكتمل من الخطة السنوية.");
+        lines.push("هذه مجرد روابط بين المحتوى والفروع الموجودة؛ لا تغيّر أسماء الفروع أو ترتيبها ولا تنشئ فروعًا جديدة.");
       }
       for (const unit of subject.units) {
         const unitRange = unit.pages ? `؛ صفحات مطبوعة ${unit.pages[0]}–${unit.pages[1]} (${unit.pageCount ?? unit.pages[1] - unit.pages[0] + 1} صفحة، ${unit.size ?? "حجم غير محدد"})` : "";
@@ -265,11 +276,10 @@ function getCurriculumIntelligenceNotes(subjectIds: string[]): string[] {
     });
     const dependencyLines = (catalogue.dependencyGraph?.edges ?? [])
       .filter(edge => subjectIds.includes(edge.subjectId))
-      .map(edge => "علاقة منهجية " + edge.fromNodeId + " → " + edge.toNodeId
-        + "؛ النوع " + edge.relationType + "؛ القوة " + edge.strength
-        + "؛ الثقة " + edge.confidence + "؛ لا تمنع التوازي ولا تفرض حظرًا: " + edge.reason);
+      .map(edge => edge.subjectId + ": " + edge.fromNodeId + " → " + edge.toNodeId
+        + " (" + edge.relationType + "; " + edge.strength + "; " + edge.confidence + ")");
     const dependencyHeader = dependencyLines.length
-      ? ["علاقات الدروس: prerequisite اعتماد مفاهيمي، curriculum_sequence ترتيب كتاب، historical_context سياق تاريخي. كلها تفضيلات ترتيب وليست أقفالًا؛ لا توقف درسًا لاحقًا إذا كان الوقت أو مسار المدرس يتطلب ذلك."]
+      ? ["علاقات الدروس: prerequisite اعتماد مفاهيمي، curriculum_sequence ترتيب كتاب، historical_context سياق. جميعها تفضيلات ترتيب غير مانعة؛ لا تُحوّلها إلى شرط يحظر التوازي."]
       : [];
     return [...sourceLines, ...policyLines, ...guidanceLines, ...subjectLines, ...dependencyHeader, ...dependencyLines];
   } catch (error) {
