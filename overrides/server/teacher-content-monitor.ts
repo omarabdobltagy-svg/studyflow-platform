@@ -22,6 +22,8 @@ function normalizeAnnouncementText(value: string): string {
   return value.normalize("NFKC")
     .toLocaleLowerCase("ar")
     .replace(/[أإآٱ]/g, "ا")
+    .replace(/ة/g, "ه")
+    .replace(/ى/g, "ي")
     .replace(/[ً-ٰٟـ]/g, "")
     .replace(/[ـً-ٟ]/g, "")
     .replace(/[^\p{L}\p{N}\s]/gu, " ")
@@ -44,8 +46,8 @@ export function classifyTeacherAnnouncement(
     /المحاضره اتلغت/,
     /المحاضره ملغيه/,
     /مش هيكون فيه محاضره/,
-    /مفيش محاضره اليوم/,
-    /لا توجد محاضره اليوم/,
+    /مفيش محاضره( اليوم)?/,
+    /لا توجد محاضره( اليوم)?/,
     /no class today/,
     /class cancelled/,
     /class canceled/,
@@ -55,6 +57,9 @@ export function classifyTeacherAnnouncement(
   const suspended = [
     /اجازه من المحاضرات/,
     /راحه من المحاضرات/,
+    /هنريح من المحاضرات/,
+    /مفيش محاضرات( اليوم| الاسبوع ده)?/,
+    /مش هننزل محاضرات/,
     /توقف المحاضرات/,
     /وقف المحاضرات/,
     /تعليق المحاضرات/,
