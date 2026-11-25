@@ -747,6 +747,15 @@ export function applyVerifiedExamComponentWeights(
       : hasCalculatedGap || hasAssessmentEvidence
         ? "medium" as const
         : "low" as const;
+    const partialExamMarkNote = component && component.marks !== null
+      && component.assessmentShare === null && blueprint?.paperMarks !== null && blueprint?.paperMarks !== undefined
+      ? "درجة المكوّن المنشورة " + component.marks + "/" + blueprint.paperMarks
+        + "، لكنها معلومة جزئية لا تدخل في الحساب لأن إجمالي التوزيع المتاح غير متطابق؛ يلزم مراجعة جدول المواصفة الأصلي."
+      : null;
+    const priorityReason = [
+      ...signals.map(signal => signal.label),
+      ...(partialExamMarkNote ? [partialExamMarkNote] : []),
+    ].join("؛ ").slice(0, 500);
 
     return {
       index,
@@ -756,12 +765,12 @@ export function applyVerifiedExamComponentWeights(
         ...step,
         priority,
         priorityScore: Math.round(score * 100),
-        priorityReason: signals.map(signal => signal.label).join("؛ "),
+        priorityReason,
         priorityEvidenceConfidence,
-        ...(examWeightKnown && component && blueprint ? {
+        ...(component && component.marks !== null && blueprint?.paperMarks !== null && blueprint?.paperMarks !== undefined ? {
           examComponentLabel: component.label,
-          examComponentMarks: component.marks ?? undefined,
-          examPaperMarks: blueprint.paperMarks ?? undefined,
+          examComponentMarks: component.marks,
+          examPaperMarks: blueprint.paperMarks,
         } : {}),
       },
     };
