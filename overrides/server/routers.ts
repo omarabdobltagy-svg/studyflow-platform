@@ -46,6 +46,7 @@ import {
   finishStudySession,
   getActiveStudySession,
   listAiPlans,
+  deleteAiPlan,
   listBooks,
   listCalendarEvents,
   listGoals,
@@ -71,7 +72,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { generatePersonalPlan } from "./planGenerator";
-import { parseYoutubeAtomFeed, scanSelectedTeacherSources } from "./teacher-content-monitor";
+import { parseYoutubeAtomFeed, scanSelectedTeacherSources, selectedTeacherIds } from "./teacher-content-monitor";
 import { isDailyPlanStale } from "./planLifecycle";
 import { createDailyPlanSourceFingerprint } from "./dailyPlanFingerprint";
 import { storageDelete, storagePut } from "./storage";
@@ -94,8 +95,8 @@ type DailyPlanResult = {
   taskCount: number;
 };
 
-// V5 makes the year-end baccalaureate policy and May 2027 readiness date part of daily-plan identity.
-const DAILY_PLANNER_POLICY_VERSION = "annual-exam-may-2027-v1";
+// V6 scopes teacher signals to second-year Baccalaureate and retires stale AI-plan tasks.
+const DAILY_PLANNER_POLICY_VERSION = "annual-exam-may-2027-teacher-scope-v2";
 const DAILY_PLAN_PREFIX = "SIE_DAILY_PLAN_V4:";
 const dailyPlanLocks = new Map<number, Promise<DailyPlanResult>>();
 const dailyPlanDirtyUsers = new Set<number>();
@@ -160,15 +161,22 @@ async function scanTeacherSourcesForStudent(userId: number): Promise<boolean> {
       const latestProfile = await getStudentProfile(userId);
       if (!latestProfile) return false;
       const latestSelection = (latestProfile.selection ?? {}) as Record<string, any>;
-      const previousUpdates = Array.isArray(latestSelection.teacherPublicUpdates)
+      const allowedTeacherIds = new Set(selectedTeacherIds(latestProfile));
+      const rawPreviousUpdates = Array.isArray(latestSelection.teacherPublicUpdates)
         ? latestSelection.teacherPublicUpdates as Array<Record<string, any>>
         : [];
+      const previousUpdates = rawPreviousUpdates.filter(update =>
+        typeof update.teacherId === "string" && allowedTeacherIds.has(update.teacherId)
+      );
       const knownIds = new Set(previousUpdates.map(update => String(update.externalId ?? "")).filter(Boolean));
-      const newUpdates = result.updates.filter(update => !knownIds.has(update.externalId));
+      const newUpdates = result.updates.filter(update =>
+        allowedTeacherIds.has(update.teacherId) && !knownIds.has(update.externalId)
+      );
       const previousScanState = (latestSelection.teacherPublicScanState ?? {}) as Record<string, string>;
       const nextScanState = { ...previousScanState, ...result.scanState };
       const scanStateChanged = JSON.stringify(previousScanState) !== JSON.stringify(nextScanState);
-      if (!newUpdates.length && !scanStateChanged) return false;
+      const staleUpdatesRemoved = previousUpdates.length !== rawPreviousUpdates.length;
+      if (!newUpdates.length && !scanStateChanged && !staleUpdatesRemoved) return false;
 
       const freshCutoff = Date.now() - 30 * 24 * 60 * 60 * 1_000;
       const mergedUpdates = [...newUpdates, ...previousUpdates]
@@ -231,7 +239,7 @@ export async function ingestYoutubeWebSubFeed(teacherId: string, xml: string) {
     if (!Object.values(teacherChoices).includes(teacherId)) continue;
 
     const latestProfile = await getStudentProfile(profileTarget.userId);
-    if (!latestProfile) continue;
+    if (!latestProfile || !selectedTeacherIds(latestProfile).includes(teacherId)) continue;
     const latestSelection = (latestProfile.selection ?? {}) as Record<string, any>;
     const previousUpdates = Array.isArray(latestSelection.teacherPublicUpdates)
       ? latestSelection.teacherPublicUpdates as Array<Record<string, any>>
@@ -423,7 +431,11 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): 
         context: "هذه خطة التشغيل اليومية الافتراضية. استخدم بيانات ملف الدراسة والتراكم والتقدم ومواضع التدريس وسجل التقييمات والمهام والمواعيد والروتين المتاحة؛ لا تطلب من الطالب إعادة إدخال أي معلومة موجودة. أعد توزيع الخطوات غير المكتملة عند تغير أي مصدر، واحتفظ بما أنجزه الطالب. اجعل أول خطوة واضحة وقابلة للبدء فورًا.\n\n" + await buildDailyPlanOperationalContext(userId),
       },
     );
-    const taskSync = await syncDailyPlanGoalTree(userId, plan, { startDate, dailyMinutes });
+    const taskSync = await syncDailyPlanGoalTree(userId, plan, { startDate, dailyMinutes }, {
+      goalTitle: "خطة StudyFlow اليومية",
+      goalCategory: "خطة يومية",
+      supersedeCategories: ["خطة يومية", "خطة ذكية"],
+    });
     const latestGeneratedPlan = await getLatestAiPlanByPromptPrefix(userId, DAILY_PLAN_PREFIX);
     const refreshedFingerprint = await getDailyPlanSourceFingerprint(userId, dailyMinutes, startDate);
     if (latestGeneratedPlan) {
@@ -2471,6 +2483,13 @@ export const appRouter = router({
 
   plans: router({
     list: protectedProcedure.query(({ ctx }) => listAiPlans(ctx.user.id)),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        await deleteAiPlan(ctx.user.id, input.id);
+        await logStudentActivity(ctx.user.id, "plan.deleted", "ai_plan", input.id, "حُذفت خطة محفوظة من السجل");
+        return { success: true };
+      }),
     currentDaily: protectedProcedure.query(async ({ ctx }) => {
       const snapshot = await getCurrentDailyPlanForStudent(ctx.user.id);
       queueTeacherSourceScan(ctx.user.id);
@@ -2545,7 +2564,11 @@ export const appRouter = router({
           ctx.user.id,
           result,
           { startDate, dailyMinutes: input.dailyMinutes },
-          { goalTitle: `خطة: ${result.title}`, goalCategory: "خطة ذكية" },
+          {
+            goalTitle: "خطة StudyFlow الذكية الحالية",
+            goalCategory: "خطة ذكية",
+            supersedeCategories: ["خطة ذكية", "خطة يومية"],
+          },
         );
         const taskSync = {
           parentGoalId: synced.parentGoalId,
