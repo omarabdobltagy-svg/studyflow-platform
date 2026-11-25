@@ -1,3 +1,5 @@
+import { getSIETeacher } from "@shared/sie-catalog";
+
 export type TeacherPublicUpdate = {
   externalId: string;
   teacherId: string;
@@ -134,13 +136,21 @@ export async function scanSelectedTeacherSources(
   const tasks: Promise<{ key: string; updates: TeacherPublicUpdate[] } | null>[] = [];
 
   for (const teacherId of selectedIds) {
-    const teacherName = teacherId === "T_AR_MOHAMED_SALAH" ? "محمد صلاح"
-      : teacherId === "T_EN_MAHMOUD_RADWAN" ? "محمود رضوان - إنجلشاوي"
-        : teacherId;
-    const channelId = YOUTUBE_CHANNEL_IDS[teacherId];
+    const teacher = getSIETeacher(teacherId);
+    const teacherName = teacher?.nameAr ?? teacherId;
+    const teacherYoutubeUrl = teacher?.profileUrl ?? "";
+    const directChannelId = YOUTUBE_CHANNEL_IDS[teacherId] ?? teacherYoutubeUrl.match(/youtube\\.com\\/channel\\/(UC[\\w-]+)/i)?.[1];
     const youtubeKey = teacherId + ":youtube";
-    if (channelId && shouldScanTeacherSource(previousState[youtubeKey], now.getTime())) {
+    if (shouldScanTeacherSource(previousState[youtubeKey], now.getTime())) {
       tasks.push((async () => {
+        let channelId = directChannelId;
+        const handle = teacherYoutubeUrl.match(/youtube\\.com\\/@([^/?]+)/i)?.[1];
+        const apiKey = process.env.YOUTUBE_API_KEY;
+        if (!channelId && handle && apiKey) {
+          const channelResponse = await fetchJson("https://www.googleapis.com/youtube/v3/channels?part=id&forHandle=" + encodeURIComponent("@" + handle) + "&key=" + encodeURIComponent(apiKey));
+          channelId = typeof (channelResponse.data?.[0] as any)?.id === "string" ? String((channelResponse.data?.[0] as any).id) : undefined;
+        }
+        if (!channelId) return null;
         const xml = await fetchText("https://www.youtube.com/feeds/videos.xml?channel_id=" + encodeURIComponent(channelId));
         return { key: youtubeKey, updates: parseYoutubeAtomFeed(xml, { teacherId, teacherName }, now) };
       })().catch(() => null));
