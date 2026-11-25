@@ -1002,6 +1002,8 @@ export function getSIECheckpointChoiceTypeLabel(choice: SIECheckpointChoice): st
 function getSIECheckpointSequenceLabel(choice: SIECheckpointChoice): string {
   const sequence = choice.lessonNumber?.trim();
   if (!sequence) return "";
+  if (choice.branchId === "ENG_VOCABULARY") return `Lesson ${sequence} · Vocabulary`;
+  if (choice.branchId === "ENG_GRAMMAR") return `Lesson ${sequence} · Grammar`;
   if (/^\d+(?:\.\d+)?$/.test(sequence)) {
     if (choice.lessonType === "topic") return `Lesson ${sequence}`;
     if (choice.lessonType === "grammar") return `قاعدة نحوية ${sequence}`;
