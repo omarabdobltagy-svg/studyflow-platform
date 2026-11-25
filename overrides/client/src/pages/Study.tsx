@@ -521,7 +521,7 @@ export default function Study() {
           <h2 className="mt-1 text-xl font-bold">التراكم الدراسي</h2>
           <p className="mt-1 text-sm leading-6 text-muted-foreground">قراءة مستقلة للفجوة داخل الفرع الحالي. يظهر المرجع المحفوظ في ملف حسابك تلقائيًا دون الحاجة لاختياره هنا.</p>
         </header>
-        <div className="grid gap-3 p-5 sm:grid-cols-3 sm:p-6">
+        <div className="grid gap-3 p-5 sm:grid-cols-2 lg:grid-cols-4 sm:p-6">
           <div className="rounded-xl border border-border/70 bg-background p-4">
             <p className="text-xs text-muted-foreground">موضعك أنت</p>
             <p className="mt-2 font-semibold">{currentGap.studentFrontierTitle || (lastCompletedLessonId === "__NOT_STARTED__" ? "لم تبدأ الفرع" : "غير محدد")}</p>
@@ -537,7 +537,12 @@ export default function Study() {
               {currentGap.status !== "calculated" ? "غير محسوبة" : currentGap.gapCount! > 0 ? currentGap.gapCount + " " + currentBranchPointLabel : currentGap.aheadCount! > 0 ? "متقدم بـ " + currentGap.aheadCount + " " + currentBranchPointLabel : "لا يوجد تراكم"}
             </p>
           </div>
-          <p className="text-xs leading-6 text-muted-foreground sm:col-span-3">
+          <div className="rounded-xl border border-primary/20 bg-primary/[0.045] p-4">
+            <p className="text-xs text-muted-foreground">التالي بعد آخر موضوع مكتمل</p>
+            <p className="mt-2 font-bold text-foreground">{nextStudentLesson?.title || (isStudentDoneWithBranch ? "اكتملت موضوعات هذا الفرع" : "حدد آخر موضوع أنهيته")}</p>
+            <p className="mt-1 text-[11px] leading-5 text-muted-foreground">اختيارك لموضوع مكتمل يعني أن نقاطه الداخلية محسوبة بالكامل، وتبدأ المذاكرة من هذا الموضوع التالي.</p>
+          </div>
+          <p className="text-xs leading-6 text-muted-foreground sm:col-span-2 lg:col-span-4">
             {currentGap.status === "student_position_missing" ? "حدد موضعك أنت أولًا." : currentGap.status === "reference_missing" ? "لا يوجد مرجع محفوظ للمقارنة حتى الآن؛ يمكنك متابعة تقدمك دون إعداد إضافي هنا." : "الحساب يستخدم عدد نقاط الفهرس داخل هذا الفرع فقط؛ لا يعمم الرقم على بقية فروع المادة."}
           </p>
         </div>
