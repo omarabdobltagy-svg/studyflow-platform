@@ -1307,7 +1307,10 @@ export function matchSIECheckpointTask(
           branchTitle: branch.branchTitle,
           nodeId: choice.nodeId,
           title: choice.title,
-          confidence: score >= 0.9 ? "exact" : "strong",
+          confidence: taskNormalized === titleNormalized
+            || taskNormalized.includes(titleNormalized)
+            || titleNormalized.includes(taskNormalized)
+            ? "exact" : "strong",
           score,
         });
       }
