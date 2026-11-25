@@ -594,6 +594,7 @@ export type ApprovedPlanStep = {
   minutes: number;
   category: string;
   priority?: "critical" | "high" | "medium" | "low";
+  resourceRecommendation?: { title: string; url: string; teacherName?: string; reason: string };
 };
 
 export function normalizeApprovedPlanSteps(steps: ApprovedPlanStep[]) {
