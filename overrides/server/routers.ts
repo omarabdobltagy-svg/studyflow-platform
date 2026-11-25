@@ -374,6 +374,24 @@ async function buildDailyPlanOperationalContext(userId: number) {
     .filter(task => task.status === "done")
     .slice(0, 10)
     .map(mapTask);
+  const rawTeacherUpdates = Array.isArray((profile?.selection as Record<string, any> | undefined)?.teacherPublicUpdates)
+    ? (profile?.selection as Record<string, any>).teacherPublicUpdates as Array<Record<string, any>>
+    : [];
+  const teacherScheduleUpdates = rawTeacherUpdates
+    .filter(update => typeof update.teacherId === "string" && selectedTeacherIds(profile!).includes(update.teacherId))
+    .filter(update => isHighConfidenceScheduleAnnouncement(update))
+    .sort((left, right) => Date.parse(String(right.publishedAt)) - Date.parse(String(left.publishedAt)))
+    .slice(0, 8)
+    .map(update => [
+      update.teacherName,
+      "النوع: " + update.announcementType,
+      "الثقة: مرتفعة",
+      update.title,
+      update.description,
+      update.affectedDate ? "التاريخ المتأثر: " + update.affectedDate : "",
+      update.url,
+    ].filter(Boolean).join(" — "));
+
   const upcomingEvents = calendar
     .filter(event => {
       const start = event.startAt instanceof Date ? event.startAt : new Date(String(event.startAt));
@@ -403,6 +421,8 @@ async function buildDailyPlanOperationalContext(userId: number) {
     openTasks.length ? openTasks.join("\n") : "لا توجد مهام مفتوحة محفوظة.",
     "مهام منتهية حديثًا (لا تعتبرها وحدها دليلًا على إكمال الدرس في سجل تقدم المنهج):",
     completedRecentTasks.length ? completedRecentTasks.join("\n") : "لا توجد مهام منتهية مسجلة.",
+    "إعلانات عامة موثوقة بتغيير أو إلغاء محاضرات (مصدرها صفحة المدرس المختار؛ التحديثات الغامضة لا تُستخدم لتغيير الجدول):",
+    teacherScheduleUpdates.length ? teacherScheduleUpdates.join("\\n") : "لا توجد إعلانات عالية الثقة عن إلغاء أو تغيير حصص ضمن آخر تحديثات المدرسين.",
     "الأحداث والمواعيد خلال 14 يومًا:",
     upcomingEvents.length ? upcomingEvents.join("\n") : "لا توجد أحداث قادمة محفوظة.",
     "الأهداف النشطة:",
