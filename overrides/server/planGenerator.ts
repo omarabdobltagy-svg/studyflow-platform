@@ -105,7 +105,7 @@ const planSchema = z.object({
     }).optional(),
     printedPageRange: z.tuple([z.number().int().positive().max(5_000), z.number().int().positive().max(5_000)]).nullish().transform(range => range ?? undefined),
     sourcePages: z.array(z.number().int().positive().max(5_000)).max(20).default([]),
-  })).min(1).max(30),
+  })).min(1).max(240),
   habits: z.array(z.object({ title: z.string().trim().min(2).max(160), cue: z.string().trim().min(2).max(240) })).max(5).default([]),
 });
 
@@ -1164,7 +1164,7 @@ export async function generatePersonalPlan(
     "أدرج printedPageRange فقط عندما يكون نطاق الصفحة المطبوعة موثقًا في ملف المنهج؛ هذه أرقام الصفحات المطبوعة في الكتاب وليست أرقام صفحات PDF. لا تخترع نطاقات صفحات للإنجليزي أو الإيطالي إذا كانت متاحة على مستوى الوحدة فقط.",
     "قسّم عبء المتابعة بحسب حجم الدرس: مشاهدة المحاضرة على أجزاء، أو قراءة الصفحات التي عيّنها المدرس، أو مراجعة ملاحظات الطالب. لا تحوّل مهارات الدرس إلى أنشطة اختبار أو قياس إتقان من إنشاء النظام.",
     "يمكن إدراج الحل أو التدريب فقط عندما يكون واجبًا محددًا من المدرس أو مهمة ذكر الطالب أنه مكلف بها. لا تضف أسئلة أو أوراق عمل أو اختبارات تدريبية من عندك.",
-    "أخرج خطة عملية مفصلة من 6 إلى 20 خطوة عادةً، ويمكن أن تصل إلى 30 خطوة عندما يتطلب التراكم ذلك. كل خطوة قصيرة وواضحة وقابلة للتنفيذ؛ لا تكتب فقرات طويلة.",
+    "أخرج خطوات مركزة وواضحة مرتبطة بمعرفات المنهج. لا تختصر المنهج في عدد محدود من الخطوات: سيكمل النظام آليًا كل نقطة غير مكتملة لم تذكرها، لذلك لا تكرر الدرس ولا تجمع موضوعات غير مترابطة في خطوة واحدة.",
     "نافذة الامتحانات التقريبية التي أكدها المستخدم من 12 يونيو 2027 إلى 22 يونيو 2027. ليست هذه مواصفة وزارة نهائية ولا يومًا واحدًا ثابتًا. استهدف إتمام التغطية الأساسية قبل 11 يونيو 2027 لتوفير هامش داخل النافذة، واذكر أن النافذة تقريبية.",
     "إيقاع الخطة الذي اختاره الطالب: " + (constraints.pace === "intensive" ? "مكثفة؛ زد كثافة الجلسات ضمن وقت الطالب اليومي مع الحفاظ على فواصل المراجعة والراحة." : constraints.pace === "relaxed" ? "مريحة؛ وزع الحمل على فترة أطول وجلسات أخف مع عدم إسقاط المتطلبات الأساسية." : "متوازنة؛ تقدم ثابت وحمل يومي متوسط مع مساحة للمراجعة والتعويض.") + ".",
     constraints.deadline ? "الموعد الشخصي الإضافي: " + constraints.deadline + ". إذا كان أسبق من 11 يونيو فاجعله هدف الإنجاز الداخلي؛ لا تعتبره موعد الامتحان الرسمي." : "لا يوجد موعد شخصي إضافي؛ استهدف إتمام المحتوى الأساسي قبل 11 يونيو 2027 تحسبًا لنافذة الامتحانات التقريبية من 12 إلى 22 يونيو 2027.",
@@ -1306,6 +1306,7 @@ export async function generatePersonalPlan(
   plan = applyTeacherLedPlanningGuard(plan);
   if (profile) {
     plan = applyPlannerProgressGuard(plan, profile);
+    plan = applyPlannerCurriculumCoverageGuard(plan, profile);
   }
   if (profile) {
     plan = applyCurriculumPrioritySignals(plan, profile);
@@ -1338,6 +1339,12 @@ export async function generatePersonalPlan(
       usedMinutes += step.minutes;
       return { ...step, day: "اليوم " + scheduleDay };
     }),
+  };
+
+  const totalPlannedMinutes = plan.steps.reduce((sum, step) => sum + step.minutes, 0);
+  plan = {
+    ...plan,
+    durationLabel: scheduleDay + " أيام دراسة تقريبًا · " + totalPlannedMinutes + " دقيقة إجمالًا",
   };
 
   const examDeadline = SECOND_YEAR_BAC_EXAM_WINDOW_2026_2027.planningReadyBy;
