@@ -407,6 +407,7 @@ export default function Planner() {
                       <input
                         type="date"
                         min={todayCairo}
+                        max={EXAM_DATE}
                         value={personalDeadline}
                         onChange={event => setPersonalDeadline(event.target.value)}
                         className="mt-2 h-11 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
