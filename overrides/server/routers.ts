@@ -447,6 +447,16 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): 
     }
 
     const startDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
+    const currentTasks = await listTasks(userId);
+    const existingCurriculumTasks = currentTasks.flatMap(task => {
+      const match = matchSIECheckpointTask(profile.subjectIds, [task.title, task.notes || ""].join(" "));
+      return match ? [{
+        ...match,
+        taskId: task.id,
+        taskTitle: task.title,
+        status: task.status,
+      }] : [];
+    });
     const sourceFingerprint = await getDailyPlanSourceFingerprint(userId, dailyMinutes, startDate);
     const expectedPromptPrefix = DAILY_PLAN_PREFIX + sourceFingerprint + ":";
     const latestDailyPlan = await getLatestAiPlanByPromptPrefix(userId, DAILY_PLAN_PREFIX);
@@ -481,9 +491,13 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): 
       true,
       {
         scope: "daily",
+        planningMode: "smart",
+        horizonDays: 7,
         dailyMinutes,
+        daysPerWeek: 6,
         startDate,
-        context: "هذه خطة التشغيل اليومية الافتراضية. استخدم بيانات ملف الدراسة والتراكم والتقدم ومواضع التدريس وسجل التقييمات والمهام والمواعيد والروتين المتاحة؛ لا تطلب من الطالب إعادة إدخال أي معلومة موجودة. أعد توزيع الخطوات غير المكتملة عند تغير أي مصدر، واحتفظ بما أنجزه الطالب. اجعل أول خطوة واضحة وقابلة للبدء فورًا.\n\n" + await buildDailyPlanOperationalContext(userId),
+        existingCurriculumTasks,
+        context: "هذه خطة المذاكرة الذكية الافتراضية للفترة القادمة. وازن بين المهام المتراكمة المفتوحة وبين التحضير للموضوع التالي قبل حصة المدرس. اقرأ مواعيد الحصص ومهام الطالب ومواضع التقدم. لا تطلب من الطالب إعادة إدخال معلومة موجودة. لا تغيّر موضع المنهج بسبب وجود مهمة. أعد ترتيب الخطة عند تغير المصادر، ولا تكرر مهمة موجودة لنفس الموضوع. اجعل أول خطوة واضحة وقابلة للبدء فورًا.\n\n" + await buildDailyPlanOperationalContext(userId),
       },
     );
     const taskSync = await syncDailyPlanGoalTree(userId, plan, { startDate, dailyMinutes }, {
@@ -564,13 +578,28 @@ async function getCurrentDailyPlanForStudent(userId: number) {
     && latestPlanDay === startDate
     && !!generatedAt
     && !isDailyPlanStale(generatedAt);
+  if (isCurrent && plan) {
+    return {
+      plan,
+      generatedAt,
+      needsRefresh: false,
+      sourceFingerprint,
+      dailyMinutes,
+      taskCount: plan.steps.length,
+    };
+  }
+
+  // Generate or reconcile the study plan automatically when the workspace opens
+  // or when its tracked sources change. Per-user locks prevent duplicate generation.
+  const refreshed = await ensureDailyPlanForStudent(userId, dailyMinutes);
+  const latestFingerprint = await getDailyPlanSourceFingerprint(userId, dailyMinutes, startDate);
   return {
-    plan,
-    generatedAt,
-    needsRefresh: !isCurrent,
-    sourceFingerprint,
+    plan: refreshed.plan,
+    generatedAt: refreshed.generatedAt,
+    needsRefresh: false,
+    sourceFingerprint: latestFingerprint,
     dailyMinutes,
-    taskCount: plan?.steps.length ?? 0,
+    taskCount: refreshed.plan.steps.length,
   };
 }
 
