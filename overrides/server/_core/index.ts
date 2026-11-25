@@ -4,7 +4,14 @@ import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerStorageProxy } from "./storageProxy";
-import { appRouter } from "../routers";
+import { appRouter, ingestYoutubeWebSubFeed } from "../routers";
+import { listStudentTeacherMonitoringProfiles } from "../db";
+import {
+  resolveYoutubeWebhookTeacher,
+  subscribeSelectedYoutubeTeachers,
+  verifyYoutubeWebhookRequest,
+  verifyYoutubeWebhookSignature,
+} from "../youtube-websub";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { sdk } from "./sdk";
@@ -37,6 +44,39 @@ async function startServer() {
   app.use(express.json({ limit: "12mb" }));
   app.use(express.urlencoded({ limit: "12mb", extended: true }));
   registerStorageProxy(app);
+
+  // YouTube WebSub verification and delivery endpoint. Only public channel feed
+  // events are accepted; the signature is validated before ingestion.
+  app.get("/webhooks/youtube", (req, res) => {
+    const challenge = verifyYoutubeWebhookRequest(req.query as Record<string, unknown>);
+    if (!challenge) return res.status(404).type("text/plain").send("not found");
+    return res.status(200).type("text/plain").send(challenge);
+  });
+
+  app.post(
+    "/webhooks/youtube",
+    express.text({ type: ["application/atom+xml", "application/xml", "text/xml"], limit: "1mb" }),
+    async (req, res) => {
+      const channelId = typeof req.query.channel_id === "string" ? req.query.channel_id : "";
+      const teacherId = typeof req.query.teacher_id === "string" ? req.query.teacher_id : "";
+      const subscription = resolveYoutubeWebhookTeacher(channelId, teacherId);
+      if (!subscription) return res.status(404).end();
+      const body = typeof req.body === "string" ? req.body : "";
+      if (!body || !verifyYoutubeWebhookSignature(body, req.header("x-hub-signature"), subscription.secret)) {
+        return res.status(401).end();
+      }
+      try {
+        const result = await ingestYoutubeWebSubFeed(teacherId, body);
+        return res.status(202).json({ received: result.received });
+      } catch (error) {
+        console.error("[StudyFlow WebSub] YouTube feed ingestion failed", {
+          teacherId,
+          errorName: error instanceof Error ? error.name : "UnknownError",
+        });
+        return res.status(500).end();
+      }
+    },
+  );
   app.post("/api/scheduled/daily-reminder", async (req, res) => {
     try {
       const user = await sdk.authenticateRequest(req);
@@ -71,6 +111,29 @@ async function startServer() {
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
   });
+
+  const syncYoutubeSubscriptions = async () => {
+    const publicUrl = process.env.STUDYFLOW_PUBLIC_URL?.trim()
+      || (process.env.RAILWAY_PUBLIC_DOMAIN ? "https://" + process.env.RAILWAY_PUBLIC_DOMAIN.trim() : "");
+    const verifyToken = process.env.STUDYFLOW_YOUTUBE_WEBHOOK_VERIFY_TOKEN?.trim() ?? "";
+    const secret = process.env.STUDYFLOW_YOUTUBE_WEBHOOK_SECRET?.trim() ?? "";
+    if (!publicUrl || !verifyToken || secret.length < 24) {
+      console.info("[StudyFlow WebSub] YouTube push is not configured; the periodic feed scan remains the fallback.");
+      return;
+    }
+    try {
+      const profiles = await listStudentTeacherMonitoringProfiles();
+      const result = await subscribeSelectedYoutubeTeachers(profiles, { publicUrl, verifyToken, secret });
+      console.info("[StudyFlow WebSub] Subscription sync finished", result);
+    } catch (error) {
+      console.warn("[StudyFlow WebSub] Subscription sync failed", {
+        errorName: error instanceof Error ? error.name : "UnknownError",
+      });
+    }
+  };
+  void syncYoutubeSubscriptions();
+  const youtubeSubscriptionTimer = setInterval(() => void syncYoutubeSubscriptions(), 6 * 60 * 60 * 1_000);
+  youtubeSubscriptionTimer.unref?.();
 }
 
 startServer().catch(console.error);
