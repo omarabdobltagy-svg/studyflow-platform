@@ -2720,6 +2720,7 @@ export const appRouter = router({
         schedule: z.object({
           startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
           dailyMinutes: z.number().int().min(20).max(600),
+          daysPerWeek: z.union([z.literal(5), z.literal(6), z.literal(7)]).default(6),
         }).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
