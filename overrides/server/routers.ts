@@ -2647,9 +2647,13 @@ export const appRouter = router({
         schedule: z.object({
           startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
           dailyMinutes: z.number().int().min(20).max(600),
-        }),
+        }).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        const schedule = input.schedule ?? {
+          startDate: new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date()),
+          dailyMinutes: 120,
+        };
         const approvedPlan = {
           ...input.plan,
           durationLabel: input.plan.durationLabel || "حتى امتحان نهاية السنة",
@@ -2665,7 +2669,7 @@ export const appRouter = router({
         const synced = await syncDailyPlanGoalTree(
           ctx.user.id,
           approvedPlan,
-          input.schedule,
+          schedule,
           {
             goalTitle: "خطة StudyFlow اليومية",
             goalCategory: "خطة يومية",
@@ -2674,8 +2678,8 @@ export const appRouter = router({
         );
         const fingerprint = await getDailyPlanSourceFingerprint(
           ctx.user.id,
-          input.schedule.dailyMinutes,
-          input.schedule.startDate,
+          schedule.dailyMinutes,
+          schedule.startDate,
         );
         await saveAiPlan(ctx.user.id, {
           prompt: DAILY_PLAN_PREFIX + fingerprint + ":",
