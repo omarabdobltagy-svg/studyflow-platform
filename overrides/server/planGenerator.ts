@@ -6,7 +6,7 @@ import { isPrimaryProviderFallbackEligible } from "./_core/llmFallback";
 import { getStudentProfile, saveAiPlan } from "./db";
 import { formatTextbookEvidence, getCurriculumBranchPriorityGuidance, orderPlanStepsByCurriculumDependencies, retrieveTextbookEvidence } from "./textbook-retrieval";
 import { buildExamBlueprintContext, SECOND_YEAR_BAC_EXAM_WINDOW_2026_2027 } from "./exam-blueprints";
-import { isSecondYearBaccalaureateProfile, isSecondYearBaccalaureateUpdate, selectedTeacherIds } from "./teacher-content-monitor";
+import { isHighConfidenceScheduleAnnouncement, isSecondYearBaccalaureateProfile, isSecondYearBaccalaureateUpdate, selectedTeacherIds } from "./teacher-content-monitor";
 
 
 export type PlanGenerationStage = "profile" | "curriculum" | "model" | "validation" | "saving" | "complete";
@@ -698,7 +698,7 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
     ? (Array.isArray(selection.teacherPublicUpdates)
       ? (selection.teacherPublicUpdates as Array<Record<string, any>>)
         .filter(update => typeof update.teacherId === "string" && allowedTeacherIds.has(update.teacherId))
-        .filter(isSecondYearBaccalaureateUpdate)
+        .filter(update => isSecondYearBaccalaureateUpdate(update) || isHighConfidenceScheduleAnnouncement(update))
         .filter(update => typeof update.url === "string" && /^https:\/\//i.test(update.url))
       : [])
     : [];
@@ -711,7 +711,15 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
     const teacherId = choices[subjectId];
     const teacher = teacherId ? getSIETeacher(teacherId) : undefined;
     const publicUpdates = teacherPublicUpdates.filter(update => update.teacherId === teacherId).slice(0, 6)
-      .map(update => [update.publishedAt, update.title, update.durationMinutes ? "المدة الموثقة: " + update.durationMinutes + " دقيقة" : "", update.description, update.url].filter(Boolean).join(" | "));
+      .map(update => [
+        update.publishedAt,
+        update.announcementType ? "نوع التحديث: " + update.announcementType : "نوع التحديث: محتوى جديد",
+        update.confidence ? "الثقة: " + update.confidence : "",
+        update.durationMinutes ? "المدة الموثقة: " + update.durationMinutes + " دقيقة" : "",
+        update.title,
+        update.description,
+        update.url,
+      ].filter(Boolean).join(" | "));
     const reported = courseProgress[subjectId] || {};
     const branches = getPlanningBranches(subjectId);
     const subjectLessonRecords = lessonProgress[subjectId] || {};
