@@ -187,9 +187,13 @@ type PlannerCurriculumChoice = {
 type PlannerBranchProgress = {
   studentFrontierId: string | null;
   studentFrontierTitle: string | null;
+  studentPosition: number | null;
   referenceFrontierId: string | null;
   referenceFrontierTitle: string | null;
+  referencePosition: number | null;
+  referenceSource: "teacher" | "school" | "unavailable";
   gapCount: number | null;
+  nextEligiblePosition: number | null;
   completedChoices: PlannerCurriculumChoice[];
   eligibleChoices: PlannerCurriculumChoice[];
 };
@@ -225,12 +229,13 @@ function buildPlannerProgressSnapshot(
 
   for (const subjectId of profile.subjectIds || []) {
     const reported = courseProgress[subjectId] || {};
+    const courseMode = selection.courseModes?.[subjectId] ?? reported.courseMode ?? "online";
     const branchRecords = (reported.branches || {}) as Record<string, Record<string, any>>;
     const teacherState = teacherStates[subjectId] || {};
     const legacyFrontier = frontiers[subjectId] || teacherState.studentAttendedFrontier || null;
     const subjectLessonRecords = lessonProgress[subjectId] || {};
 
-    for (const branch of getFirstPartBranches(subjectId)) {
+    for (const branch of getPlanningBranches(subjectId)) {
       const legacyArabicReadingRecord = subjectId === "ARB_G2_BAC" && branch.branchId === "ARB_READING"
         ? Object.entries(branchRecords)
           .filter(([key]) => /^ARB_U[123]$/.test(key))
@@ -275,9 +280,10 @@ function buildPlannerProgressSnapshot(
         : savedSchoolFrontierValue === "__UNKNOWN__" && saved.schoolFrontierConfirmedAt
           ? "__UNKNOWN__"
           : undefined;
-      const schoolFrontier = savedSchoolFrontier !== undefined
+      const resolvedSchoolFrontier = savedSchoolFrontier !== undefined
         ? savedSchoolFrontier
         : belongsToBranch(reported.schoolClassFrontierId) ? reported.schoolClassFrontierId : "__UNKNOWN__";
+      const schoolFrontier = courseMode === "center" ? resolvedSchoolFrontier : "__UNKNOWN__";
       const gap = calculateLearningGap(branch.choices, {
         studentFrontierId: studentFrontier,
         teacherTeachingFrontierId: teacherFrontier,
@@ -309,12 +315,19 @@ function buildPlannerProgressSnapshot(
         }
       }
 
+      const nextEligiblePosition = branchEligible.length
+        ? branch.choices.findIndex(choice => choice.nodeId === branchEligible[0].nodeId)
+        : null;
       branches.set(plannerBranchKey(subjectId, branch.branchId), {
         studentFrontierId: gap.studentFrontierId,
         studentFrontierTitle: gap.studentFrontierTitle,
+        studentPosition: gap.studentPosition,
         referenceFrontierId: gap.referenceFrontierId,
         referenceFrontierTitle: gap.referenceFrontierTitle,
+        referencePosition: gap.referencePosition,
+        referenceSource: gap.referenceSource,
         gapCount: gap.gapCount,
+        nextEligiblePosition,
         completedChoices: branchCompleted,
         eligibleChoices: branchEligible,
       });
@@ -656,15 +669,10 @@ export function parseGeneratedPlan(content: string): GeneratedPlan {
   throw new Error("الاستجابة الذكية غير مكتملة أو لا تطابق تنسيق الخطة (تعذّر تحويل الخطة الذكية). لم يتم حفظ مسودة تالفة؛ حاول مرة أخرى.");
 }
 
-function getFirstPartBranches(subjectId: string) {
-  const branches = getSIECheckpointBranches(subjectId);
-  if (subjectId !== "PROG_AI_G2_BAC") return branches;
-  return branches
-    .map(branch => ({
-      ...branch,
-      choices: branch.choices.filter(choice => /^PROG_[1-4]_/.test(choice.nodeId)),
-    }))
-    .filter(branch => branch.choices.length > 0);
+function getPlanningBranches(subjectId: string) {
+  // Annual planning uses the complete student-year catalog. Partial textbook
+  // retrieval must never remove later chapters from the student's roadmap.
+  return getSIECheckpointBranches(subjectId);
 }
 
 function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof getStudentProfile>>>) {
@@ -697,45 +705,24 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
     const state = teacherStates[subjectId] || {};
     const reported = courseProgress[subjectId] || {};
     const branchRecords = (reported.branches || {}) as Record<string, Record<string, any>>;
-    const branches = getFirstPartBranches(subjectId);
+    const branches = getPlanningBranches(subjectId);
     const studentLegacyFrontier = reported.lastCompletedLessonId || frontiers[subjectId] || state.studentAttendedFrontier || null;
     const subjectLessonRecords = lessonProgress[subjectId] || {};
 
     const branchSummaries = branches.map(branch => {
-      const legacyArabicReadingRecord = subjectId === "ARB_G2_BAC" && branch.branchId === "ARB_READING"
-        ? Object.entries(branchRecords)
-          .filter(([key]) => /^ARB_U[123]$/.test(key))
-          .map(([, record]) => record)
-          .find((record: any) => branch.choices.some(choice =>
-            [record.lastCompletedLessonId, record.teacherTeachingFrontierId, record.schoolClassFrontierId].includes(choice.nodeId)
-          ))
-        : undefined;
-      const saved = branchRecords[branch.branchId] || legacyArabicReadingRecord || {};
-      const belongsToBranch = (value: unknown) =>
-        typeof value === "string" &&
-        (value === "__NOT_STARTED__" ||
-          branch.choices.some(choice => choice.nodeId === value));
-      const studentFrontier = Object.prototype.hasOwnProperty.call(saved, "lastCompletedLessonId")
-        ? saved.lastCompletedLessonId
-        : belongsToBranch(studentLegacyFrontier) ? studentLegacyFrontier : "__UNKNOWN__";
-      const teacherFrontier = Object.prototype.hasOwnProperty.call(saved, "teacherTeachingFrontierId")
-        ? saved.teacherTeachingFrontierId
-        : belongsToBranch(reported.teacherTeachingFrontierId) ? reported.teacherTeachingFrontierId : "__UNKNOWN__";
-      const schoolFrontier = Object.prototype.hasOwnProperty.call(saved, "schoolClassFrontierId")
-        ? saved.schoolClassFrontierId
-        : belongsToBranch(reported.schoolClassFrontierId) ? reported.schoolClassFrontierId : "__UNKNOWN__";
+      const branchProgress = progressSnapshot.branches.get(plannerBranchKey(subjectId, branch.branchId));
+      const studentFrontier = branchProgress?.studentFrontierId ?? "__UNKNOWN__";
+      const teacherFrontier = branchProgress?.referenceSource === "teacher"
+        ? branchProgress.referenceFrontierId ?? "__UNKNOWN__"
+        : "__UNKNOWN__";
+      const schoolFrontier = branchProgress?.referenceSource === "school"
+        ? branchProgress.referenceFrontierId ?? "__UNKNOWN__"
+        : "__UNKNOWN__";
       const gap = calculateLearningGap(branch.choices, {
         studentFrontierId: studentFrontier,
         teacherTeachingFrontierId: teacherFrontier,
         schoolClassFrontierId: schoolFrontier,
       });
-      const branchProgress = progressSnapshot.branches.get(plannerBranchKey(subjectId, branch.branchId));
-      const referenceLabel = gap.referenceSource === "teacher" ? "المدرس"
-        : gap.referenceSource === "school" ? "المدرسة" : "غير متاح";
-      const studentLabel = branch.choices.find(choice => choice.nodeId === studentFrontier)?.title
-        || (studentFrontier === "__NOT_STARTED__" ? "لم يبدأ بعد" : "غير محدد");
-      const referenceLabelTitle = branch.choices.find(choice => choice.nodeId === gap.referenceFrontierId)?.title
-        || (gap.referenceFrontierId === "__NOT_STARTED__" ? "لم يبدأ بعد" : "غير محدد");
       const records = branch.choices.map(choice => subjectLessonRecords[choice.nodeId]).filter(Boolean);
       const completed = records.filter((item: any) => Array.isArray(item.completedSteps) && item.completedSteps.length === 5).length;
       const underway = records.filter((item: any) => Array.isArray(item.completedSteps) && item.completedSteps.length > 0 && item.completedSteps.length < 5).length;
@@ -811,7 +798,7 @@ export function applyCurriculumPrioritySignals(
   const lessonProgress = mergeSubjectLessonProgress(selection.subjectLessonProgress, selection.sq3rProgress);
   const nodeLookup = new Map<string, { subjectId: string; branchId: string; branchLength: number }>();
   for (const subjectId of profile.subjectIds || []) {
-    for (const branch of getFirstPartBranches(subjectId)) {
+    for (const branch of getPlanningBranches(subjectId)) {
       for (const choice of branch.choices) {
         nodeLookup.set(choice.nodeId, {
           subjectId,
@@ -981,7 +968,7 @@ export function applyVerifiedTeacherResourceRecommendations(
   const byUrl = new Map(allowedUpdates.map(update => [String(update.url), update]));
   const nodeToSubject = new Map<string, string>();
   for (const subjectId of profile.subjectIds || []) {
-    for (const branch of getFirstPartBranches(subjectId)) {
+    for (const branch of getPlanningBranches(subjectId)) {
       for (const choice of branch.choices) nodeToSubject.set(choice.nodeId, subjectId);
     }
   }
@@ -1066,7 +1053,7 @@ export async function generatePersonalPlan(
   updatePlanGenerationProgress(userId, "curriculum");
   const curriculumTitles = profile
     ? (profile.subjectIds || []).flatMap(subjectId =>
-        getFirstPartBranches(subjectId).flatMap(branch =>
+        getPlanningBranches(subjectId).flatMap(branch =>
           [branch.branchTitle, ...branch.choices.map(choice => choice.title)]
         )
       ).join("؛ ")
