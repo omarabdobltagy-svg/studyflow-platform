@@ -370,18 +370,18 @@ export default function Planner() {
         {history.isError && <QueryErrorNotice onRetry={() => void history.refetch()} label="تعذّر تحميل خططك المحفوظة." />}
         {profile.isError && <QueryErrorNotice onRetry={() => void profile.refetch()} label="تعذّر تحميل ملفك الدراسي. أعد المحاولة قبل توليد الخطة." />}
 
-        <section className="relative overflow-hidden rounded-[1.6rem] border border-stone-700/60 bg-gradient-to-l from-[#24211d] via-[#1b1a18] to-[#342c24] p-5 text-white shadow-xl sm:p-7">
-          <div className="pointer-events-none absolute -left-12 -top-16 size-56 rounded-full bg-amber-500/10 blur-3xl" />
+        <section className="relative overflow-hidden rounded-[1.6rem] border border-slate-700/60 bg-gradient-to-l from-[#111B2D] via-[#172B46] to-[#101B2D] p-5 text-white shadow-xl sm:p-7">
+          <div className="pointer-events-none absolute -left-12 -top-16 size-56 rounded-full bg-blue-400/10 blur-3xl" />
           <div className="relative flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
             <div className="max-w-2xl">
-              <p className="text-[11px] font-bold tracking-[0.2em] text-amber-100/75">STUDYFLOW · AI STUDY PLAN</p>
+              <p className="text-[11px] font-bold tracking-[0.2em] text-blue-100/80">STUDYFLOW · AI STUDY PLAN</p>
               <h2 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">خطة واحدة. قرار واضح. وتنفيذ تحت سيطرتك.</h2>
               <p className="mt-2 text-sm leading-7 text-slate-300">
                 الذكاء الاصطناعي يبني المسودة من موادك وتقدمك وتراكمك. أنت تراجع المهام وتغيّرها قبل أن تتحول إلى جدول تنفيذ.
               </p>
             </div>
             <div className="shrink-0 rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
-              <div className="flex items-center gap-2 text-xs font-semibold text-amber-100"><CalendarClock className="size-4" />موعد امتحان نهاية السنة</div>
+              <div className="flex items-center gap-2 text-xs font-semibold text-blue-100"><CalendarClock className="size-4" />موعد امتحان نهاية السنة</div>
               <div className="mt-2 text-xl font-bold">12–22 يونيو 2027</div>
               <p className="mt-1 text-[11px] text-slate-300">فترة امتحانات تقريبية — الجاهزية المستهدفة قبل 11 يونيو</p>
             </div>
@@ -580,7 +580,7 @@ export default function Planner() {
         {plan && (
           <>
             {loadedSavedDraft && !approved && (
-              <section className="app-card flex flex-col gap-3 rounded-2xl border border-amber-500/20 bg-amber-500/[0.04] p-4 sm:flex-row sm:items-center sm:justify-between">
+              <section className="app-card flex flex-col gap-3 rounded-2xl border border-blue-500/20 bg-blue-500/[0.04] p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                   <h3 className="text-sm font-bold">أنت تعرض مسودة محفوظة من زيارة سابقة</h3>
                   <p className="mt-1 text-xs leading-6 text-muted-foreground">قد لا تعكس آخر تقدم سجلته في الفروع. حدّثها الآن ليُعاد حساب الدروس المتبقية وترتيب الأولويات من ملفك الحالي.</p>
@@ -754,7 +754,6 @@ function PlanCard({
     group.steps.push({ step, index });
   });
   const priorityLabel = (value?: string) => value === "critical" ? "عاجل" : value === "high" ? "أولوية عالية" : value === "low" ? "منخفضة" : "متوسطة";
-  const difficultyLabel = (value?: string) => value === "hard" ? "صعب" : value === "easy" ? "سهل" : value === "medium" ? "متوسط" : "غير محدد";
   return (
     <section className="app-card overflow-hidden rounded-2xl border border-border/80">
       <div className="border-b border-border/70 bg-gradient-to-l from-secondary/60 to-card p-5 sm:p-6">
@@ -791,7 +790,6 @@ function PlanCard({
               <span className="rounded-lg border border-primary/20 bg-background px-2.5 py-1 text-[11px] font-semibold">{firstStep.minutes} دقيقة</span>
             </div>
             <h3 className="mt-2 text-base font-bold leading-7">{firstStep.title}</h3>
-            <p className="mt-1 text-sm leading-6 text-muted-foreground">{firstStep.detail}</p>
             <p className="mt-2 text-[11px] text-muted-foreground">{firstStep.category} · {priorityLabel(firstStep.priority)}</p>
           </div>
         )}
