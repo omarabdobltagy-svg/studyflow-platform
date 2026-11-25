@@ -68,6 +68,7 @@ type PlanView = {
 };
 const PLANNING_READY_BY = "2027-06-11";
 const DAILY_SNAPSHOT_PREFIX = "SIE_DAILY_PLAN_V4:";
+const ANNUAL_PLAN_PREFIX = "SIE_ANNUAL_PLAN_V1:";
 const todayCairo = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
 const initialPrompt = "أنشئ الخطة السنوية الكاملة للعام الدراسي 2026–2027 حتى الجاهزية قبل 11 يونيو 2027. غطِّ المنهج كله في المواد المختارة، وانطلق من آخر موضوع مكتمل في كل فرع. ادمج المهام الحالية دون تكرارها، ولا تعتبر المهمة دليلًا على اكتمال الدرس. لا تنشئ اختبارات أو أسئلة أو واجبات من عندك.";
 const paceOptions: Array<{ value: Pace; title: string; subtitle: string }> = [
@@ -188,10 +189,14 @@ export default function Planner() {
     && !profile.isError && !learning.isError && !tasksQuery.isError;
 
   const savedPlans = useMemo(() => (history.data || [])
-    .filter(record => !String(record.prompt || "").startsWith(DAILY_SNAPSHOT_PREFIX))
     .flatMap(record => {
       const saved = parseSavedPlan(record);
-      return saved ? [{ id: record.id, createdAt: record.createdAt, plan: saved }] : [];
+      if (!saved) return [];
+      const prompt = String(record.prompt || "");
+      const isActualDailySnapshot = prompt.startsWith(DAILY_SNAPSHOT_PREFIX)
+        && !prompt.startsWith(ANNUAL_PLAN_PREFIX)
+        && !saved.title.startsWith("الخطة السنوية");
+      return isActualDailySnapshot ? [] : [{ id: record.id, createdAt: record.createdAt, plan: saved }];
     })
     .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()), [history.data]);
 
