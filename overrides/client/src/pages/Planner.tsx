@@ -6,11 +6,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { buildLearningBacklogSummary } from "@/lib/learningBacklog";
 import { getSIECheckpointBranches, getSIESubject } from "@shared/sie-catalog";
-import { ArrowUpRight, BrainCircuit, CheckCircle2, Clock3, Lightbulb, ListTree, Loader2, Sparkles, Target, UserRound } from "lucide-react";
+import { ArrowUpRight, BrainCircuit, CheckCircle2, Clock3, Lightbulb, ListTree, Loader2, Sparkles, Target, Trash2, UserRound } from "lucide-react";
 import { FormEvent, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-type PlanView = { title: string; summary: string; durationLabel: string; steps: { day: string; title: string; detail: string; minutes: number; category: string; priority?: "critical" | "high" | "medium" | "low"; priorityScore?: number; priorityReason?: string; priorityEvidenceConfidence?: "low" | "medium" | "high"; examComponentLabel?: string; examComponentMarks?: number; examPaperMarks?: number; difficulty?: "easy" | "medium" | "hard" | "unknown"; lessonSize?: "small" | "medium" | "large" | "unknown"; difficultyBasis?: "student_report" | "assessment_history" | "curriculum_profile" | "unknown"; difficultyConfidence?: "low" | "medium" | "high"; printedPageRange?: [number, number]; sourcePages?: number[] }[]; habits: { title: string; cue: string }[]; reviewQuestion: string; taskSync?: { parentGoalId: number; stageCount: number; taskCount: number; routineId?: number | null } };
+type PlanView = { title: string; summary: string; durationLabel: string; steps: { day: string; title: string; detail: string; minutes: number; category: string; priority?: "critical" | "high" | "medium" | "low"; priorityScore?: number; priorityReason?: string; priorityEvidenceConfidence?: "low" | "medium" | "high"; examComponentLabel?: string; examComponentMarks?: number; examPaperMarks?: number; resourceRecommendation?: { title: string; url: string; teacherName?: string; reason: string }; difficulty?: "easy" | "medium" | "hard" | "unknown"; lessonSize?: "small" | "medium" | "large" | "unknown"; difficultyBasis?: "student_report" | "assessment_history" | "curriculum_profile" | "unknown"; difficultyConfidence?: "low" | "medium" | "high"; printedPageRange?: [number, number]; sourcePages?: number[] }[]; habits: { title: string; cue: string }[]; reviewQuestion: string; taskSync?: { parentGoalId: number; stageCount: number; taskCount: number; routineId?: number | null } };
 const todayCairo = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
 const starters = [
   { label: "ترتيب التراكم", prompt: "حلّل التراكم الحالي ورتّب أولويات إنهائه على مراحل واقعية." },
@@ -38,18 +38,6 @@ export default function Planner() {
     refetchOnWindowFocus: true,
   });
   const learning = trpc.learning.get.useQuery();
-  const teacherPublicUpdates = useMemo(() => {
-    const selection = (profile.data as any)?.selection ?? {};
-    const updates = Array.isArray(selection.teacherPublicUpdates) ? selection.teacherPublicUpdates : [];
-    return [...updates].sort((left: any, right: any) =>
-      Date.parse(String(right.publishedAt || 0)) - Date.parse(String(left.publishedAt || 0))
-    ).slice(0, 6);
-  }, [profile.data]);
-  const teacherScanState = ((profile.data as any)?.selection?.teacherPublicScanState ?? {}) as Record<string, string>;
-  const latestTeacherScanAt = Object.values(teacherScanState)
-    .map(value => Date.parse(value))
-    .filter(Number.isFinite)
-    .sort((a, b) => b - a)[0] ?? null;
   const dailySnapshot = trpc.plans.currentDaily.useQuery(undefined, {
     staleTime: 10_000,
     refetchInterval: query => query.state.data?.needsRefresh || !query.state.data?.plan ? 15_000 : 180_000,
@@ -66,6 +54,13 @@ export default function Planner() {
       toast.success(result.generated ? "تم تحديث خطة اليوم والمهام المرتبطة بها." : "خطة اليوم محدثة بالفعل.");
     },
     onError: error => toast.error("تعذّر تحديث خطة اليوم: " + error.message),
+  });
+  const deleteSavedPlan = trpc.plans.delete.useMutation({
+    onSuccess: async () => {
+      await Promise.all([utils.plans.list.invalidate(), utils.plans.currentDaily.invalidate()]);
+      toast.success("تم حذف الخطة المحفوظة.");
+    },
+    onError: error => toast.error("تعذّر حذف الخطة: " + error.message),
   });
   const backlogBySubject = useMemo(
     () => buildLearningBacklogSummary(
@@ -116,62 +111,6 @@ export default function Planner() {
     <section className="app-card sf-planner-surface mb-6 overflow-hidden">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 p-4 sm:p-5">
         <div className="min-w-0">
-          <p className="eyebrow">TEACHER SIGNALS</p>
-          <h2 className="mt-1 text-lg font-bold">آخر تحديثات المدرسين</h2>
-          <p className="mt-1 max-w-2xl text-xs leading-6 text-muted-foreground">
-            دي التحديثات العامة التي استقبلها StudyFlow من مصادر المدرسين المختارين. وصول تحديث جديد يطلق مراجعة للخطة، لكنه لا يتحول تلقائيًا إلى واجب قبل مطابقته بالمنهج.
-          </p>
-        </div>
-        <span className="shrink-0 rounded-full border border-border bg-muted/40 px-3 py-1.5 text-xs font-semibold">
-          {teacherPublicUpdates.length} تحديثات محفوظة
-        </span>
-      </header>
-      <div className="p-4 sm:p-5">
-        <p className="text-[11px] text-muted-foreground">
-          آخر فحص مسجل: {latestTeacherScanAt
-            ? new Intl.DateTimeFormat("ar-EG", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Cairo" }).format(new Date(latestTeacherScanAt))
-            : "لم يُسجل فحص بعد"}
-          · YouTube: إشعارات فورية للقنوات التي قبلت الاشتراك، مع فحص دوري احتياطي
-        </p>
-        {teacherPublicUpdates.length ? (
-          <div className="mt-3 divide-y divide-border/60">
-            {teacherPublicUpdates.map((update: any, index: number) => (
-              <article key={String(update.externalId || index)} className="flex flex-wrap items-start justify-between gap-3 py-3 first:pt-0 last:pb-0">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
-                    <span className="rounded-md border border-border px-2 py-0.5">{update.sourceType === "youtube" ? "YouTube" : update.sourceType === "facebook" ? "Facebook" : "مصدر عام"}</span>
-                    <span>{update.teacherName || "مدرس مختار"}</span>
-                    <span>·</span>
-                    <span>{update.publishedAt && Number.isFinite(Date.parse(String(update.publishedAt)))
-                      ? new Intl.DateTimeFormat("ar-EG", { dateStyle: "medium", timeZone: "Africa/Cairo" }).format(new Date(update.publishedAt))
-                      : "تاريخ غير متاح"}</span>
-                  </div>
-                  <h3 className="mt-1 break-words text-sm font-semibold">{update.title || "تحديث جديد"}</h3>
-                  {update.durationMinutes ? <p className="mt-1 text-[11px] text-muted-foreground">مدة الفيديو: {update.durationMinutes} دقيقة</p> : null}
-                  {update.description ? <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{update.description}</p> : null}
-                </div>
-                {typeof update.url === "string" && /^https:\/\//i.test(update.url)
-                  ? <a href={update.url} target="_blank" rel="noreferrer" className="shrink-0 text-xs font-semibold text-primary hover:underline">فتح المصدر</a>
-                  : null}
-              </article>
-            ))}
-          </div>
-        ) : (
-          <div className="mt-3 rounded-xl bg-muted/35 p-4">
-            <p className="text-sm font-semibold">لا توجد تحديثات جديدة محفوظة بعد.</p>
-            <p className="mt-1 text-xs leading-6 text-muted-foreground">
-              سيظهر هنا عنوان الفيديو وتاريخه ومدته عند وصول تحديث من قناة مدرس مختارة. إذا لم يظهر مدرس، فتأكد أن قناته العامة مرتبطة بملفك الدراسي.
-            </p>
-          </div>
-        )}
-        <p className="mt-3 border-t border-border/60 pt-3 text-[11px] leading-5 text-muted-foreground">
-          حدود الاتصال الحالية: YouTube مفعّل للقنوات التي اكتمل لها الاشتراك. Facebook يحتاج صلاحيات Page/App وبيانات وصول غير مهيأة في هذه المعاينة. WhatsApp الخاص أو مجموعات المدرسين ليست مصدرًا عامًا يمكن مسحه؛ يمكن التعامل فقط مع تكامل أعمال/رسائل مصرح بها.
-        </p>
-      </div>
-    </section>
-    <section className="app-card sf-planner-surface mb-6 overflow-hidden">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 p-4 sm:p-5">
-        <div className="min-w-0">
           <p className="eyebrow">AUTO DAILY PLAN</p>
           <h2 className="mt-1 text-lg font-bold">خطة اليوم التلقائية</h2>
           <p className="mt-1 max-w-2xl text-xs leading-6 text-muted-foreground">
@@ -207,6 +146,7 @@ export default function Planner() {
             </div>
             <h3 className="mt-3 text-base font-bold">{dailySnapshot.data.plan.title}</h3>
             <p className="mt-1 text-sm leading-6 text-muted-foreground">{dailySnapshot.data.plan.summary}</p>
+            {!dailySnapshot.data.plan.steps.some((step: any) => step.resourceRecommendation) && <p className="mt-2 text-xs text-muted-foreground">لا توجد مشاهدة إضافية من تحديثات المدرسين مطلوبة في الخطة الحالية.</p>}
             <div className="mt-4 grid gap-2 md:grid-cols-3">
               {dailySnapshot.data.plan.steps.slice(0, 3).map((step: any, index: number) => (
                 <article key={step.curriculumNodeIds?.join("-") || index} className="min-w-0 rounded-xl border border-border/70 bg-muted/20 p-3">
@@ -222,6 +162,7 @@ export default function Planner() {
                   </div>
                   <p className="mt-1 line-clamp-3 text-xs leading-5 text-muted-foreground">{step.detail}</p>
                   {step.priorityReason && <p className="mt-2 border-t border-border/60 pt-2 text-[11px] leading-5 text-muted-foreground">سبب الترتيب: {step.priorityReason}</p>}
+                  {step.resourceRecommendation && <a href={step.resourceRecommendation.url} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs font-semibold text-primary hover:bg-primary/10"><ArrowUpRight className="size-3.5" />مشاهدة مقترحة من {step.resourceRecommendation.teacherName || "المدرس"}: {step.resourceRecommendation.title}</a>}
                 </article>
               ))}
             </div>
@@ -308,7 +249,7 @@ export default function Planner() {
           <Button disabled={generate.isPending || profile.isLoading || !profile.data} className="pressable min-w-44 rounded-xl bg-primary">{generate.isPending ? <><Loader2 className="size-4 animate-spin" />يبني خطة مناسبة...</> : <><Sparkles className="size-4" />ولّد خطتي</>}</Button></div></div></div></form></section>
     {generate.isPending && <PlanLoading />}
     {plan ? <PlanCard plan={plan} title="خطتك المقترحة" studentName={profile.data?.studentName} /> : <section className="grid gap-4 md:grid-cols-3"><Feature icon={<ListTree className="size-5" />} title="مراحل قابلة للمتابعة" copy="تحويل الخطة تلقائيًا إلى هدف ومراحل ومهام داخل قائمة مهامك." /><Feature icon={<Clock3 className="size-5" />} title="وقت يناسب طاقتك" copy="جلسات قصيرة وخيارات حد أدنى عندما يكون اليوم ثقيلًا." /><Feature icon={<Lightbulb className="size-5" />} title="عودة بلا جلد ذات" copy="خطة تعيدك تدريجيًا من التراكم بدل أن تضاعف الضغط." /></section>}
-    {savedPlans.length > 0 && <section className="no-print mt-8"><div className="mb-4 flex items-center justify-between"><div><p className="eyebrow">محفوظاتك</p><h2 className="mt-1 font-bold">خطط سابقة</h2></div><span className="text-xs text-muted-foreground">{savedPlans.length} خطط محفوظة</span></div><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{savedPlans.map(item => <button key={item.id} onClick={() => setPlan(item.plan)} className="app-card sf-planner-surface pressable p-4 text-right hover:border-primary/25"><div className="flex items-start gap-3"><span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-secondary text-primary"><BrainCircuit className="size-4" /></span><div className="min-w-0 flex-1"><p className="truncate font-semibold">{item.plan.title}</p><p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{item.plan.summary}</p><p className="mt-2 text-[11px] text-muted-foreground">{new Intl.DateTimeFormat("ar-EG", { day: "numeric", month: "short" }).format(new Date(item.createdAt))}</p></div></div></button>)}</div></section>}
+    {savedPlans.length > 0 && <section className="no-print mt-8"><div className="mb-4 flex items-center justify-between"><div><p className="eyebrow">محفوظاتك</p><h2 className="mt-1 font-bold">خطط سابقة</h2></div><span className="text-xs text-muted-foreground">{savedPlans.length} خطط محفوظة</span></div><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{savedPlans.map(item => <article key={item.id} className="app-card sf-planner-surface p-4"><button type="button" onClick={() => setPlan(item.plan)} className="pressable w-full text-right hover:border-primary/25"><div className="flex items-start gap-3"><span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-secondary text-primary"><BrainCircuit className="size-4" /></span><div className="min-w-0 flex-1"><p className="truncate font-semibold">{item.plan.title}</p><p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{item.plan.summary}</p><p className="mt-2 text-[11px] text-muted-foreground">{new Intl.DateTimeFormat("ar-EG", { day: "numeric", month: "short" }).format(new Date(item.createdAt))}</p></div></div></button><div className="mt-3 flex justify-end border-t border-border/60 pt-2"><Button type="button" variant="ghost" size="sm" disabled={deleteSavedPlan.isPending} onClick={() => { if (window.confirm("حذف هذه الخطة من المحفوظات؟")) deleteSavedPlan.mutate({ id: item.id }); }} className="h-8 gap-1.5 text-xs text-destructive hover:text-destructive"><Trash2 className="size-3.5" />حذف الخطة</Button></div></article>)}</div></section>}
   </DashboardLayout>;
 }
 
@@ -325,6 +266,7 @@ function PlanCard({ plan, title, studentName }: { plan: PlanView; title: string;
         <div className="min-w-0"><p className="eyebrow">{title}</p><h2 className="mt-1 text-xl font-bold">{plan.title}</h2><p className="mt-2 max-w-3xl text-sm leading-7 text-muted-foreground">{plan.summary}</p>{studentName && <p className="mt-3 text-xs text-primary">خطة مخصصة لـ {studentName}</p>}</div>
         <div className="flex flex-wrap items-center gap-2"><span className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-card px-3 py-2 text-xs font-semibold text-primary shadow-sm"><Clock3 className="size-3.5" />{plan.durationLabel}</span><PlanExportActions plan={plan} studentName={studentName} /></div>
       </div>
+      <div className="mt-4 rounded-xl border border-border/70 bg-muted/25 p-3 text-xs leading-6 text-muted-foreground">{plan.steps.some(step => step.resourceRecommendation) ? "اختار المخطط مشاهدة من تحديثات المدرسين لأنها تخدم درسًا غير مكتملًا. ستظهر داخل الخطوة التي تحتاجها فقط." : "راجع المخطط تحديثات المدرسين، ولم يجد مشاهدة إضافية مناسبة لاحتياجك الحالي."}</div>
       <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
         <div className="rounded-xl border border-border/70 bg-card/70 p-3"><span className="text-[11px] text-muted-foreground">عدد المهام</span><b className="mt-1 block text-lg">{plan.steps.length}</b></div>
         <div className="rounded-xl border border-border/70 bg-card/70 p-3"><span className="text-[11px] text-muted-foreground">إجمالي الوقت</span><b className="mt-1 block text-lg">{totalMinutes} د</b></div>
@@ -341,6 +283,7 @@ function PlanCard({ plan, title, studentName }: { plan: PlanView; title: string;
         <div className="space-y-3">{plan.steps.map((step, index) => <article key={`${step.day}-${index}`} className="rounded-2xl border border-border/70 bg-muted/15 p-4">
           <div className="flex flex-wrap items-center gap-2 text-xs"><span className="font-semibold text-primary">{step.day}</span><span className="text-muted-foreground">· {step.category}</span><span className="mr-auto inline-flex items-center gap-1 text-[11px] text-muted-foreground"><Clock3 className="size-3" />{step.minutes} دقيقة</span></div>
           <h4 className="mt-2 font-semibold">{step.title}</h4><p className="mt-1 text-sm leading-7 text-muted-foreground">{step.detail}</p>{step.priorityReason ? <p className="mt-2 text-xs leading-6 text-muted-foreground">سبب الأولوية: {step.priorityReason}</p> : null}
+          {step.resourceRecommendation && <a href={step.resourceRecommendation.url} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs font-semibold text-primary hover:bg-primary/10"><ArrowUpRight className="size-3.5" />مشاهدة مقترحة من {step.resourceRecommendation.teacherName || "المدرس"}: {step.resourceRecommendation.title}<span className="font-normal text-muted-foreground">— {step.resourceRecommendation.reason}</span></a>}
           <div className="mt-3 flex flex-wrap gap-1.5"><span className="rounded-lg border border-border bg-background px-2 py-1 text-[10px] font-semibold">{priorityLabel(step.priority)}</span>{typeof step.priorityScore === "number" ? <span className="rounded-lg border border-border bg-background px-2 py-1 text-[10px]">مؤشر الأولوية {step.priorityScore}/100</span> : null}{step.examComponentLabel ? <span className="rounded-lg border border-primary/20 bg-primary/5 px-2 py-1 text-[10px]">{step.examComponentLabel} · {step.examComponentMarks}/{step.examPaperMarks}</span> : null}<span className="rounded-lg border border-border bg-background px-2 py-1 text-[10px]">{difficultyLabel(step.difficulty)}</span><span className="rounded-lg border border-border bg-background px-2 py-1 text-[10px]">{sizeLabel(step.lessonSize)}</span><span className="rounded-lg border border-border bg-background px-2 py-1 text-[10px]">{step.difficultyBasis === "student_report" ? "حسب تقييمك" : step.difficultyBasis === "assessment_history" ? "حسب نتائجك" : step.difficultyBasis === "curriculum_profile" ? "تقدير منهجي أولي" : "مصدر الصعوبة غير محدد"} · ثقة {step.difficultyConfidence === "high" ? "مرتفعة" : step.difficultyConfidence === "medium" ? "متوسطة" : "منخفضة"}</span>{step.printedPageRange ? <span className="rounded-lg border border-border bg-background px-2 py-1 text-[10px]">صفحات الكتاب المطبوعة: {step.printedPageRange[0]}–{step.printedPageRange[1]}</span> : null}{step.sourcePages?.length ? <span className="rounded-lg border border-border bg-background px-2 py-1 text-[10px]">مراجع PDF: {step.sourcePages.join("، ")}</span> : null}</div>
         </article>)}</div>
       </div>
