@@ -108,6 +108,20 @@ describe("Arabic course taxonomy", () => {
     expect(unitThreeNahw?.choices.filter(choice => choice.title.includes("النعت والبدل والتمييز"))).toHaveLength(1);
   });
 
+  it("keeps Arabic teacher-course branches separate from official textbook units", () => {
+    const units = getSIECheckpointUnits("ARB_G2_BAC");
+    const teacherTopics = units.filter(unit => !unit.isOfficialUnit);
+    const titles = teacherTopics.map(unit => unit.title);
+    expect(titles).toContain("التعبير");
+    expect(titles).toContain("الإملاء");
+    expect(titles).toContain("الأدب والقصة");
+    expect(new Set(teacherTopics.map(unit => unit.unitId)).size).toBe(teacherTopics.length);
+    for (const unit of teacherTopics) expect(unit.branches).toHaveLength(1);
+    expect(teacherTopics.find(unit => unit.title === "التعبير")?.lessonCount).toBe(2);
+    expect(teacherTopics.find(unit => unit.title === "الإملاء")?.lessonCount).toBe(2);
+    expect(teacherTopics.find(unit => unit.title === "الأدب والقصة")?.lessonCount).toBe(2);
+  });
+
   it("uses the student's visible Arabic topic units to match existing tasks without changing progress", () => {
     const visibleNahw = getSIECheckpointProgressBranches("ARB_G2_BAC").find(branch => branch.branchId === "ARB_NAHW");
     expect(visibleNahw?.choices.filter(choice => choice.title.includes("الممنوع من الصرف"))).toHaveLength(1);
