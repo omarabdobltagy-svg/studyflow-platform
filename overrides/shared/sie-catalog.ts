@@ -1272,11 +1272,11 @@ export function getSIECheckpointUnits(subjectId: string): SIECurriculumUnit[] {
   const units = new Map<string, SIECurriculumUnit>();
   for (const branch of branches) {
     for (const choice of branch.choices) {
-      const unitTitle = choice.unitTitle?.trim() || branch.branchTitle;
       const isOfficialUnit = typeof choice.unitNumber === "number" && choice.unitNumber > 0;
+      const unitTitle = isOfficialUnit ? (choice.unitTitle?.trim() || branch.branchTitle) : branch.branchTitle;
       const unitId = isOfficialUnit
         ? `UNIT_${choice.unitNumber}_${unitTitle}`
-        : `TOPICS_${branch.branchId}_${unitTitle}`;
+        : `TOPICS_${branch.branchId}`;
       let unit = units.get(unitId);
       if (!unit) {
         unit = {
