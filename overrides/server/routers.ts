@@ -5,7 +5,7 @@ import { FixedWindowRateLimiter } from "./_core/authRateLimit";
 import { SignJWT } from "jose";
 import { TRPCError } from "@trpc/server";
 import { COOKIE_NAME } from "@shared/const";
-import { SIE_CATALOG_META, SIE_SYSTEMS, getSIEEducationSystem, getSIESubject, getSIETeacher, getSIETeachersForSubject, getSIETrack, getSIECheckpointChoices, getSIECheckpointBranches, normalizeSIECheckpointFrontier, getSIECheckpointProgressBranches, validateSIESubjectSelection } from "@shared/sie-catalog";
+import { SIE_CATALOG_META, SIE_SYSTEMS, getSIEEducationSystem, getSIESubject, getSIETeacher, getSIETeachersForSubject, getSIETrack, getSIECheckpointChoices, getSIECheckpointBranches, normalizeSIECheckpointFrontier, getSIECheckpointProgressBranches, matchSIECheckpointTask, validateSIESubjectSelection } from "@shared/sie-catalog";
 import { calculateLearningGap } from "@shared/sie-learning-progress";
 import {
   addChapter,
@@ -100,6 +100,7 @@ type DailyPlanResult = {
 // V6 scopes teacher signals to second-year Baccalaureate and retires stale AI-plan tasks.
 const DAILY_PLANNER_POLICY_VERSION = "annual-exam-june-12-2027-g2-planner-v3";
 const DAILY_PLAN_PREFIX = "SIE_DAILY_PLAN_V4:";
+const ANNUAL_PLAN_PREFIX = "SIE_ANNUAL_PLAN_V1:";
 const dailyPlanLocks = new Map<number, Promise<DailyPlanResult>>();
 const dailyPlanDirtyUsers = new Set<number>();
 const dailyPlanReconcileTimers = new Map<number, ReturnType<typeof setTimeout>>();
@@ -317,12 +318,14 @@ function queueDailyPlanEnsure(userId: number, dailyMinutes: number) {
 }
 
 async function buildDailyPlanOperationalContext(userId: number) {
-  const [tasks, goals, calendar, books] = await Promise.all([
+  const [tasks, goals, calendar, books, profile] = await Promise.all([
     listTasks(userId),
     listGoals(userId),
     listCalendarEvents(userId, "Africa/Cairo"),
     listBooks(userId),
+    getStudentProfile(userId),
   ]);
+  const subjectIds = profile?.subjectIds ?? [];
   const now = new Date();
   const horizon = now.getTime() + 14 * 24 * 60 * 60 * 1_000;
   const formatDate = (value: unknown) => {
@@ -338,15 +341,26 @@ async function buildDailyPlanOperationalContext(userId: number) {
       timeZone: "Africa/Cairo",
     }).format(date);
   };
-  const openTasks = tasks
-    .filter(task => task.status !== "done")
-    .slice(0, 20)
-    .map(task => [
+  const mapTask = (task: typeof tasks[number]) => {
+    const match = matchSIECheckpointTask(subjectIds, [task.title, task.notes || ""].join(" "));
+    return [
+      "معرف المهمة: " + task.id,
       task.title,
+      "الحالة: " + (task.status === "done" ? "منتهية" : "مفتوحة"),
       "الأولوية: " + (task.priority || "متوسطة"),
       task.dueAt ? "الموعد: " + formatDate(task.dueAt) : "",
       task.notes ? "ملاحظة: " + String(task.notes).slice(0, 100) : "",
-    ].filter(Boolean).join(" — "));
+      match ? "مطابقة المنهج: " + [getSIESubject(match.subjectId)?.nameAr ?? match.subjectId, match.branchTitle, match.title, match.nodeId, match.confidence].join(" — ") : "لا توجد مطابقة منهج مؤكدة",
+    ].filter(Boolean).join(" — ");
+  };
+  const openTasks = tasks
+    .filter(task => task.status !== "done")
+    .slice(0, 30)
+    .map(mapTask);
+  const completedRecentTasks = tasks
+    .filter(task => task.status === "done")
+    .slice(0, 10)
+    .map(mapTask);
   const upcomingEvents = calendar
     .filter(event => {
       const start = event.startAt instanceof Date ? event.startAt : new Date(String(event.startAt));
@@ -372,8 +386,10 @@ async function buildDailyPlanOperationalContext(userId: number) {
     .slice(0, 12)
     .map(book => book.title);
   return [
-    "المهام المفتوحة ذات الأولوية والمواعيد:",
+    "المهام المفتوحة ذات الأولوية والمواعيد (هذه التزامات وليست دليلًا على اكتمال الموضوع):",
     openTasks.length ? openTasks.join("\n") : "لا توجد مهام مفتوحة محفوظة.",
+    "مهام منتهية حديثًا (لا تعتبرها وحدها دليلًا على إكمال الدرس في سجل تقدم المنهج):",
+    completedRecentTasks.length ? completedRecentTasks.join("\n") : "لا توجد مهام منتهية مسجلة.",
     "الأحداث والمواعيد خلال 14 يومًا:",
     upcomingEvents.length ? upcomingEvents.join("\n") : "لا توجد أحداث قادمة محفوظة.",
     "الأهداف النشطة:",
@@ -2589,6 +2605,7 @@ export const appRouter = router({
         prompt: z.string().trim().min(12, "أضف تفاصيل أكثر قليلًا حتى تكون الخطة مناسبة.").max(2_000),
         includeStudentProfile: z.boolean().default(true),
         dailyMinutes: z.number().int().min(20).max(600).default(120),
+        daysPerWeek: z.union([z.literal(5), z.literal(6), z.literal(7)]).default(6),
         startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
         pace: z.enum(["intensive", "balanced", "relaxed"]).default("balanced"),
         paceLevel: z.number().int().min(1).max(3).default(2),
@@ -2604,17 +2621,40 @@ export const appRouter = router({
           throw new TRPCError({ code: "BAD_REQUEST", message: "الموعد الشخصي يجب أن يكون في أو قبل هدف الجاهزية 11 يونيو 2027." });
         }
         try {
+          await scanTeacherSourcesForStudent(ctx.user.id);
+          const [currentTasks, currentOperationalContext] = await Promise.all([
+            listTasks(ctx.user.id),
+            buildDailyPlanOperationalContext(ctx.user.id),
+          ]);
+          const currentProfile = await getStudentProfile(ctx.user.id);
+          const existingCurriculumTasks = currentProfile
+            ? currentTasks.flatMap(task => {
+                const match = matchSIECheckpointTask(currentProfile.subjectIds, [task.title, task.notes || ""].join(" "));
+                return match ? [{
+                  ...match,
+                  taskId: task.id,
+                  taskTitle: task.title,
+                  status: task.status,
+                }] : [];
+              })
+            : [];
+          const annualPrompt = input.prompt.startsWith(ANNUAL_PLAN_PREFIX)
+            ? input.prompt
+            : ANNUAL_PLAN_PREFIX + startDate + ": " + input.prompt;
           const result = await generatePersonalPlan(
             ctx.user.id,
-            input.prompt,
+            annualPrompt,
             input.includeStudentProfile,
             {
               scope: "annual",
               dailyMinutes: input.dailyMinutes,
+              daysPerWeek: input.daysPerWeek,
               startDate,
               pace: input.pace,
               paceLevel: input.paceLevel as 1 | 2 | 3,
               deadline: input.deadline,
+              context: "هذه خطة سنوية كاملة وليست قائمة متراكمات. ادمج المهام الحالية كما هي، ولا تعتبر المهمة المنتهية أو المفتوحة وحدها دليلًا على اكتمال موضوع المنهج. لا تنشئ مهمة ثانية لنفس الموضوع إذا كانت له مهمة مطابقة بالفعل.\n\n" + currentOperationalContext,
+              existingCurriculumTasks,
             },
           );
           await logStudentActivity(ctx.user.id, "plan.draft_generated", "ai_plan", null, "أنشأ المخطط الذكي مسودة للمراجعة قبل الاعتماد", {
@@ -2623,6 +2663,7 @@ export const appRouter = router({
             pace: input.pace,
             paceLevel: input.paceLevel,
             dailyMinutes: input.dailyMinutes,
+            daysPerWeek: input.daysPerWeek,
             examWindowStart: "2027-06-12",
             examWindowEnd: "2027-06-22",
             examReadinessTarget: "2027-06-11",
@@ -2652,6 +2693,12 @@ export const appRouter = router({
             minutes: z.number().int().min(5).max(480),
             category: z.string().trim().min(2).max(80),
             curriculumNodeIds: z.array(z.string().trim().min(1).max(120)).max(8).optional(),
+            existingTask: z.object({
+              id: z.number().int().positive(),
+              title: z.string().trim().min(1).max(220),
+              status: z.enum(["todo", "done"]),
+              confidence: z.enum(["exact", "strong"]),
+            }).optional(),
             priority: z.enum(["critical", "high", "medium", "low"]).optional(),
             difficulty: z.enum(["easy", "medium", "hard", "unknown"]).optional(),
             lessonSize: z.enum(["small", "medium", "large", "unknown"]).optional(),
@@ -2708,9 +2755,9 @@ export const appRouter = router({
           approvedPlan,
           schedule,
           {
-            goalTitle: "خطة StudyFlow اليومية",
-            goalCategory: "خطة يومية",
-            supersedeCategories: ["خطة يومية", "خطة ذكية", "خطة تدريبية"],
+            goalTitle: "خطة StudyFlow السنوية",
+            goalCategory: "خطة سنوية",
+            supersedeCategories: ["خطة سنوية"],
           },
         );
         const fingerprint = await getDailyPlanSourceFingerprint(
@@ -2719,12 +2766,12 @@ export const appRouter = router({
           schedule.startDate,
         );
         await saveAiPlan(ctx.user.id, {
-          prompt: DAILY_PLAN_PREFIX + fingerprint + ":",
-          title: approvedPlan.title,
+          prompt: ANNUAL_PLAN_PREFIX + fingerprint + ":",
+          title: "الخطة السنوية 2026–2027",
           planJson: JSON.stringify(approvedPlan),
         });
         await logStudentActivity(ctx.user.id, "plan.approved", "ai_plan", null, "اعتمد الطالب مسودة المخطط وأنشئت المهام بعد مراجعته", {
-          title: approvedPlan.title,
+          title: "الخطة السنوية 2026–2027",
           taskCount: synced.taskCount,
           officialExamDate: "2027-06-12",
         });
