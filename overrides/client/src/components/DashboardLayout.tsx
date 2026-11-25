@@ -77,6 +77,15 @@ export default function DashboardLayout({ title, description, children, action }
   });
   const [location, setLocation] = useLocation();
   const [isMobileNavOpen, setMobileNavOpen] = useState(false);
+  // Keep the top dock focused on the few destinations students use every day.
+  // The full navigation remains available in the sidebar and the mobile "sections" sheet.
+  const desktopDockItems = [
+    { label: "اليوم", path: "/", icon: LayoutDashboard, group: "مساحة اليوم" },
+    { label: "المهام", path: "/tasks", icon: CheckSquare2, group: "مساحة اليوم" },
+    { label: "المذاكرة", path: "/study", icon: BookOpenText, group: "التعلّم" },
+    { label: "المساعد", path: "/assistant", icon: MessageCircle, group: "التعلّم" },
+    { label: "الخطة", path: "/planner", icon: CalendarRange, group: "التخطيط" },
+  ];
   const studentProfile = trpc.studentProfile.get.useQuery(undefined, { enabled: Boolean(user) });
   const { theme, toggleTheme } = useTheme();
   const reduceMotion = useReducedMotion();
@@ -252,7 +261,7 @@ export default function DashboardLayout({ title, description, children, action }
             </div>
 
             <nav className="sf-desktop-dock" aria-label="التنقل السريع">
-              {navigation.flatMap(group => group.items.map(item => ({ ...item, group: group.label }))).map(item => {
+              {desktopDockItems.map(item => {
                 const active = isActive(item.path);
                 return (
                   <motion.button
