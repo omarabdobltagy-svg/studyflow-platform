@@ -182,7 +182,7 @@ export default function Home() {
   const profile = trpc.studentProfile.get.useQuery();
   const dailyPlanSnapshot = trpc.plans.currentDaily.useQuery(undefined, {
     staleTime: 10_000,
-    refetchInterval: query => query.state.data?.needsRefresh || !query.state.data?.plan ? 5_000 : 45_000,
+    refetchInterval: query => query.state.data?.needsRefresh || !query.state.data?.plan ? 5_000 : 300_000,
     refetchOnWindowFocus: true,
     retry: 1,
   });
