@@ -88,10 +88,10 @@ export default function Home() {
   });
 
   useEffect(() => {
-    if (profile.isSuccess && profile.data && !profile.data.selection?.welcomeGuideCompletedAt) {
+    if (profile.isSuccess && profile.data && !((profile.data.selection as Record<string, any> | undefined)?.welcomeGuideCompletedAt)) {
       setShowWelcomeGuide(true);
     }
-  }, [profile.isSuccess, profile.data?.selection?.welcomeGuideCompletedAt]);
+  }, [profile.isSuccess, (profile.data?.selection as Record<string, any> | undefined)?.welcomeGuideCompletedAt]);
 
   // Refresh the profile after the daily-plan query finishes its automatic public teacher scan.
   useEffect(() => {
