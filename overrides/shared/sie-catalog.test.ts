@@ -7,6 +7,8 @@ import {
   getSIECheckpointChoiceTypeLabel,
   getSIECheckpointChoices,
   getSIECheckpointChoicesForTeacher,
+  getSIECheckpointProgressOptions,
+  normalizeSIECheckpointFrontier,
   getSIETeachersForSubject,
   validateSIESubjectSelection,
 } from "./sie-catalog";
@@ -64,6 +66,29 @@ describe("Arabic course taxonomy", () => {
     expect(nahw?.choices.map(choice => choice.title)).toContain("تطبيق على الممنوع من الصرف وعلل منعه");
     expect(choices.map(choice => choice.nodeId)).toContain("ARB_U3_L3");
     expect(new Set(choices.map(choice => choice.nodeId)).size).toBe(choices.length);
+  });
+
+  it("treats multi-part Arabic grammar topics as one completed topic in progress selectors", () => {
+    const options = getSIECheckpointProgressOptions("ARB_G2_BAC", "ARB_NAHW");
+    const mamnooOptions = options.filter(option =>
+      option.value === "ARB_U2_N3"
+      || option.label.includes("الممنوع من الصرف")
+      || option.label.includes("تابع الممنوع")
+    );
+    expect(mamnooOptions).toHaveLength(1);
+    expect(mamnooOptions[0]).toMatchObject({
+      value: "ARB_U2_N3",
+      label: "الممنوع من الصرف وعلل منعه",
+    });
+    expect(options.find(option => option.value === "ARB_U3_N1")?.label)
+      .toBe("النعت والبدل والتمييز بينهما");
+    expect(options.findIndex(option => option.value === "ARB_U3_N1"))
+      .toBe(options.findIndex(option => option.value === "ARB_U2_N3") + 1);
+
+    for (const id of ["ARB_U2_N1", "ARB_U2_N2", "ARB_U2_N3"]) {
+      expect(normalizeSIECheckpointFrontier("ARB_G2_BAC", "ARB_NAHW", id)).toBe("ARB_U2_N3");
+    }
+    expect(normalizeSIECheckpointFrontier("ARB_G2_BAC", "ARB_NAHW", "ARB_U3_N1")).toBe("ARB_U3_N1");
   });
 
   it("returns readable Arabic types and source-aware labels", () => {
