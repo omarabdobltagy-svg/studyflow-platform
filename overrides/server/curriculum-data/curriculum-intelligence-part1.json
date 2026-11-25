@@ -172,6 +172,12 @@
             }
           ]
         }
+      ],
+      "learningIntent": [
+        "The book integrates authentic informational, prose, and poetry texts with listening, speaking, reading, writing, critical thinking, creativity, and aesthetic appreciation.",
+        "Grammar is presented as functional language use that organizes thought and controls meaning in coherent argumentative and creative writing, not as isolated memorization.",
+        "Rhetoric supports discourse analysis and persuasive communication.",
+        "Use the existing Arabic branches in the catalog unchanged. The book's learning outcomes explain lesson context; the teacher remains responsible for teaching and practicing the skills."
       ]
     },
     "HIS_G2_BAC": {
@@ -366,6 +372,12 @@
             }
           ]
         }
+      ],
+      "learningIntent": [
+        "The introduction explicitly moves beyond memorizing dates and narratives toward understanding historical change, causes, effects, and connections between past and present.",
+        "The book uses historical documents, official records, correspondence, maps, photographs, and infographics as learning sources.",
+        "The student is expected to build an evidence-based understanding of national identity, international relations, and historical decisions through teacher-led instruction.",
+        "Keep History as its existing single linear progress branch. Do not create chapter branches or label units as unimportant."
       ]
     },
     "PROG_AI_G2_BAC": {
@@ -650,6 +662,12 @@
             }
           ]
         }
+      ],
+      "learningIntent": [
+        "The Part 1 course moves progressively from foundational concepts to applications, using everyday situations, practical activities, discussion, and collaboration.",
+        "The Ministry introduction highlights critical thinking, problem solving, practical application, verification of information, responsible technology use, privacy, and digital safety.",
+        "Topics include information technology and society, AI concepts and ethics, cybersecurity, web applications, and web/media design.",
+        "Keep Programming and AI as its existing single linear progress branch. Use the book to understand the topic and sequence; do not generate coding quizzes, tests, or skill assessments for the student."
       ]
     },
     "ENG1_G2_BAC": {
@@ -754,7 +772,14 @@
           ]
         }
       ],
-      "limitation": "The scanned PDF's unit contents are verified visually; lesson-level page ranges and the complete text are not indexed. Do not invent individual topic sizes or difficulty."
+      "limitation": "The scanned PDF's unit contents are verified visually; lesson-level page ranges and the complete text are not indexed. Do not invent individual topic sizes or difficulty.",
+      "learningIntent": [
+        "The five Part 1 units integrate reading, listening, speaking, and writing around real-world topics.",
+        "Vocabulary and grammar are studied in context and remain separate tracking branches as already defined by the catalog.",
+        "Reading activities involve identifying main ideas and details, interpreting a writer's viewpoint, distinguishing fact and opinion, and supporting a position with evidence.",
+        "Writing includes organized analytical, discursive, opinion, and argumentative paragraphs. These are teacher-led skills, not StudyFlow-generated tests.",
+        "The story and GRE branches are separate existing catalog tracks; this Part 1 textbook profile does not assign them an exam weight or redefine their status."
+      ]
     },
     "SECOND_LANGUAGE_G2_BAC_PENDING": {
       "title": "اللغة الإيطالية – اللغة الأجنبية الثانية",
@@ -777,5 +802,25 @@
       ],
       "limitation": "لم يُعثر على ملف الكتاب الأصلي داخل المكتبة. هذه أسماء وحدات فقط؛ يلزم ملف الكتاب لتحديد الصفحات والحجم والمحتوى."
     }
+  },
+  "planningPolicy": {
+    "scope": "Part 1 / First-term textbooks only. This is a pedagogical reference, not a new curriculum taxonomy.",
+    "platformRole": "StudyFlow plans workload, follows teacher/course progress, schedules recorded lectures and already-assigned work. It is not the teacher and is not an examination platform.",
+    "teacherOwnsInstruction": "Subject skills and learning outcomes are taught and worked on by the teacher. StudyFlow may understand these outcomes to identify what a lesson is about, but must not teach, test, quiz, examine, or grade the student on them.",
+    "allowedPlanTasks": [
+      "Watch a known teacher lecture or a verified lesson resource.",
+      "Read or review the exact assigned textbook pages or the student's existing notes.",
+      "Complete homework or practice explicitly assigned by the teacher and already known to the student or platform.",
+      "Prepare materials for a known lesson and record actual progress or delays."
+    ],
+    "prohibitedPlanTasks": [
+      "AI-generated quizzes, tests, mock exams, diagnostic exams, or question banks.",
+      "AI-generated review questions or self-test prompts.",
+      "Tasks that ask StudyFlow to measure, grade, or certify mastery of curriculum skills.",
+      "Invented homework or practice questions that were not assigned by the teacher."
+    ],
+    "assessmentEvidence": "Existing teacher or external-platform scores may be stored and used as historical evidence when their source is known. They are not permission for StudyFlow to generate a new assessment.",
+    "branchTaxonomyPolicy": "Do not create, rename, merge, split, or reorder subject branches based on this file. The existing branch IDs, labels, and ordering in shared/sie-catalog.ts remain authoritative.",
+    "coverageBoundary": "This file describes learning intent for Part 1 only. It does not claim that Part 2 or the complete year has been analyzed."
   }
 }
