@@ -568,6 +568,11 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                       />
                       <span><b>مواعيد المادة غير ثابتة حاليًا</b><span className="block text-muted-foreground">اختَر ده لو المدرس بينزل المحاضرات بدون جدول أسبوعي محدد.</span></span>
                     </label>
+                    {!editMode && !form.teacherScheduleUnfixed[currentSetupSubjectId] && !(form.teacherSchedules[currentSetupSubjectId] ?? []).length && (
+                      <p className="mt-3 rounded-xl border border-primary/25 bg-primary/[.045] px-3 py-2 text-xs leading-6 text-muted-foreground">
+                        أضف موعدًا واحدًا على الأقل حتى تقدر المنصة تجهّز مذاكرتك قبل الحصة، أو فعّل «مواعيد المادة غير ثابتة حاليًا».
+                      </p>
+                    )}
                     <div className="mt-4 space-y-2.5">
                       {!form.teacherScheduleUnfixed[currentSetupSubjectId] && (form.teacherSchedules[currentSetupSubjectId] ?? []).map((slot, slotIndex) => (
                         <div key={slotIndex} className="grid gap-2 rounded-xl border border-border/70 bg-card p-3 sm:grid-cols-[1fr_1fr_.8fr_auto] sm:items-end">
