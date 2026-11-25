@@ -802,7 +802,8 @@ export const SIE_CHECKPOINT_CHOICES: Record<string, SIECheckpointChoice[]> = {
     // Additional official textbook checkpoints remain available even when they are not in the 21-item course index.
     { nodeId: "ARB_U1_N2", title: "تابع الأسماء الخمسة", unitTitle: "العلم والضمير", unitNumber: 1, lessonNumber: "2", lessonType: "grammar", sourceLabel: "كتاب الطالب", branchId: "ARB_NAHW", branchTitle: "النحو", branchType: "course_track" },
     { nodeId: "ARB_U2_N2", title: "تابع الممنوع من الصرف وعلل منعه", unitTitle: "سلطان الكلمة الرقمية", unitNumber: 2, lessonNumber: "2", lessonType: "grammar", sourceLabel: "كتاب الطالب", branchId: "ARB_NAHW", branchTitle: "النحو", branchType: "course_track" },
-    { nodeId: "ARB_U3_N1", title: "النعت والبدل والتمييز بينهما", unitTitle: "الإنسان وكرامته", unitNumber: 3, lessonNumber: "1", lessonType: "grammar", sourceLabel: "كتاب الطالب", branchId: "ARB_NAHW", branchTitle: "النحو", branchType: "course_track" },
+    { nodeId: "ARB_U3_N1_NAAT_BADAL", title: "النعت والبدل", unitTitle: "الإنسان وكرامته", unitNumber: 3, lessonNumber: "1", lessonType: "grammar", sourceLabel: "كتاب الطالب", branchId: "ARB_NAHW", branchTitle: "النحو", branchType: "course_track" },
+    { nodeId: "ARB_U3_N1_TAMYIZ", title: "التمييز", unitTitle: "الإنسان وكرامته", unitNumber: 3, lessonNumber: "1", lessonType: "grammar", sourceLabel: "كتاب الطالب", branchId: "ARB_NAHW", branchTitle: "النحو", branchType: "course_track" },
     { nodeId: "ARB_U3_N2", title: "العطف", unitTitle: "الإنسان وكرامته", unitNumber: 3, lessonNumber: "2", lessonType: "grammar", sourceLabel: "كتاب الطالب", branchId: "ARB_NAHW", branchTitle: "النحو", branchType: "course_track" },
     { nodeId: "ARB_U1_N3", title: "تطبيق على الأسماء الخمسة", unitTitle: "العلم والضمير", unitNumber: 1, lessonNumber: "3", lessonType: "grammar", sourceLabel: "كتاب الطالب - الجزء الأول", branchId: "ARB_NAHW", branchTitle: "النحو", branchType: "course_track" },
     { nodeId: "ARB_U2_N3", title: "تطبيق على الممنوع من الصرف وعلل منعه", unitTitle: "سلطان الكلمة الرقمية", unitNumber: 2, lessonNumber: "3", lessonType: "grammar", sourceLabel: "كتاب الطالب - الجزء الأول", branchId: "ARB_NAHW", branchTitle: "النحو", branchType: "course_track" },
@@ -1282,6 +1283,9 @@ export function normalizeSIECheckpointFrontier(
   frontierId: string,
 ): string {
   if (subjectId !== "ARB_G2_BAC" || branchId !== "ARB_NAHW") return frontierId;
+  // The retired combined lesson represented both split topics as completed.
+  // Map its persisted frontier to the last new checkpoint so existing progress is preserved.
+  if (frontierId === "ARB_U3_N1") return "ARB_U3_N1_TAMYIZ";
   const group = ARABIC_NAHW_TOPIC_GROUPS.find(item => item.nodeIds.includes(frontierId as never));
   return group?.value ?? frontierId;
 }
