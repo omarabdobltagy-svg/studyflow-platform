@@ -577,7 +577,7 @@ export default function Study() {
                       <p className="text-sm font-bold">فروع {subjectName}</p>
                       <p className="mt-1 text-[11px] text-muted-foreground">اختَر الفرع الذي تريد تسجيل التقدم فيه.</p>
                     </div>
-                    <span className="shrink-0 rounded-full border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-bold tabular-nums">{branchIndex + 1} / {branches.length}</span>
+                    <span className="shrink-0 rounded-full border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-bold tabular-nums">{visibleBranchPosition} / {branches.length}</span>
                   </div>
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
                     {branches.map((branch, index) => {
@@ -616,7 +616,7 @@ export default function Study() {
                   transition={{ duration: 0.42, ease: [.22, 1, .36, 1] }} className="space-y-4">
                   <div className="flex flex-wrap items-end justify-between gap-3">
                     <div>
-                      <p className="text-[10px] font-bold tracking-[0.12em] text-primary">الفرع الحالي · {branchIndex + 1}</p>
+                      <p className="text-[10px] font-bold tracking-[0.12em] text-primary">الفرع الحالي · {visibleBranchPosition}</p>
                       <h3 className="mt-1 text-lg font-bold">{branchDisplayTitle}</h3>
                       <p className="mt-1 text-xs leading-5 text-muted-foreground">{branchChoiceOptions.length} {currentBranchPointLabel} في فهرس هذا الفرع.</p>
                     </div>
