@@ -40,6 +40,7 @@ import {
   getLatestAiPlanByPromptPrefix,
   updateAiPlanPrompt,
   listRecentStudentActivityEvents,
+  listStudentTeacherMonitoringProfiles,
   recordStudentActivityEvent,
   startStudySession,
   finishStudySession,
@@ -70,7 +71,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { generatePersonalPlan } from "./planGenerator";
-import { scanSelectedTeacherSources } from "./teacher-content-monitor";
+import { parseYoutubeAtomFeed, scanSelectedTeacherSources } from "./teacher-content-monitor";
 import { isDailyPlanStale } from "./planLifecycle";
 import { createDailyPlanSourceFingerprint } from "./dailyPlanFingerprint";
 import { storageDelete, storagePut } from "./storage";
@@ -203,6 +204,80 @@ async function scanTeacherSourcesForStudent(userId: number): Promise<boolean> {
   } finally {
     if (teacherSourceScanLocks.get(userId) === task) teacherSourceScanLocks.delete(userId);
   }
+}
+
+export async function ingestYoutubeWebSubFeed(teacherId: string, xml: string) {
+  const teacher = getSIETeacher(teacherId);
+  if (!teacher) return { received: 0, updatedProfiles: 0 };
+  const updates = parseYoutubeAtomFeed(xml, {
+    teacherId,
+    teacherName: teacher.nameAr,
+  });
+  if (!updates.length) return { received: 0, updatedProfiles: 0 };
+
+  const profiles = await listStudentTeacherMonitoringProfiles();
+  let updatedProfiles = 0;
+  const scanKey = teacherId + ":youtube";
+  const observedAt = new Date().toISOString();
+  for (const profileTarget of profiles) {
+    const teacherChoices = {
+      ...(profileTarget.teacherSelections ?? {}),
+      ...((profileTarget.selection?.teacherChoices && typeof profileTarget.selection.teacherChoices === "object")
+        ? profileTarget.selection.teacherChoices as Record<string, string>
+        : {}),
+    };
+    if (!Object.values(teacherChoices).includes(teacherId)) continue;
+
+    const latestProfile = await getStudentProfile(profileTarget.userId);
+    if (!latestProfile) continue;
+    const latestSelection = (latestProfile.selection ?? {}) as Record<string, any>;
+    const previousUpdates = Array.isArray(latestSelection.teacherPublicUpdates)
+      ? latestSelection.teacherPublicUpdates as Array<Record<string, any>>
+      : [];
+    const knownIds = new Set(previousUpdates.map(update => String(update.externalId ?? "")).filter(Boolean));
+    const newUpdates = updates.filter(update => !knownIds.has(update.externalId));
+    const previousScanState = (latestSelection.teacherPublicScanState ?? {}) as Record<string, string>;
+    const nextScanState = { ...previousScanState, [scanKey]: observedAt };
+    const scanStateChanged = previousScanState[scanKey] !== observedAt;
+    if (!newUpdates.length && !scanStateChanged) continue;
+
+    if (newUpdates.length) {
+      const freshCutoff = Date.now() - 30 * 24 * 60 * 60 * 1_000;
+      const mergedUpdates = [...newUpdates, ...previousUpdates]
+        .filter(update => {
+          const publishedAt = Date.parse(String(update.publishedAt));
+          return Number.isFinite(publishedAt) && publishedAt >= freshCutoff;
+        })
+        .sort((left, right) => Date.parse(String(right.publishedAt)) - Date.parse(String(left.publishedAt)))
+        .slice(0, 36);
+      await updateStudentProfileSelection(profileTarget.userId, {
+        ...latestSelection,
+        teacherPublicUpdates: mergedUpdates,
+        teacherPublicScanState: nextScanState,
+      });
+      await recordStudentActivityEvent({
+        userId: profileTarget.userId,
+        eventType: "teacher.public_update_detected",
+        entityType: "teacher_source",
+        summary: "تم استقبال تحديث عام جديد من قناة المدرس عبر إشعار يوتيوب",
+        metadata: {
+          teacherId,
+          count: newUpdates.length,
+          source: "youtube_websub",
+          externalIds: newUpdates.map(item => item.externalId),
+        },
+      });
+      if (!dailyPlanLocks.has(profileTarget.userId)) queueDailyPlanReconciliation(profileTarget.userId);
+    } else {
+      await updateStudentProfileSelection(profileTarget.userId, {
+        ...latestSelection,
+        teacherPublicScanState: nextScanState,
+      });
+    }
+    updatedProfiles += 1;
+  }
+
+  return { received: updates.length, updatedProfiles };
 }
 
 function queueTeacherSourceScan(userId: number) {
