@@ -35,6 +35,23 @@ export default function Planner() {
   const history = trpc.plans.list.useQuery();
   const profile = trpc.studentProfile.get.useQuery();
   const learning = trpc.learning.get.useQuery();
+  const dailySnapshot = trpc.plans.currentDaily.useQuery(undefined, {
+    staleTime: 10_000,
+    refetchInterval: query => query.state.data?.needsRefresh || !query.state.data?.plan ? 15_000 : 180_000,
+    refetchOnWindowFocus: true,
+    retry: 1,
+  });
+  const ensureDaily = trpc.plans.ensureDaily.useMutation({
+    onSuccess: async result => {
+      await Promise.all([
+        utils.plans.currentDaily.invalidate(),
+        utils.dashboard.summary.invalidate(),
+        utils.tasks.list.invalidate(),
+      ]);
+      toast.success(result.generated ? "تم تحديث خطة اليوم والمهام المرتبطة بها." : "خطة اليوم محدثة بالفعل.");
+    },
+    onError: error => toast.error("تعذّر تحديث خطة اليوم: " + error.message),
+  });
   const backlogBySubject = useMemo(
     () => buildLearningBacklogSummary(
       profile.data?.subjectIds ?? [],
@@ -80,6 +97,100 @@ export default function Planner() {
     {history.isError && <QueryErrorNotice onRetry={() => void history.refetch()} label="تعذّر تحميل خططك المحفوظة." />}
     {profile.isError && <QueryErrorNotice onRetry={() => void profile.refetch()} label="تعذّر تحميل ملفك الدراسي؛ لا يمكن إنشاء خطة مخصصة قبل عودة بيانات الملف." />}
     {learning.isError && <QueryErrorNotice onRetry={() => void learning.refetch()} label="تعذّر تحميل مواضع الفروع؛ أعد المحاولة حتى يستطيع المخطط قراءة التراكم المحسوب." />}
+    {dailySnapshot.isError && <QueryErrorNotice onRetry={() => void dailySnapshot.refetch()} label="تعذّر تحميل خطة اليوم التلقائية." />}
+    <section className="app-card sf-planner-surface mb-6 overflow-hidden">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 p-4 sm:p-5">
+        <div className="min-w-0">
+          <p className="eyebrow">AUTO DAILY PLAN</p>
+          <h2 className="mt-1 text-lg font-bold">خطة اليوم التلقائية</h2>
+          <p className="mt-1 max-w-2xl text-xs leading-6 text-muted-foreground">
+            دي الخطة التشغيلية التي يستخدمها StudyFlow لمتابعة يومك وتحويل الأولويات إلى مهام. تتحدث عند تغير تقدمك أو ظروفك أو المهام أو وصول تحديث دراسي موثوق.
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          className="shrink-0 rounded-xl"
+          disabled={ensureDaily.isPending || dailySnapshot.isLoading}
+          onClick={() => ensureDaily.mutate({ dailyMinutes: dailySnapshot.data?.dailyMinutes ?? dailyMinutes })}
+        >
+          {ensureDaily.isPending ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+          تحديث الخطة الآن
+        </Button>
+      </header>
+      <div className="p-4 sm:p-5">
+        {dailySnapshot.isLoading ? (
+          <div className="space-y-3"><div className="h-5 w-2/3 animate-pulse rounded bg-muted" /><div className="h-4 w-full animate-pulse rounded bg-muted" /></div>
+        ) : dailySnapshot.data?.plan ? (
+          <>
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className={"rounded-full px-2.5 py-1 font-semibold " + (dailySnapshot.data.needsRefresh ? "bg-amber-500/10 text-amber-700 dark:text-amber-300" : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300")}>
+                {dailySnapshot.data.needsRefresh ? "توجد تغييرات تنتظر إعادة التخطيط" : "الخطة متزامنة مع بياناتك"}
+              </span>
+              <span className="text-muted-foreground">
+                {dailySnapshot.data.generatedAt
+                  ? "آخر بناء: " + new Intl.DateTimeFormat("ar-EG", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Cairo" }).format(new Date(dailySnapshot.data.generatedAt))
+                  : "لم يُسجل وقت بناء"}
+              </span>
+              <span className="text-muted-foreground">· {dailySnapshot.data.taskCount} خطوة</span>
+            </div>
+            <h3 className="mt-3 text-base font-bold">{dailySnapshot.data.plan.title}</h3>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">{dailySnapshot.data.plan.summary}</p>
+            <div className="mt-4 grid gap-2 md:grid-cols-3">
+              {dailySnapshot.data.plan.steps.slice(0, 3).map((step: any, index: number) => (
+                <article key={step.curriculumNodeIds?.join("-") || index} className="min-w-0 rounded-xl border border-border/70 bg-muted/20 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                    <span className="font-semibold text-primary">{step.day}</span>
+                    <span className="text-muted-foreground">{step.minutes} دقيقة</span>
+                  </div>
+                  <h4 className="mt-2 break-words text-sm font-semibold">{step.title}</h4>
+                  <p className="mt-1 line-clamp-3 text-xs leading-5 text-muted-foreground">{step.detail}</p>
+                </article>
+              ))}
+            </div>
+            <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
+              <a href="/tasks" className="font-semibold text-primary hover:underline">المهام التي أنشأتها الخطة</a>
+              <a href="/study" className="font-semibold text-primary hover:underline">تحديث موضعك في المنهج</a>
+            </div>
+          </>
+        ) : (
+          <div className="rounded-xl bg-muted/35 p-4">
+            <p className="text-sm font-semibold">لم يتم إنشاء خطة يومية حتى الآن.</p>
+            <p className="mt-1 text-xs leading-6 text-muted-foreground">سيقرأ المخطط ملفك وموادك وتقدمك والوقت المتاح، ثم ينشئ أول خطة تشغيلية.</p>
+            <Button className="mt-3 rounded-xl" onClick={() => ensureDaily.mutate({ dailyMinutes })} disabled={ensureDaily.isPending}>
+              {ensureDaily.isPending ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+              أنشئ خطة اليوم
+            </Button>
+          </div>
+        )}
+      </div>
+    </section>
+    <section className="app-card sf-planner-surface mb-6 overflow-hidden">
+      <div className="p-4 sm:p-5">
+        <p className="eyebrow">HOW THE AI DECIDES</p>
+        <h2 className="mt-1 text-lg font-bold">كيف يختار المخطط أولوياتك؟</h2>
+        <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
+          المخطط لا يساوي بين المحاضرات ولا يوزعها عشوائيًا على الأيام. يبدأ باستبعاد ما سجلته كمكتمل، ثم يستخدم أوزان الامتحان المتاحة، وفجوات المنهج، ونتائجك، والمتطلبات السابقة، وصعوبة وحجم الدرس، ووقت وطاقة اليوم.
+        </p>
+        <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            ["01", "اكتمال المنهج", "آخر نقطة حددتها مكتملة تُغلق ما قبلها، وتوجّه النظام إلى النقطة التالية"],
+            ["02", "وزن الامتحان", "يستخدم درجات المكوّنات عندما تكون المواصفة موثقة لنفس الفصل والامتحان"],
+            ["03", "مستواك الفعلي", "يقرأ التقييمات والمواضع الصعبة والفجوات داخل كل فرع على حدة"],
+            ["04", "قدرتك اليوم", "يحدد طول الجلسة وحمل اليوم حسب الوقت والطاقة والموارد المتاحة"],
+          ].map(([number, title, detail]) => (
+            <article key={number} className="rounded-xl border border-border/70 bg-muted/20 p-3">
+              <span className="text-[10px] font-bold text-primary">{number}</span>
+              <h3 className="mt-1 text-sm font-bold">{title}</h3>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">{detail}</p>
+            </article>
+          ))}
+        </div>
+        <p className="mt-3 text-[11px] leading-5 text-muted-foreground">
+          حدود البيانات الحالية: وزن القصة والقواعد والقراءة والكتابة بالإنجليزية موثق لمواصفة أول ترم فقط. التوزيع التفصيلي للتاريخ والبرمجة والنهائي السنوي لا يُخمن؛ يُعرض كغير مؤكد حتى تتوفر مواصفته المعتمدة.
+        </p>
+      </div>
+    </section>
     <section className="sf-feature-hero relative mb-6 overflow-hidden rounded-[1.55rem] p-6 text-primary-foreground shadow-2xl sm:p-8"><div className="onboarding-orb onboarding-orb-one" /><div className="onboarding-orb onboarding-orb-two" /><div className="relative grid gap-6 lg:grid-cols-[1.1fr_.9fr]"><div><p className="eyebrow text-primary-foreground/65">من الوصف إلى مسار عملي</p><h2 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">خطة مبنية على المنهج، لا على تخمين عدد المهام.</h2><p className="mt-3 max-w-xl text-sm leading-7 text-primary-foreground/75">يربط المخطط الدروس بتقدمك وموضع المدرس وتقييمك للصعوبة، ويستخدم نصوص الكتب المتاحة فعليًا. ثم يقسم الدروس الكبيرة إلى جلسات فهم وتطبيق واسترجاع، ويرتبها حسب الأولوية والوقت.</p><div className="mt-5 flex flex-wrap gap-2">{["فجوة كل وحدة مستقلة", "أولوية وصعوبة وحجم الدرس", "تحويل تلقائي إلى مهام"].map(item => <span key={item} className="rounded-full border border-white/12 bg-white/8 px-3 py-1.5 text-xs text-primary-foreground/75">{item}</span>)}</div></div><div className="rounded-2xl border border-white/12 bg-white/8 p-4 backdrop-blur-sm"><div className="flex items-center gap-3"><span className="flex size-10 items-center justify-center rounded-xl bg-white/12"><Sparkles className="size-5 text-violet-200" /></span><div><p className="font-semibold">مبدأ التخطيط</p><p className="mt-1 text-xs leading-5 text-primary-foreground/65">جلسة تبدأ بها اليوم أفضل من خطة لا تفتحها.</p></div></div>{profile.data && <div className="mt-4 flex items-center gap-2 rounded-xl bg-black/10 p-3 text-xs text-primary-foreground/75"><UserRound className="size-4" />{profile.data.studentName} · {profile.data.track}</div>}<a href="/study" className="mt-3 flex items-center justify-between rounded-xl border border-white/15 bg-white/8 px-3 py-3 text-sm font-semibold text-primary-foreground hover:bg-white/12"><span>تحديث موضع المدرس وتقدمك</span><ArrowUpRight className="size-4" /></a></div></div></section>
     {profile.data && <section className="app-card sf-planner-surface mb-6 p-5 sm:p-6">
        <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><p className="eyebrow">ملف الدراسة والتراكم</p><h2 className="mt-1 font-bold">الفجوات المحسوبة من مواضعك</h2><p className="mt-1 text-xs leading-6 text-muted-foreground">المخطط يقرأ موضعك وموضع المدرس أو المجموعة داخل كل فرع، ولا يحوّل الفروع غير المكتملة إلى صفر.</p></div><div className="flex items-center gap-2"><span className="rounded-xl bg-secondary px-3 py-2 text-xs font-semibold text-primary">{profile.data.subjectIds.length} مواد</span><a href="/study" className="inline-flex items-center gap-1 rounded-xl border border-border px-3 py-2 text-xs font-semibold hover:border-primary/40 hover:text-primary">تحديث المواضع <ArrowUpRight className="size-3.5" /></a></div></div>
