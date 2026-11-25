@@ -455,7 +455,7 @@ export default function Study() {
             <div>
               <p className="text-[10px] font-bold tracking-[0.14em] text-primary">اختيار التقدم</p>
               <h2 className="mt-1 text-xl font-bold">ابدأ من الوحدة، أو افتح الدروس</h2>
-              <p className="mt-1 text-sm leading-6 text-muted-foreground">ابدأ بالوحدات الرسمية من الكتاب. فروع التعبير والإملاء والأدب والقصة تظهر كمسارات كورس المدرس بشكل مستقل. تقدر تسجل اكتمال وحدة أو تضغط «إظهار باقي الدروس» للتفصيل.</p>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">{subjectId === "ENG1_G2_BAC" ? "كل الوحدات العشر داخل فرع Units، وداخل كل وحدة دروس Vocabulary وGrammar بأرقامها، ثم موضوعات الكتاب." : "ابدأ بالوحدات الرسمية من الكتاب. فروع التعبير والإملاء والأدب والقصة تظهر كمسارات كورس المدرس بشكل مستقل. تقدر تسجل اكتمال وحدة أو تضغط «إظهار باقي الدروس» للتفصيل."}</p>
             </div>
             <div className="inline-flex rounded-xl border border-border bg-muted/40 p-1">
               <button type="button" onClick={() => setStudyViewMode("units")} aria-pressed={studyViewMode === "units"}
@@ -513,7 +513,7 @@ export default function Study() {
                       </span>
                     </div>
                     <div className="mt-4 flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">{completedTopics} من {totalTopics} موضوع</span>
+                      <span className="text-muted-foreground">{completedTopics} من {totalTopics} {subjectId === "ENG1_G2_BAC" ? "درس / موضوع" : "موضوع"}</span>
                       <span className="font-bold text-primary">{percent}٪</span>
                     </div>
                     <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
@@ -537,10 +537,15 @@ export default function Study() {
                               ? "مفردات وتعبيرات الوحدة"
                               : choice.title;
                             return (
-                              <div key={choice.nodeId} className="sf-english-lesson-row flex min-w-0 items-center gap-2 rounded-xl border border-border/60 bg-card px-3 py-2.5">
+                              <button key={choice.nodeId} type="button" onClick={() => {
+                                setBranchTransition(null);
+                                setBranchId(choice.displayBranchId);
+                                setStudyViewMode("lessons");
+                              }} className="sf-english-lesson-row flex w-full min-w-0 items-center gap-2 rounded-xl border border-border/60 bg-card px-3 py-2.5 text-right transition-colors hover:border-primary/40 hover:bg-accent/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
                                 <span className="sf-english-lesson-type shrink-0 rounded-lg bg-secondary px-2.5 py-1 text-[10px] font-extrabold text-secondary-foreground">{lessonLabel}</span>
                                 <span className="min-w-0 flex-1 text-xs font-semibold leading-6 text-foreground">{helperText}</span>
-                              </div>
+                                <span className="shrink-0 text-[10px] font-semibold text-primary">متابعة</span>
+                              </button>
                             );
                           })}
                         </div>
@@ -555,11 +560,15 @@ export default function Study() {
                               const sectionLabel = choice.nodeId.includes("_SEC_A_") ? "Section A"
                                 : choice.nodeId.includes("_SEC_B_") ? "Section B" : "";
                               return (
-                                <div key={choice.nodeId} className="sf-english-lesson-row flex min-w-0 items-start gap-2 rounded-xl border border-border/60 bg-card px-3 py-2">
-                                  <span className="sf-english-section-tag shrink-0 rounded-md border border-border bg-muted px-2 py-1 text-[9px] font-semibold text-muted-foreground">{`Topic ${choice.lessonNumber}`}</span>
+                                <button key={choice.nodeId} type="button" onClick={() => {
+                                  setBranchTransition(null);
+                                  setBranchId(choice.displayBranchId);
+                                  setStudyViewMode("lessons");
+                                }} className="sf-english-lesson-row flex w-full min-w-0 items-start gap-2 rounded-xl border border-border/60 bg-card px-3 py-2 text-right transition-colors hover:border-primary/40 hover:bg-accent/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+                                  <span className="sf-english-section-tag shrink-0 rounded-md border border-border bg-muted px-2 py-1 text-[9px] font-semibold text-muted-foreground">{"Topic " + choice.lessonNumber}</span>
                                   <span className="min-w-0 flex-1 text-xs leading-6 text-foreground">{choice.title}</span>
                                   {sectionLabel && <span className="sf-english-section-tag shrink-0 rounded-md border border-border bg-muted px-2 py-1 text-[9px] font-semibold text-muted-foreground">{sectionLabel}</span>}
-                                </div>
+                                </button>
                               );
                             })}
                           </div>
