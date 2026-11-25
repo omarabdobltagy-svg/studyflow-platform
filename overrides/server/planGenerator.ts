@@ -680,8 +680,6 @@ function getPlanningBranches(subjectId: string) {
 function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof getStudentProfile>>>) {
   const selection = (profile.selection || {}) as Record<string, any>;
   const choices = (selection.teacherChoices || profile.teacherSelections || {}) as Record<string, string>;
-  const frontiers = (selection.teacherFrontiers || {}) as Record<string, string>;
-  const teacherStates = (selection.teacherProgressState || {}) as Record<string, Record<string, any>>;
   const lessonProgress = mergeSubjectLessonProgress(selection.subjectLessonProgress, selection.sq3rProgress);
   const courseProgress = (selection.learningCourseProgress || {}) as Record<string, any>;
   const progressSnapshot = buildPlannerProgressSnapshot(profile);
