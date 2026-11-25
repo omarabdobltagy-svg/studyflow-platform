@@ -9,6 +9,7 @@ import {
   getSIECheckpointChoicesForTeacher,
   getSIECheckpointProgressOptions,
   getSIECheckpointProgressBranches,
+  getSIEStudentVisibleBranches,
   getSIECheckpointUnits,
   matchSIECheckpointTask,
   normalizeSIECheckpointFrontier,
@@ -97,11 +98,14 @@ describe("Arabic course taxonomy", () => {
   it("groups the official Arabic textbook into three units across its independent branches", () => {
     const units = getSIECheckpointUnits("ARB_G2_BAC");
     const officialUnits = units.filter(unit => unit.isOfficialUnit);
-    expect(officialUnits.map(unit => unit.unitNumber)).toEqual([1, 2, 3]);
+    expect(officialUnits.map(unit => unit.unitNumber)).toEqual([1, 2, 3, 4, 5, 6]);
     expect(officialUnits.map(unit => unit.unitTitle)).toEqual([
       "العلم والضمير",
       "سلطان الكلمة الرقمية",
       "الإنسان وكرامته",
+      "بناء الوعي",
+      "فن التفاوض والقيادة",
+      "الثقافة أسلوب حياة",
     ]);
     const unitThreeNahw = officialUnits[2].branches.find(branch => branch.branchId === "ARB_NAHW");
     expect(unitThreeNahw?.choices.map(choice => choice.title)).toContain("النعت والبدل والتمييز بينهما");
@@ -117,9 +121,50 @@ describe("Arabic course taxonomy", () => {
     expect(titles).toContain("الأدب والقصة");
     expect(new Set(teacherTopics.map(unit => unit.unitId)).size).toBe(teacherTopics.length);
     for (const unit of teacherTopics) expect(unit.branches).toHaveLength(1);
-    expect(teacherTopics.find(unit => unit.title === "التعبير")?.lessonCount).toBe(2);
-    expect(teacherTopics.find(unit => unit.title === "الإملاء")?.lessonCount).toBe(2);
-    expect(teacherTopics.find(unit => unit.title === "الأدب والقصة")?.lessonCount).toBe(2);
+    expect(teacherTopics.find(unit => unit.title === "التعبير")?.lessonCount).toBe(7);
+    expect(teacherTopics.find(unit => unit.title === "الإملاء")?.lessonCount).toBe(3);
+    expect(teacherTopics.find(unit => unit.title === "الأدب والقصة")?.lessonCount).toBe(10);
+  });
+
+  it("hides the standalone Reading branch while preserving legacy text IDs inside official units", () => {
+    const rawReading = getSIECheckpointBranches("ARB_G2_BAC").find(branch => branch.branchId === "ARB_READING");
+    expect(rawReading?.choices.map(choice => choice.nodeId)).toContain("ARB_U1_L1");
+
+    const visible = getSIEStudentVisibleBranches("ARB_G2_BAC");
+    expect(visible.map(branch => branch.branchId)).not.toContain("ARB_READING");
+    expect(visible.map(branch => branch.branchId)).toEqual([
+      "ARB_NAHW", "ARB_BALAGHA", "ARB_TEXTS", "ARB_EXPRESSION", "ARB_SPELLING", "ARB_LITERATURE",
+    ]);
+
+    const firstUnitReading = getSIECheckpointUnits("ARB_G2_BAC")
+      .find(unit => unit.unitNumber === 1)
+      ?.branches.find(item => item.branchId === "ARB_READING");
+    expect(firstUnitReading?.branchTitle).toBe("نصوص الوحدة");
+    expect(firstUnitReading?.choices.map(choice => choice.nodeId)).toContain("ARB_U1_L1");
+  });
+
+  it("includes all ten works from the independent Arabic literature book and their authors", () => {
+    const literature = getSIECheckpointProgressBranches("ARB_G2_BAC")
+      .find(branch => branch.branchId === "ARB_LITERATURE");
+    expect(literature?.choices).toHaveLength(10);
+    expect(literature?.choices.map(choice => choice.title)).toEqual([
+      "حكايات الغريب", "عودة الروح", "كفاح طيبة", "الأرض", "شمس وليل",
+      "العبرات", "وا إسلاماه", "عبقرية عمر", "رجل تحت الصفر", "صح النوم",
+    ]);
+    expect(literature?.choices[2]).toMatchObject({ author: "نجيب محفوظ", lessonType: "story" });
+    expect(getSIECheckpointChoiceDisplayLabel(literature!.choices[2])).toContain("المؤلف: نجيب محفوظ");
+  });
+
+  it("adds source-labelled expression and spelling applications without presenting them as official lesson headings", () => {
+    const branches = getSIECheckpointBranches("ARB_G2_BAC");
+    const expression = branches.find(branch => branch.branchId === "ARB_EXPRESSION");
+    const spelling = branches.find(branch => branch.branchId === "ARB_SPELLING");
+    expect(expression?.choices.map(choice => choice.nodeId)).toContain("ARB_EXP_U1_INFO_PARAGRAPH");
+    expect(expression?.choices.find(choice => choice.nodeId === "ARB_EXP_U1_CRITICAL_PARAGRAPH")?.sourceLabel)
+      .toContain("ص36");
+    expect(spelling?.choices.map(choice => choice.nodeId)).toContain("ARB_SPELL_U1_HAMZA_PRACTICE");
+    expect(spelling?.choices.find(choice => choice.nodeId === "ARB_SPELL_U1_HAMZA_PRACTICE")?.note)
+      .toContain("ليس درسًا وزاريًا مستقلًا");
   });
 
   it("uses the student's visible Arabic topic units to match existing tasks without changing progress", () => {
