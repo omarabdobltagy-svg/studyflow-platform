@@ -266,7 +266,7 @@ async function buildDailyPlanOperationalContext(userId: number) {
       event.source === "routine" ? "روتين" : "",
     ].filter(Boolean).join(" — "));
   const activeGoals = goals
-    .filter(goal => goal.status !== "completed" && goal.status !== "done")
+    .filter(goal => goal.status === "active")
     .slice(0, 10)
     .map(goal => [
       goal.title,
@@ -274,7 +274,6 @@ async function buildDailyPlanOperationalContext(userId: number) {
       "التقدم: " + Math.round(Number(goal.progress) || 0) + "%",
     ].filter(Boolean).join(" — "));
   const availableBooks = books
-    .filter(book => book.status !== "archived")
     .slice(0, 12)
     .map(book => book.title);
   return [
