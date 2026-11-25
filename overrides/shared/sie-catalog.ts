@@ -1297,8 +1297,10 @@ export function matchSIECheckpointTask(
           ? 1
           : taskNormalized.includes(titleNormalized) || titleNormalized.includes(taskNormalized)
             ? 0.98
-            : overlap / Math.max(taskTokens.length, titleTokens.length);
-        if (score < 0.58 || (taskTokens.length > 1 && overlap < 2)) continue;
+            : overlap / Math.min(taskTokens.length, titleTokens.length);
+        // Short task labels often omit the rest of a longer textbook title.
+        // Require at least two meaningful shared Arabic terms to avoid generic matches.
+        if (score < 0.58 || overlap < 2) continue;
         candidates.push({
           subjectId,
           branchId: branch.branchId,
