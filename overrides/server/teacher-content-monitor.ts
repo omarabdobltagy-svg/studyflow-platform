@@ -10,6 +10,7 @@ export type TeacherPublicUpdate = {
   url: string;
   publishedAt: string;
   observedAt: string;
+  durationMinutes?: number;
 };
 
 export type TeacherSourceScanResult = {
@@ -51,7 +52,7 @@ export function parseYoutubeAtomFeed(
     const videoId = xmlTag(entry, "yt:videoId");
     const title = xmlTag(entry, "title");
     const publishedAt = xmlTag(entry, "published");
-    const description = xmlTag(entry, "media:description").slice(0, 1_200);
+    const description = xmlTag(entry, "media:description").slice(0, 2_200);
     if (!videoId || !title || !Number.isFinite(Date.parse(publishedAt))) return [];
     return [{
       externalId: "youtube:" + videoId,
@@ -65,6 +66,13 @@ export function parseYoutubeAtomFeed(
       observedAt: observedAt.toISOString(),
     }];
   });
+}
+
+export function parseYoutubeDurationMinutes(duration: string): number | undefined {
+  const match = duration.match(/^PT(?:(\\d+)H)?(?:(\\d+)M)?(?:(\\d+)S)?$/i);
+  if (!match) return undefined;
+  const totalSeconds = Number(match[1] ?? 0) * 3_600 + Number(match[2] ?? 0) * 60 + Number(match[3] ?? 0);
+  return totalSeconds > 0 ? Math.ceil(totalSeconds / 60) : undefined;
 }
 
 export function shouldScanTeacherSource(lastScannedAt: string | undefined, now = Date.now()) {
@@ -196,10 +204,37 @@ export async function scanSelectedTeacherSources(
     scanState[item.key] = now.toISOString();
     updates.push(...item.updates);
   }
-  return {
-    updates: updates
-      .sort((left, right) => Date.parse(right.publishedAt) - Date.parse(left.publishedAt))
-      .slice(0, MAX_UPDATES_PER_SCAN),
-    scanState,
-  };
+  let orderedUpdates = updates
+    .filter(update => now.getTime() - Date.parse(update.publishedAt) <= 30 * 24 * 60 * 60 * 1_000)
+    .sort((left, right) => Date.parse(right.publishedAt) - Date.parse(left.publishedAt))
+    .slice(0, MAX_UPDATES_PER_SCAN);
+
+  const apiKey = process.env.YOUTUBE_API_KEY;
+  const videoIds = orderedUpdates
+    .filter(update => update.sourceType === "youtube")
+    .map(update => update.externalId.replace(/^youtube:/, ""));
+  if (apiKey && videoIds.length) {
+    try {
+      const metadata = await fetchJson(
+        "https://www.googleapis.com/youtube/v3/videos?part=contentDetails&id="
+          + encodeURIComponent(videoIds.join(",")) + "&key=" + encodeURIComponent(apiKey),
+      );
+      const durationById = new Map<string, number>();
+      for (const video of Array.isArray(metadata.items) ? metadata.items : []) {
+        const minutes = typeof video.contentDetails?.duration === "string"
+          ? parseYoutubeDurationMinutes(video.contentDetails.duration)
+          : undefined;
+        if (typeof video.id === "string" && minutes) durationById.set(video.id, minutes);
+      }
+      orderedUpdates = orderedUpdates.map(update => {
+        const videoId = update.externalId.replace(/^youtube:/, "");
+        const durationMinutes = durationById.get(videoId);
+        return durationMinutes ? { ...update, durationMinutes } : update;
+      });
+    } catch {
+      // Duration enrichments are optional; title, description and source link remain usable.
+    }
+  }
+
+  return { updates: orderedUpdates, scanState };
 }
