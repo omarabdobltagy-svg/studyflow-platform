@@ -9,7 +9,7 @@ describe("teacher public channel monitor", () => {
           <yt:videoId>abc123</yt:videoId>
           <title>مراجعة الوحدة الثانية &amp; حل التقييمات</title>
           <published>2026-11-24T18:00:00+00:00</published>
-          <media:description><![CDATA[شرح ومراجعة &amp; تطبيق]]></media:description>
+          <media:description><![CDATA[شرح ومراجعة & تطبيق]]></media:description>
         </entry>
       </feed>`;
     const updates = parseYoutubeAtomFeed(xml, { teacherId: "T_EN_MAHMOUD_RADWAN", teacherName: "إنجلشاوي" }, new Date("2026-11-25T00:00:00Z"));
