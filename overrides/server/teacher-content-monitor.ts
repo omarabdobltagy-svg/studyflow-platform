@@ -116,9 +116,12 @@ async function fetchText(url: string) {
   return response.text();
 }
 
-async function fetchJson(url: string) {
+async function fetchJson(url: string, accessToken?: string) {
   const response = await fetch(url, {
-    headers: { "user-agent": "StudyFlow-Teacher-Updates/1.0 (+public-page-monitor)" },
+    headers: {
+      "user-agent": "StudyFlow-Teacher-Updates/1.0 (+public-page-monitor)",
+      ...(accessToken ? { authorization: "Bearer " + accessToken } : {}),
+    },
     signal: AbortSignal.timeout(8_000),
   });
   if (!response.ok) throw new Error("Public teacher page returned HTTP " + response.status);
@@ -173,8 +176,7 @@ export async function scanSelectedTeacherSources(
         const url = new URL("https://graph.facebook.com/" + graphVersion + "/" + encodeURIComponent(pageId) + "/feed");
         url.searchParams.set("fields", "id,message,story,created_time,permalink_url");
         url.searchParams.set("limit", "10");
-        url.searchParams.set("access_token", pageToken);
-        const payload = await fetchJson(url.toString());
+        const payload = await fetchJson(url.toString(), pageToken);
         const posts = Array.isArray(payload.data) ? payload.data as Array<Record<string, unknown>> : [];
         const updates = posts.flatMap((item: Record<string, unknown>) => {
           const externalId = typeof item.id === "string" ? item.id : "";
