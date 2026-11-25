@@ -220,6 +220,74 @@ function queueDailyPlanEnsure(userId: number, dailyMinutes: number) {
   timer.unref?.();
 }
 
+async function buildDailyPlanOperationalContext(userId: number) {
+  const [tasks, goals, calendar, books] = await Promise.all([
+    listTasks(userId),
+    listGoals(userId),
+    listCalendarEvents(userId, "Africa/Cairo"),
+    listBooks(userId),
+  ]);
+  const now = new Date();
+  const horizon = now.getTime() + 14 * 24 * 60 * 60 * 1_000;
+  const formatDate = (value: unknown) => {
+    if (!value) return "";
+    const date = value instanceof Date ? value : new Date(String(value));
+    if (!Number.isFinite(date.getTime())) return "";
+    return new Intl.DateTimeFormat("ar-EG", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: "Africa/Cairo",
+    }).format(date);
+  };
+  const openTasks = tasks
+    .filter(task => task.status !== "done")
+    .slice(0, 20)
+    .map(task => [
+      task.title,
+      "الأولوية: " + (task.priority || "متوسطة"),
+      task.dueAt ? "الموعد: " + formatDate(task.dueAt) : "",
+      task.notes ? "ملاحظة: " + String(task.notes).slice(0, 100) : "",
+    ].filter(Boolean).join(" — "));
+  const upcomingEvents = calendar
+    .filter(event => {
+      const start = event.startAt instanceof Date ? event.startAt : new Date(String(event.startAt));
+      return Number.isFinite(start.getTime()) && start.getTime() >= now.getTime() - 60 * 60 * 1_000 && start.getTime() <= horizon;
+    })
+    .slice(0, 20)
+    .map(event => [
+      event.title,
+      formatDate(event.startAt),
+      event.endAt ? "إلى " + formatDate(event.endAt) : "",
+      event.type === "event" ? "موعد" : event.type === "study" ? "جلسة دراسة" : "هدف",
+      event.source === "routine" ? "روتين" : "",
+    ].filter(Boolean).join(" — "));
+  const activeGoals = goals
+    .filter(goal => goal.status !== "completed" && goal.status !== "done")
+    .slice(0, 10)
+    .map(goal => [
+      goal.title,
+      goal.targetDate ? "الموعد المستهدف: " + formatDate(goal.targetDate) : "",
+      "التقدم: " + Math.round(Number(goal.progress) || 0) + "%",
+    ].filter(Boolean).join(" — "));
+  const availableBooks = books
+    .filter(book => book.status !== "archived")
+    .slice(0, 12)
+    .map(book => book.title);
+  return [
+    "المهام المفتوحة ذات الأولوية والمواعيد:",
+    openTasks.length ? openTasks.join("\n") : "لا توجد مهام مفتوحة محفوظة.",
+    "الأحداث والمواعيد خلال 14 يومًا:",
+    upcomingEvents.length ? upcomingEvents.join("\n") : "لا توجد أحداث قادمة محفوظة.",
+    "الأهداف النشطة:",
+    activeGoals.length ? activeGoals.join("\n") : "لا توجد أهداف نشطة محفوظة.",
+    "الكتب والموارد المتاحة:",
+    availableBooks.length ? availableBooks.join("، ") : "لا توجد كتب محفوظة.",
+  ].join("\n").slice(0, 2_350);
+}
+
 async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): Promise<DailyPlanResult> {
   const running = dailyPlanLocks.get(userId);
   if (running) return running;
@@ -270,7 +338,7 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): 
       {
         dailyMinutes,
         startDate,
-        context: "هذه خطة التشغيل اليومية الافتراضية. استخدم بيانات ملف الدراسة والتراكم والتقدم ومواضع التدريس وسجل التقييمات والمهام والمواعيد والروتين المتاحة؛ لا تطلب من الطالب إعادة إدخال أي معلومة موجودة. أعد توزيع الخطوات غير المكتملة عند تغير أي مصدر، واحتفظ بما أنجزه الطالب. اجعل أول خطوة واضحة وقابلة للبدء فورًا.",
+        context: "هذه خطة التشغيل اليومية الافتراضية. استخدم بيانات ملف الدراسة والتراكم والتقدم ومواضع التدريس وسجل التقييمات والمهام والمواعيد والروتين المتاحة؛ لا تطلب من الطالب إعادة إدخال أي معلومة موجودة. أعد توزيع الخطوات غير المكتملة عند تغير أي مصدر، واحتفظ بما أنجزه الطالب. اجعل أول خطوة واضحة وقابلة للبدء فورًا.\\n\\n" + await buildDailyPlanOperationalContext(userId),
       },
     );
     const taskSync = await syncDailyPlanGoalTree(userId, plan, { startDate, dailyMinutes });
