@@ -269,3 +269,47 @@ html body .sf-shell-v3 .sf-main .sf-english-section-tag { white-space:nowrap; }
 @media (prefers-reduced-motion:reduce) {
   html body .sf-shell-v3 .sf-main .sf-plan-day { transition:none !important; }
 }
+
+
+/* Mobile bottom dock: clear stale centered-width and translate rules from older skins. */
+@media (max-width:720px) {
+  html body .sf-shell-v3 .sf-mobile-dock {
+    position:fixed !important;
+    left:8px !important;
+    right:8px !important;
+    width:auto !important;
+    min-width:0 !important;
+    max-width:none !important;
+    margin:0 !important;
+    transform:none !important;
+    box-sizing:border-box !important;
+    display:grid !important;
+    grid-template-columns:repeat(5,minmax(0,1fr)) !important;
+    align-items:stretch !important;
+    justify-content:stretch !important;
+    gap:4px !important;
+    padding:6px !important;
+    bottom:calc(8px + env(safe-area-inset-bottom)) !important;
+    z-index:120 !important;
+  }
+  html body .sf-shell-v3 .sf-mobile-dock .sf-mobile-dock-item {
+    display:grid !important;
+    width:100% !important;
+    min-width:0 !important;
+    max-width:100% !important;
+    min-height:54px !important;
+    padding:4px 2px !important;
+    justify-items:center !important;
+    align-content:center !important;
+    box-sizing:border-box !important;
+    white-space:normal !important;
+    overflow:hidden !important;
+  }
+  html body .sf-shell-v3 .sf-mobile-dock .sf-mobile-dock-item span {
+    display:block !important;
+    max-width:100% !important;
+    overflow:hidden !important;
+    text-overflow:ellipsis !important;
+    white-space:nowrap !important;
+  }
+}
