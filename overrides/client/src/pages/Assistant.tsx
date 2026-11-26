@@ -1,9 +1,9 @@
 import DashboardLayout from "@/components/DashboardLayout";
-import { AIChatBox, type Message } from "@/components/AIChatBox";
+import { AIChatBox } from "@/components/AIChatBox";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { BookOpen, MessageSquare, Plus, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
@@ -19,27 +19,55 @@ const suggestions = [
 function newThread(): ChatThread {
   return { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7), title: "محادثة جديدة", messages: [], updatedAt: Date.now() };
 }
+
 function loadThreads(): ChatThread[] {
   if (typeof window === "undefined") return [newThread()];
   try {
     const parsed = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || "[]");
     if (!Array.isArray(parsed)) return [newThread()];
-    const valid = parsed.filter((item: any) =>
-      item && typeof item.id === "string" && typeof item.title === "string" &&
-      Array.isArray(item.messages) && typeof item.updatedAt === "number"
-    ).map((item: any) => ({
-      id: item.id,
-      title: item.title.slice(0, 80),
-      updatedAt: item.updatedAt,
-      messages: item.messages.filter((message: any) =>
-        message && ["user", "assistant"].includes(message.role) &&
-        typeof message.content === "string" && message.content.length <= 6_000
-      ).slice(-40),
-    })).slice(0, 30);
+    const valid = parsed.filter((item: unknown) => {
+      if (!item || typeof item !== "object") return false;
+      const record = item as Record<string, unknown>;
+      return typeof record.id === "string" && typeof record.title === "string"
+        && Array.isArray(record.messages) && typeof record.updatedAt === "number";
+    }).map((item: unknown) => {
+      const record = item as Record<string, unknown>;
+      const messages = (record.messages as unknown[]).filter((message: unknown) => {
+        if (!message || typeof message !== "object") return false;
+        const entry = message as Record<string, unknown>;
+        return ["user", "assistant"].includes(String(entry.role))
+          && typeof entry.content === "string"
+          && (entry.content as string).length <= 6_000;
+      }) as ChatMessage[];
+      return {
+        id: String(record.id),
+        title: String(record.title).slice(0, 80),
+        updatedAt: Number(record.updatedAt),
+        messages: messages.slice(-40),
+      };
+    }).slice(0, 30);
     return valid.length ? valid : [newThread()];
   } catch {
     return [newThread()];
   }
+}
+
+function updateThreadMessage(
+  current: ChatThread[],
+  threadId: string,
+  content: string,
+  removeEmptyPlaceholder = false,
+): ChatThread[] {
+  return current.map(thread => {
+    if (thread.id !== threadId) return thread;
+    const messages = [...thread.messages];
+    const last = messages[messages.length - 1];
+    if (last?.role === "assistant" && (last.content === "" || !removeEmptyPlaceholder)) {
+      if (removeEmptyPlaceholder && !content) messages.pop();
+      else messages[messages.length - 1] = { role: "assistant", content };
+    }
+    return { ...thread, messages: messages.slice(-40), updatedAt: Date.now() };
+  });
 }
 
 export default function Assistant() {
@@ -48,40 +76,56 @@ export default function Assistant() {
     if (typeof window === "undefined") return "";
     return window.localStorage.getItem(SELECTED_KEY) || "";
   });
+  const [streamingThreadId, setStreamingThreadId] = useState<string | null>(null);
   const activeThread = useMemo(
     () => threads.find(thread => thread.id === selectedId) || threads[0],
-    [threads, selectedId]
+    [threads, selectedId],
   );
   const profile = trpc.studentProfile.get.useQuery();
-  const chat = trpc.ai.chat.useMutation({
-    onSuccess: result => {
-      setThreads(current => current.map(thread =>
-        thread.id === activeThread.id
-          ? { ...thread, messages: [...thread.messages, { role: "assistant" as const, content: result.content }].slice(-40), updatedAt: Date.now() }
-          : thread
-      ));
-    },
-    onError: error => toast.error(error.message || "تعذّر الرد الآن. حاول مرة أخرى."),
-  });
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const streamingThreadRef = useRef<string | null>(null);
+
+  const stopCurrentStream = (preservePartial = true) => {
+    const threadId = streamingThreadRef.current;
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    streamingThreadRef.current = null;
+    setStreamingThreadId(null);
+    if (threadId && !preservePartial) {
+      setThreads(current => updateThreadMessage(current, threadId, "", true));
+    }
+  };
+
+  useEffect(() => () => {
+    abortControllerRef.current?.abort();
+  }, []);
 
   useEffect(() => {
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(threads.slice(0, 30)));
-      if (activeThread && activeThread.id) window.localStorage.setItem(SELECTED_KEY, activeThread.id);
+      if (activeThread?.id) window.localStorage.setItem(SELECTED_KEY, activeThread.id);
     } catch {
       toast.error("تعذّر حفظ المحادثات على هذا الجهاز.");
     }
-  }, [threads, activeThread && activeThread.id]);
+  }, [threads, activeThread?.id]);
 
   const createConversation = () => {
-    if (chat.isPending) return;
+    stopCurrentStream(true);
     const thread = newThread();
     setThreads(current => [thread, ...current].slice(0, 30));
     setSelectedId(thread.id);
   };
 
+  const chooseConversation = (threadId: string) => {
+    if (streamingThreadRef.current && streamingThreadRef.current !== threadId) {
+      stopCurrentStream(true);
+    }
+    setSelectedId(threadId);
+  };
+
   const deleteConversation = () => {
-    if (!activeThread || chat.isPending) return;
+    if (!activeThread) return;
+    if (streamingThreadRef.current === activeThread.id) stopCurrentStream(false);
     const remaining = threads.filter(thread => thread.id !== activeThread.id);
     const next = remaining.length ? remaining : [newThread()];
     setThreads(next);
@@ -89,25 +133,121 @@ export default function Assistant() {
     toast.success("تم حذف المحادثة من هذا الجهاز.");
   };
 
-  const sendMessage = (content: string) => {
+  const sendMessage = async (content: string) => {
     const trimmed = content.trim();
-    if (!trimmed || chat.isPending || !activeThread) return;
+    if (!trimmed || !activeThread) return;
+
+    stopCurrentStream(true);
+    const threadId = activeThread.id;
     const userMessage: ChatMessage = { role: "user", content: trimmed };
-    const nextMessages = [...activeThread.messages, userMessage].slice(-40);
-    setThreads(current => current.map(thread => thread.id === activeThread.id
-      ? { ...thread, title: thread.messages.length ? thread.title : trimmed.slice(0, 42), messages: nextMessages, updatedAt: Date.now() }
+    const requestMessages = [...activeThread.messages, userMessage].slice(-20);
+    const visibleMessages = [...activeThread.messages, userMessage, { role: "assistant" as const, content: "" }].slice(-40);
+
+    setThreads(current => current.map(thread => thread.id === threadId
+      ? {
+          ...thread,
+          title: thread.messages.length ? thread.title : trimmed.slice(0, 42),
+          messages: visibleMessages,
+          updatedAt: Date.now(),
+        }
       : thread
     ));
+
     const memory = threads
-      .filter(thread => thread.id !== activeThread.id && thread.messages.length > 0)
+      .filter(thread => thread.id !== threadId && thread.messages.length > 0)
       .slice()
       .sort((left, right) => right.updatedAt - left.updatedAt)
       .slice(0, 5)
-      .map(thread => "محادثة سابقة: " + thread.title + "\n" + thread.messages.slice(-2).map(message => (message.role === "user" ? "الطالب: " : "المساعد: ") + message.content.slice(0, 500)).join("\n"))
+      .map(thread => "محادثة سابقة: " + thread.title + "\n" + thread.messages.slice(-2)
+        .map(message => (message.role === "user" ? "الطالب: " : "المساعد: ") + message.content.slice(0, 500))
+        .join("\n"))
       .join("\n---\n")
       .slice(0, 2_400);
-    chat.mutate({ messages: nextMessages.slice(-20), memory });
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    streamingThreadRef.current = threadId;
+    setStreamingThreadId(threadId);
+    let streamedText = "";
+    let buffer = "";
+
+    const appendToken = (token: string) => {
+      if (!token) return;
+      streamedText += token;
+      setThreads(current => updateThreadMessage(current, threadId, streamedText));
+    };
+
+    const consumeEvent = (eventBlock: string) => {
+      const lines = eventBlock.split(/\r?\n/);
+      const eventName = lines.find(line => line.startsWith("event:"))?.slice(6).trim();
+      const data = lines.filter(line => line.startsWith("data:"))
+        .map(line => line.slice(5).trim()).join("\n");
+      if (!data || data === "[DONE]") return;
+      let payload: Record<string, unknown>;
+      try {
+        payload = JSON.parse(data) as Record<string, unknown>;
+      } catch {
+        return;
+      }
+      if (eventName === "error" || typeof payload.error === "string") {
+        throw new Error(typeof payload.error === "string" ? payload.error : "تعذّر إكمال الرد.");
+      }
+      if (typeof payload.token === "string") appendToken(payload.token);
+    };
+
+    try {
+      const response = await fetch("/api/assistant/stream", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+        },
+        body: JSON.stringify({ messages: requestMessages, memory }),
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        let message = "تعذّر الاتصال بالمساعد الدراسي.";
+        try {
+          const payload = await response.json() as { error?: string; message?: string };
+          message = payload.message || payload.error || message;
+        } catch {
+          // Keep the safe generic message if the server does not return JSON.
+        }
+        throw new Error(message);
+      }
+      if (!response.body) throw new Error("المتصفح لم يتمكن من استقبال تدفق الرد.");
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split(/\r?\n\r?\n/);
+        buffer = events.pop() ?? "";
+        for (const eventBlock of events) consumeEvent(eventBlock);
+      }
+      buffer += decoder.decode();
+      if (buffer.trim()) consumeEvent(buffer);
+      if (!streamedText.trim()) throw new Error("وصلت استجابة فارغة. جرّب السؤال مرة أخرى.");
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        // A deliberate conversation switch keeps any partial text but stops the request.
+      } else {
+        setThreads(current => updateThreadMessage(current, threadId, streamedText, !streamedText));
+        toast.error(error instanceof Error ? error.message : "تعذّر الرد الآن. حاول مرة أخرى.");
+      }
+    } finally {
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+        streamingThreadRef.current = null;
+        setStreamingThreadId(null);
+      }
+    }
   };
+
+  const activeIsStreaming = Boolean(activeThread && streamingThreadId === activeThread.id);
 
   return (
     <DashboardLayout title="المساعد الدراسي الذكي" description="ذكاء دراسي متصل بسياق مساحتك، وأنشطتك، والمهام والروتين والتقويم والتقدم المنهجي.">
@@ -117,7 +257,7 @@ export default function Assistant() {
             <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg"><Sparkles className="size-5" /></span>
             <div>
               <div className="flex flex-wrap items-center gap-2"><h2 className="text-lg font-bold">مساعد StudyFlow</h2><span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">متصل بالمخطط الدراسي</span></div>
-              <p className="mt-1 text-sm leading-6 text-muted-foreground">اسأل عن الدرس، اطلب شرحًا أو تدريبًا، وارجع لأي محادثة سابقة.</p>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">اسأل عن الدرس، اطلب شرحًا، وشاهد الرد أثناء تكوّنه بدل انتظار اكتماله.</p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -127,38 +267,43 @@ export default function Assistant() {
         </div>
         <div className="grid gap-4 p-3 sm:p-4 lg:grid-cols-[250px_minmax(0,1fr)]">
           <aside className="flex min-w-0 flex-col rounded-2xl border border-border/70 bg-muted/20 p-3">
-            <Button type="button" onClick={createConversation} disabled={chat.isPending} className="mb-3 h-11 w-full justify-center gap-2 rounded-xl bg-primary">
+            <Button type="button" onClick={createConversation} className="mb-3 h-11 w-full justify-center gap-2 rounded-xl bg-primary">
               <Plus className="size-4" />محادثة جديدة
             </Button>
             <div className="mb-2 flex items-center justify-between px-1 text-xs font-semibold text-muted-foreground">
               <span>محادثاتك</span><span>{threads.length}</span>
             </div>
             <div className="flex gap-2 overflow-x-auto pb-1 lg:max-h-[520px] lg:flex-col lg:overflow-y-auto lg:overflow-x-hidden">
-              {threads.slice().sort((a, b) => b.updatedAt - a.updatedAt).map(thread => (
+              {threads.slice().sort((left, right) => right.updatedAt - left.updatedAt).map(thread => (
                 <button
                   type="button"
                   key={thread.id}
-                  disabled={chat.isPending}
-                  onClick={() => setSelectedId(thread.id)}
-                  className={"min-w-40 rounded-xl border px-3 py-3 text-right transition-colors disabled:opacity-60 lg:w-full " + (activeThread && activeThread.id === thread.id ? "border-primary/30 bg-primary/10 text-foreground" : "border-transparent bg-background hover:border-border")}
+                  onClick={() => chooseConversation(thread.id)}
+                  className={"min-w-40 rounded-xl border px-3 py-3 text-right transition-colors lg:w-full " + (activeThread?.id === thread.id ? "border-primary/30 bg-primary/10 text-foreground" : "border-transparent bg-background hover:border-border")}
                 >
                   <span className="flex items-center gap-2"><MessageSquare className="size-3.5 shrink-0 text-primary" /><span className="truncate text-sm font-semibold">{thread.title}</span></span>
                   <span className="mt-2 block truncate text-[11px] text-muted-foreground">{thread.messages[0]?.content || "ابدأ محادثة جديدة"}</span>
                 </button>
               ))}
             </div>
-            <p className="mt-3 hidden text-[11px] leading-5 text-muted-foreground lg:block">سجل المحادثات الحالي محفوظ على هذا المتصفح، بينما تُحفظ خلاصة دراسية مختارة على حسابك لتخصيص المساعد عبر الجلسات.</p>
+            <p className="mt-3 hidden text-[11px] leading-5 text-muted-foreground lg:block">سجل المحادثات محفوظ على هذا المتصفح، وخلاصة دراسية مختارة تُحفظ على حسابك لتخصيص المساعد عبر الجلسات.</p>
           </aside>
           <div className="min-w-0">
             <div className="mb-3 flex items-center justify-between gap-3 px-1">
-              <div className="min-w-0"><p className="truncate text-sm font-bold">{(activeThread && activeThread.title) || "محادثة جديدة"}</p><p className="mt-1 text-[11px] text-muted-foreground">يمكنك تعديل نص الإملاء الصوتي قبل إرساله.</p></div>
-              <Button type="button" variant="ghost" size="sm" disabled={!activeThread || !activeThread.messages.length || chat.isPending} onClick={deleteConversation} className="shrink-0 gap-2 rounded-xl text-muted-foreground hover:text-destructive"><Trash2 className="size-3.5" />حذف</Button>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-bold">{activeThread?.title || "محادثة جديدة"}</p>
+                <p className="mt-1 text-[11px] text-muted-foreground">{activeIsStreaming ? "المساعد بيكتب الرد الآن..." : "يمكنك تعديل نص الإملاء الصوتي قبل إرساله."}</p>
+              </div>
+              <div className="flex shrink-0 items-center gap-1">
+                {activeIsStreaming && <Button type="button" variant="outline" size="sm" onClick={() => stopCurrentStream(true)} className="h-9 rounded-xl text-xs">إيقاف الرد</Button>}
+                <Button type="button" variant="ghost" size="sm" disabled={!activeThread?.messages.length} onClick={deleteConversation} className="gap-2 rounded-xl text-muted-foreground hover:text-destructive"><Trash2 className="size-3.5" />حذف</Button>
+              </div>
             </div>
             <AIChatBox
-              key={activeThread && activeThread.id}
-              messages={(activeThread && activeThread.messages) || []}
+              key={activeThread?.id}
+              messages={activeThread?.messages || []}
               onSendMessage={sendMessage}
-              isLoading={chat.isPending}
+              isLoading={activeIsStreaming}
               height="min(72vh, 760px)"
               placeholder="اسأل عن درس أو مفهوم في منهجك..."
               emptyStateMessage="ابدأ بسؤال عن درس أو مفهوم، أو اطلب توضيحًا لشرح المدرس."
