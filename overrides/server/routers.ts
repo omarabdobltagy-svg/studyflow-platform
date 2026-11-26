@@ -94,6 +94,7 @@ import { invokeLLMWithNvidiaFallback } from "./_core/llmFallback";
 import { formatTextbookEvidence, retrieveTextbookEvidence } from "./textbook-retrieval";
 import { createReminderCron, getReminderPreferences, listReminderNotifications, markReminderRead, saveReminderPreferences, saveReminderSchedule } from "./reminders";
 import { getTeacherCourseFactsWithRefresh } from "./teacher-course-research";
+import { getDueTeacherClassFollowups, buildTeacherClassFollowupKey, type TeacherClassFollowupRecord } from "./teacherClassFollowups";
 
 
 type DailyPlanResult = {
@@ -1565,6 +1566,228 @@ export const appRouter = router({
         });
         queueDailyPlanReconciliation(ctx.user.id);
         return savedProfile;
+      }),
+  }),
+
+  teacherClassFollowups: router({
+    due: protectedProcedure.query(async ({ ctx }) => {
+      const profile = await getStudentProfile(ctx.user.id);
+      if (!profile) return [];
+      const selection = (profile.selection ?? {}) as Record<string, any>;
+      const teacherSchedules = (selection.teacherSchedules ?? {}) as Record<string, Array<{ dayOfWeek: number; startTime: string }>>;
+      const records = (selection.teacherClassFollowups ?? {}) as Record<string, TeacherClassFollowupRecord>;
+      const due = getDueTeacherClassFollowups({
+        subjectIds: profile.subjectIds,
+        teacherSchedules,
+        records,
+      });
+      const teacherChoices = (selection.teacherChoices ?? profile.teacherSelections ?? {}) as Record<string, string>;
+      const customTeacherNames = (selection.customTeacherNames ?? {}) as Record<string, string>;
+      return due.map(item => {
+        const subject = getSIESubject(item.subjectId);
+        const teacherId = teacherChoices[item.subjectId] ?? profile.teacherSelections?.[item.subjectId] ?? "";
+        const teacher = teacherId ? getSIETeacher(teacherId) : undefined;
+        const branches = getSIECheckpointProgressBranches(item.subjectId).map(branch => ({
+          branchId: branch.branchId,
+          branchTitle: branch.branchTitle,
+          choices: branch.choices.map(choice => ({ nodeId: choice.nodeId, title: choice.title })),
+        }));
+        return {
+          ...item,
+          classStartAt: item.classStartAt.toISOString(),
+          dueAt: item.dueAt.toISOString(),
+          nextSessionAt: item.nextSessionAt.toISOString(),
+          subjectName: subject?.nameAr ?? item.subjectId,
+          teacherId: teacherId || null,
+          teacherName: teacher?.nameAr ?? customTeacherNames[item.subjectId] ?? "المدرس",
+          branches,
+        };
+      });
+    }),
+    snooze: protectedProcedure
+      .input(z.object({ key: z.string().trim().min(3).max(240), hours: z.number().int().min(1).max(24).default(4) }))
+      .mutation(async ({ ctx, input }) => {
+        const profile = await getStudentProfile(ctx.user.id);
+        if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "ملفك الدراسي غير موجود." });
+        const selection = (profile.selection ?? {}) as Record<string, any>;
+        const records = { ...((selection.teacherClassFollowups ?? {}) as Record<string, TeacherClassFollowupRecord>) };
+        const due = getDueTeacherClassFollowups({
+          subjectIds: profile.subjectIds,
+          teacherSchedules: (selection.teacherSchedules ?? {}) as Record<string, Array<{ dayOfWeek: number; startTime: string }>>,
+          records,
+        });
+        if (!due.some(item => item.key === input.key)) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "المتابعة دي لم تعد متاحة." });
+        }
+        const current = records[input.key] ?? {};
+        records[input.key] = {
+          ...current,
+          snoozedUntil: new Date(Date.now() + input.hours * 60 * 60 * 1_000).toISOString(),
+        };
+        await updateStudentProfileSelection(ctx.user.id, { ...selection, teacherClassFollowups: records });
+        return { success: true, snoozedUntil: records[input.key].snoozedUntil };
+      }),
+    complete: protectedProcedure
+      .input(z.object({
+        key: z.string().trim().min(3).max(240),
+        outcome: z.enum(["covered", "no_new_topics", "cancelled"]),
+        coveredBranches: z.array(z.string().trim().min(1).max(120)).max(12).default([]),
+        branchFrontiers: z.record(z.string(), z.string().trim().min(1).max(120)).default({}),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const profile = await getStudentProfile(ctx.user.id);
+        if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "ملفك الدراسي غير موجود." });
+        const selection = (profile.selection ?? {}) as Record<string, any>;
+        const teacherSchedules = (selection.teacherSchedules ?? {}) as Record<string, Array<{ dayOfWeek: number; startTime: string }>>;
+        const records = { ...((selection.teacherClassFollowups ?? {}) as Record<string, TeacherClassFollowupRecord>) };
+        const due = getDueTeacherClassFollowups({ subjectIds: profile.subjectIds, teacherSchedules, records });
+        const session = due.find(item => item.key === input.key);
+        if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "المتابعة دي لم تعد متاحة أو تم تسجيلها بالفعل." });
+        const branches = getSIECheckpointProgressBranches(session.subjectId);
+        const branchById = new Map(branches.map(branch => [branch.branchId, branch]));
+        const coveredBranches = [...new Set(input.coveredBranches)];
+        if (input.outcome !== "covered" && (coveredBranches.length || Object.keys(input.branchFrontiers).length)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "اختيارات الفروع لا تتوافق مع حالة الحصة." });
+        }
+        if (input.outcome === "covered" && session.requiresTopicSelection && coveredBranches.length === 0) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "حدد فرعًا واحدًا على الأقل إذا شرح المدرس موضوعًا جديدًا." });
+        }
+        for (const branchId of coveredBranches) {
+          if (!branchById.has(branchId)) throw new TRPCError({ code: "BAD_REQUEST", message: "فرع المنهج المحدد غير موجود." });
+        }
+        for (const [branchId, nodeId] of Object.entries(input.branchFrontiers)) {
+          const branch = branchById.get(branchId);
+          if (!branch || !coveredBranches.includes(branchId) || !branch.choices.some(choice => choice.nodeId === nodeId)) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "آخر درس محدد لا ينتمي إلى الفرع المختار." });
+          }
+        }
+
+        const now = new Date();
+        const nowIso = now.toISOString();
+        const learningCourseProgress = {
+          ...((selection.learningCourseProgress ?? {}) as Record<string, any>),
+        };
+        const subjectProgress = { ...(learningCourseProgress[session.subjectId] ?? {}) };
+        const subjectBranches = { ...((subjectProgress.branches ?? {}) as Record<string, Record<string, any>>) };
+        const teacherProgressEvents = Array.isArray(selection.teacherProgressEvents)
+          ? selection.teacherProgressEvents as Array<Record<string, unknown>>
+          : [];
+
+        if (input.outcome === "covered") {
+          for (const branchId of coveredBranches) {
+            const branch = branchById.get(branchId)!;
+            const previous = subjectBranches[branchId] ?? {};
+            const next = { ...previous };
+            const frontierId = input.branchFrontiers[branchId];
+            if (frontierId) {
+              const newPosition = branch.choices.findIndex(choice => choice.nodeId === frontierId);
+              const previousPosition = branch.choices.findIndex(choice => choice.nodeId === previous.teacherTeachingFrontierId);
+              // Teacher coverage moves forward only; an older report cannot roll the frontier back.
+              if (previousPosition < 0 || newPosition > previousPosition) {
+                next.teacherTeachingFrontierId = frontierId;
+                next.teacherFrontierConfirmedAt = nowIso;
+                next.teacherFrontierEvidenceSource = "student_post_class_checkin";
+              }
+            }
+            next.lastTeacherClassAt = session.classStartAt.toISOString();
+            next.lastTeacherClassOutcome = "covered";
+            next.lastTeacherCoveredAt = nowIso;
+            next.lastTeacherCoveredFrontierId = frontierId ?? previous.lastTeacherCoveredFrontierId ?? null;
+            subjectBranches[branchId] = next;
+          }
+        }
+        subjectProgress.branches = subjectBranches;
+        subjectProgress.lastTeacherClassAt = session.classStartAt.toISOString();
+        subjectProgress.lastTeacherClassOutcome = input.outcome;
+        subjectProgress.lastTeacherClassCheckinAt = nowIso;
+        learningCourseProgress[session.subjectId] = subjectProgress;
+
+        const previousRecord = records[input.key] ?? {};
+        const recordStatus = session.requiresTopicSelection ? "answered"
+          : input.outcome === "cancelled" ? "cancelled" : "auto_processed";
+        const record: TeacherClassFollowupRecord & Record<string, unknown> = {
+          ...previousRecord,
+          status: recordStatus,
+          outcome: input.outcome,
+          answeredAt: nowIso,
+          classDate: session.classDate,
+          classStartAt: session.classStartAt.toISOString(),
+          subjectId: session.subjectId,
+          coveredBranches,
+          branchFrontiers: input.branchFrontiers,
+          evidenceSource: session.requiresTopicSelection ? "student_post_class_checkin" : "scheduled_teacher_class",
+          nextSessionAt: session.nextSessionAt.toISOString(),
+        };
+
+        const subject = getSIESubject(session.subjectId);
+        const teacherChoices = (selection.teacherChoices ?? profile.teacherSelections ?? {}) as Record<string, string>;
+        const customTeacherNames = (selection.customTeacherNames ?? {}) as Record<string, string>;
+        const teacherId = teacherChoices[session.subjectId] ?? profile.teacherSelections?.[session.subjectId] ?? "";
+        const teacher = teacherId ? getSIETeacher(teacherId) : undefined;
+        const teacherName = teacher?.nameAr ?? customTeacherNames[session.subjectId] ?? "المدرس";
+        const subjectName = subject?.nameAr ?? session.subjectId;
+        const nextTitle = "محاضرة " + teacherName + " — " + subjectName;
+        const calendarEvents = await listCalendarEvents(ctx.user.id, "Africa/Cairo");
+        const existingNextEvent = calendarEvents.find(event =>
+          event.source === "event"
+          && event.title === nextTitle
+          && new Date(event.startAt).getTime() === session.nextSessionAt.getTime()
+        );
+        let nextCalendarEventId = existingNextEvent
+          ? Number(String(existingNextEvent.id).replace(/^event-/, ""))
+          : null;
+        if (!nextCalendarEventId) {
+          nextCalendarEventId = await createCalendarEvent(ctx.user.id, {
+            title: nextTitle,
+            type: "event",
+            startAt: session.nextSessionAt,
+            allDay: false,
+            color: "emerald",
+          });
+        }
+        record.nextCalendarEventId = nextCalendarEventId;
+        records[input.key] = record;
+
+        try {
+          await updateStudentProfileSelection(ctx.user.id, {
+            ...selection,
+            learningCourseProgress,
+            teacherClassFollowups: records,
+            teacherProgressEvents: [
+              ...teacherProgressEvents,
+              {
+                subjectId: session.subjectId,
+                teacherId: teacherId || null,
+                classDate: session.classDate,
+                classStartAt: session.classStartAt.toISOString(),
+                outcome: input.outcome,
+                coveredBranches,
+                branchFrontiers: input.branchFrontiers,
+                eventType: "teacher_class_followup",
+                evidenceSource: record.evidenceSource,
+                occurredAt: nowIso,
+              },
+            ].slice(-500),
+          });
+        } catch (error) {
+          if (!existingNextEvent && nextCalendarEventId) {
+            await deleteCalendarEvent(ctx.user.id, nextCalendarEventId).catch(() => undefined);
+          }
+          throw error;
+        }
+
+        queueDailyPlanReconciliation(ctx.user.id);
+        await logStudentActivity(
+          ctx.user.id,
+          "teacher.class_followup_completed",
+          "teacher_class",
+          input.key,
+          session.requiresTopicSelection
+            ? "تم تسجيل ما غطاه المدرس بعد المحاضرة"
+            : "تم تسجيل مرور موعد الحصة وفق الجدول الأسبوعي",
+          { subjectId: session.subjectId, outcome: input.outcome, coveredBranches, nextSessionAt: session.nextSessionAt.toISOString() },
+        );
+        return { success: true, nextSessionAt: session.nextSessionAt.toISOString(), nextCalendarEventId };
       }),
   }),
 
