@@ -93,6 +93,7 @@ import { callDataApi } from "./_core/dataApi";
 import { invokeLLMWithNvidiaFallback } from "./_core/llmFallback";
 import { formatTextbookEvidence, retrieveTextbookEvidence } from "./textbook-retrieval";
 import { createReminderCron, getReminderPreferences, listReminderNotifications, markReminderRead, saveReminderPreferences, saveReminderSchedule } from "./reminders";
+import { getTeacherCourseFactsWithRefresh } from "./teacher-course-research";
 
 
 type DailyPlanResult = {
@@ -1097,6 +1098,23 @@ export const appRouter = router({
     }),
   }),
 
+  teacherDirectory: router({
+    facts: protectedProcedure
+      .input(z.object({
+        teacherId: z.string().trim().min(3).max(80),
+        subjectId: z.string().trim().min(3).max(80),
+        systemId: z.enum(["EG_BACCALAUREATE", "EG_GENERAL_SECONDARY"]),
+        gradeYear: z.string().trim().min(2).max(60),
+      }))
+      .query(async ({ input }) => {
+        const teacher = getSIETeacher(input.teacherId);
+        if (!teacher || !teacher.subjectIds.includes(input.subjectId)) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "المدرس غير مسجل لهذه المادة في دليل StudyFlow." });
+        }
+        return getTeacherCourseFactsWithRefresh(input);
+      }),
+  }),
+
   studentProfile: router({
     get: protectedProcedure.query(async ({ ctx }) => {
       const profile = await getStudentProfile(ctx.user.id);
@@ -1364,6 +1382,9 @@ export const appRouter = router({
         courseModes: z.record(z.string(), z.enum(["center", "online"])).default({}),
         customTeacherNames: z.record(z.string(), z.string().trim().max(120)).default({}),
         teacherAccessRequirements: z.record(z.string(), z.enum(["homework_and_exam", "homework_only", "exam_only", "none", "unknown"])).default({}),
+        teacherHomeworkPolicy: z.record(z.string(), z.enum(["yes", "no", "varies", "unknown"])).default({}),
+        teacherHomeworkRequiredBeforeNextLecture: z.record(z.string(), z.enum(["yes", "no", "varies", "unknown"])).default({}),
+        teacherPreLectureExamRequired: z.record(z.string(), z.enum(["yes", "no", "varies", "unknown"])).default({}),
         teacherSchedules: z.record(z.string(), z.array(z.object({
           dayOfWeek: z.number().int().min(0).max(6),
           startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
@@ -1407,6 +1428,11 @@ export const appRouter = router({
         }
         for (const subjectId of Object.keys(input.teacherAccessRequirements)) {
           if (!input.subjectIds.includes(subjectId)) throw new TRPCError({ code: "BAD_REQUEST", message: "متطلبات المحاضرة التالية يجب أن تخص مادة في ملفك." });
+        }
+        for (const map of [input.teacherHomeworkPolicy, input.teacherHomeworkRequiredBeforeNextLecture, input.teacherPreLectureExamRequired]) {
+          for (const subjectId of Object.keys(map)) {
+            if (!input.subjectIds.includes(subjectId)) throw new TRPCError({ code: "BAD_REQUEST", message: "بيانات الواجب أو الامتحان يجب أن تخص مادة في ملفك." });
+          }
         }
         for (const [subjectId, schedule] of Object.entries(input.teacherSchedules)) {
           if (!input.subjectIds.includes(subjectId)) {
@@ -1490,6 +1516,9 @@ export const appRouter = router({
             ])),
             teacherScheduleUnfixedSubjectIds: input.teacherScheduleUnfixedSubjectIds.filter(subjectId => input.subjectIds.includes(subjectId)),
             teacherAccessRequirements: Object.fromEntries(input.subjectIds.map(subjectId => [subjectId, input.teacherAccessRequirements[subjectId] ?? "unknown"])),
+            teacherHomeworkPolicy: Object.fromEntries(input.subjectIds.map(subjectId => [subjectId, input.teacherHomeworkPolicy[subjectId] ?? "unknown"])),
+            teacherHomeworkRequiredBeforeNextLecture: Object.fromEntries(input.subjectIds.map(subjectId => [subjectId, input.teacherHomeworkRequiredBeforeNextLecture[subjectId] ?? "unknown"])),
+            teacherPreLectureExamRequired: Object.fromEntries(input.subjectIds.map(subjectId => [subjectId, input.teacherPreLectureExamRequired[subjectId] ?? "unknown"])),
             teacherProgressState: Object.fromEntries(Object.entries(input.teacherSelections).map(([subjectId, teacherId]) => {
               const teacher = getSIETeacher(teacherId);
               const report = input.teacherFrontierReports[subjectId] ?? (teacher?.studentInputRequired ? "__DEFERRED__" : "__NOT_REQUIRED__");
