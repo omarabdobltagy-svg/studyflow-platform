@@ -119,14 +119,71 @@ export default function DashboardLayout({ title, description, children, action }
   }, [isMobileNavOpen]);
 
   useEffect(() => {
-    if (reduceMotion || !pageContentRef.current) return;
-    const context = gsap.context(() => {
-      const headings = gsap.utils.toArray<HTMLElement>(".sf-main h1, .sf-main h2, .sf-main .eyebrow");
-      const cards = gsap.utils.toArray<HTMLElement>(".sf-main .app-card");
-      if (headings.length) gsap.fromTo(headings, { y: 12, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, stagger: 0.035, ease: "power3.out", clearProps: "transform,opacity" });
-      if (cards.length) gsap.fromTo(cards, { y: 17, opacity: 0 }, { y: 0, opacity: 1, duration: 0.58, stagger: 0.055, ease: "power3.out", delay: 0.04, clearProps: "transform,opacity" });
-    }, pageContentRef);
-    return () => context.revert();
+    const scope = pageContentRef.current;
+    if (!scope) return;
+
+    // Scroll reveals are triggered once per element when the element enters the viewport.
+    const selector = [
+      ".sf-page > section",
+      ".sf-page .app-card",
+      ".sf-page .sf-map-branch-card",
+      ".sf-page .sf-map-step",
+      ".sf-page .sf-main-tasks .group",
+      ".sf-page [data-scroll-reveal]",
+    ].join(", ");
+    const candidates = Array.from(scope.querySelectorAll<HTMLElement>(selector));
+    const targets = candidates.filter(element => !element.parentElement?.closest(selector));
+
+    if (reduceMotion) {
+      gsap.set(targets, { clearProps: "opacity,visibility,transform,filter" });
+      return;
+    }
+
+    const reveal = (elements: HTMLElement[]) => {
+      if (!elements.length) return;
+      gsap.fromTo(
+        elements,
+        { autoAlpha: 0, y: 22, filter: "blur(4px)" },
+        {
+          autoAlpha: 1,
+          y: 0,
+          filter: "blur(0px)",
+          duration: 0.68,
+          stagger: 0.075,
+          ease: "power3.out",
+          clearProps: "opacity,visibility,transform,filter",
+        },
+      );
+    };
+
+    if (typeof IntersectionObserver === "undefined") {
+      reveal(targets);
+      return;
+    }
+
+    const observer = new IntersectionObserver(entries => {
+      const entering = entries
+        .filter(entry => entry.isIntersecting)
+        .map(entry => entry.target as HTMLElement);
+      entering.forEach(element => observer.unobserve(element));
+      reveal(entering);
+    }, { threshold: 0.12, rootMargin: "0px 0px -7% 0px" });
+
+    targets.forEach(element => {
+      const rect = element.getBoundingClientRect();
+      if (rect.top <= window.innerHeight * 0.92 && rect.bottom > 0) {
+        reveal([element]);
+      } else {
+        gsap.set(element, { autoAlpha: 0, y: 22, filter: "blur(4px)" });
+        observer.observe(element);
+      }
+    });
+
+    return () => {
+      observer.disconnect();
+      gsap.killTweensOf(targets);
+      gsap.set(targets, { clearProps: "opacity,visibility,transform,filter" });
+    };
   }, [location, reduceMotion]);
 
   useEffect(() => {
