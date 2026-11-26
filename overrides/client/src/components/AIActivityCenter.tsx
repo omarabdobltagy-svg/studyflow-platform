@@ -57,7 +57,6 @@ export default function AIActivityCenter() {
     && current?.completedAt !== undefined
     && now - current.completedAt < 8_000;
   const visible = Boolean(current && (current.status === "running" || showRecent));
-  const eventCount = current?.events.length ?? 0;
 
   useEffect(() => {
     if (!active.length && !showRecent) return;
