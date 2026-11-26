@@ -106,7 +106,7 @@ type DailyPlanResult = {
 };
 
 // V6 scopes teacher signals to second-year Baccalaureate and retires stale AI-plan tasks.
-const DAILY_PLANNER_POLICY_VERSION = "smart-study-horizon-teacher-sync-v3";
+const DAILY_PLANNER_POLICY_VERSION = "smart-study-task-list-no-timing-v4";
 const DAILY_PLAN_PREFIX = "SIE_DAILY_PLAN_V4:";
 const DAILY_PLAN_DRAFT_PREFIX = "SIE_DAILY_PLAN_DRAFT_V1:";
 const ANNUAL_PLAN_PREFIX = "SIE_ANNUAL_PLAN_V1:"
@@ -130,12 +130,13 @@ async function getDailyPlanSourceFingerprint(userId: number, dailyMinutes: numbe
       message: "أكمل ملفك الدراسي وحدد موادك أولًا حتى يبني المخطط خطة دقيقة.",
     });
   }
-  const [tasks, goals, calendar, routines, books] = await Promise.all([
+  const [tasks, goals, calendar, routines, books, recentActivity] = await Promise.all([
     listTasks(userId),
     listGoals(userId),
     listCalendarEvents(userId),
     listRoutines(userId, "Africa/Cairo"),
     listBooks(userId),
+    listRecentStudentActivityEvents(userId, 40),
   ]);
   const fingerprintSelection = { ...((profile.selection ?? {}) as Record<string, unknown>) };
   delete fingerprintSelection.teacherPublicScanState;
@@ -163,6 +164,7 @@ async function getDailyPlanSourceFingerprint(userId: number, dailyMinutes: numbe
     calendar: byId(calendar),
     routines: byId(routines),
     books: byId(books),
+    taskBlockerReports: recentActivity.filter(event => event.eventType === "task.not_completed").map(event => ({ id: event.id, entityId: event.entityId, summary: event.summary, metadata: event.metadata })),
   });
 }
 
@@ -347,16 +349,31 @@ function queueDailyPlanEnsure(userId: number, _dailyMinutes: number) {
 }
 
 async function buildDailyPlanOperationalContext(userId: number) {
-  const [tasks, goals, calendar, books, routines, profile] = await Promise.all([
+  const [tasks, goals, calendar, books, routines, profile, recentActivity] = await Promise.all([
     listTasks(userId),
     listGoals(userId),
     listCalendarEvents(userId, "Africa/Cairo"),
     listBooks(userId),
     listRoutines(userId, "Africa/Cairo"),
     getStudentProfile(userId),
+    listRecentStudentActivityEvents(userId, 40),
   ]);
   const memorySnapshot = buildPlannerMemorySnapshot({ profile, tasks, goals, calendar, routines, books });
   const subjectIds = profile?.subjectIds ?? [];
+  const selection = (profile?.selection ?? {}) as Record<string, any>;
+  const accessRequirementLabels: Record<string, string> = {
+    homework_and_exam: "واجب وامتحان مطلوبان قبل المحاضرة التالية",
+    homework_only: "الواجب فقط مطلوب قبل المحاضرة التالية",
+    exam_only: "الامتحان فقط مطلوب قبل المحاضرة التالية",
+    none: "لا يوجد شرط سابق مسجل",
+    unknown: "شرط المحاضرة التالية غير معروف بعد",
+  };
+  const teacherAccessRequirements = subjectIds.map(subjectId => {
+    const subject = getSIESubject(subjectId)?.nameAr ?? subjectId;
+    const value = selection.teacherAccessRequirements?.[subjectId] ?? "unknown";
+    return subject + ": " + (accessRequirementLabels[value] ?? accessRequirementLabels.unknown);
+  });
+  const nonCompletionReports = recentActivity.filter(event => event.eventType === "task.not_completed").slice(-10).map(event => event.summary);
   const now = new Date();
   const horizon = now.getTime() + 14 * 24 * 60 * 60 * 1_000;
   const formatDate = (value: unknown) => {
@@ -435,6 +452,10 @@ async function buildDailyPlanOperationalContext(userId: number) {
     .slice(0, 12)
     .map(book => book.title);
   const readableContext = [
+    "شروط دخول المحاضرات التالية التي أبلغ بها الطالب (استخدمها كمتطلبات سابقة، ولا تخترع واجبات أو امتحانات):",
+    teacherAccessRequirements.length ? teacherAccessRequirements.join("\\n") : "لا توجد شروط مدرسين مسجلة.",
+    "أسباب عدم إكمال مهام سابقة كما أبلغ بها الطالب:",
+    nonCompletionReports.length ? nonCompletionReports.join("\\n") : "لا توجد تقارير تعثر حديثة.",
     "المهام المفتوحة ذات الأولوية والمواعيد (هذه التزامات وليست دليلًا على اكتمال الموضوع):",
     openTasks.length ? openTasks.join("\n") : "لا توجد مهام مفتوحة محفوظة.",
     "مهام منتهية حديثًا (لا تعتبرها وحدها دليلًا على إكمال الدرس في سجل تقدم المنهج):",
@@ -1342,6 +1363,7 @@ export const appRouter = router({
         skippedTeacherSubjectIds: z.array(z.string().trim().min(1).max(80)).max(12).default([]),
         courseModes: z.record(z.string(), z.enum(["center", "online"])).default({}),
         customTeacherNames: z.record(z.string(), z.string().trim().max(120)).default({}),
+        teacherAccessRequirements: z.record(z.string(), z.enum(["homework_and_exam", "homework_only", "exam_only", "none", "unknown"])).default({}),
         teacherSchedules: z.record(z.string(), z.array(z.object({
           dayOfWeek: z.number().int().min(0).max(6),
           startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
@@ -1382,6 +1404,9 @@ export const appRouter = router({
           if (!input.subjectIds.includes(subjectId)) {
             throw new TRPCError({ code: "BAD_REQUEST", message: "اسم المدرس المرسل لا يخص مادة في الملف." });
           }
+        }
+        for (const subjectId of Object.keys(input.teacherAccessRequirements)) {
+          if (!input.subjectIds.includes(subjectId)) throw new TRPCError({ code: "BAD_REQUEST", message: "متطلبات المحاضرة التالية يجب أن تخص مادة في ملفك." });
         }
         for (const [subjectId, schedule] of Object.entries(input.teacherSchedules)) {
           if (!input.subjectIds.includes(subjectId)) {
@@ -1464,6 +1489,7 @@ export const appRouter = router({
               ),
             ])),
             teacherScheduleUnfixedSubjectIds: input.teacherScheduleUnfixedSubjectIds.filter(subjectId => input.subjectIds.includes(subjectId)),
+            teacherAccessRequirements: Object.fromEntries(input.subjectIds.map(subjectId => [subjectId, input.teacherAccessRequirements[subjectId] ?? "unknown"])),
             teacherProgressState: Object.fromEntries(Object.entries(input.teacherSelections).map(([subjectId, teacherId]) => {
               const teacher = getSIETeacher(teacherId);
               const report = input.teacherFrontierReports[subjectId] ?? (teacher?.studentInputRequired ? "__DEFERRED__" : "__NOT_REQUIRED__");
@@ -1841,6 +1867,30 @@ export const appRouter = router({
           queueDailyPlanReconciliation(ctx.user.id, input.done ? "task.completed" : "task.reopened", "task");
         }
         return result;
+      }),
+    reportNotCompleted: protectedProcedure
+      .input(z.object({
+        id: z.number().int().positive(),
+        reason: z.enum(["low_time", "not_understood", "too_much", "other_commitment", "forgot", "other"]),
+        note: z.string().trim().max(500).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const task = (await listTasks(ctx.user.id)).find(item => item.id === input.id);
+        if (!task) throw new TRPCError({ code: "NOT_FOUND", message: "المهمة غير موجودة في قائمتك." });
+        if (task.status === "done") throw new TRPCError({ code: "BAD_REQUEST", message: "المهمة مكتملة بالفعل." });
+        const labels: Record<typeof input.reason, string> = {
+          low_time: "الوقت المتاح كان قليلًا",
+          not_understood: "المحتوى لم يكن واضحًا",
+          too_much: "المهمة كانت كبيرة أو صعبة",
+          other_commitment: "انشغلت بأمر آخر",
+          forgot: "نسيت المهمة",
+          other: "سبب آخر",
+        };
+        await logStudentActivity(ctx.user.id, "task.not_completed", "task", input.id,
+          "لم تكتمل المهمة «" + task.title + "»: " + labels[input.reason] + (input.note ? " — " + input.note : ""),
+          { taskTitle: task.title, reason: input.reason, reasonLabel: labels[input.reason], note: input.note ?? null });
+        queueDailyPlanReconciliation(ctx.user.id, "task.updated", "task");
+        return { success: true };
       }),
     undo: protectedProcedure
       .input(z.object({ changeId: z.number().int().positive() }))
@@ -3066,10 +3116,10 @@ export const appRouter = router({
             cue: z.string().trim().min(1).max(240),
           })).max(5).default([]),
           steps: z.array(z.object({
-            day: z.string().trim().min(1).max(60),
+            day: z.string().trim().max(60).default("")
             title: z.string().trim().min(2).max(180),
             detail: z.string().trim().min(1).max(1_200),
-            minutes: z.number().int().min(5).max(480),
+            minutes: z.number().int().min(0).max(480)
             category: z.string().trim().min(2).max(80),
             curriculumNodeIds: z.array(z.string().trim().min(1).max(120)).max(8).optional(),
             existingTask: z.object({
@@ -3111,6 +3161,7 @@ export const appRouter = router({
           dailyMinutes: z.number().int().min(20).max(600),
           daysPerWeek: z.union([z.literal(5), z.literal(6), z.literal(7)]).default(6),
           horizonDays: z.union([z.literal(7), z.literal(14)]).default(7),
+          mode: z.enum(["flexible", "scheduled"]).default("scheduled"),
         }).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -3130,33 +3181,36 @@ export const appRouter = router({
           return legacyResult;
         }
         const schedule = input.schedule;
+        const flexibleTasks = schedule.mode === "flexible";
         const scheduleSettings = {
-          dailyMinutes: schedule.dailyMinutes,
-          daysPerWeek: schedule.daysPerWeek,
-          horizonDays: schedule.horizonDays,
-          maxSessionMinutes: Math.min(90, schedule.dailyMinutes),
+          dailyMinutes: schedule.dailyMinutes, daysPerWeek: schedule.daysPerWeek,
+          horizonDays: schedule.horizonDays, maxSessionMinutes: Math.min(90, schedule.dailyMinutes),
         };
-        // Re-run the deterministic scheduler on the reviewed version. Editing a draft
-        // cannot bypass the capacity and session constraints enforced at generation time.
-        const rescheduled = schedulePlanSteps(input.plan.steps, scheduleSettings);
-        const quality = evaluatePlanQuality(rescheduled.steps, scheduleSettings, rescheduled.stats);
-        if (quality.status === "blocked") {
-          throw new TRPCError({
+        let approvedSteps = input.plan.steps;
+        let quality: ReturnType<typeof evaluatePlanQuality> | undefined;
+        let durationLabel = "مهام مرنة";
+        if (flexibleTasks) {
+          approvedSteps = input.plan.steps.map((step, index) => ({
+            ...step, day: "", minutes: 0, scheduleState: "scheduled" as const,
+            dayIndex: null, dateOffsetDays: null, scheduleNote: undefined,
+            sourceStepIndex: index, segmentIndex: undefined, segmentCount: undefined,
+          }));
+        } else {
+          const rescheduled = schedulePlanSteps(input.plan.steps, scheduleSettings);
+          quality = evaluatePlanQuality(rescheduled.steps, scheduleSettings, rescheduled.stats);
+          if (quality.status === "blocked") throw new TRPCError({
             code: "BAD_REQUEST",
             message: "الخطة تحتوي على تعارضات تمنع اعتمادها: " + quality.blockers.slice(0, 2).join("؛ "),
           });
+          approvedSteps = rescheduled.steps;
+          durationLabel = `${schedule.horizonDays} يومًا · ${rescheduled.stats.studyDaysUsed} أيام دراسة · ${rescheduled.stats.scheduledMinutes} دقيقة مجدولة`
+            + (rescheduled.stats.deferredMinutes ? ` · ${rescheduled.stats.deferredMinutes} دقيقة مؤجلة` : "");
         }
         const approvedPlan = {
-          ...input.plan,
-          durationLabel: `${schedule.horizonDays} يومًا · ${rescheduled.stats.studyDaysUsed} أيام دراسة · ${rescheduled.stats.scheduledMinutes} دقيقة مجدولة`
-            + (rescheduled.stats.deferredMinutes ? ` · ${rescheduled.stats.deferredMinutes} دقيقة مؤجلة` : ""),
-          habits: input.plan.habits,
-          quality,
-          steps: rescheduled.steps.map((step, index) => ({
-            ...step,
-            day: step.day || `اليوم ${index + 1}`,
-            curriculumNodeIds: step.curriculumNodeIds ?? [],
-            sourcePages: step.sourcePages ?? [],
+          ...input.plan, durationLabel, habits: input.plan.habits, ...(quality ? { quality } : {}),
+          steps: approvedSteps.map((step, index) => ({
+            ...step, day: flexibleTasks ? "" : (step.day || `اليوم ${index + 1}`),
+            curriculumNodeIds: step.curriculumNodeIds ?? [], sourcePages: step.sourcePages ?? [],
           })),
         };
         const synced = await syncDailyPlanGoalTree(
@@ -3178,7 +3232,6 @@ export const appRouter = router({
             studyConditions: {
               ...previousConditions,
               dailyMinutes: schedule.dailyMinutes,
-              daysPerWeek: schedule.daysPerWeek,
             },
           });
         }
