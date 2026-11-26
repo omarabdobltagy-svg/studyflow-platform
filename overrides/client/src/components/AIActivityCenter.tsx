@@ -44,9 +44,9 @@ export default function AIActivityCenter() {
   const [now, setNow] = useState(Date.now());
   const activityQuery = trpc.ai.activity.useQuery(undefined, {
     enabled: Boolean(user) && !loading,
-    staleTime: 0,
-    refetchOnWindowFocus: true,
-    refetchInterval: query => query.state.data?.active?.length ? 850 : 2_500,
+    staleTime: 1_000,
+    refetchOnWindowFocus: false,
+    refetchInterval: query => query.state.data?.active?.length ? 1_500 : 10_000,
   });
 
   const active = activityQuery.data?.active ?? [];
@@ -119,12 +119,12 @@ export default function AIActivityCenter() {
           </header>
 
           {isRunning && (
-            <div className="h-0.5 w-full overflow-hidden bg-muted">
+            <div className="h-1 w-full overflow-hidden bg-muted" role="progressbar" aria-label="جاري تنفيذ الطلب" aria-valuetext="مؤشر انتظار غير محدد؛ لا توجد نسبة إنجاز دقيقة">
               <motion.div
-                className="h-full origin-right bg-primary"
-                initial={{ scaleX: 0.12 }}
-                animate={{ scaleX: [0.25, 0.72, 0.42] }}
-                transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
+                className="h-full w-1/3 rounded-full bg-primary"
+                initial={{ x: "120%" }}
+                animate={{ x: ["120%", "-120%"] }}
+                transition={{ duration: 1.35, repeat: Infinity, ease: "linear" }}
               />
             </div>
           )}
