@@ -1834,7 +1834,7 @@ export const appRouter = router({
           `المكتبة: ${bookRows.slice(0, 8).map(book => `- ${book.title} — ${book.subject} (${book.progress}%)`).join("\n") || "لا توجد كتب مسجلة."}`,
           `الروتين النشط: ${routineRows.filter(routine => routine.isActive).slice(0, 6).map(routine => `- ${routine.name}: ${routine.items.filter(item => item.isActive).map(item => `${item.title}${item.completedToday ? " ✓" : ""}`).join("، ")}`).join("\n") || "لا يوجد روتين نشط."}`,
           `المواعيد القادمة: ${calendarRows.filter(event => new Date(event.startAt).getTime() >= Date.now()).slice(0, 8).map(event => `- ${event.title} (${dateLabel(event.startAt)})`).join("\n") || "لا توجد مواعيد قادمة مسجلة."}`,
-          `مواضع المدرسين وتقدم الطالب (كل مصدر مستقل):\n${teacherProgressContext}`
+          `مواضع المدرسين وتقدم الطالب (كل مصدر مستقل):\n${teacherProgressContext}`,
           `طرق الدراسة ومتطلبات الواجب والامتحان لكل مدرس (بيانات مركزية مع مصادر وثقة؛ unknown تعني عدم وجود دليل كافٍ):\n${teacherCourseFactsContext || "لا توجد بيانات مدرسين مختارة."}`,
           `فهرس المنهج وتقدم دروس SQ3R:\n${curriculumContext || "لا توجد فهارس متاحة للمواد المختارة."}`,
           `بيانات المنهج المشتقة من فهارس كتب الجزء الأول (أسماء الدروس ونطاق الصفحات المطبوعة وتقدير حجم/صعوبة أولي؛ ليست نصوصًا منقولة من صفحات الكتب):\n${textbookEvidenceContext || "بيانات المنهج التفصيلية غير متاحة الآن."}`,
