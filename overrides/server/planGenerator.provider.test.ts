@@ -146,7 +146,8 @@ describe("planner completed-curriculum guard", () => {
         step("الممنوع من الصرف وعلل منعه", "ARB_U2_N1"),
         step("تابع الممنوع من الصرف وعلل منعه", "ARB_U2_N2"),
         step("تطبيق على الممنوع من الصرف وعلل منعه", "ARB_U2_N3"),
-        step("النعت والبدل والتمييز بينهما", "ARB_U3_N1"),
+        step("النعت والبدل", "ARB_U3_N1_NAAT_BADAL"),
+        step("التمييز", "ARB_U3_N1_TAMYIZ"),
         step("العطف", "ARB_U3_N2"),
       ],
     };
@@ -154,7 +155,8 @@ describe("planner completed-curriculum guard", () => {
     const guarded = applyPlannerProgressGuard(plan as any, profile);
 
     expect(guarded.steps.map(item => item.curriculumNodeIds)).toEqual([
-      ["ARB_U3_N1"],
+      ["ARB_U3_N1_NAAT_BADAL"],
+      ["ARB_U3_N1_TAMYIZ"],
       ["ARB_U3_N2"],
     ]);
   });
