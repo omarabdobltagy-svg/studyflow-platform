@@ -217,7 +217,7 @@ export default function Planner() {
     const conditions = (selection.studyConditions ?? {}) as Record<string, unknown>;
     const configuredMinutes = Number(conditions.dailyMinutes);
     if (Number.isFinite(configuredMinutes) && configuredMinutes > 0) setDailyMinutes(configuredMinutes <= 60 ? 60 : configuredMinutes <= 150 ? 120 : 180);
-remove pref days assignment    plannerPreferencesInitialized.current = true;
+    plannerPreferencesInitialized.current = true;
   }, [profile.data, profile.isLoading, profile.isError]);
 
   const generate = trpc.plans.generate.useMutation({
