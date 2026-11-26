@@ -1625,11 +1625,11 @@ export async function enqueuePlannerReconciliationJob(input: {
     set: {
       impact: sql`IF(${plannerReconciliationJobs.impact} = 'structural' OR VALUES(impact) = 'structural', 'structural', 'local')`,
       eventType: input.eventType.slice(0, 80),
-      status: "queued",
-      revision: sql`${plannerReconciliationJobs.revision} + 1`,
-      attempts: 0,
+      attempts: sql`IF(${plannerReconciliationJobs.status} = 'running', ${plannerReconciliationJobs.attempts}, 0)`,
       nextRunAt,
-      lockedUntil: null,
+      lockedUntil: sql`IF(${plannerReconciliationJobs.status} = 'running', ${plannerReconciliationJobs.lockedUntil}, NULL)`,
+      status: sql`IF(${plannerReconciliationJobs.status} = 'running', 'running', 'queued')`,
+      revision: sql`${plannerReconciliationJobs.revision} + 1`,
       lastError: null,
     },
   });
@@ -1645,7 +1645,13 @@ export async function claimPlannerReconciliationJobs(limit = 3, leaseMs = 8 * 60
       .where(and(
         lte(plannerReconciliationJobs.nextRunAt, now),
         or(
-          eq(plannerReconciliationJobs.status, "queued"),
+          and(
+            eq(plannerReconciliationJobs.status, "queued"),
+            or(
+              isNull(plannerReconciliationJobs.lockedUntil),
+              lt(plannerReconciliationJobs.lockedUntil, now),
+            ),
+          ),
           and(
             eq(plannerReconciliationJobs.status, "running"),
             lt(plannerReconciliationJobs.lockedUntil, now),
@@ -1668,6 +1674,30 @@ export async function claimPlannerReconciliationJobs(limit = 3, leaseMs = 8 * 60
   });
 }
 
+async function requeuePlannerJobAfterConcurrentChange(jobId: number, completedRevision: number) {
+  const db = await requireDb();
+  const current = (await db.select({
+    revision: plannerReconciliationJobs.revision,
+    status: plannerReconciliationJobs.status,
+  }).from(plannerReconciliationJobs)
+    .where(eq(plannerReconciliationJobs.id, jobId))
+    .limit(1))[0];
+  if (!current || current.status !== "running" || current.revision <= completedRevision) return false;
+
+  const result = await db.update(plannerReconciliationJobs).set({
+    status: "queued",
+    attempts: 0,
+    nextRunAt: new Date(Date.now() + 1_500),
+    lockedUntil: null,
+    lastError: null,
+  }).where(and(
+    eq(plannerReconciliationJobs.id, jobId),
+    eq(plannerReconciliationJobs.revision, current.revision),
+    eq(plannerReconciliationJobs.status, "running"),
+  ));
+  return Number(result[0]?.affectedRows ?? 0) > 0;
+}
+
 export async function completePlannerReconciliationJob(jobId: number, revision: number) {
   const db = await requireDb();
   const result = await db.update(plannerReconciliationJobs).set({
@@ -1679,7 +1709,12 @@ export async function completePlannerReconciliationJob(jobId: number, revision: 
     eq(plannerReconciliationJobs.revision, revision),
     eq(plannerReconciliationJobs.status, "running"),
   ));
-  return Number(result[0]?.affectedRows ?? 0) > 0;
+  if (Number(result[0]?.affectedRows ?? 0) > 0) return true;
+
+  // A newer event arrived while this revision was executing. Requeue it now,
+  // instead of leaving it behind the previous worker's lease timeout.
+  await requeuePlannerJobAfterConcurrentChange(jobId, revision);
+  return false;
 }
 
 export async function failPlannerReconciliationJob(input: {
@@ -1701,7 +1736,10 @@ export async function failPlannerReconciliationJob(input: {
     eq(plannerReconciliationJobs.revision, input.revision),
     eq(plannerReconciliationJobs.status, "running"),
   ));
-  return Number(result[0]?.affectedRows ?? 0) > 0;
+  if (Number(result[0]?.affectedRows ?? 0) > 0) return true;
+
+  await requeuePlannerJobAfterConcurrentChange(input.jobId, input.revision);
+  return false;
 }
 
 export async function recordStudentActivityEvent(input: {
