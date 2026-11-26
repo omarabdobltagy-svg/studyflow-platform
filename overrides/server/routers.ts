@@ -5,7 +5,7 @@ import { FixedWindowRateLimiter } from "./_core/authRateLimit";
 import { SignJWT } from "jose";
 import { TRPCError } from "@trpc/server";
 import { COOKIE_NAME } from "@shared/const";
-import { SIE_CATALOG_META, SIE_SYSTEMS, getSIEEducationSystem, getSIESubject, getSIETeacher, getSIETeachersForSubject, getSIETrack, getSIECheckpointChoices, getSIECheckpointBranches, normalizeSIECheckpointFrontier, getSIECheckpointProgressBranches, matchSIECheckpointTask, validateSIESubjectSelection } from "@shared/sie-catalog";
+import { SIE_CATALOG_META, SIE_SYSTEMS, SIE_TEACHERS, SIE_SUBJECTS, getSIEEducationSystem, getSIESubject, getSIETeacher, getSIETeachersForSubject, getSIETrack, getSIECheckpointChoices, getSIECheckpointBranches, normalizeSIECheckpointFrontier, getSIECheckpointProgressBranches, matchSIECheckpointTask, validateSIESubjectSelection } from "@shared/sie-catalog";
 import { calculateLearningGap } from "@shared/sie-learning-progress";
 import {
   addChapter,
@@ -1711,9 +1711,41 @@ export const appRouter = router({
               `مصدر وثقة تقدم الطالب: ${String(progress.evidenceSource ?? "لا يوجد سجل")} / ${String(progress.confidence ?? "غير محدد")}`,
             ].join(" | ");
           }).join("\n") || "لم يتم اختيار مدرسين بعد.";
-        const teacherCourseFactsContext = await Promise.all(Object.entries(teacherChoices)
-          .filter(([subjectId, teacherId]) => Boolean(teacherId && teacherId !== "__SKIP__" && profile?.subjectIds.includes(subjectId)))
-          .map(async ([subjectId, teacherId]) => {
+        const latestStudentQuestion = [...input.messages].reverse().find(message => message.role === "user")?.content ?? "";
+        const teacherFactsTargets = new Map<string, { teacherId: string; subjectId: string }>();
+        for (const [subjectId, teacherId] of Object.entries(teacherChoices)) {
+          if (teacherId && teacherId !== "__SKIP__" && profile?.subjectIds.includes(subjectId)) {
+            teacherFactsTargets.set(`${teacherId}::${subjectId}`, { teacherId, subjectId });
+          }
+        }
+        const mentionedSubjectIds = SIE_SUBJECTS
+          .filter(subject => latestStudentQuestion.toLocaleLowerCase("ar").includes(subject.nameAr.toLocaleLowerCase("ar")))
+          .map(subject => subject.subjectId);
+        const unresolvedTeacherQuestions: string[] = [];
+        for (const teacher of SIE_TEACHERS) {
+          const name = teacher.nameAr.trim();
+          const brand = teacher.brandName.trim();
+          const mentioned = (name.length >= 4 && latestStudentQuestion.includes(name))
+            || (brand.length >= 5 && latestStudentQuestion.toLocaleLowerCase("ar").includes(brand.toLocaleLowerCase("ar")));
+          if (!mentioned) continue;
+          const matchingSubjects = teacher.subjectIds.filter(subjectId => mentionedSubjectIds.includes(subjectId));
+          const selectedSubjects = (profile?.subjectIds ?? []).filter(subjectId =>
+            teacherChoices[subjectId] === teacher.teacherId && teacher.subjectIds.includes(subjectId)
+          );
+          const subjectId = selectedSubjects.length === 1
+            ? selectedSubjects[0]
+            : matchingSubjects.length === 1
+              ? matchingSubjects[0]
+              : teacher.subjectIds.length === 1 ? teacher.subjectIds[0] : null;
+          if (!subjectId) {
+            unresolvedTeacherQuestions.push(`تم ذكر المدرس "${teacher.nameAr}"، لكن تحديد مادته غير واضح. المواد المسجلة له: ${teacher.subjectIds.map(id => getSIESubject(id)?.nameAr ?? id).join("، ")}.`);
+            continue;
+          }
+          teacherFactsTargets.set(`${teacher.teacherId}::${subjectId}`, { teacherId: teacher.teacherId, subjectId });
+        }
+        const unresolvedTeacherQuestionContext = unresolvedTeacherQuestions.join("\\n");
+        const teacherCourseFactsContext = await Promise.all([...teacherFactsTargets.values()]
+          .map(async ({ subjectId, teacherId }) => {
             const systemId = selection.systemId === "EG_GENERAL_SECONDARY" ? "EG_GENERAL_SECONDARY" : "EG_BACCALAUREATE";
             try {
               const facts = await getTeacherCourseFactsWithRefresh({
@@ -1836,6 +1868,7 @@ export const appRouter = router({
           `المواعيد القادمة: ${calendarRows.filter(event => new Date(event.startAt).getTime() >= Date.now()).slice(0, 8).map(event => `- ${event.title} (${dateLabel(event.startAt)})`).join("\n") || "لا توجد مواعيد قادمة مسجلة."}`,
           `مواضع المدرسين وتقدم الطالب (كل مصدر مستقل):\n${teacherProgressContext}`,
           `طرق الدراسة ومتطلبات الواجب والامتحان لكل مدرس (بيانات مركزية مع مصادر وثقة؛ unknown تعني عدم وجود دليل كافٍ):\n${teacherCourseFactsContext || "لا توجد بيانات مدرسين مختارة."}`,
+          `ملاحظة عن المدرس المذكور في السؤال: ${unresolvedTeacherQuestionContext || "لا توجد إحالة غير محسومة."}`,
           `فهرس المنهج وتقدم دروس SQ3R:\n${curriculumContext || "لا توجد فهارس متاحة للمواد المختارة."}`,
           `بيانات المنهج المشتقة من فهارس كتب الجزء الأول (أسماء الدروس ونطاق الصفحات المطبوعة وتقدير حجم/صعوبة أولي؛ ليست نصوصًا منقولة من صفحات الكتب):\n${textbookEvidenceContext || "بيانات المنهج التفصيلية غير متاحة الآن."}`,
           `التقدم المبلغ عنه ونتائج التقييمات:\n${learningEvidenceContext || "لا توجد تحديثات تقدم محفوظة حتى الآن."}`,
