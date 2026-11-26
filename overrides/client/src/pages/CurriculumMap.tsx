@@ -273,7 +273,7 @@ export default function CurriculumMap() {
           <p>الخريطة تجمع تقدمك مع مرجع المدرس أو الفصل، وتحسب الفجوة داخل كل وحدة على حدة. الفروع غير الموثقة تظل ظاهرة كبيانات غير مكتملة.</p>
         </div>
         <div className="sf-map-hero-meta">
-          <span><b>{branches.length}</b><small>وحدات هذه المادة</small></span>
+          <span><b>{branches.length}</b><small>مسارات المادة</small></span>
           <span><b>{trackedPositions}</b><small>مواضع طالب مسجلة</small></span>
         </div>
       </section>
@@ -356,6 +356,9 @@ export default function CurriculumMap() {
               const progress = completedCount !== null
                 ? Math.round((completedCount / Math.max(1, branch.choices.length)) * 100)
                 : null;
+              const referenceProgress = gap?.referencePosition !== null && gap?.referencePosition !== undefined
+                ? Math.round((Math.max(0, Math.min(branch.choices.length, gap.referencePosition)) / Math.max(1, branch.choices.length)) * 100)
+                : null;
               const isSelected = branch.branchId === selectedBranchId;
               return (
                 <article
@@ -369,14 +372,19 @@ export default function CurriculumMap() {
                     <span className="sf-map-gap-status">{gapLabel(gap, branch.pointLabel)}</span>
                   </button>
                   <div className="sf-map-branch-progress">
-                    <div className="sf-map-progress-rail"><i style={{ width: progress === null ? "0%" : progress + "%" }} /></div>
+                    <div className="sf-map-progress-rail" aria-label="تقدمك مقارنة بموضع المدرس">
+                      {referenceProgress !== null && <b style={{ width: referenceProgress + "%" }} />}
+                      <i style={{ width: progress === null ? "0%" : progress + "%" }} />
+                    </div>
                     <span>{progress === null ? "لم يُسجل التقدم بعد" : completedCount + " من " + branch.choices.length + " نقاط مكتملة · " + progress + "%"}</span>
                   </div>
                   <div className="sf-map-branch-steps" role="list" aria-label="التسلسل التفصيلي للدروس">
                     {branch.choices.map((choice, index) => {
                       const isCompleted = completedCount !== null && index < completedCount;
                       const isNext = completedCount !== null && index === completedCount;
-                      const state = isCompleted ? "completed" : isNext ? "next" : completedCount === null ? "untracked" : "future";
+                      const isBehindTeacher = completedCount !== null && gap?.referencePosition !== null && gap?.referencePosition !== undefined
+                        && index >= completedCount && index < gap.referencePosition;
+                      const state = isCompleted ? "completed" : isBehindTeacher ? "gap" : isNext ? "next" : completedCount === null ? "untracked" : "future";
                       const stepLabel = branch.pointLabel === "موضوع" ? "الموضوع" : "الدرس";
                       const localizedTitle = displayCurriculumTitle(choice.title);
                       const localizedUnit = displayCurriculumTitle(choice.unitTitle);
@@ -393,7 +401,7 @@ export default function CurriculumMap() {
                           <b>{localizedTitle}</b>
                           {localizedTitle !== choice.title && <small className="sf-map-step-original" dir="ltr">{choice.title}</small>}
                           {choice.unitTitle && <small className="sf-map-step-unit">{choice.unitNumber ? "الوحدة " + choice.unitNumber + " · " : ""}{localizedUnit}</small>}
-                          <em>{isCompleted ? "مكتمل" : isNext ? "التالي" : completedCount === null ? "لم يُسجل التقدم" : "لاحقًا"}</em>
+                          <em>{isCompleted ? "مكتمل" : isBehindTeacher ? (isNext ? "ابدأ الآن · متأخر" : "ضمن فجوة المدرس") : isNext ? "التالي" : completedCount === null ? "لم يُسجل التقدم" : "لاحقًا"}</em>
                         </button>
                       );
                     })}
