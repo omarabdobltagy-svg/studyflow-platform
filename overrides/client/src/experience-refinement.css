@@ -538,3 +538,28 @@ body[data-studyflow-sections-open="true"] .sf-hub-root {
 @media (max-width: 720px) {
   .sf-sections-trigger { min-height: 40px; }
 }
+
+
+/* Teacher check-in: a calm, focused panel that feels like part of the workspace. */
+.sf-class-followup-sheet {
+  box-shadow: -28px 0 90px -55px rgba(0,0,0,.72) !important;
+}
+.sf-class-followup-sheet input[type="checkbox"] {
+  accent-color: var(--primary);
+}
+.sf-class-followup-sheet select:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.sf-class-followup-sheet button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+@media (max-width: 720px) {
+  .sf-class-followup-sheet {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    border-inline: 0 !important;
+    border-radius: 0 !important;
+  }
+}
