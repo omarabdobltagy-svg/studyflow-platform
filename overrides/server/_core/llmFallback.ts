@@ -1,4 +1,11 @@
-import { invokeLLM, invokeNvidiaLLM, type InvokeParams, type InvokeResult } from "./llm";
+import {
+  invokeLLM,
+  invokeLLMStream,
+  invokeNvidiaLLM,
+  invokeNvidiaLLMStream,
+  type InvokeParams,
+  type InvokeResult,
+} from "./llm";
 
 export function isPrimaryProviderFallbackEligible(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
@@ -36,4 +43,26 @@ export async function invokeLLMWithNvidiaFallback(params: InvokeParams): Promise
   }
 
   return primary;
+}
+
+/**
+ * Stream assistant text from the primary model. When its credentials, quota,
+ * or streaming capability are unavailable, switch to NVIDIA NIM. NIM may
+ * return a queued 202 response; that path emits the completed answer once.
+ */
+export async function invokeLLMWithNvidiaFallbackStream(
+  params: InvokeParams,
+  onToken: (token: string) => void,
+): Promise<InvokeResult> {
+  try {
+    return await invokeLLMStream(params, onToken);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const streamingUnsupported = /(?:stream|streaming).{0,50}(?:not supported|unsupported|disabled)|(?:not supported|unsupported).{0,50}(?:stream|streaming)/i.test(message);
+    if (!isPrimaryProviderFallbackEligible(error) && !streamingUnsupported) throw error;
+    console.warn("[StudyFlow AI] Primary streaming provider unavailable; switching to NVIDIA NIM.", {
+      reason: streamingUnsupported ? "streaming_unsupported" : "primary_provider_fallback",
+    });
+    return invokeNvidiaLLMStream(params, onToken);
+  }
 }
