@@ -1743,7 +1743,7 @@ export const appRouter = router({
           }
           teacherFactsTargets.set(`${teacher.teacherId}::${subjectId}`, { teacherId: teacher.teacherId, subjectId });
         }
-        const unresolvedTeacherQuestionContext = unresolvedTeacherQuestions.join("\\n");
+        const unresolvedTeacherQuestionContext = unresolvedTeacherQuestions.join("\n");
         const teacherCourseFactsContext = await Promise.all([...teacherFactsTargets.values()]
           .map(async ({ subjectId, teacherId }) => {
             const systemId = selection.systemId === "EG_GENERAL_SECONDARY" ? "EG_GENERAL_SECONDARY" : "EG_BACCALAUREATE";
