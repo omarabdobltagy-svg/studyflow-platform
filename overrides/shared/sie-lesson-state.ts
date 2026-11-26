@@ -13,9 +13,9 @@ export function isStudentLessonState(value: unknown): value is StudentLessonStat
 
 /**
  * The student frontier means "the last lesson reached in the teacher's explanation".
- * Before the explicit state model was introduced, the legacy inclusive frontier
- * represented completed learning. New-model frontiers default to watched-only until
- * the student reports studying the lesson.
+ * A lesson position only proves that its explanation was reached; it does not prove
+ * the student studied or understood it. Every unconfirmed lesson at or before the
+ * frontier therefore remains watched-only until the student reports otherwise.
  */
 export function getEffectiveStudentLessonState(input: {
   choices: Array<{ nodeId: string }>;
@@ -36,9 +36,7 @@ export function getEffectiveStudentLessonState(input: {
     : input.choices.findIndex(choice => choice.nodeId === frontier);
   if (frontierIndex < 0 && frontier !== "__NOT_STARTED__") return "not_recorded";
   if (frontierIndex < index) return "not_watched";
-  return input.lessonStateModelVersion && input.lessonStateModelVersion >= 1
-    ? "watched_only"
-    : "studied";
+  return "watched_only";
 }
 
 export function isStudentLessonStudyComplete(state: StudentLessonState): boolean {
