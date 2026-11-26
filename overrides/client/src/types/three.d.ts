@@ -11,6 +11,8 @@ declare module "three" {
     y: number;
     z: number;
     set(x: number, y: number, z: number): this;
+    copy(value: Vector3): this;
+    constructor(x?: number, y?: number, z?: number);
   }
 
   export class Object3D {
@@ -29,7 +31,9 @@ declare module "three" {
     dispose(): void;
   }
 
-  export class Scene extends Object3D {}
+  export class Scene extends Object3D {
+    traverse(callback: (object: Object3D) => void): void;
+  }
 
   export class PerspectiveCamera extends Object3D {
     aspect: number;
@@ -63,6 +67,19 @@ declare module "three" {
 
   export class IcosahedronGeometry extends BufferGeometry {
     constructor(radius?: number, detail?: number);
+  }
+
+  export class SphereGeometry extends BufferGeometry {
+    constructor(radius?: number, widthSegments?: number, heightSegments?: number);
+  }
+
+  export class CatmullRomCurve3 {
+    constructor(points?: Vector3[]);
+    getPoint(t: number): Vector3;
+  }
+
+  export class TubeGeometry extends BufferGeometry {
+    constructor(path: CatmullRomCurve3, tubularSegments?: number, radius?: number, radialSegments?: number, closed?: boolean);
   }
 
   export class TorusGeometry extends BufferGeometry {
