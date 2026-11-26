@@ -1590,7 +1590,7 @@ export async function generatePersonalPlan(
           const facts = await getTeacherCourseFactsWithRefresh({
             teacherId,
             subjectId,
-            systemId: teacherSystemId,
+            educationSystem: teacherSystemId,
             gradeYear: profile.gradeYear,
           });
           if (facts.facts.isStale || facts.facts.confidence === "low") return null;
