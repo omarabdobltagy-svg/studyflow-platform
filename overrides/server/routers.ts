@@ -3116,10 +3116,10 @@ export const appRouter = router({
             cue: z.string().trim().min(1).max(240),
           })).max(5).default([]),
           steps: z.array(z.object({
-            day: z.string().trim().max(60).default("")
+            day: z.string().trim().max(60).default(""),
             title: z.string().trim().min(2).max(180),
             detail: z.string().trim().min(1).max(1_200),
-            minutes: z.number().int().min(0).max(480)
+            minutes: z.number().int().min(0).max(480),
             category: z.string().trim().min(2).max(80),
             curriculumNodeIds: z.array(z.string().trim().min(1).max(120)).max(8).optional(),
             existingTask: z.object({
