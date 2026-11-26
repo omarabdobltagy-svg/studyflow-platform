@@ -417,7 +417,7 @@ function buildPlannerProgressSnapshot(
         teacherTeachingFrontierId: teacherFrontier,
         schoolClassFrontierId: schoolFrontier,
       });
-      const lessonStates = (saved.lessonStates ?? {}) as Record<string, { state?: unknown }>;
+      const lessonStates = (saved.lessonStates ?? {}) as Record<string, { state?: StudentLessonState }>;
       const lessonStateModelVersion = Number(saved.lessonStateModelVersion ?? 0);
       const branchCompleted: PlannerCurriculumChoice[] = [];
       const branchEligible: PlannerCurriculumChoice[] = [];
