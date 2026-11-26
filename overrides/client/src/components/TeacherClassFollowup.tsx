@@ -44,7 +44,7 @@ export default function TeacherClassFollowup() {
       setSelectedBranches([]);
       setBranchFrontiers({});
       setBusyKey(null);
-      toast.success("اتسجل شرح المدرس، واتضاف الموعد القادم للتقويم.");
+      if (!autoSubmitted.current.has(result.key)) toast.success("اتسجل شرح المدرس، واتضاف الموعد القادم للتقويم.");
     },
     onError: error => {
       setBusyKey(null);
