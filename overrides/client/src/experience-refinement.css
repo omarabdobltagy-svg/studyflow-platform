@@ -464,3 +464,77 @@ input:focus-visible, textarea:focus-visible, select:focus-visible,
   .sf-page-loading-mark span,
   .sf-page-loading-track span { animation: none; }
 }
+
+
+/* Navigation: active state is a quiet rail, never a yellow icon tile. */
+.sf-sections-trigger {
+  border: 1px solid color-mix(in srgb, var(--primary) 26%, var(--border)) !important;
+  background: color-mix(in srgb, var(--primary) 5%, var(--card)) !important;
+  color: var(--foreground) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+}
+.sf-sections-trigger:hover {
+  border-color: color-mix(in srgb, var(--primary) 46%, var(--border)) !important;
+  background: color-mix(in srgb, var(--primary) 9%, var(--card)) !important;
+}
+.sf-sections-trigger svg { color: var(--primary); }
+.sf-nav-list-mobile .sf-nav-item {
+  position: relative;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted-foreground);
+}
+.sf-nav-list-mobile .sf-nav-item.is-active {
+  border-color: color-mix(in srgb, var(--primary) 24%, var(--border)) !important;
+  background: color-mix(in srgb, var(--primary) 7%, var(--card)) !important;
+  color: var(--foreground) !important;
+  box-shadow: none !important;
+}
+.sf-nav-list-mobile .sf-nav-item.is-active::before {
+  position: absolute;
+  inset-block: 9px;
+  inset-inline-start: 0;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--primary);
+  content: "";
+}
+.sf-nav-list-mobile .sf-nav-item .sf-nav-icon,
+.sf-nav-list-mobile .sf-nav-item.is-active .sf-nav-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  background: transparent !important;
+  color: currentColor !important;
+  box-shadow: none !important;
+  filter: none !important;
+}
+.sf-nav-list-mobile .sf-nav-item.is-active span,
+.sf-nav-list-mobile .sf-nav-item.is-active svg { color: inherit; }
+.sf-mobile-dock-item.is-active {
+  border: 1px solid color-mix(in srgb, var(--primary) 25%, transparent) !important;
+  background: color-mix(in srgb, var(--primary) 7%, var(--card)) !important;
+  color: var(--foreground) !important;
+  box-shadow: none !important;
+}
+.sf-mobile-dock-item.is-active svg { color: var(--primary) !important; }
+.sf-dock-item.is-active {
+  background: color-mix(in srgb, var(--primary) 8%, transparent) !important;
+  color: var(--foreground) !important;
+}
+.sf-dock-item.is-active .sf-dock-icon { color: var(--primary) !important; }
+.sf-dock-active {
+  background: var(--primary) !important;
+  box-shadow: none !important;
+}
+.sf-mobile-sheet {
+  z-index: 90 !important;
+}
+body[data-studyflow-sections-open="true"] .sf-hub-root {
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+.sf-hub-root { z-index: 28 !important; }
+@media (max-width: 720px) {
+  .sf-sections-trigger { min-height: 40px; }
+}
