@@ -184,7 +184,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
     teacherId: selectedSetupTeacherId || "__none__",
     subjectId: currentSetupSubjectId || "__none__",
     systemId: (form.systemId || "EG_BACCALAUREATE") as "EG_BACCALAUREATE" | "EG_GENERAL_SECONDARY",
-    gradeYear: track?.gradeYear ?? SIE_CATALOG_META.gradeYear,
+    gradeYear: SIE_CATALOG_META.gradeYear,
   }, {
     enabled: Boolean(selectedSetupTeacherId && currentSetupSubjectId && form.systemId),
     refetchInterval: query => query.state.data?.state === "researching" ? 4_000 : false,
