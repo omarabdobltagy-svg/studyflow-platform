@@ -1,3 +1,4 @@
+import { formatStudyMethodNotes } from "./study-method";
 import { and, asc, desc, eq, inArray, isNull, like, lt, lte, or, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { storageDelete } from "./storage";
@@ -743,6 +744,7 @@ export async function syncDailyPlanGoalTree(
       day: string;
       title: string;
       detail: string;
+      studyMethod?: { stages: Array<{ title: string; instruction: string; reason: string; optional?: boolean }>; completionCriteria: string; teacherPolicyNote?: string };
       minutes: number;
       category: string;
       priority?: "critical" | "high" | "medium" | "low";
@@ -772,6 +774,7 @@ export async function syncDailyPlanGoalTree(
   const dueDates = steps.map(() => null);
   const taskNotes = (step: typeof steps[number]) => [
     step.detail,
+    ...(step.studyMethod ? [formatStudyMethodNotes(step.studyMethod)] : []),
     ...(step.scheduleNote ? [step.scheduleNote] : []),
     ...(step.resourceRecommendation ? [
       "مشاهدة إضافية موصى بها من " + (step.resourceRecommendation.teacherName || "المدرس") + ": " + step.resourceRecommendation.title,
