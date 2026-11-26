@@ -1,5 +1,6 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import PlanExportActions from "@/components/PlanExportActions";
+import PlannerOperationsScene from "@/components/PlannerOperationsScene";
 import QueryErrorNotice from "@/components/QueryErrorNotice";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
@@ -480,6 +481,8 @@ export default function Planner() {
             </div>
           )}
         </section>
+
+        <PlannerOperationsScene />
 
         {!profile.isLoading && profile.data && (!profile.data.subjectIds || profile.data.subjectIds.length === 0) && (
           <section className="rounded-2xl border border-border bg-card p-5">
