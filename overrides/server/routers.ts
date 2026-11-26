@@ -58,6 +58,9 @@ import {
   listGoals,
   listRoutines,
   listTasks,
+  listTaskSubtasks,
+  addTaskSubtask,
+  toggleTaskSubtask,
   saveStudentProfile,
   saveAiPlan,
   saveSIEOnboarding,
@@ -1840,6 +1843,27 @@ export const appRouter = router({
 
   tasks: router({
     list: protectedProcedure.query(({ ctx }) => listTasks(ctx.user.id)),
+    subtasks: protectedProcedure
+      .input(z.object({ taskId: z.number().int().positive() }))
+      .query(({ ctx, input }) => listTaskSubtasks(ctx.user.id, input.taskId)),
+    addSubtask: protectedProcedure
+      .input(z.object({ taskId: z.number().int().positive(), title: z.string().trim().min(2).max(220) }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await addTaskSubtask(ctx.user.id, input.taskId, input.title);
+        await logStudentActivity(ctx.user.id, "task.subtask_added", "task", input.taskId, "أضيفت خطوة تنفيذ لمهمة");
+        return result;
+      }),
+    toggleSubtask: protectedProcedure
+      .input(z.object({
+        taskId: z.number().int().positive(),
+        subtaskId: z.number().int().positive(),
+        completed: z.boolean(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await toggleTaskSubtask(ctx.user.id, input.taskId, input.subtaskId, input.completed);
+        await logStudentActivity(ctx.user.id, input.completed ? "task.subtask_completed" : "task.subtask_reopened", "task", input.taskId, input.completed ? "اكتملت خطوة من خطوات مهمة" : "أعيد فتح خطوة من خطوات مهمة");
+        return result;
+      }),
     create: protectedProcedure
       .input(z.object({
         title: z.string().trim().min(1, "اكتب عنوان المهمة.").max(220),
@@ -3109,6 +3133,9 @@ export const appRouter = router({
         plan: z.object({
           title: z.string().trim().min(3).max(160),
           summary: z.string().trim().max(1_500),
+          objective: z.string().trim().max(500).optional(),
+          strategy: z.string().trim().max(900).optional(),
+          selectionRationale: z.array(z.string().trim().min(5).max(280)).max(6).optional(),
           memorySnapshot: z.any().optional(),
           durationLabel: z.string().trim().min(1).max(100).optional(),
           habits: z.array(z.object({
@@ -3119,6 +3146,11 @@ export const appRouter = router({
             day: z.string().trim().max(60).default(""),
             title: z.string().trim().min(2).max(180),
             detail: z.string().trim().min(1).max(1_200),
+            whyThisTask: z.string().trim().max(500).optional(),
+            rules: z.array(z.string().trim().min(3).max(280)).max(8).optional(),
+            prerequisites: z.array(z.string().trim().min(3).max(280)).max(6).optional(),
+            executionSteps: z.array(z.string().trim().min(3).max(220)).max(8).optional(),
+            completionCriteria: z.array(z.string().trim().min(3).max(280)).max(6).optional(),
             minutes: z.number().int().min(0).max(480),
             category: z.string().trim().min(2).max(80),
             curriculumNodeIds: z.array(z.string().trim().min(1).max(120)).max(8).optional(),

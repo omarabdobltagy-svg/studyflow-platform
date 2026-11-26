@@ -7,7 +7,6 @@ import QueryErrorNotice from "@/components/QueryErrorNotice";
 import BrandMark from "@/components/BrandMark";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
-import StudyOrbScene from "@/components/StudyOrbScene";
 import { gsap } from "gsap";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
@@ -25,27 +24,27 @@ type NavigationGroup = {
 };
 
 const navigation: NavigationGroup[] = [
-  { label: "مساحة اليوم", items: [
+  { label: "الرئيسية", items: [
     { label: "لوحة اليوم", path: "/", icon: LayoutDashboard },
-    { label: "المهام", path: "/tasks", icon: CheckSquare2 },
-    { label: "روتيني", path: "/routines", icon: Sparkles },
+    { label: "خطة المذاكرة", path: "/planner", icon: CalendarRange },
+    { label: "مهامي", path: "/tasks", icon: CheckSquare2 },
     { label: "التقويم", path: "/calendar", icon: CalendarDays },
   ] },
   { label: "التعلّم", items: [
-    { label: "المكتبة", path: "/books", icon: LibraryBig },
-    { label: "المذاكرة والتقدم", path: "/study", icon: BookOpenText },
-    { label: "جلسة SQ3R", path: "/sq3r", icon: BookOpenCheck },
+    { label: "المواد والشرح", path: "/study", icon: BookOpenText },
     { label: "خريطة المنهج", path: "/learning-map", icon: Network },
-    { label: "المساعد الدراسي الذكي", path: "/assistant", icon: MessageCircle },
+    { label: "المكتبة", path: "/books", icon: LibraryBig },
+    { label: "المساعد الدراسي", path: "/assistant", icon: MessageCircle },
   ] },
-  { label: "التخطيط", items: [
+  { label: "المتابعة والأدوات", items: [
+    { label: "تحليل التقدم", path: "/analytics", icon: BarChart3 },
     { label: "الأهداف", path: "/goals", icon: Goal },
-    { label: "المخطط الذكي", path: "/planner", icon: CalendarRange },
-    { label: "تحليل الأداء", path: "/analytics", icon: BarChart3 },
-  ] },
-  { label: "إدارة المساحة", items: [
+    { label: "روتينك", path: "/routines", icon: Sparkles },
+    { label: "جلسة SQ3R", path: "/sq3r", icon: BookOpenCheck },
     { label: "التذكيرات", path: "/reminders", icon: CalendarDays },
-    { label: "الملف الدراسي", path: "/settings", icon: Settings2 },
+  ] },
+  { label: "الحساب", items: [
+    { label: "الملف والإعدادات", path: "/settings", icon: Settings2 },
   ] },
 ];
 
@@ -83,13 +82,6 @@ export default function DashboardLayout({ title, description, children, action }
   const pageContentRef = useRef<HTMLDivElement>(null);
   // Keep the top dock focused on the few destinations students use every day.
   // The full navigation remains available in the sidebar and the mobile "sections" sheet.
-  const desktopDockItems = [
-    { label: "اليوم", path: "/", icon: LayoutDashboard, group: "مساحة اليوم" },
-    { label: "المهام", path: "/tasks", icon: CheckSquare2, group: "مساحة اليوم" },
-    { label: "المذاكرة", path: "/study", icon: BookOpenText, group: "التعلّم" },
-    { label: "المساعد", path: "/assistant", icon: MessageCircle, group: "التعلّم" },
-    { label: "الخطة", path: "/planner", icon: CalendarRange, group: "التخطيط" },
-  ];
   const studentProfile = trpc.studentProfile.get.useQuery(undefined, { enabled: Boolean(user) });
   const { theme, toggleTheme } = useTheme();
   const reduceMotion = useReducedMotion();
@@ -243,6 +235,7 @@ export default function DashboardLayout({ title, description, children, action }
 
   const initial = user.name?.trim().charAt(0) || "م";
   const currentPath = location.split("?")[0];
+  const currentGroup = navigation.find(group => group.items.some(item => item.path === currentPath || currentPath.startsWith(item.path + "/")))?.label ?? "StudyFlow";
   const isActive = (path: string) => path === "/" ? currentPath === "/" : currentPath === path || currentPath.startsWith(path + "/");
   const navigate = (path: string) => {
     setLocation(path);
@@ -252,9 +245,9 @@ export default function DashboardLayout({ title, description, children, action }
   const pageKey = (location.split("?")[0].split("/")[1] || "home").replace(/[^a-z0-9-]/gi, "");
   const mobileDockItems = [
     { label: "اليوم", path: "/", icon: LayoutDashboard },
+    { label: "الخطة", path: "/planner", icon: CalendarRange },
     { label: "المهام", path: "/tasks", icon: CheckSquare2 },
     { label: "المذاكرة", path: "/study", icon: BookOpenText },
-    { label: "الخريطة", path: "/learning-map", icon: BrainCircuit },
   ];
 
   const renderNavigation = (mobile = false) => (
@@ -296,8 +289,8 @@ export default function DashboardLayout({ title, description, children, action }
         <b>{user.name || "مستخدم التطبيق"}</b>
         <span>مساحتك الشخصية</span>
       </div>
-      <Button variant="ghost" size="icon" onClick={() => setShowLogoutConfirm(true)} className="sf-account-logout" aria-label="تسجيل الخروج" title="تسجيل الخروج">
-        <LogOut className="size-4" />
+      <Button type="button" variant="ghost" onClick={() => setShowLogoutConfirm(true)} className="sf-account-logout" aria-label="تسجيل الخروج" title="تسجيل الخروج">
+        <LogOut className="size-4" /><span>تسجيل الخروج</span>
       </Button>
     </div>
   );
@@ -305,7 +298,15 @@ export default function DashboardLayout({ title, description, children, action }
   return (
     <div className="sf-app-shell sf-shell-v3">
       <div className="sf-app-frame" data-page={pageKey}>
-        <StudyOrbScene className="sf-workspace-3d" />
+        <aside className="sf-sidebar" aria-label="القائمة الرئيسية">
+          <button type="button" onClick={() => navigate("/")} className="sf-brand" aria-label="العودة إلى لوحة اليوم">
+            <span className="sf-brand-mark"><BrandMark className="size-5"/></span>
+            <span className="sf-brand-copy"><b>StudyFlow</b><small>STUDENT WORKSPACE</small></span>
+          </button>
+          <p className="sf-sidebar-caption">مساحتك الدراسية</p>
+          {renderNavigation()}
+          <div className="sf-sidebar-footer">{account}</div>
+        </aside>
         <div className="sf-app-main">
           <motion.header
             className="sf-topbar sf-topbar-editorial"
@@ -314,40 +315,13 @@ export default function DashboardLayout({ title, description, children, action }
             transition={{ type: "spring", stiffness: 260, damping: 25 }}
           >
             <div className="sf-header-start">
-              <button onClick={() => navigate("/")} className="sf-brand" aria-label="العودة إلى لوحة اليوم">
-                <span className="sf-brand-mark"><BrandMark className="size-5" /></span>
-                <span className="sf-brand-copy"><b>StudyFlow</b><small>STUDENT WORKSPACE</small></span>
-              </button>
-              <span className="sf-header-divider" />
               <div className="sf-heading-copy">
-                <p className="sf-topbar-kicker">مساحة الدراسة <span>/</span> STUDYFLOW</p>
+                <p className="sf-topbar-kicker">STUDYFLOW <span>/</span> {currentGroup}</p>
                 <h1>{title}</h1>
                 <p className="sf-page-description">{description}</p>
               </div>
             </div>
 
-            <nav className="sf-desktop-dock" aria-label="التنقل السريع">
-              {desktopDockItems.map(item => {
-                const active = isActive(item.path);
-                return (
-                  <motion.button
-                    key={item.path}
-                    type="button"
-                    className={cn("sf-dock-item", active && "is-active")}
-                    onClick={() => navigate(item.path)}
-                    aria-label={item.label}
-                    aria-current={active ? "page" : undefined}
-                    whileHover={{ y: -5, scale: 1.05 }}
-                    whileTap={{ scale: 0.92 }}
-                    transition={{ type: "spring", stiffness: 340, damping: 18 }}
-                  >
-                    <span className="sf-dock-icon"><item.icon size={18} strokeWidth={1.8} /></span>
-                    <span className="sf-dock-tooltip"><b>{item.label}</b><small>{item.group}</small></span>
-                    {active && <motion.i layoutId="sf-active-dock" className="sf-dock-active" transition={{ type: "spring", stiffness: 380, damping: 28 }} />}
-                  </motion.button>
-                );
-              })}
-            </nav>
 
             <div className="sf-topbar-actions">
               {action ? <div className="dashboard-header-actions">{action}</div> : null}
@@ -362,7 +336,7 @@ export default function DashboardLayout({ title, description, children, action }
               >
                 {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
               </Button>
-              <span className="sf-topbar-avatar" aria-label={user.name || "ملف الطالب"}>{initial}</span>
+              <Button type="button" variant="outline" size="icon" className="sf-theme-button pressable" onClick={() => navigate("/settings")} aria-label="الإعدادات" title="الإعدادات"><Settings2 className="size-4"/></Button>
             </div>
           </motion.header>
 

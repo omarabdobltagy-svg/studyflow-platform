@@ -18,6 +18,7 @@ import {
   studentProfiles,
   studySessions,
   taskChangeLogs,
+  taskSubtasks,
   tasks,
   users,
 } from "../drizzle/schema";
@@ -431,6 +432,46 @@ export async function saveSIEOnboarding(userId: number, data: SIEOnboardingInput
   return getStudentProfile(userId);
 }
 
+export async function listTaskSubtasks(userId: number, taskId: number) {
+  const db = await requireDb();
+  const ownedTask = await db.select({ id: tasks.id }).from(tasks)
+    .where(and(eq(tasks.id, taskId), eq(tasks.userId, userId))).limit(1);
+  if (!ownedTask[0]) throw new Error("المهمة غير موجودة في مساحتك.");
+  return db.select().from(taskSubtasks)
+    .where(eq(taskSubtasks.taskId, taskId))
+    .orderBy(asc(taskSubtasks.sortOrder), asc(taskSubtasks.createdAt));
+}
+
+export async function addTaskSubtask(userId: number, taskId: number, title: string) {
+  const db = await requireDb();
+  const ownedTask = await db.select({ id: tasks.id }).from(tasks)
+    .where(and(eq(tasks.id, taskId), eq(tasks.userId, userId))).limit(1);
+  if (!ownedTask[0]) throw new Error("المهمة غير موجودة في مساحتك.");
+  const last = await db.select({ sortOrder: taskSubtasks.sortOrder }).from(taskSubtasks)
+    .where(eq(taskSubtasks.taskId, taskId))
+    .orderBy(desc(taskSubtasks.sortOrder)).limit(1);
+  const result = await db.insert(taskSubtasks).values({
+    taskId,
+    title: title.trim(),
+    sortOrder: (last[0]?.sortOrder ?? -1) + 1,
+    isCompleted: false,
+  });
+  return { id: Number(result[0].insertId) };
+}
+
+export async function toggleTaskSubtask(userId: number, taskId: number, subtaskId: number, completed: boolean) {
+  const db = await requireDb();
+  const ownedTask = await db.select({ id: tasks.id }).from(tasks)
+    .where(and(eq(tasks.id, taskId), eq(tasks.userId, userId))).limit(1);
+  if (!ownedTask[0]) throw new Error("المهمة غير موجودة في مساحتك.");
+  const ownedSubtask = await db.select({ id: taskSubtasks.id }).from(taskSubtasks)
+    .where(and(eq(taskSubtasks.id, subtaskId), eq(taskSubtasks.taskId, taskId))).limit(1);
+  if (!ownedSubtask[0]) throw new Error("خطوة التنفيذ لا تتبع هذه المهمة.");
+  await db.update(taskSubtasks).set({ isCompleted: completed })
+    .where(and(eq(taskSubtasks.id, subtaskId), eq(taskSubtasks.taskId, taskId)));
+  return { success: true };
+}
+
 export async function listTasks(userId: number) {
   const db = await requireDb();
   return db
@@ -743,6 +784,11 @@ export async function syncDailyPlanGoalTree(
       day: string;
       title: string;
       detail: string;
+      whyThisTask?: string;
+      rules?: string[];
+      prerequisites?: string[];
+      executionSteps?: string[];
+      completionCriteria?: string[];
       minutes: number;
       category: string;
       priority?: "critical" | "high" | "medium" | "low";
@@ -770,17 +816,36 @@ export async function syncDailyPlanGoalTree(
     throw new Error("لا يمكن إنشاء مهام يومية من خطة بلا خطوات عملية.");
   }
   const dueDates = steps.map(() => null);
-  const taskNotes = (step: typeof steps[number]) => [
-    step.detail,
-    ...(step.scheduleNote ? [step.scheduleNote] : []),
-    ...(step.resourceRecommendation ? [
-      "مشاهدة إضافية موصى بها من " + (step.resourceRecommendation.teacherName || "المدرس") + ": " + step.resourceRecommendation.title,
-      step.resourceRecommendation.url,
-      "سبب التوصية: " + step.resourceRecommendation.reason,
-    ] : []),
-  ].filter(Boolean).join("\n\n");
+  const taskNotes = (step: typeof steps[number]) => {
+    const sections: Array<[string, string]> = [
+      ["المطلوب", step.detail],
+      ["سبب اختيار المهمة", step.whyThisTask || step.priorityReason || "اختيرت بناءً على تقدمك الحالي والموضوعات المتاحة."],
+      ["قواعد المهمة", (step.rules ?? []).map(rule => "• " + rule).join("\n") || "• التزم بالشرح والحدود التي حددها المدرس، ولا تضف متطلبات من عندك."],
+      ["المتطلبات السابقة", (step.prerequisites ?? []).map(item => "• " + item).join("\n") || "لا يوجد شرط سابق مؤكد مسجل لهذه المهمة."],
+      ["معيار الإكمال", (step.completionCriteria ?? []).map(item => "• " + item).join("\n") || "اعتبر المهمة مكتملة بعد إنهاء خطوات التنفيذ المسجلة والتحقق من إنجاز المطلوب."],
+    ];
+    if (step.resourceRecommendation) {
+      sections.push(["مصدر الشرح", [
+        step.resourceRecommendation.title,
+        step.resourceRecommendation.teacherName || "مصدر مدرس",
+        step.resourceRecommendation.url,
+        "سبب التوصية: " + step.resourceRecommendation.reason,
+      ].join("\n")]);
+    }
+    return sections.map(([heading, value]) => heading + ":\n" + value).join("\n\n");
+  };
 
   return db.transaction(async tx => {
+    const ensureExecutionSteps = async (taskId: number, titles: string[] = []) => {
+      const cleanTitles = [...new Set(titles.map(value => value.trim()).filter(Boolean))].slice(0, 8);
+      if (!cleanTitles.length) return;
+      const existing = await tx.select({ id: taskSubtasks.id }).from(taskSubtasks)
+        .where(eq(taskSubtasks.taskId, taskId)).limit(1);
+      if (existing.length) return;
+      await tx.insert(taskSubtasks).values(cleanTitles.map((title, sortOrder) => ({
+        taskId, title, sortOrder, isCompleted: false,
+      })));
+    };
     // Retire open tasks from older AI-generated plans before writing the new one.
     // Completed tasks remain as historical evidence; manually created tasks are untouched.
     const supersedeCategories = [...new Set(identity.supersedeCategories ?? [goalCategory])];
@@ -937,6 +1002,7 @@ export async function syncDailyPlanGoalTree(
             estimatedMinutes: null,
             dueAt,
           }).where(and(eq(tasks.id, task.id), eq(tasks.userId, userId)));
+          await ensureExecutionSteps(task.id, step.executionSteps ?? []);
           refreshedTaskCount += 1;
           taskLinks.push({ planStepIndex: sourceIndex, taskId: task.id, status: "todo" });
           continue;
@@ -953,8 +1019,10 @@ export async function syncDailyPlanGoalTree(
             estimatedMinutes: null,
             dueAt,
           });
+          const taskId = Number(taskInsert[0].insertId);
+          await ensureExecutionSteps(taskId, step.executionSteps ?? []);
           createdTaskCount += 1;
-          taskLinks.push({ planStepIndex: sourceIndex, taskId: Number(taskInsert[0].insertId), status: "todo" });
+          taskLinks.push({ planStepIndex: sourceIndex, taskId, status: "todo" });
         } else {
           taskLinks.push({ planStepIndex: sourceIndex, taskId: linkedExistingTask.id, status: linkedExistingTask.status });
         }
@@ -985,8 +1053,10 @@ export async function syncDailyPlanGoalTree(
           estimatedMinutes: null,
           dueAt,
         });
+        const taskId = Number(taskInsert[0].insertId);
+        await ensureExecutionSteps(taskId, step.executionSteps ?? []);
         createdTaskCount += 1;
-        taskLinks.push({ planStepIndex: sourceIndex, taskId: Number(taskInsert[0].insertId), status: "todo" });
+        taskLinks.push({ planStepIndex: sourceIndex, taskId, status: "todo" });
       } else {
         taskLinks.push({ planStepIndex: sourceIndex, taskId: linkedExistingTask.id, status: linkedExistingTask.status });
       }

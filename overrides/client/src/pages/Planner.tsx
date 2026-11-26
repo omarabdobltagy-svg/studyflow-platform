@@ -40,6 +40,11 @@ type PlanStep = {
   day: string;
   title: string;
   detail: string;
+  whyThisTask?: string;
+  rules?: string[];
+  prerequisites?: string[];
+  executionSteps?: string[];
+  completionCriteria?: string[];
   minutes: number;
   category: string;
   priority?: "critical" | "high" | "medium" | "low";
@@ -84,6 +89,9 @@ type PlanQuality = {
 type PlanView = {
   title: string;
   summary: string;
+  objective?: string;
+  strategy?: string;
+  selectionRationale?: string[];
   durationLabel: string;
   steps: PlanStep[];
   habits: { title: string; cue: string }[];
@@ -111,6 +119,9 @@ function parseSavedPlan(record: { planJson: string }): PlanView | null {
     return {
       title: saved.title,
       summary: typeof saved.summary === "string" ? saved.summary : "خطة دراسية مبنية على ملفك وتقدمك.",
+      objective: typeof saved.objective === "string" ? saved.objective : "",
+      strategy: typeof saved.strategy === "string" ? saved.strategy : "",
+      selectionRationale: Array.isArray(saved.selectionRationale) ? saved.selectionRationale : [],
       durationLabel: "مهام مرنة",
       steps: saved.steps.map((raw: any, index) => ({
         day: "",
@@ -385,7 +396,12 @@ export default function Planner() {
       steps: [...plan.steps, {
         day: `اليوم ${plan.steps.length + 1}`,
         title: "مهمة جديدة",
-        detail: "اكتب ما الذي تريد إنجازه في هذه الجلسة.",
+        detail: "اكتب المطلوب المحدد من الدرس أو الواجب، وليس عنوانًا عامًا فقط.",
+        whyThisTask: "",
+        rules: [],
+        prerequisites: [],
+        executionSteps: [],
+        completionCriteria: [],
         minutes: 0,
         category: "دراسة",
         priority: "medium",
@@ -404,6 +420,9 @@ export default function Planner() {
       plan: {
         title: plan.title,
         summary: plan.summary,
+        objective: plan.objective,
+        strategy: plan.strategy,
+        selectionRationale: plan.selectionRationale,
         steps: plan.steps.map((step, index) => ({
           ...step,
           day: step.day || `اليوم ${index + 1}`,
@@ -436,7 +455,7 @@ export default function Planner() {
               <p className="text-[10px] font-semibold tracking-[.22em] text-primary">STUDYFLOW / PLANNER</p>
               <h2 className="mt-3 text-2xl font-bold tracking-tight sm:text-3xl">مذاكرتك، بترتيب واقعي.</h2>
               <p className="mt-2 max-w-xl text-sm leading-7 text-muted-foreground">
-                المحرك يوازن تلقائيًا بين المتراكم، والدرس القادم مع المدرس، والمهام المسجلة، والوقت المتاح. لا تحتاج إلى اختيار طريقة التخطيط أو كتابة طلب طويل.
+                المحرك يراجع تقدمك في كل مادة، والمهام المفتوحة، ومتطلبات المدرسين، ثم يشرح لك سبب ترتيب كل مهمة وما المطلوب لإنجازها.
               </p>
             </div>
             <div className="grid grid-cols-3 gap-2 sm:min-w-[320px]">
@@ -458,7 +477,6 @@ export default function Planner() {
             <div className="relative mt-5 flex flex-wrap items-center gap-2 border-t border-border/70 pt-4 text-xs text-muted-foreground">
               <span className="rounded-full border border-border bg-muted/25 px-3 py-1.5">{profile.data.track}</span>
               <span className="rounded-full border border-border bg-muted/25 px-3 py-1.5">{profile.data.subjectIds.length} مواد مختارة</span>
-              <span className="rounded-full border border-border bg-muted/25 px-3 py-1.5">مستوى الانشغال: {dailyMinutes === 60 ? "مرتفع جدًا" : dailyMinutes === 120 ? "متوسط" : "أقل نسبيًا"}</span>
             </div>
           )}
         </section>
@@ -471,26 +489,15 @@ export default function Planner() {
           </section>
         )}
 
-        <section className="rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
+        <section className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
           <div>
-            <p className="text-[10px] font-semibold tracking-[.18em] text-primary">YOUR STUDY CAPACITY</p>
-            <h3 className="mt-1 text-lg font-bold">قد إيه وقتك متاح في حياتك غالبًا؟</h3>
-            <p className="mt-1 max-w-2xl text-xs leading-6 text-muted-foreground">ده مؤشر لانشغالك وحجم المهام المناسب ليك، مش مدة للمحاضرات أو جدول بمواعيد. تقدر تغيّره في أي وقت، ومش هنحدد وقتًا لأي مهمة إلا لو أنت اخترت ده بنفسك.</p>
+            <p className="text-[10px] font-semibold tracking-[.16em] text-primary">PLAN CONTROL</p>
+            <h3 className="mt-1 text-base font-bold">{plan ? "تحديث الخطة بناءً على آخر تقدمك" : "ابدأ ببناء خطة مذاكرتك"}</h3>
+            <p className="mt-1 text-xs leading-6 text-muted-foreground">لا تحتاج إلى إدخال ساعات أو تقسيم أيام. سيستخدم النظام ملفك الدراسي والمهام الفعلية ومتطلبات المدرسين ليقترح خطة مفهومة ومفسّرة.</p>
           </div>
-          <div className="mt-4 grid gap-2 sm:grid-cols-3">
-            {([[60,"ساعة تقريبًا","مشغول جدًا — مهام أقل وبأولوية أعلى"],[120,"ساعتان تقريبًا","انشغال متوسط — حمل متوازن"],[180,"3 ساعات أو أكثر","مساحة أكبر — مهام أكثر عند الحاجة"]] as const).map(([value,label,description]) => (
-              <button key={value} type="button" aria-pressed={dailyMinutes===value} onClick={() => setDailyMinutes(value)}
-                className={"rounded-xl border p-4 text-right transition " + (dailyMinutes===value ? "border-primary bg-primary/[.06] ring-1 ring-primary/25" : "border-border bg-background hover:border-primary/35")}>
-                <span className="block text-sm font-bold">{label}</span><span className="mt-1 block text-xs leading-5 text-muted-foreground">{description}</span>
-              </button>
-            ))}
-          </div>
-          <div className="mt-4 flex flex-col gap-3 border-t border-border/70 pt-4 sm:flex-row sm:items-center sm:justify-between">
-            <p className="max-w-xl text-xs leading-6 text-muted-foreground">المخطط هيقرأ موادك وتقدمك والمهام وشروط المدرسين، ثم يقترح قائمة مهام مرنة. لا يوجد يوم أو ساعة إلزامية لكل مهمة.</p>
-            <Button className="h-11 w-full rounded-xl px-6 sm:w-auto" onClick={() => runGeneration(dailyMinutes)} disabled={!isPreflightReady || generate.isPending || !profile.data?.subjectIds?.length}>
-              {generate.isPending ? <><Loader2 className="size-4 animate-spin" /> بنبني قائمتك…</> : <><Sparkles className="size-4" /> أنشئ قائمة مهامي</>}
-            </Button>
-          </div>
+          <Button className="h-11 w-full shrink-0 rounded-xl px-6 sm:w-auto" onClick={() => runGeneration(dailyMinutes)} disabled={!isPreflightReady || generate.isPending || !profile.data?.subjectIds?.length}>
+            {generate.isPending ? <><Loader2 className="size-4 animate-spin" /> بنراجع بياناتك…</> : <><RefreshCw className="size-4" /> {plan ? "حدّث خطتي" : "أنشئ خطتي"}</>}
+          </Button>
         </section>
 
         {plan && (
@@ -604,6 +611,12 @@ function PlanCard({ plan, title, studentName, editable, onChange, onApprove, onA
           <h2 className="mt-2 text-xl font-bold sm:text-2xl">المهام المقترحة ليك</h2><p className="mt-2 max-w-2xl whitespace-pre-line text-sm leading-7 text-muted-foreground">{plan.summary.split("\n\n")[0]}</p>{studentName&&<p className="mt-2 text-xs text-muted-foreground">مبنية على ملف {studentName}</p>}</div>
         <div className="flex flex-wrap items-center gap-2"><span className={"rounded-full border px-3 py-1.5 text-xs font-semibold "+(approved?"border-primary/20 bg-primary/[0.05] text-primary":"border-border bg-muted/30 text-muted-foreground")}>{approved?"قائمة مهام معتمدة":"مسودة للمراجعة"}</span><PlanExportActions plan={plan} studentName={studentName}/></div>
       </div>
+      <section className="mt-5 rounded-2xl border border-border/70 bg-background/75 p-4">
+        <p className="text-[10px] font-semibold tracking-[.14em] text-primary">هدف الخطة</p>
+        <p className="mt-2 text-sm font-semibold leading-7">{plan.objective || plan.summary}</p>
+        {plan.strategy && <><p className="mt-4 text-[10px] font-semibold tracking-[.14em] text-primary">كيف رتبنا المهام؟</p><p className="mt-2 text-sm leading-7 text-muted-foreground">{plan.strategy}</p></>}
+        {!!plan.selectionRationale?.length && <ul className="mt-3 space-y-2">{plan.selectionRationale.map((reason,index)=><li key={index} className="flex items-start gap-2 text-xs leading-6 text-muted-foreground"><span className="mt-2 size-1.5 shrink-0 rounded-full bg-primary"/>{reason}</li>)}</ul>}
+      </section>
       <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3">
         <div className="rounded-xl border border-border/70 bg-muted/15 p-3"><p className="text-[10px] text-muted-foreground">إجمالي المهام</p><p className="mt-1 text-base font-bold tabular-nums">{plan.steps.length.toLocaleString("ar-EG")}</p></div>
         <div className="rounded-xl border border-border/70 bg-muted/15 p-3"><p className="text-[10px] text-muted-foreground">المهام المكتملة</p><p className="mt-1 text-base font-bold tabular-nums">{completedCount.toLocaleString("ar-EG")}</p></div>
@@ -621,7 +634,18 @@ function PlanCard({ plan, title, studentName, editable, onChange, onApprove, onA
           <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-[11px] font-semibold text-muted-foreground">{index+1}</span>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2"><span className="rounded-md bg-muted/60 px-2 py-1 text-[10px] font-semibold text-muted-foreground">{step.category}</span>{step.priority==="critical"&&<span className="text-[10px] font-semibold text-destructive">عاجل</span>}{step.priority==="high"&&<span className="text-[10px] font-semibold text-amber-600">أولوية عالية</span>}{(step.plannerTaskStatus==="done"||step.existingTask?.status==="done")&&<span className="text-[10px] text-primary">مكتملة</span>}{step.resourceRecommendation&&<span className="text-[10px] font-semibold text-primary">مصدر مدرس متاح</span>}</div>
-            <h5 className="mt-2 text-sm font-bold leading-6">{step.title}</h5><p className="mt-1 whitespace-pre-line text-xs leading-6 text-muted-foreground">{step.detail}</p>
+            <h5 className="mt-2 text-sm font-bold leading-6">{step.title}</h5>
+            <p className="mt-1 whitespace-pre-line text-xs leading-6 text-muted-foreground">{step.detail}</p>
+            <details className="mt-3 rounded-xl border border-border/70 bg-muted/10 p-3">
+              <summary className="cursor-pointer text-xs font-semibold">تفاصيل المهمة وقواعدها</summary>
+              <div className="mt-3 space-y-3">
+                {step.whyThisTask && <section><p className="text-[11px] font-bold">لماذا هذه المهمة الآن؟</p><p className="mt-1 text-xs leading-6 text-muted-foreground">{step.whyThisTask}</p></section>}
+                {!!step.rules?.length && <section><p className="text-[11px] font-bold">قواعد التنفيذ</p><ul className="mt-1 space-y-1">{step.rules.map((rule,i)=><li key={i} className="text-xs leading-6 text-muted-foreground">• {rule}</li>)}</ul></section>}
+                {!!step.prerequisites?.length && <section><p className="text-[11px] font-bold">قبل البدء</p><ul className="mt-1 space-y-1">{step.prerequisites.map((item,i)=><li key={i} className="text-xs leading-6 text-muted-foreground">• {item}</li>)}</ul></section>}
+                {!!step.executionSteps?.length && <section><p className="text-[11px] font-bold">خطوات التنفيذ</p><ol className="mt-1 space-y-1">{step.executionSteps.map((item,i)=><li key={i} className="text-xs leading-6 text-muted-foreground">{i+1}. {item}</li>)}</ol></section>}
+                {!!step.completionCriteria?.length && <section><p className="text-[11px] font-bold">متى تعتبرها مكتملة؟</p><ul className="mt-1 space-y-1">{step.completionCriteria.map((item,i)=><li key={i} className="text-xs leading-6 text-muted-foreground">• {item}</li>)}</ul></section>}
+              </div>
+            </details>
             {step.priorityReason&&<details className="mt-2 text-[11px] text-muted-foreground"><summary className="cursor-pointer">لماذا هذه المهمة؟</summary><p className="mt-2 max-w-xl leading-6">{step.priorityReason}</p></details>}
             {step.resourceRecommendation&&<a href={step.resourceRecommendation.url} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-[11px] font-semibold text-primary">افتح شرح المدرس المقترح</a>}
             {editable&&<div className="mt-3 flex flex-wrap items-center gap-1 border-t border-border/50 pt-2"><Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={()=>setEditing({index,title:step.title,detail:step.detail})}>تعديل</Button><Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" disabled={index===0} onClick={()=>onMoveStep(index,-1)}><ArrowUp className="size-3.5"/> لأعلى</Button><Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" disabled={index===plan.steps.length-1} onClick={()=>onMoveStep(index,1)}><ArrowDown className="size-3.5"/> لأسفل</Button><Button type="button" variant="ghost" size="sm" className="mr-auto h-8 px-2 text-xs text-destructive" disabled={plan.steps.length<=1} onClick={()=>onRemoveStep(index)}><X className="size-3.5"/> حذف</Button></div>}

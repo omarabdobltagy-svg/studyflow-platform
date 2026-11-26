@@ -144,11 +144,19 @@ export function getDailyPlanFeasibilityNote(input: DailyPlanFeasibilityInput): s
 const planSchema = z.object({
   title: z.string().trim().min(3).max(160),
   summary: z.string().trim().min(10).max(1_500),
+  objective: z.string().trim().max(500).default(""),
+  strategy: z.string().trim().max(900).default(""),
+  selectionRationale: z.array(z.string().trim().min(5).max(280)).max(6).default([]),
   durationLabel: z.string().trim().min(2).max(100),
   steps: z.array(z.object({
     day: z.string().trim().max(60).default(""),
     title: z.string().trim().min(2).max(180),
     detail: z.string().trim().min(5).max(1_200),
+    whyThisTask: z.string().trim().max(500).optional(),
+    rules: z.array(z.string().trim().min(3).max(280)).max(8).default([]),
+    prerequisites: z.array(z.string().trim().min(3).max(280)).max(6).default([]),
+    executionSteps: z.array(z.string().trim().min(3).max(220)).max(8).default([]),
+    completionCriteria: z.array(z.string().trim().min(3).max(280)).max(6).default([]),
     minutes: z.number().int().min(0).max(480).default(0),
     category: z.string().trim().min(2).max(80),
     curriculumNodeIds: z.array(z.string().trim().min(1).max(120)).max(8).default([]),
@@ -1370,7 +1378,11 @@ export async function generatePersonalPlan(
     "كيّف قائمة المهام مع ظروف الطالب المعلنة: الطاقة المنخفضة أو الانشغال الشديد يعني عدد مهام أقل وبداية أسهل، والحالة المعنوية المنخفضة تعني اختيار مهمة أولى سهلة، وقيود الموارد تعني عدم تكليف الطالب بأداة أو كتاب أو اتصال غير متاح. لا تقدم تشخيصًا طبيًا أو نفسيًا.",
     "لا تعتبر غياب السجل دليلًا على الإنجاز، ولا توبّخ الطالب.",
     "لا تحوّل منظومة الأداءات الأسبوعية والشهرية إلى دروس منهجية؛ تعامل معها كالتزامات منفصلة يجب تتبع إنجازها لأن لها شرط أهلية مستقلًا، ولا تخلط نسبها مع توزيع درجات ورقة الامتحان.",
-    "أخرج JSON صحيحًا فقط بالعربية: title, summary, durationLabel, steps (1-240 عنصرًا، وكل عنصر فيه title,detail,category,curriculumNodeIds,priority,difficulty,lessonSize,difficultyBasis,difficultyConfidence,resourceRecommendation?,printedPageRange,sourcePages)، habits (0-5 فيها title,cue). resourceRecommendation اختياري ولا يُضاف إلا لمصدر مدرس موثق ومطابق حرفيًا لأحد تحديثات الصف الثاني بكالوريا ومفيد لدرس غير مكتمل؛ شكله {title,url,teacherName,reason}. يجب أن يحتوي curriculumNodeIds على معرف واحد أو أكثر من الدروس المتاحة التي ترتبط بها الخطوة. printedPageRange نطاق صفحات الكتاب المطبوع [البداية، النهاية] عند توافره فقط؛ sourcePages مراجع PDF المسترجعة فعليًا فقط وتكون [] في غير ذلك. اجعل الملخص واضحًا والتفاصيل مركزة.",
+    "لا تخرج مهامًا عامة من نوع ذاكر الدرس أو راجع الوحدة فقط. حدّد اسم المادة والفرع والدرس أو الواجب المرتبط فعلًا ببيانات الطالب، واشرح ما الذي سيفعله الطالب بالضبط.",
+    "كل مهمة يجب أن تكون مفهومة دون الرجوع إلى المحادثة: detail يشرح المطلوب، whyThisTask يوضح سبب اختيارها الآن، rules يحتوي قواعد تنفيذ محددة لا تخترع سياسة للمدرس، prerequisites لا يحتوي إلا متطلبات مسجلة أو مؤكدة، executionSteps يحتوي 2 إلى 5 خطوات عملية واضحة، وcompletionCriteria يحتوي معيارًا يمكن التحقق منه دون إنشاء اختبار أو أسئلة.",
+    "لا تكتب قواعد عامة أو تكرارية مثل ذاكر جيدًا أو ركّز. اجعل القواعد مرتبطة بطبيعة المهمة ومصدرها. إذا لم توجد متطلبات سابقة مؤكدة، أرسل prerequisites كقائمة فارغة؛ لا تفترض عدم وجود واجب لمجرد غياب البيانات.",
+    "في الخطة ككل اكتب objective كهدف واضح، وstrategy كشرح لطريقة ترتيب المهام، وselectionRationale من 2 إلى 5 أسباب قصيرة مرتبطة ببيانات فعلية. لا تستخدم لغة تقنية مثل fingerprint أو snapshot مع الطالب.",
+    "أخرج JSON صحيحًا فقط بالعربية: title, summary, objective, strategy, selectionRationale, durationLabel, steps (1-240 عنصرًا، وكل عنصر فيه title,detail,whyThisTask,rules,prerequisites,executionSteps,completionCriteria,category,curriculumNodeIds,priority,difficulty,lessonSize,difficultyBasis,difficultyConfidence,resourceRecommendation?,printedPageRange,sourcePages)، habits (0-5 فيها title,cue). resourceRecommendation اختياري ولا يُضاف إلا لمصدر مدرس موثق ومطابق حرفيًا لأحد تحديثات الصف الثاني بكالوريا ومفيد لدرس غير مكتمل؛ شكله {title,url,teacherName,reason}. يجب أن يحتوي curriculumNodeIds على معرف واحد أو أكثر من الدروس المتاحة التي ترتبط بها الخطوة. printedPageRange نطاق صفحات الكتاب المطبوع [البداية، النهاية] عند توافره فقط؛ sourcePages مراجع PDF المسترجعة فعليًا فقط وتكون [] في غير ذلك. اجعل الملخص واضحًا والتفاصيل مركزة.",
     "كل خطوة يجب أن تحدد المادة والوحدة/الفرع والدرس وطريقة مذاكرته، لا عنوانًا عامًا.",
     planScope === "daily"
       ? "هذه قائمة مهام تشغيلية حالية. نمط الأولوية المختار: " + (planningMode === "backlog" ? "المتراكم أولًا فقط" : planningMode === "teacher_sync" ? "مواكبة متطلبات المدرس" : "ذكي متوازن: إنهاء الالتزامات الحالية والاستعداد للموضوع التالي") + ". أخرج مهامًا قليلة أو أكثر حسب مستوى الانشغال، دون أي أيام أو مواعيد أو مدد."
