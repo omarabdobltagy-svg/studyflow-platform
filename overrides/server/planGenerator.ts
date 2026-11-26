@@ -1584,12 +1584,14 @@ export async function generatePersonalPlan(
       daysPerWeek,
       steps: plan.steps,
     });
+    const adaptiveNote = "هذه خطة للفترة القادمة فقط. ستُعاد مواءمتها عند تغير المهام أو التقدم أو مواعيد الحصص.";
+    const combinedNotes = adaptiveNote + " " + feasibilityNote;
     const retainedSummary = plan.summary
-      .slice(0, Math.max(0, 1_500 - feasibilityNote.length - 2))
+      .slice(0, Math.max(0, 1_500 - combinedNotes.length - 2))
       .trim();
     plan = {
       ...plan,
-      summary: (retainedSummary + "\n\n" + feasibilityNote).slice(0, 1_500),
+      summary: (retainedSummary + "\n\n" + combinedNotes).slice(0, 1_500),
     };
   }
   updatePlanGenerationProgress(userId, "saving", undefined, undefined, constraints.activityId);
