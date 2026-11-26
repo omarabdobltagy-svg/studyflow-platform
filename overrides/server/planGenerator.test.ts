@@ -84,6 +84,64 @@ describe("annual plan curriculum coverage and progress alignment", () => {
     expect(nextGrammarStep?.priorityReason).toContain("الفجوة الحالية: 2");
   });
 
+  it("keeps an individually missed middle lesson eligible after the teacher frontier has moved forward", () => {
+    const nahwChoices = getSIECheckpointBranches("ARB_G2_BAC")
+      .find(branch => branch.branchId === "ARB_NAHW")!.choices;
+    const frontierIndex = nahwChoices.findIndex(choice => choice.nodeId === "ARB_U3_N1_BADAL");
+    const lessonStates: Record<string, { state: string; source: string }> = Object.fromEntries(
+      nahwChoices.slice(0, frontierIndex + 1).map(choice => [
+        choice.nodeId,
+        { state: "studied", source: "student_self_report" },
+      ]),
+    );
+    lessonStates["ARB_U2_N3"] = { state: "not_watched", source: "student_self_report" };
+
+    const profile = {
+      subjectIds: ["ARB_G2_BAC"],
+      selection: {
+        learningCourseProgress: {
+          ARB_G2_BAC: {
+            branches: {
+              ARB_NAHW: {
+                lastCompletedLessonId: "ARB_U3_N1_BADAL",
+                teacherTeachingFrontierId: "ARB_U3_N2",
+                lessonStateModelVersion: 1,
+                lessonStates,
+              },
+            },
+          },
+        },
+      },
+    } as any;
+    const plan = parseGeneratedPlan(JSON.stringify({
+      title: "تعويض درس فائت",
+      summary: "خطة تعويض درس فائت في منتصف فرع النحو.",
+      durationLabel: "مهام مرنة",
+      steps: [
+        {
+          day: "",
+          title: "تعويض درس الممنوع من الصرف",
+          detail: "راجع شرح المدرس لهذا الدرس الذي فاتك.",
+          minutes: 0,
+          category: "النحو",
+          curriculumNodeIds: ["ARB_U2_N3"],
+        },
+        {
+          day: "",
+          title: "إعادة مذاكرة درس مكتمل",
+          detail: "هذا الدرس مؤكد أنه مكتمل.",
+          minutes: 0,
+          category: "النحو",
+          curriculumNodeIds: ["ARB_U2_N2"],
+        },
+      ],
+      habits: [],
+    }));
+
+    const guarded = applyPlannerProgressGuard(plan, profile);
+    expect(guarded.steps.map(step => step.curriculumNodeIds)).toEqual([["ARB_U2_N3"]]);
+  });
+
   it("covers all remaining programming chapters, including chapters 5–7, once", () => {
     const profile = {
       subjectIds: ["PROG_AI_G2_BAC"],
