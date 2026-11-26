@@ -666,6 +666,7 @@ export type ApprovedPlanStep = {
   day: number;
   title: string;
   detail: string;
+  studyMethod?: { stages: Array<{ title: string; instruction: string; reason: string; optional?: boolean }>; completionCriteria: string; teacherPolicyNote?: string };
   minutes: number;
   category: string;
   priority?: "critical" | "high" | "medium" | "low";
