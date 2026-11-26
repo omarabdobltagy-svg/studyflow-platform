@@ -747,6 +747,10 @@ export async function syncDailyPlanGoalTree(
       priority?: "critical" | "high" | "medium" | "low";
       existingTask?: { id: number; title: string; status: "todo" | "done"; confidence: "exact" | "strong" };
       resourceRecommendation?: { title: string; url: string; teacherName?: string; reason: string };
+      scheduleState?: "scheduled" | "deferred";
+      dayIndex?: number | null;
+      dateOffsetDays?: number | null;
+      scheduleNote?: string;
     }>;
   },
   schedule: { startDate: string; dailyMinutes: number; daysPerWeek?: number },

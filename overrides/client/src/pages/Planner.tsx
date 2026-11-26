@@ -57,6 +57,29 @@ type PlanStep = {
   difficultyConfidence?: "low" | "medium" | "high";
   printedPageRange?: [number, number];
   sourcePages?: number[];
+  scheduleState?: "scheduled" | "deferred";
+  dayIndex?: number | null;
+  dateOffsetDays?: number | null;
+  scheduleNote?: string;
+  sourceTitle?: string;
+  sourceStepIndex?: number;
+  segmentIndex?: number;
+  segmentCount?: number;
+};
+type PlanQuality = {
+  score: number;
+  status: "ready" | "partial" | "blocked";
+  blockers: string[];
+  warnings: string[];
+  stats: {
+    availableStudyDays: number;
+    studyDaysUsed: number;
+    scheduledMinutes: number;
+    deferredMinutes: number;
+    deferredSteps: number;
+    maxDailyLoadMinutes: number;
+    maxSessionMinutes: number;
+  };
 };
 type PlanView = {
   title: string;
@@ -64,6 +87,7 @@ type PlanView = {
   durationLabel: string;
   steps: PlanStep[];
   habits: { title: string; cue: string }[];
+  quality?: PlanQuality;
   // Export component compatibility only; deliberately blank so no AI self-test is created.
   reviewQuestion: string;
   taskSync?: { parentGoalId: number; stageCount: number; taskCount: number; routineId?: number | null };
@@ -104,6 +128,7 @@ function parseSavedPlan(record: { planJson: string }): PlanView | null {
         ...raw,
       })),
       habits: Array.isArray(saved.habits) ? saved.habits : [],
+      quality: saved.quality,
       reviewQuestion: "",
     };
   } catch {
@@ -114,7 +139,7 @@ function parseSavedPlan(record: { planJson: string }): PlanView | null {
 export default function Planner() {
   const utils = trpc.useUtils();
   const [plan, setPlan] = useState<PlanView | null>(null);
-  const [planningMode, setPlanningMode] = useState<PlanningMode>("smart");
+  const planningMode: PlanningMode = "smart";
   const [horizonDays, setHorizonDays] = useState<7 | 14>(7);
   const [dailyMinutes, setDailyMinutes] = useState(120);
   const [daysPerWeek, setDaysPerWeek] = useState<5 | 6 | 7>(6);
@@ -390,7 +415,7 @@ export default function Planner() {
           day: step.day || `اليوم ${index + 1}`,
         })),
       },
-      schedule: { startDate: todayCairo, dailyMinutes, daysPerWeek },
+      schedule: { startDate: todayCairo, dailyMinutes, daysPerWeek, horizonDays },
     });
   };
 
@@ -404,228 +429,207 @@ export default function Planner() {
   return (
     <DashboardLayout
       title="خطة المذاكرة"
-      description="خطة قصيرة المدى تتوازن مع مهامك الحالية ومواعيد الحصص القادمة."
+      description="خطة واقعية تتغير مع تقدمك والتزاماتك."
     >
-      <div className="sf-planner-page space-y-6">
+      <div className="mx-auto w-full max-w-6xl space-y-5 pb-8">
         {history.isError && <QueryErrorNotice onRetry={() => void history.refetch()} label="تعذّر تحميل خططك المحفوظة." />}
-        {profile.isError && <QueryErrorNotice onRetry={() => void profile.refetch()} label="تعذّر تحميل ملفك الدراسي. أعد المحاولة قبل توليد الخطة." />}
+        {profile.isError && <QueryErrorNotice onRetry={() => void profile.refetch()} label="تعذّر تحميل ملفك الدراسي. أعد المحاولة قبل إنشاء الخطة." />}
 
-        <section className="sf-planner-hero relative overflow-hidden rounded-[1.8rem] border border-border bg-card p-6 text-card-foreground shadow-sm sm:p-8">
-          <div className="pointer-events-none absolute -right-16 -top-24 size-72 rounded-full bg-primary/10 blur-3xl" />
-          <div className="relative flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+        <section className="relative overflow-hidden rounded-[1.75rem] border border-border bg-card p-5 shadow-sm sm:p-7">
+          <div className="pointer-events-none absolute -left-20 -top-24 size-72 rounded-full bg-primary/[0.08] blur-3xl" />
+          <div className="relative flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
             <div className="max-w-2xl">
-              <p className="text-[10px] font-bold tracking-[.2em] text-primary">STUDYFLOW · PERSONAL STUDY ENGINE</p>
-              <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">خطة مذاكرتك، حسب واقعك.</h2>
-              <p className="mt-3 max-w-xl text-sm leading-8 text-muted-foreground">المنصة تقرأ مهامك وتقدمك ومواعيد حصص المدرسين، ثم توازن بين إنهاء المتراكم والاستعداد للدرس الجديد. وتتجدد الخطة مع تغيّر يومك.</p>
+              <p className="text-[10px] font-semibold tracking-[.22em] text-primary">STUDYFLOW / PLANNER</p>
+              <h2 className="mt-3 text-2xl font-bold tracking-tight sm:text-3xl">مذاكرتك، بترتيب واقعي.</h2>
+              <p className="mt-2 max-w-xl text-sm leading-7 text-muted-foreground">
+                المحرك يوازن تلقائيًا بين المتراكم، والدرس القادم مع المدرس، والمهام المسجلة، والوقت المتاح. لا تحتاج إلى اختيار طريقة التخطيط أو كتابة طلب طويل.
+              </p>
             </div>
-            <div className="grid min-w-[185px] grid-cols-2 gap-2 rounded-2xl border border-border bg-muted/30 p-3">
-              <div><p className="text-[10px] text-muted-foreground">المهام المفتوحة</p><p className="mt-1 text-2xl font-bold text-primary">{(tasksQuery.data ?? []).filter((task: any) => task.status !== "done").length.toLocaleString("ar-EG")}</p></div>
-              <div><p className="text-[10px] text-muted-foreground">موادك</p><p className="mt-1 text-2xl font-bold">{(profile.data?.subjectIds?.length ?? 0).toLocaleString("ar-EG")}</p></div>
+            <div className="grid grid-cols-3 gap-2 sm:min-w-[320px]">
+              <div className="rounded-xl border border-border/70 bg-background/80 p-3">
+                <p className="text-[10px] text-muted-foreground">المواد</p>
+                <p className="mt-1 text-xl font-bold tabular-nums">{(profile.data?.subjectIds?.length ?? 0).toLocaleString("ar-EG")}</p>
+              </div>
+              <div className="rounded-xl border border-border/70 bg-background/80 p-3">
+                <p className="text-[10px] text-muted-foreground">مهام مفتوحة</p>
+                <p className="mt-1 text-xl font-bold tabular-nums">{(tasksQuery.data ?? []).filter((task: any) => task.status !== "done").length.toLocaleString("ar-EG")}</p>
+              </div>
+              <div className="rounded-xl border border-border/70 bg-background/80 p-3">
+                <p className="text-[10px] text-muted-foreground">فروع المنهج</p>
+                <p className="mt-1 text-xl font-bold tabular-nums">{progressPreview.length.toLocaleString("ar-EG")}</p>
+              </div>
             </div>
           </div>
           {profile.data && (
-            <div className="relative mt-5 flex flex-wrap gap-2 border-t border-border/70 pt-4 text-xs text-muted-foreground">
-              <span className="rounded-full border border-border bg-muted/30 px-3 py-1.5">{profile.data.studentName}</span>
-              <span className="rounded-full border border-border bg-muted/30 px-3 py-1.5">{profile.data.track}</span>
-              <span className="rounded-full border border-border bg-muted/30 px-3 py-1.5">{profile.data.subjectIds.length} مواد</span>
+            <div className="relative mt-5 flex flex-wrap items-center gap-2 border-t border-border/70 pt-4 text-xs text-muted-foreground">
+              <span className="rounded-full border border-border bg-muted/25 px-3 py-1.5">{profile.data.track}</span>
+              <span className="rounded-full border border-border bg-muted/25 px-3 py-1.5">{profile.data.subjectIds.length} مواد مختارة</span>
+              <span className="rounded-full border border-border bg-muted/25 px-3 py-1.5">{dailyMinutes} دقيقة يوميًا · {daysPerWeek} أيام أسبوعيًا</span>
             </div>
           )}
         </section>
+
         {!profile.isLoading && profile.data && (!profile.data.subjectIds || profile.data.subjectIds.length === 0) && (
-          <section className="app-card rounded-2xl p-5">
-            <h3 className="font-bold">أكمل ملفك الدراسي أولًا</h3>
-            <p className="mt-1 text-sm leading-6 text-muted-foreground">حدد نظامك وصفك وموادك حتى يستطيع المخطط اختيار الدروس الصحيحة بدل إنشاء خطة عامة.</p>
+          <section className="rounded-2xl border border-border bg-card p-5">
+            <h3 className="font-semibold">أكمل ملفك الدراسي أولًا</h3>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">حدد نظامك وصفك وموادك حتى يختار المحرك الدروس الصحيحة بدل إنشاء خطة عامة.</p>
             <a href="/profile" className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-primary">فتح الملف الدراسي <ArrowUpRight className="size-4" /></a>
           </section>
         )}
 
-        <section className="sf-planner-setup app-card overflow-hidden rounded-[1.6rem] border border-border/80">
-          <header className="sf-planner-setup-header border-b border-border/70 bg-gradient-to-l from-secondary/65 to-card p-5 sm:p-6">
-            <p className="eyebrow">SMART STUDY FLOW · NEXT PERIOD</p>
-            <h2 className="mt-1 text-xl font-bold">كيف تحب نرتّب مذاكرتك؟</h2>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">الاختيار الافتراضي يوازن بين المتراكم والجديد مع المدرس. التقدم والمهام والمواعيد تُقرأ تلقائيًا من ملفك.</p>
-            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <Metric label="المواد المختارة" value={(profile.data?.subjectIds?.length ?? 0).toLocaleString("ar-EG")} />
-              <Metric label="المهام المفتوحة" value={(tasksQuery.data ?? []).filter((task: any) => task.status !== "done").length.toLocaleString("ar-EG")} />
-              <Metric label="مهام مرتبطة بالمنهج" value={curriculumLinkedTasks.length.toLocaleString("ar-EG")} />
-              <Metric label="فروع تقدم مقروءة" value={progressPreview.length.toLocaleString("ar-EG")} />
+        <section className="rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
+          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="text-[10px] font-semibold tracking-[.18em] text-primary">YOUR AVAILABLE CAPACITY</p>
+              <h3 className="mt-1 text-lg font-bold">حدد وقتك المتاح فقط</h3>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">باقي القرارات يتولاها المحرك من بياناتك الفعلية. لن يضغط أكثر من السقف الذي تحدده.</p>
             </div>
-          </header>
-          <div className="sf-planner-setup-grid grid gap-5 p-5 sm:p-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(280px,.85fr)]">
-            <div className="space-y-4">
-              <div>
-                <h3 className="font-bold">نوع المساعدة</h3>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">الخطة الذكية هي الاختيار الافتراضي. غيّرها فقط لو محتاج تركيز مختلف.</p>
-              </div>
-              <div className="sf-planner-mode-list grid gap-2">
-                {planningModeOptions.map((option, index) => (
-                  <button type="button" key={option.value} onClick={() => setPlanningMode(option.value)} aria-pressed={planningMode === option.value}
-                    className={"sf-planner-mode-card group flex items-start gap-3 rounded-2xl border p-4 text-right transition-all duration-300 " + (planningMode === option.value ? "border-primary/45 bg-primary/[.07] shadow-[0_14px_35px_-27px_rgba(168,200,78,.6)]" : "border-border bg-card hover:-translate-y-0.5 hover:border-primary/30")}>
-                    <span className={"mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl " + (planningMode === option.value ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground")}>
-                      {index === 0 ? <Sparkles className="size-4" /> : index === 1 ? <RefreshCw className="size-4" /> : <CalendarClock className="size-4" />}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="flex flex-wrap items-center gap-2 text-sm font-bold">{option.title}{index === 0 && <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[9px] text-primary">{option.marker}</span>}</span>
-                      <span className="mt-1 block text-xs leading-6 text-muted-foreground">{option.description}</span>
-                    </span>
-                    <span className={"mt-1 size-4 shrink-0 rounded-full border " + (planningMode === option.value ? "border-primary bg-primary shadow-[inset_0_0_0_4px_var(--card)]" : "border-border")} />
-                  </button>
-                ))}
-              </div>
-              <div className="sf-planner-control-grid grid gap-3 sm:grid-cols-3">
-                <label className="block"><span className="mb-2 block text-sm font-semibold">وقت المذاكرة يوميًا</span>
-                  <select value={dailyMinutes} onChange={event => setDailyMinutes(Number(event.target.value))} className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm">
-                    {[60,90,120,150,180,210,240,300,360].map(value => <option key={value} value={value}>{formatStudyDuration(value)}</option>)}
-                  </select>
-                </label>
-                <label className="block"><span className="mb-2 block text-sm font-semibold">أيام المذاكرة أسبوعيًا</span>
-                  <select value={daysPerWeek} onChange={event => setDaysPerWeek(Number(event.target.value) as 5 | 6 | 7)} className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm">
-                    <option value={5}>5 أيام</option><option value={6}>6 أيام</option><option value={7}>7 أيام</option>
-                  </select>
-                </label>
-                <label className="block"><span className="mb-2 block text-sm font-semibold">الفترة التي نرتّبها</span>
-                  <select value={horizonDays} onChange={event => setHorizonDays(Number(event.target.value) as 7 | 14)} className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm">
-                    <option value={7}>الأسبوع القادم</option><option value={14}>الأسبوعان القادمان</option>
-                  </select>
-                </label>
-              </div>
-              <div className="rounded-xl border border-primary/15 bg-primary/[.045] p-3 text-xs leading-6 text-muted-foreground">
-                مواعيد حصص المدرسين تُقرأ من ملفك الدراسي. أي تغيير موثوق في موعد محاضرة سيُستخدم عند تجديد الخطة، ولن نعتبر غياب إعلان دليلًا على إلغاء الحصة.
-              </div>
-              <div className="flex flex-col gap-2 border-t border-border/70 pt-4 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-xs leading-5 text-muted-foreground">المحرك يقرأ التقدم والمهام والمواعيد، ثم يقترح توزيعًا قابلًا للتعديل قبل الاعتماد.</p>
-                <Button className="rounded-xl px-5" onClick={() => runGeneration(planningMode, horizonDays, dailyMinutes, daysPerWeek)} disabled={!isPreflightReady || generate.isPending}>
-                  {generate.isPending ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}{loadedSavedDraft ? "جدّد خطة مذاكرتي" : "رتّب مذاكرتي"}
-                </Button>
-              </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:min-w-[440px]">
+              <label className="block">
+                <span className="mb-1.5 block text-[11px] font-semibold text-muted-foreground">وقت الدراسة يوميًا</span>
+                <select value={dailyMinutes} onChange={event => setDailyMinutes(Number(event.target.value))} className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none focus:border-primary/60">
+                  {[30,45,60,75,90,105,120,135,150,180,210,240,300,360,420,480].map(value => <option key={value} value={value}>{formatStudyDuration(value)}</option>)}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-[11px] font-semibold text-muted-foreground">أيام الدراسة</span>
+                <select value={daysPerWeek} onChange={event => setDaysPerWeek(Number(event.target.value) as 5 | 6 | 7)} className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none focus:border-primary/60">
+                  <option value={5}>5 أيام</option><option value={6}>6 أيام</option><option value={7}>7 أيام</option>
+                </select>
+              </label>
+              <label className="block col-span-2 sm:col-span-1">
+                <span className="mb-1.5 block text-[11px] font-semibold text-muted-foreground">الفترة</span>
+                <select value={horizonDays} onChange={event => setHorizonDays(Number(event.target.value) as 7 | 14)} className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none focus:border-primary/60">
+                  <option value={7}>7 أيام</option><option value={14}>14 يومًا</option>
+                </select>
+              </label>
             </div>
-            <aside className="sf-planner-context space-y-3">
-              <div className="rounded-xl border border-border/70 bg-muted/15 p-4">
-                <h3 className="font-bold">ما تقرأه المنصة الآن</h3>
-                {profile.isLoading || learning.isLoading || tasksQuery.isLoading ? <p className="mt-2 text-xs text-muted-foreground">جارٍ قراءة الملف والتقدم والمهام...</p> : (
-                  <><p className="mt-2 text-xs leading-5 text-muted-foreground">الموضوع التالي محسوب بعد آخر موضوع مكتمل، ومرجع المدرس ظاهر للمقارنة فقط.</p>
-                    <div className="mt-3 max-h-64 space-y-2 overflow-y-auto">
-                      {progressPreview.slice(0, 12).map(item => <div key={item.key} className="rounded-lg border border-border/70 bg-card p-3">
-                        <p className="text-xs font-bold">{item.subject} · {item.branch}</p>
-                        <p className="mt-1 text-[11px] text-muted-foreground">آخر موضوع مكتمل: {item.lastCompleted}</p>
+          </div>
+          <div className="mt-4 flex flex-col gap-3 border-t border-border/70 pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="max-w-xl text-xs leading-6 text-muted-foreground">
+              تُقرأ مواضع المنهج ومواعيد المدرسين والمهام تلقائيًا. أي عمل لا يتسع داخل الفترة سيظهر بوضوح كمؤجل، لا كعبء مخفي على يومك.
+            </p>
+            <Button className="h-11 w-full rounded-xl px-6 sm:w-auto" onClick={() => runGeneration("smart", horizonDays, dailyMinutes, daysPerWeek)} disabled={!isPreflightReady || generate.isPending || !profile.data?.subjectIds?.length}>
+              {generate.isPending ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+              {generate.isPending ? "جارٍ ترتيب خطتك" : loadedSavedDraft ? "تحديث خطتي" : "أنشئ خطتي"}
+            </Button>
+          </div>
+          <details className="mt-4 border-t border-border/60 pt-3">
+            <summary className="cursor-pointer list-none text-xs font-semibold text-muted-foreground hover:text-foreground">
+              عرض تفاصيل البيانات التي سيستخدمها المحرك
+            </summary>
+            <div className="mt-3 grid gap-3 lg:grid-cols-2">
+              <div className="rounded-xl border border-border/70 bg-muted/15 p-3">
+                <h4 className="text-xs font-semibold">التقدم في المنهج</h4>
+                {profile.isLoading || learning.isLoading ? <p className="mt-2 text-xs text-muted-foreground">جارٍ قراءة التقدم...</p> : (
+                  <div className="mt-2 max-h-64 space-y-2 overflow-y-auto">
+                    {progressPreview.slice(0, 16).map(item => (
+                      <div key={item.key} className="rounded-lg border border-border/60 bg-card p-3">
+                        <p className="text-xs font-semibold">{item.subject} · {item.branch}</p>
+                        <p className="mt-1 text-[11px] text-muted-foreground">آخر مكتمل: {item.lastCompleted}</p>
                         <p className="mt-1 text-xs font-semibold text-primary">التالي: {item.next}</p>
                         <p className="mt-1 text-[10px] text-muted-foreground">مرجع المدرس: {item.reference}</p>
-                      </div>)}
-                    </div></>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
-              <div className="rounded-xl border border-border/70 bg-muted/15 p-4">
-                <h3 className="font-bold">المهام التي ستُدمج</h3>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">{curriculumLinkedTasks.length} مهمة مفتوحة تطابقت مع موضوعات المنهج؛ سيتم إظهارها بدل إنشاء نسخ أخرى.</p>
-                {curriculumLinkedTasks.slice(0,5).map(({task,match}) => <p key={task.id} className="mt-2 rounded-lg bg-card px-3 py-2 text-xs"><b>{task.title}</b>{match && <span className="mt-1 block text-muted-foreground">{getSIESubject(match.subjectId)?.nameAr} · {match.branchTitle} · {match.title}</span>}</p>)}
+              <div className="rounded-xl border border-border/70 bg-muted/15 p-3">
+                <h4 className="text-xs font-semibold">التزامات مرتبطة بالمنهج</h4>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">{curriculumLinkedTasks.length} مهمة مفتوحة طابقت موضوعات المنهج. سيتم ربط الموجود بدل تكراره.</p>
+                {curriculumLinkedTasks.slice(0, 8).map(({task,match}) => (
+                  <p key={task.id} className="mt-2 rounded-lg bg-card px-3 py-2 text-xs">
+                    <b>{task.title}</b>
+                    {match && <span className="mt-1 block text-muted-foreground">{getSIESubject(match.subjectId)?.nameAr} · {match.branchTitle}</span>}
+                  </p>
+                ))}
+                {taskProgressConflicts.length > 0 && (
+                  <div className="mt-3 rounded-lg border border-amber-500/25 bg-amber-500/[0.04] p-3">
+                    <p className="text-xs font-semibold">تعارضات تحتاج مراجعة</p>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">بعض المهام مرتبطة بموضوعات مسجلة كمكتملة. المحرك لن يغير تقدم المنهج تلقائيًا.</p>
+                    {taskProgressConflicts.slice(0, 4).map(({task,match}) => <p key={task.id} className="mt-2 text-xs">{task.title} — {match?.title}</p>)}
+                    <a href="/study" className="mt-2 inline-flex text-xs font-semibold text-primary">مراجعة تقدم المنهج</a>
+                  </div>
+                )}
               </div>
-              {taskProgressConflicts.length > 0 && <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.04] p-4"><h3 className="text-sm font-bold">تعارض يحتاج مراجعة</h3><p className="mt-1 text-xs leading-5 text-muted-foreground">فيه مهمة مفتوحة مرتبطة بموضوع مسجل كمكتمل. المنصة لن تغيّر التقدم تلقائيًا.</p>{taskProgressConflicts.slice(0,3).map(({task,match}) => <p key={task.id} className="mt-2 text-xs">{task.title} — {match?.title}</p>)}<a href="/study" className="mt-2 inline-flex text-xs font-semibold text-primary">مراجعة تقدم المنهج</a></div>}
-              {(profile.isError || learning.isError || tasksQuery.isError) && <div className="rounded-xl border border-destructive/25 bg-destructive/5 p-3 text-xs text-destructive">تعذر قراءة كل البيانات الحالية؛ أعد المحاولة قبل إنشاء الخطة حتى لا تُبنى على بيانات ناقصة.</div>}
-            </aside>
-          </div>
+              {(profile.isError || learning.isError || tasksQuery.isError) && <div className="rounded-lg border border-destructive/25 bg-destructive/5 p-3 text-xs text-destructive">تعذر قراءة كل البيانات. أعد المحاولة قبل توليد الخطة حتى لا تعتمد على بيانات ناقصة.</div>}
+            </div>
+          </details>
         </section>
+
         {generate.isPending && !plan && <PlanLoading progress={generationProgress.data ?? null} />}
         {!generate.isPending && !plan && !history.isLoading && !profile.isLoading && profile.data?.subjectIds?.length && (
-          <section className="app-card rounded-2xl p-4 text-sm text-muted-foreground">
-            لم تُرتّب خطة مذاكرة بعد. اضغط «رتّب مذاكرتي» ليقرأ النظام بياناتك ويقترح توزيع الأيام.
+          <section className="rounded-2xl border border-dashed border-border bg-card/50 px-5 py-12 text-center">
+            <span className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary"><CalendarClock className="size-5" /></span>
+            <h3 className="mt-4 text-base font-semibold">لم يتم ترتيب خطة لهذه الفترة بعد</h3>
+            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">اضغط «أنشئ خطتي». سيجمع المحرك تقدمك والتزاماتك ثم يعرض أولويات واضحة وجدولًا لا يتجاوز وقتك اليومي.</p>
+          </section>
+        )}
+
+        {loadedSavedDraft && !approved && plan && (
+          <section className="flex flex-col gap-3 rounded-2xl border border-amber-500/20 bg-amber-500/[0.035] p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold">أنت تراجع خطة محفوظة من فترة سابقة</p>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">قد لا تعكس آخر تقدم أو تغييرات مواعيدك. يمكنك تحديثها من إعدادات الوقت أعلاه.</p>
+            </div>
+            <span className="shrink-0 text-xs text-muted-foreground">مسودة محفوظة</span>
           </section>
         )}
 
         {plan && (
-          <>
-            {loadedSavedDraft && !approved && (
-              <section className="app-card flex flex-col gap-3 rounded-2xl border border-primary/20 bg-primary/[0.04] p-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
-                  <h3 className="text-sm font-bold">أنت تعرض خطة مذاكرة محفوظة من زيارة سابقة</h3>
-                  <p className="mt-1 text-xs leading-6 text-muted-foreground">قد لا تعكس آخر تقدم أو تغييرات جدول حصصك. جدّدها ليُعاد ترتيب المتراكم والاستعداد للمحاضرات القادمة.</p>
-                </div>
-                <Button
-                  type="button"
-                  className="shrink-0 rounded-xl"
-                  onClick={() => runGeneration(planningMode, horizonDays, dailyMinutes, daysPerWeek)}
-                  disabled={generate.isPending}
-                >
-                  {generate.isPending ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
-                  تحديث حسب تقدمي الحالي
-                </Button>
-              </section>
-            )}
-            <PlanCard
-              plan={plan}
-              title={approved ? "خطة المذاكرة المعتمدة" : loadedSavedDraft ? "خطة مذاكرة محفوظة" : "مقترح خطة مذاكرة"}
-              studentName={profile.data?.studentName}
-              editable={!approved}
-              onChange={updatePlan}
-              onApprove={approveCurrentPlan}
-              onAddStep={addStep}
-              onRemoveStep={removeStep}
-              onMoveStep={moveStep}
-              approving={approvePlan.isPending}
-              approved={approved}
-            />
-
-          </>
+          <PlanCard
+            plan={plan}
+            title={approved ? "الخطة المعتمدة" : loadedSavedDraft ? "مسودة محفوظة" : "مقترحك الدراسي"}
+            studentName={profile.data?.studentName}
+            editable={!approved}
+            onChange={updatePlan}
+            onApprove={approveCurrentPlan}
+            onAddStep={addStep}
+            onRemoveStep={removeStep}
+            onMoveStep={moveStep}
+            approving={approvePlan.isPending}
+            approved={approved}
+          />
         )}
 
         {savedPlans.length > 0 && (
-          <section className="app-card rounded-2xl p-5 sm:p-6">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <details className="rounded-2xl border border-border bg-card p-4 sm:p-5">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
               <div>
-                <p className="eyebrow">PLAN HISTORY</p>
-                <h3 className="mt-1 text-lg font-bold">خططك السابقة</h3>
-                <p className="mt-1 text-xs text-muted-foreground">اختر مسودة قديمة لفتحها ومراجعتها من جديد.</p>
+                <p className="text-[10px] font-semibold tracking-[.16em] text-muted-foreground">SAVED HISTORY</p>
+                <h3 className="mt-1 font-semibold">خطط سابقة <span className="text-xs font-normal text-muted-foreground">({savedPlans.length})</span></h3>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">{savedPlans.length} محفوظة</span>
-                <Button type="button" variant="destructive" size="sm" className="rounded-xl" onClick={handleDeleteAll} disabled={deleteAllPlans.isPending}>
-                  {deleteAllPlans.isPending ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
-                  مسح كل الخطط
-                </Button>
-              </div>
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
+              <span className="text-xs text-primary">عرض السجل</span>
+            </summary>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
               {savedPlans.map(item => (
                 <article key={item.id} className="rounded-xl border border-border/70 bg-muted/15 p-3">
-                  <button
-                    type="button"
-                    onClick={() => { setPlan(item.plan); setApproved(false); setLoadedSavedDraft(true); }}
-                    className="w-full text-right"
-                  >
-                    <span className="flex items-center gap-2 text-sm font-semibold"><BrainCircuit className="size-4 text-primary" />{item.plan.title}</span>
+                  <button type="button" onClick={() => { setPlan(item.plan); setApproved(false); setLoadedSavedDraft(true); }} className="w-full text-right">
+                    <span className="block text-sm font-semibold">{item.plan.title}</span>
                     <span className="mt-1 block line-clamp-2 text-xs leading-5 text-muted-foreground">{item.plan.summary}</span>
                     <span className="mt-2 block text-[11px] text-muted-foreground">{new Intl.DateTimeFormat("ar-EG", { day: "numeric", month: "short", year: "numeric" }).format(new Date(item.createdAt))}</span>
                   </button>
-                  <div className="mt-3 flex justify-end border-t border-border/60 pt-2">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 gap-1.5 text-xs text-destructive hover:text-destructive"
-                      disabled={deleteSavedPlan.isPending}
-                      onClick={() => {
-                        if (window.confirm("حذف هذه المسودة من السجل؟")) deleteSavedPlan.mutate({ id: item.id });
-                      }}
-                    >
-                      <Trash2 className="size-3.5" />حذف
+                  <div className="mt-2 flex justify-end">
+                    <Button type="button" variant="ghost" size="sm" className="h-8 text-xs text-destructive" disabled={deleteSavedPlan.isPending} onClick={() => { if (window.confirm("حذف هذه المسودة من السجل؟")) deleteSavedPlan.mutate({ id: item.id }); }}>
+                      <Trash2 className="size-3.5" /> حذف
                     </Button>
                   </div>
                 </article>
               ))}
             </div>
-          </section>
-        )}
-
-        {(savedPlans.length === 0 && !history.isLoading && !activeDailyPlan.data?.plan) && (
-          <div className="flex justify-end">
-            <Button type="button" variant="ghost" className="text-xs text-muted-foreground" onClick={handleDeleteAll} disabled={deleteAllPlans.isPending}>
-              مسح بيانات خطط المذاكرة السابقة
-            </Button>
-          </div>
+            <div className="mt-4 flex justify-end border-t border-border pt-3">
+              <Button type="button" variant="ghost" size="sm" className="text-xs text-destructive" onClick={handleDeleteAll} disabled={deleteAllPlans.isPending}>
+                {deleteAllPlans.isPending ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-3.5" />}
+                مسح كل الخطط
+              </Button>
+            </div>
+          </details>
         )}
       </div>
     </DashboardLayout>
   );
 }
+
 
 function PlanLoading({ progress }: { progress: GenerationProgress | null }) {
   const stages: Array<{ id: GenerationProgress["currentStage"]; title: string }> = [
@@ -692,223 +696,236 @@ function PlanCard({
   approving: boolean;
   approved: boolean;
 }) {
+  const [editing, setEditing] = useState<{ index: number; title: string; detail: string; minutes: number } | null>(null);
+  const groups = useMemo(() => {
+    const map = new Map<string, Array<{ step: PlanStep; index: number }>>();
+    plan.steps.forEach((step, index) => {
+      const key = step.scheduleState === "deferred" ? "deferred" : (step.day || "غير مجدول");
+      const current = map.get(key) ?? [];
+      current.push({ step, index });
+      map.set(key, current);
+    });
+    return [...map.entries()].map(([key, steps]) => ({
+      key,
+      title: key === "deferred" ? "بعد الفترة المحددة" : key,
+      steps,
+      deferred: key === "deferred",
+      totalMinutes: steps.reduce((sum, item) => sum + item.step.minutes, 0),
+    }));
+  }, [plan.steps]);
+
   const totalMinutes = plan.steps.reduce((sum, step) => sum + step.minutes, 0);
-  const coveredTopics = new Set(plan.steps.flatMap(step => step.curriculumNodeIds ?? [])).size;
-  const dayCount = new Set(plan.steps.map(step => step.day || "غير مجدول")).size;
-  const highPriorityCount = plan.steps.filter(step => step.priority === "critical" || step.priority === "high").length;
-  const firstStep = plan.steps[0];
-  const dayGroups: Array<{ day: string; steps: Array<{ step: PlanStep; index: number }> }> = [];
-  plan.steps.forEach((step, index) => {
-    const day = step.day || "غير مجدول";
-    let group = dayGroups.find(item => item.day === day);
-    if (!group) {
-      group = { day, steps: [] };
-      dayGroups.push(group);
-    }
-    group.steps.push({ step, index });
-  });
-  const maxDayMinutes = Math.max(1, ...dayGroups.map(group => group.steps.reduce((sum, item) => sum + item.step.minutes, 0)));
-  const priorityLabel = (value?: string) => value === "critical" ? "عاجل" : value === "high" ? "أولوية عالية" : value === "low" ? "منخفضة" : "متوسطة";
-  const difficultyLabel = (value?: PlanStep["difficulty"]) =>
-    value === "easy" ? "سهل" : value === "medium" ? "متوسط" : value === "hard" ? "صعب" : "";
-  const lessonSizeLabel = (value?: PlanStep["lessonSize"]) =>
-    value === "small" ? "قصير" : value === "medium" ? "متوسط" : value === "large" ? "كبير" : "";
-  const difficultyBasisLabel = (value?: PlanStep["difficultyBasis"]) =>
-    value === "student_report" ? "حسب تقييمك" : value === "curriculum_profile" ? "حسب طبيعة المنهج" : "";
+  const scheduledMinutes = plan.quality?.stats.scheduledMinutes
+    ?? plan.steps.filter(step => step.scheduleState !== "deferred").reduce((sum, step) => sum + step.minutes, 0);
+  const deferredMinutes = plan.quality?.stats.deferredMinutes
+    ?? plan.steps.filter(step => step.scheduleState === "deferred").reduce((sum, step) => sum + step.minutes, 0);
+  const scheduledSteps = plan.steps.filter(step => step.scheduleState !== "deferred");
+  const statusLabel = plan.quality?.status === "blocked" ? "يحتاج مراجعة"
+    : plan.quality?.status === "partial" ? "جدول جزئي" : "جاهزة للمراجعة";
+  const statusStyle = plan.quality?.status === "blocked"
+    ? "border-destructive/25 bg-destructive/[0.04] text-destructive"
+    : plan.quality?.status === "partial"
+      ? "border-amber-500/25 bg-amber-500/[0.04] text-amber-700 dark:text-amber-300"
+      : "border-primary/20 bg-primary/[0.05] text-primary";
+
+  const saveEdit = () => {
+    if (!editing) return;
+    onChange({
+      ...plan,
+      steps: plan.steps.map((step, index) => index === editing.index
+        ? { ...step, title: editing.title.trim() || step.title, detail: editing.detail.trim() || step.detail, minutes: Math.max(5, Math.min(480, Math.round(editing.minutes || 5))) }
+        : step),
+    });
+    setEditing(null);
+  };
+
   return (
-    <section className="sf-plan-board app-card overflow-hidden rounded-2xl border border-border/80">
-      <div className="sf-plan-board-header border-b border-border/70 bg-gradient-to-l from-secondary/60 to-card p-5 sm:p-6">
+    <section className="overflow-hidden rounded-[1.65rem] border border-border bg-card shadow-sm">
+      <header className="border-b border-border/70 p-4 sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <p className="eyebrow">{title}</p>
-            <h2 className="mt-1 text-xl font-bold sm:text-2xl">برنامج المذاكرة للفترة القادمة</h2>
-            <p className="mt-2 max-w-3xl text-sm leading-7 text-muted-foreground">{plan.summary}</p>
-            {studentName && <p className="mt-2 text-xs text-primary">خطة مخصصة لـ {studentName}</p>}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[10px] font-semibold tracking-[.16em] text-primary">STUDYFLOW / YOUR PLAN</span>
+              <span className="rounded-full border border-border px-2.5 py-1 text-[10px] text-muted-foreground">{title}</span>
+            </div>
+            <h2 className="mt-2 text-xl font-bold sm:text-2xl">خطة الفترة القادمة</h2>
+            <p className="mt-2 max-w-2xl whitespace-pre-line text-sm leading-7 text-muted-foreground">{plan.summary.split("\n\n")[0]}</p>
+            {studentName && <p className="mt-2 text-xs text-muted-foreground">مبنية على ملف {studentName}</p>}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-xl bg-card px-3 py-2 text-xs font-semibold text-primary shadow-sm"><Clock3 className="size-3.5" />فترة التنفيذ: {plan.durationLabel || formatStudyDuration(totalMinutes)}</span>
+            <span className={"rounded-full border px-3 py-1.5 text-xs font-semibold " + (approved ? "border-primary/20 bg-primary/[0.05] text-primary" : statusStyle)}>
+              {approved ? "خطة معتمدة" : statusLabel}
+            </span>
             <PlanExportActions plan={plan} studentName={studentName} />
           </div>
         </div>
 
         <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <Metric label="نقاط المنهج المغطاة" value={coveredTopics.toLocaleString("ar-EG")} />
-          <Metric label="أيام التنفيذ" value={dayCount.toLocaleString("ar-EG")} />
-          <Metric label="وقت المذاكرة المخطط" value={formatStudyDuration(totalMinutes)} />
-          <Metric label="أولوية عالية أو عاجلة" value={highPriorityCount.toLocaleString("ar-EG")} />
+          <div className="rounded-xl border border-border/70 bg-muted/15 p-3">
+            <p className="text-[10px] text-muted-foreground">وقت داخل الجدول</p>
+            <p className="mt-1 text-base font-bold tabular-nums">{formatStudyDuration(scheduledMinutes)}</p>
+          </div>
+          <div className="rounded-xl border border-border/70 bg-muted/15 p-3">
+            <p className="text-[10px] text-muted-foreground">وقت مؤجل</p>
+            <p className="mt-1 text-base font-bold tabular-nums">{deferredMinutes ? formatStudyDuration(deferredMinutes) : "لا يوجد"}</p>
+          </div>
+          <div className="rounded-xl border border-border/70 bg-muted/15 p-3">
+            <p className="text-[10px] text-muted-foreground">أيام دراسة</p>
+            <p className="mt-1 text-base font-bold tabular-nums">{(plan.quality?.stats.studyDaysUsed ?? new Set(scheduledSteps.map(step => step.day)).size).toLocaleString("ar-EG")}</p>
+          </div>
+          <div className="rounded-xl border border-border/70 bg-muted/15 p-3">
+            <p className="text-[10px] text-muted-foreground">إجمالي العمل</p>
+            <p className="mt-1 text-base font-bold tabular-nums">{formatStudyDuration(totalMinutes)}</p>
+          </div>
         </div>
 
-        {plan.taskSync && (
-          <div className="mt-4 flex flex-col gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2 text-sm font-semibold"><CheckCircle2 className="size-4 text-emerald-600" />تم اعتماد خطة المذاكرة</div>
-            <a href="/tasks" className="inline-flex items-center gap-1 text-xs font-semibold text-primary">فتح قائمة المهام <ArrowUpRight className="size-3.5" /></a>
-          </div>
-        )}
-        {firstStep && !approved && (
-          <div className="sf-plan-priority mx-4 mt-4 overflow-hidden rounded-2xl border border-primary/25 bg-primary/[0.06] p-4 sm:mx-6">
+        {plan.quality && (
+          <div className="mt-4 rounded-xl border border-border/70 bg-background/70 p-3.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs font-bold tracking-wide text-primary">ابدأ من هنا · الخطوة الأعلى أولوية</p>
-              <span className="rounded-lg border border-primary/20 bg-background px-2.5 py-1 text-[11px] font-semibold">وقت المذاكرة: {formatStudyDuration(firstStep.minutes)}</span>
+              <div>
+                <p className="text-xs font-semibold">فحص قابلية التنفيذ</p>
+                <p className="mt-1 text-[11px] text-muted-foreground">تم فحص سقف اليوم وتقسيم الجلسات قبل عرض الخطة.</p>
+              </div>
+              <span className="text-sm font-bold tabular-nums">{plan.quality.score}/100</span>
             </div>
-            <h3 className="mt-2 text-base font-bold leading-7">{firstStep.title}</h3>
-            <p className="mt-1 text-[11px] text-muted-foreground">{firstStep.category} · {priorityLabel(firstStep.priority)}</p>
-            <p className="mt-3 text-sm leading-7 text-foreground/85">{firstStep.detail}</p>
-            {firstStep.priorityReason && <p className="mt-3 rounded-xl border border-primary/15 bg-background/65 px-3 py-2.5 text-xs leading-6 text-muted-foreground"><b className="text-foreground">لماذا تبدأ بها؟ </b>{firstStep.priorityReason}</p>}
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+              <div className="h-full rounded-full bg-primary transition-all" style={{ width: plan.quality.score + "%" }} />
+            </div>
+            {plan.quality.warnings.length > 0 && (
+              <ul className="mt-3 space-y-1.5 text-xs leading-5 text-muted-foreground">
+                {plan.quality.warnings.slice(0, 3).map((warning, index) => <li key={index}>• {warning}</li>)}
+              </ul>
+            )}
+            {plan.quality.blockers.length > 0 && (
+              <ul className="mt-3 space-y-1.5 text-xs leading-5 text-destructive">
+                {plan.quality.blockers.map((blocker, index) => <li key={index}>• {blocker}</li>)}
+              </ul>
+            )}
           </div>
         )}
-      </div>
+      </header>
 
-      <div className="sf-plan-layout grid gap-5 p-4 sm:p-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(230px,.65fr)]">
-        <main className="sf-plan-days min-w-0">
-          <div className="sf-plan-days-heading mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h3 className="font-bold">توزيع المذاكرة على الأيام</h3>
-              <p className="mt-1 text-xs text-muted-foreground">{editable ? "كل يوم ظاهر بالكامل. عدّل أي مهمة قبل اعتماد الخطة." : "نظرة مباشرة على مهام كل يوم ووقتها."}</p>
-            </div>
-            {editable && <Button type="button" size="sm" variant="outline" className="rounded-lg" onClick={onAddStep}><Plus className="size-4" />إضافة موضوع</Button>}
-          </div>
-
-          <div className="sf-plan-days-grid grid gap-3 md:grid-cols-2">
-            {dayGroups.map((group, groupIndex) => (
-              <section key={group.day} className="sf-plan-day min-w-0 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-                <header className="sf-plan-day-header border-b border-border/70 bg-muted/25 p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex min-w-0 items-center gap-3">
-                      <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-sm font-bold text-primary">{String(groupIndex + 1).padStart(2, "0")}</span>
-                      <div className="min-w-0">
-                        <h4 className="break-words font-bold">{group.day}</h4>
-                        <p className="mt-1 text-[11px] text-muted-foreground">{group.steps.length} مهام</p>
-                      </div>
-                    </div>
-                    <div className="shrink-0 text-left">
-                      <b className="block text-sm font-bold tabular-nums text-foreground">{formatStudyDuration(group.steps.reduce((sum, item) => sum + item.step.minutes, 0))}</b>
-                      <span className="text-[10px] text-muted-foreground">إجمالي وقت اليوم</span>
-                    </div>
-                  </div>
-                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">
-                    <div className="h-full rounded-full bg-primary transition-[width] duration-300" style={{ width: Math.min(100, Math.round(group.steps.reduce((sum, item) => sum + item.step.minutes, 0) / maxDayMinutes * 100)) + "%" }} />
-                  </div>
-                </header>
-                <div className="space-y-2.5 bg-muted/10 p-3 sm:p-4">
-                  {group.steps.map(({ step, index }) => (
-                    <article key={`step-${index}-${step.curriculumNodeIds?.join("-") || "manual"}`} className="sf-plan-step group rounded-xl border border-border/70 bg-background p-3.5 transition-colors hover:border-primary/30">
-                      <div className="flex items-start gap-3">
-                        <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-secondary text-xs font-bold text-primary">{index + 1}</span>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2 text-xs">
-                            <span className="rounded-lg bg-secondary px-2 py-1 font-semibold text-primary">{step.category}</span>
-                            {step.priority && <span className="rounded-lg border border-border bg-card px-2 py-1">{priorityLabel(step.priority)}</span>}
-                          </div>
-                          {editable ? (
-                            <>
-                              <label className="mt-3 block text-[11px] font-semibold text-muted-foreground">عنوان المهمة</label>
-                              <input
-                                value={step.title}
-                                onChange={event => onChange({ ...plan, steps: plan.steps.map((item, itemIndex) => itemIndex === index ? { ...item, title: event.target.value } : item) })}
-                                className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm font-semibold outline-none focus:border-primary/50"
-                              />
-                              <label className="mt-3 block text-[11px] font-semibold text-muted-foreground">تفاصيل التنفيذ</label>
-                              <textarea
-                                rows={3}
-                                value={step.detail}
-                                onChange={event => onChange({ ...plan, steps: plan.steps.map((item, itemIndex) => itemIndex === index ? { ...item, detail: event.target.value } : item) })}
-                                className="mt-1 min-h-20 w-full resize-y rounded-lg border border-border bg-card px-3 py-2 text-sm leading-6 outline-none focus:border-primary/50"
-                              />
-                              <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
-                                <div>
-                                  <label className="block text-[11px] font-semibold text-muted-foreground">وقت المذاكرة المتوقع بالدقائق</label>
-                                  <input
-                                    type="number"
-                                    min={5}
-                                    max={480}
-                                    step={5}
-                                    value={step.minutes}
-                                    onChange={event => {
-                                      const minutes = Number(event.target.value);
-                                      onChange({ ...plan, steps: plan.steps.map((item, itemIndex) => itemIndex === index ? { ...item, minutes: Number.isFinite(minutes) ? Math.max(5, Math.min(480, minutes)) : 5 } : item) });
-                                    }}
-                                    className="mt-1 h-10 w-36 rounded-lg border border-border bg-card px-3 text-sm outline-none focus:border-primary/50"
-                                  />
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  <Button type="button" variant="ghost" size="icon" className="size-8" disabled={index === 0} onClick={() => onMoveStep(index, -1)} aria-label="نقل المهمة لأعلى"><ArrowUp className="size-4" /></Button>
-                                  <Button type="button" variant="ghost" size="icon" className="size-8" disabled={index === plan.steps.length - 1} onClick={() => onMoveStep(index, 1)} aria-label="نقل المهمة لأسفل"><ArrowDown className="size-4" /></Button>
-                                  <Button type="button" variant="ghost" size="icon" className="size-8 text-destructive hover:text-destructive" disabled={plan.steps.length <= 1} onClick={() => onRemoveStep(index)} aria-label="حذف المهمة"><X className="size-4" /></Button>
-                                </div>
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              <h4 className="mt-3 text-sm font-bold leading-7 sm:text-base">{step.title}</h4>
-                              <p className="mt-2 whitespace-pre-line text-sm leading-7 text-muted-foreground">{step.detail}</p>
-                              <div className="mt-3 flex flex-wrap gap-2">
-                                <span className="rounded-lg border border-primary/15 bg-primary/[.045] px-2.5 py-1.5 text-[11px] font-semibold text-primary">وقت المذاكرة المتوقع: {formatStudyDuration(step.minutes)}</span>
-                                {difficultyLabel(step.difficulty) && <span className="rounded-lg border border-border bg-card px-2.5 py-1.5 text-[11px] text-muted-foreground">الصعوبة: {difficultyLabel(step.difficulty)}</span>}
-                                {lessonSizeLabel(step.lessonSize) && <span className="rounded-lg border border-border bg-card px-2.5 py-1.5 text-[11px] text-muted-foreground">حجم الموضوع: {lessonSizeLabel(step.lessonSize)}</span>}
-                                {difficultyBasisLabel(step.difficultyBasis) && <span className="rounded-lg border border-border bg-card px-2.5 py-1.5 text-[11px] text-muted-foreground">{difficultyBasisLabel(step.difficultyBasis)}</span>}
-                              </div>
-                            </>
-                          )}
-                          {step.priorityReason && (
-                            <div className="mt-3 rounded-xl border border-primary/15 bg-primary/[.035] px-3 py-2.5 text-xs leading-6 text-muted-foreground">
-                              <b className="text-foreground">سبب ترتيبها بهذه الأولوية: </b>{step.priorityReason}
-                              {step.priorityEvidenceConfidence && <span className="mr-1 text-[10px]">· ثقة الدليل: {step.priorityEvidenceConfidence === "high" ? "عالية" : step.priorityEvidenceConfidence === "medium" ? "متوسطة" : "منخفضة"}</span>}
-                            </div>
-                          )}
-                          {step.difficultyConfidence && step.difficulty !== "unknown" && (
-                            <p className="mt-2 text-[10px] text-muted-foreground">درجة الثقة في تقدير الصعوبة: {step.difficultyConfidence === "high" ? "عالية" : step.difficultyConfidence === "medium" ? "متوسطة" : "منخفضة"}</p>
-                          )}
-                          {step.existingTask && (
-                            <p className="mt-3 text-xs font-semibold text-primary">
-                              {step.existingTask.status === "todo" ? "هذه المهمة موجودة بالفعل في قائمتك؛ لن تُنشأ نسخة مكررة." : "المهمة المرتبطة منتهية؛ لم نعتبر ذلك دليلًا على إكمال الدرس."}
-                            </p>
-                          )}
-                          {step.resourceRecommendation && (
-                            <a href={step.resourceRecommendation.url} target="_blank" rel="noreferrer" className="mt-3 inline-flex max-w-full flex-wrap items-center gap-2 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2 text-xs font-semibold text-primary hover:bg-primary/10">
-                              <ArrowUpRight className="size-3.5" />
-                              مشاهدة مقترحة من {step.resourceRecommendation.teacherName || "المدرس"}: {step.resourceRecommendation.title}
-                              <span className="font-normal text-muted-foreground">— {step.resourceRecommendation.reason}</span>
-                            </a>
-                          )}
-                          {step.printedPageRange && <p className="mt-3 text-[10px] font-medium text-muted-foreground">صفحات الكتاب: {step.printedPageRange[0]}–{step.printedPageRange[1]}</p>}
-                          {!step.printedPageRange && Boolean(step.sourcePages?.length) && <p className="mt-2 text-[10px] text-muted-foreground">صفحات المصدر: {step.sourcePages?.join("، ")}</p>}
-                        </div>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              </section>
-            ))}
+      <div className="space-y-4 p-4 sm:p-6">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h3 className="font-bold">توزيعك اليومي</h3>
+            <p className="mt-1 text-xs text-muted-foreground">ابدأ بأول خطوة في اليوم الحالي. كل جلسة لها وقت محدد وواضح.</p>
           </div>
           {editable && (
-            <Button type="button" variant="outline" className="mt-4 w-full rounded-xl" onClick={onApprove} disabled={approving || plan.steps.length === 0 || !plan.title.trim()}>
+            <Button type="button" size="sm" variant="outline" className="h-9 rounded-lg" onClick={onAddStep}>
+              <Plus className="size-3.5" /> إضافة مهمة
+            </Button>
+          )}
+        </div>
+
+        {groups.map((group, groupIndex) => (
+          <section key={group.key} className={"overflow-hidden rounded-2xl border " + (group.deferred ? "border-amber-500/25 bg-amber-500/[0.025]" : "border-border/80 bg-background")}>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 px-4 py-3">
+              <div className="flex items-center gap-3">
+                <span className={"flex size-9 items-center justify-center rounded-xl text-xs font-bold " + (group.deferred ? "bg-amber-500/10 text-amber-600" : "bg-primary/10 text-primary")}>
+                  {group.deferred ? <CalendarClock className="size-4" /> : String(groupIndex + 1).padStart(2, "0")}
+                </span>
+                <div>
+                  <h4 className="text-sm font-bold">{group.title}</h4>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">{group.steps.length} جلسات</p>
+                </div>
+              </div>
+              <div className="text-left">
+                <p className="text-sm font-bold tabular-nums">{formatStudyDuration(group.totalMinutes)}</p>
+                <p className="text-[10px] text-muted-foreground">{group.deferred ? "غير محسوب على أيام هذه الفترة" : "حمل اليوم"}</p>
+              </div>
+            </div>
+
+            <div className="divide-y divide-border/60">
+              {group.steps.map(({ step, index }) => (
+                <article key={`${step.sourceStepIndex ?? index}:${step.segmentIndex ?? 1}:${index}`} className="p-4">
+                  {editing?.index === index ? (
+                    <div className="space-y-3">
+                      <label className="block">
+                        <span className="mb-1 block text-[11px] font-semibold text-muted-foreground">عنوان المهمة</span>
+                        <input value={editing.title} onChange={event => setEditing(current => current ? { ...current, title: event.target.value } : current)} className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm" />
+                      </label>
+                      <label className="block">
+                        <span className="mb-1 block text-[11px] font-semibold text-muted-foreground">تفاصيل التنفيذ</span>
+                        <textarea rows={3} value={editing.detail} onChange={event => setEditing(current => current ? { ...current, detail: event.target.value } : current)} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm leading-6" />
+                      </label>
+                      <label className="block max-w-[180px]">
+                        <span className="mb-1 block text-[11px] font-semibold text-muted-foreground">الوقت بالدقائق</span>
+                        <input type="number" min={5} max={480} step={5} value={editing.minutes} onChange={event => setEditing(current => current ? { ...current, minutes: Number(event.target.value) } : current)} className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm" />
+                      </label>
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(null)}>إلغاء</Button>
+                        <Button type="button" size="sm" onClick={saveEdit}>حفظ التعديل</Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-start gap-3">
+                      <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-[11px] font-semibold text-muted-foreground">{index + 1}</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="rounded-md bg-muted/60 px-2 py-1 text-[10px] font-semibold text-muted-foreground">{step.category}</span>
+                          {step.priority === "critical" && <span className="text-[10px] font-semibold text-destructive">عاجل</span>}
+                          {(step.priority === "high") && <span className="text-[10px] font-semibold text-amber-600">أولوية عالية</span>}
+                          {step.existingTask?.status === "done" && <span className="text-[10px] text-primary">مكتملة كمهمة</span>}
+                        </div>
+                        <h5 className="mt-2 text-sm font-bold leading-6">{step.title}</h5>
+                        <p className="mt-1 whitespace-pre-line text-xs leading-6 text-muted-foreground">{step.detail}</p>
+                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                          <span className="inline-flex items-center gap-1 rounded-lg border border-border bg-muted/20 px-2.5 py-1.5 text-[11px] font-semibold">
+                            <Clock3 className="size-3.5" /> {formatStudyDuration(step.minutes)}
+                          </span>
+                          {step.priorityReason && (
+                            <details className="text-[11px] text-muted-foreground">
+                              <summary className="cursor-pointer">لماذا هذه المهمة؟</summary>
+                              <p className="mt-2 max-w-xl leading-6">{step.priorityReason}</p>
+                            </details>
+                          )}
+                          {step.resourceRecommendation && (
+                            <a href={step.resourceRecommendation.url} target="_blank" rel="noreferrer" className="text-[11px] font-semibold text-primary">مصدر شرح مقترح</a>
+                          )}
+                        </div>
+                        {group.deferred && step.scheduleNote && <p className="mt-2 rounded-lg bg-amber-500/[0.05] px-3 py-2 text-[11px] leading-5 text-muted-foreground">{step.scheduleNote}</p>}
+                        {editable && (
+                          <div className="mt-3 flex flex-wrap items-center gap-1 border-t border-border/50 pt-2">
+                            <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => setEditing({ index, title: step.title, detail: step.detail, minutes: step.minutes })}>تعديل</Button>
+                            <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" disabled={index === 0} onClick={() => onMoveStep(index, -1)}><ArrowUp className="size-3.5" /> لأعلى</Button>
+                            <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" disabled={index === plan.steps.length - 1} onClick={() => onMoveStep(index, 1)}><ArrowDown className="size-3.5" /> لأسفل</Button>
+                            <Button type="button" variant="ghost" size="sm" className="mr-auto h-8 px-2 text-xs text-destructive" disabled={plan.steps.length <= 1} onClick={() => onRemoveStep(index)}><X className="size-3.5" /> حذف</Button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </article>
+              ))}
+            </div>
+          </section>
+        ))}
+
+        {editable && (
+          <div className="flex flex-col gap-3 border-t border-border/70 pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs leading-5 text-muted-foreground">اعتماد الخطة سينشئ مهامًا فقط. لن يغيّر مواضع المنهج المكتملة تلقائيًا.</p>
+            <Button type="button" className="h-11 rounded-xl px-6" onClick={onApprove} disabled={approving || plan.steps.length === 0 || !plan.title.trim() || plan.quality?.status === "blocked"}>
               {approving ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
               اعتماد الخطة وإنشاء المهام
             </Button>
-          )}
-        </main>
-
-        <aside className="sf-plan-aside space-y-3">
-          <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
-            <h3 className="flex items-center gap-2 font-bold"><BrainCircuit className="size-4 text-primary" />ملخص الخطة</h3>
-            <p className="mt-2 text-sm leading-7 text-muted-foreground">{plan.summary}</p>
           </div>
-          <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
-            <h3 className="font-bold">عادات داعمة</h3>
-            {plan.habits.length ? (
-              <div className="mt-3 space-y-2">
-                {plan.habits.map((habit, index) => <div key={`${habit.title}-${index}`} className="rounded-lg bg-background p-3"><p className="text-sm font-semibold">{habit.title}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{habit.cue}</p></div>)}
-              </div>
-            ) : <p className="mt-2 text-xs leading-6 text-muted-foreground">لا توجد عادات إضافية لازمة لهذه الخطة.</p>}
-          </div>
-          {editable && (
-            <p className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-xs leading-6 text-muted-foreground">
-              التعديلات هنا لا تؤثر على ملف المنهج أو تقدمك. لن تُنشأ مهام أو مواعيد فعلية إلا بعد الضغط على «اعتماد الخطة».
-            </p>
-          )}
-        </aside>
+        )}
 
-        <PlanAssistantChat plan={plan} />
+        <details className="rounded-xl border border-border/70 bg-muted/10 p-3">
+          <summary className="cursor-pointer text-xs font-semibold">تفاصيل إضافية عن الخطة</summary>
+          <div className="mt-3 whitespace-pre-line text-xs leading-6 text-muted-foreground">{plan.summary}</div>
+          {plan.habits.length > 0 && (
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {plan.habits.map((habit, index) => <div key={`${habit.title}:${index}`} className="rounded-lg bg-background p-3"><p className="text-xs font-semibold text-foreground">{habit.title}</p><p className="mt-1 text-xs leading-5">{habit.cue}</p></div>)}
+            </div>
+          )}
+        </details>
+
+        <details className="rounded-xl border border-border/70">
+          <summary className="cursor-pointer px-4 py-3 text-xs font-semibold text-muted-foreground">اسأل مساعد الخطة</summary>
+          <div className="p-3"><PlanAssistantChat plan={plan} /></div>
+        </details>
       </div>
     </section>
   );
