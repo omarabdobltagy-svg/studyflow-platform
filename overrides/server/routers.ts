@@ -95,6 +95,7 @@ import type { InvokeParams } from "./_core/llm";
 import { formatTextbookEvidence, retrieveTextbookEvidence } from "./textbook-retrieval";
 import { createReminderCron, getReminderPreferences, listReminderNotifications, markReminderRead, saveReminderPreferences, saveReminderSchedule } from "./reminders";
 import { getTeacherCourseFactsWithRefresh } from "./teacher-course-research";
+import { STUDENT_LESSON_STATES, isStudentLessonState } from "@shared/sie-lesson-state";
 import { getDueTeacherClassFollowups, buildTeacherClassFollowupKey, type TeacherClassFollowupRecord } from "./teacherClassFollowups";
 
 
@@ -2622,7 +2623,7 @@ export const appRouter = router({
           courseMode,
           teacherId: teacherChoice && teacherChoice !== "__SKIP__" ? teacherChoice : null,
           lastCompletedLessonId: nextStudentFrontier,
-          ...(input.studentFrontierId !== undefined ? { studentFrontierConfirmedAt: now } : {}),
+          ...(input.studentFrontierId !== undefined ? { studentFrontierConfirmedAt: now, lessonStateModelVersion: 1 } : {}),
           teacherTeachingFrontierId: nextTeacherFrontier,
           ...(input.teacherTeachingFrontierId !== undefined ? { teacherFrontierConfirmedAt: now } : {}),
           schoolClassFrontierId: nextSchoolFrontier,
@@ -2668,6 +2669,65 @@ export const appRouter = router({
           });
         queueDailyPlanReconciliation(ctx.user.id);
         return { success: true, record: nextBranchRecord, learningGap, savedStudent, savedTeacher };
+      }),
+    updateLessonLearningState: protectedProcedure
+      .input(z.object({
+        subjectId: z.string().trim().min(1).max(80),
+        branchId: z.string().trim().min(1).max(120),
+        nodeId: z.string().trim().min(1).max(120),
+        state: z.enum(STUDENT_LESSON_STATES),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const profile = await getStudentProfile(ctx.user.id);
+        if (!profile || !profile.subjectIds.includes(input.subjectId)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "اختر مادة موجودة في ملفك الدراسي." });
+        }
+        const branch = getSIECheckpointProgressBranches(input.subjectId)
+          .find(item => item.branchId === input.branchId);
+        if (!branch || !branch.choices.some(choice => choice.nodeId === input.nodeId)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "الدرس لا ينتمي إلى فرع المنهج المحدد." });
+        }
+        if (!isStudentLessonState(input.state)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "حالة الدرس غير معروفة." });
+        }
+
+        const selection = (profile.selection ?? {}) as Record<string, any>;
+        const courseProgress = (selection.learningCourseProgress ?? {}) as Record<string, any>;
+        const subjectRecord = courseProgress[input.subjectId] ?? {};
+        const branchRecords = (subjectRecord.branches ?? {}) as Record<string, Record<string, any>>;
+        const previous = branchRecords[input.branchId] ?? {};
+        const lessonStates = { ...((previous.lessonStates ?? {}) as Record<string, Record<string, unknown>>) };
+        const now = new Date().toISOString();
+        lessonStates[input.nodeId] = {
+          state: input.state,
+          source: "student_self_report",
+          updatedAt: now,
+        };
+        const nextBranchRecord = {
+          ...previous,
+          lessonStateModelVersion: 1,
+          lessonStates,
+          updatedAt: now,
+        };
+        const nextSubjectRecord = {
+          ...subjectRecord,
+          branches: { ...branchRecords, [input.branchId]: nextBranchRecord },
+          updatedAt: now,
+        };
+        await updateStudentProfileSelection(ctx.user.id, {
+          ...selection,
+          learningCourseProgress: { ...courseProgress, [input.subjectId]: nextSubjectRecord },
+        });
+        await logStudentActivity(
+          ctx.user.id,
+          "learning.lesson_state_updated",
+          "curriculum_checkpoint",
+          input.nodeId,
+          "تم تحديث حالة مشاهدة ومذاكرة درس",
+          { subjectId: input.subjectId, branchId: input.branchId, state: input.state },
+        );
+        queueDailyPlanReconciliation(ctx.user.id);
+        return { success: true, state: input.state, updatedAt: now };
       }),
     updateCourseProgress: protectedProcedure
       .input(z.object({
