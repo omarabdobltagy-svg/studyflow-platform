@@ -113,6 +113,12 @@ export default function DashboardLayout({ title, description, children, action }
   const reduceMotion = useReducedMotion();
 
   useEffect(() => {
+    if (isMobileNavOpen) document.body.dataset.studyflowSectionsOpen = "true";
+    else delete document.body.dataset.studyflowSectionsOpen;
+    return () => { delete document.body.dataset.studyflowSectionsOpen; };
+  }, [isMobileNavOpen]);
+
+  useEffect(() => {
     if (reduceMotion || !pageContentRef.current) return;
     const context = gsap.context(() => {
       const headings = gsap.utils.toArray<HTMLElement>(".sf-main h1, .sf-main h2, .sf-main .eyebrow");
@@ -297,7 +303,7 @@ export default function DashboardLayout({ title, description, children, action }
                 >
                   <item.icon className="sf-nav-icon" />
                   <span>{item.label}</span>
-                  {active && <motion.span layoutId="sf-sheet-active" className="sf-nav-indicator" />}
+                  {active && }
                 </motion.button>
               );
             })}
