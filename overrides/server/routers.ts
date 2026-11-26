@@ -710,6 +710,10 @@ async function reconcileDailyPlanAfterChange(
 ) {
   if (impact === "none") return;
   if (impact === "local") {
+    if (dailyPlanLocks.has(userId)) {
+      dailyPlanDirtyUsers.add(userId);
+      return;
+    }
     await reconcileDailyPlanTaskState(userId);
     return;
   }

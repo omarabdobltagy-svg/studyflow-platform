@@ -622,7 +622,7 @@ export function schedulePlanStepDates(
   dailyMinutes: number,
   daysPerWeek = 7,
 ) {
-  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(startDate)) throw new Error("تاريخ بداية الخطة غير صالح.");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) throw new Error("تاريخ بداية الخطة غير صالح.");
   const parsedStart = new Date(`${startDate}T12:00:00.000Z`);
   if (Number.isNaN(parsedStart.getTime()) || parsedStart.toISOString().slice(0, 10) !== startDate) throw new Error("تاريخ بداية الخطة غير صالح.");
   const capacity = Math.min(600, Math.max(20, Math.round(dailyMinutes)));
