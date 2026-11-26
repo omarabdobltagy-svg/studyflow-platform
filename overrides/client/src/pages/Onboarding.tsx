@@ -211,7 +211,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
 
   useEffect(() => {
     const result = teacherFacts.data;
-    if (!result || result.state === "insufficient_evidence" || !currentSetupSubjectId) return;
+    if (!result || result.state === "researching" || result.state === "insufficient_evidence" || result.facts.isStale || !currentSetupSubjectId) return;
     setForm(current => {
       const subjectId = currentSetupSubjectId;
       const next = { ...current };
