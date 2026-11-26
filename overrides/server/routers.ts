@@ -3259,10 +3259,10 @@ export const appRouter = router({
         await logStudentActivity(ctx.user.id, "plan.approved", "ai_plan", null, "اعتمد الطالب خطة المذاكرة وأنشئت المهام بعد مراجعته", {
           title: "خطة المذاكرة",
           taskCount: synced.taskCount,
-          planningHorizon: "short_term",
-          qualityScore: quality.score,
-          qualityStatus: quality.status,
-          deferredMinutes: quality.stats.deferredMinutes,
+          planningMode: flexibleTasks ? "flexible_tasks" : "scheduled",
+          qualityScore: quality?.score ?? null,
+          qualityStatus: quality?.status ?? "flexible",
+
         });
         return {
           parentGoalId: synced.parentGoalId,
