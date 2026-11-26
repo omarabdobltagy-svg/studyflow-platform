@@ -78,7 +78,7 @@ export default function TeacherClassFollowup() {
     setBusyKey(item.key);
     complete.mutate({
       key: item.key,
-      outcome: "covered",
+      outcome: "scheduled_only",
       coveredBranches: [],
       branchFrontiers: {},
     });
