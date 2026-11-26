@@ -91,7 +91,8 @@ export default function Assistant() {
     abortControllerRef.current = null;
     streamingThreadRef.current = null;
     setStreamingThreadId(null);
-    if (threadId && !preservePartial) {
+    // An empty placeholder is never a message; preserve real partial text only.
+    if (threadId) {
       setThreads(current => updateThreadMessage(current, threadId, "", true));
     }
   };
