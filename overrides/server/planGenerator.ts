@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { getSIECheckpointBranches, getSIESubject, getSIETeacher } from "@shared/sie-catalog";
 import { calculateLearningGap } from "@shared/sie-learning-progress";
+import { ensureRequiredLessonCoverage, getMissingLessonCheckpoints, type RequiredLessonCheckpoint } from "./plan-coverage";
 import { invokeLLM } from "./_core/llm";
 import { getStudentProfile, saveAiPlan } from "./db";
 import { formatTextbookEvidence, retrieveTextbookEvidence } from "./textbook-retrieval";
@@ -8,14 +9,17 @@ import { formatTextbookEvidence, retrieveTextbookEvidence } from "./textbook-ret
 const planSchema = z.object({
   title: z.string().min(3).max(100),
   summary: z.string().min(10).max(500),
+  strategy: z.string().min(10).max(700).optional(),
+  coverage: z.object({ requiredLessons: z.number().int().nonnegative(), coveredLessons: z.number().int().nonnegative(), appendedLessons: z.number().int().nonnegative(), unverifiedBacklog: z.array(z.object({ subject: z.string(), count: z.number().int().nonnegative() })) }).optional(),
   durationLabel: z.string().min(2).max(70),
   steps: z.array(z.object({
     day: z.string().min(1).max(30),
     title: z.string().min(2).max(120),
     detail: z.string().min(5).max(350),
     minutes: z.number().int().min(5).max(480),
-    category: z.string().min(2).max(60),
-  })).min(3).max(10),
+    category: z.string().min(2).max(100),
+    subtasks: z.array(z.string().min(2).max(220)).max(5).optional(),
+  })).min(3).max(120),
   habits: z.array(z.object({ title: z.string().min(2).max(120), cue: z.string().min(2).max(160) })).min(1).max(4),
   reviewQuestion: z.string().min(5).max(250),
 });
@@ -44,6 +48,8 @@ export function parseGeneratedPlan(content: string): GeneratedPlan {
 }
 
 function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof getStudentProfile>>>) {
+  const requiredLessons: RequiredLessonCheckpoint[] = [];
+  const unverifiedBacklog: Array<{ subject: string; count: number }> = [];
   const selection = (profile.selection || {}) as Record<string, any>;
   const choices = (selection.teacherChoices || profile.teacherSelections || {}) as Record<string, string>;
   const frontiers = (selection.teacherFrontiers || {}) as Record<string, string>;
@@ -89,6 +95,16 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
         teacherTeachingFrontierId: teacherFrontier,
         schoolClassFrontierId: schoolFrontier,
       });
+      const missingCheckpoints = getMissingLessonCheckpoints(branch.choices, gap.studentPosition, gap.referencePosition);
+      requiredLessons.push(...missingCheckpoints.map(checkpoint => ({
+        subjectId,
+        subjectName: subject?.nameAr || subjectId,
+        branchId: branch.branchId,
+        branchTitle: branch.branchTitle,
+        lessonId: checkpoint.nodeId,
+        lessonTitle: checkpoint.title,
+        estimatedMinutes: Number(reported.estimatedMinutesPerLesson ?? 45),
+      })));
       const referenceLabel = gap.referenceSource === "teacher" ? "المدرس"
         : gap.referenceSource === "school" ? "المدرسة" : "غير متاح";
       const studentLabel = branch.choices.find(choice => choice.nodeId === studentFrontier)?.title
@@ -108,6 +124,7 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
           ? "غير محسوبة لعدم اكتمال البيانات داخل الفرع"
           : gap.gapCount + " نقطة داخل الفرع؛ متقدم عن المرجع: " + (gap.aheadCount ?? 0)),
         "إنجاز SQ3R في الفرع: " + completed + " مكتمل؛ " + underway + " قيد الدراسة",
+        "كل الدروس المطلوبة التي يجب تغطيتها في الخطة داخل هذا الفرع: " + (missingCheckpoints.map(item => item.title).join("، ") || "لا توجد فجوة مؤكدة قابلة للقياس"),
         "نقاط صعبة: " + (hard.join("، ") || "لا توجد بيانات"),
       ].join(" | ");
     }).join("\n");
@@ -119,6 +136,7 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
         ? "؛ نقاط تحتاج تقوية: " + item.weakConcepts.join("، ") : "")
     ).join(" | ");
     const legacyBacklog = profile.backlog[subjectId] ?? (subject && profile.backlog[subject.nameAr]) ?? null;
+    if (legacyBacklog !== null && Number(legacyBacklog) > 0) unverifiedBacklog.push({ subject: subject?.nameAr || subjectId, count: Number(legacyBacklog) });
     const lessonList = branches.map(branch =>
       branch.branchTitle + ": " + branch.choices.map(choice => choice.title).join("، ")
     ).join("؛ ");
@@ -138,13 +156,15 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
     ].join("\n");
   }).join("\n\n");
 
-  return [
+  const context = [
     "اسم الطالب: " + profile.studentName,
     "النظام: " + profile.educationSystem + "؛ الصف: " + profile.gradeYear + "؛ المسار: " + profile.track,
     "المواد ومواضعها: \n" + (subjectContext || "لا توجد مواد مسجلة"),
     "قيم التراكم القديمة (تُعامل كمدخلات غير مؤكدة فقط): " + Object.entries(profile.backlog).map(entry => entry[0] + ": " + entry[1]).join("، "),
     "العائق المعلن: " + (profile.obstacle || "غير محدد"),
+    "إجمالي الدروس المؤكدة المطلوبة في الفجوات المحسوبة: " + requiredLessons.length,
   ].join("\n");
+  return { context, requiredLessons, unverifiedBacklog };
 }
 
 export async function generatePersonalPlan(
@@ -155,13 +175,18 @@ export async function generatePersonalPlan(
 ): Promise<GeneratedPlan> {
   const dailyMinutes = Math.max(20, Math.min(600, Math.trunc(constraints.dailyMinutes ?? 120)));
   const profile = includeStudentProfile ? await getStudentProfile(userId) : null;
+  const learningInventory = profile ? buildLearningContext(profile) : {
+    context: "لم يطلب المستخدم تخصيص الخطة بالملف الدراسي.",
+    requiredLessons: [] as RequiredLessonCheckpoint[],
+    unverifiedBacklog: [] as Array<{ subject: string; count: number }>,
+  };
   const textbookRetrieval = profile
     ? retrieveTextbookEvidence(profile.subjects || [], prompt, 4)
     : { passages: [], coverageNotes: [] };
   const textbookContext = formatTextbookEvidence(textbookRetrieval);
   const context = profile
-    ? buildLearningContext(profile) + "\n\nمصادر نصية من الكتب الرسمية مرتبطة بطلب الخطة:\n" + (textbookContext || "لم يتم استرجاع مقتطف مطابق من كتاب متاح.")
-    : "لم يطلب المستخدم تخصيص الخطة بالملف الدراسي.";
+    ? learningInventory.context + "\n\nمصادر نصية من الكتب الرسمية مرتبطة بطلب الخطة:\n" + (textbookContext || "لم يتم استرجاع مقتطف مطابق من كتاب متاح.")
+    : learningInventory.context;
   const system = [
     "أنت محرك التخطيط الدراسي داخل StudyFlow، ولست مساعد دردشة عام.",
     "حلّل فجوة المنهج المحسوبة تلقائيًا لكل فرع مستقل داخل المادة، وموضع الطالب وموضع التدريس المرجعي داخل الفرع نفسه، وتقدم SQ3R ونتائج التقييم وصعوبة الدروس؛ ثم ابنِ خطة عملية متوازنة.",
@@ -173,14 +198,17 @@ export async function generatePersonalPlan(
     constraints.startDate ? "تاريخ بداية التنفيذ: " + constraints.startDate + "." : "تاريخ البداية يحدده الطالب عند اعتماد الخطة.",
     "احترم سعة اليوم المحددة من الطالب. لا تتجاوزها، ووزع الخطة واقعيًا مع هامش تعويض. إذا نقصت البيانات فاختر بداية تدريجية واذكر الافتراض في الملخص.",
     "لا تعتبر غياب السجل دليلًا على الإنجاز، ولا توبّخ الطالب.",
-    "أخرج كائن JSON فقط بالعربية وبالحقول: title, summary, durationLabel, steps (3-10 عناصر فيها day,title,detail,minutes,category), habits (1-4 عناصر فيها title,cue), reviewQuestion.",
+    "أخرج كائن JSON فقط بالعربية وبالحقول: title, summary, strategy, durationLabel, steps (3-120 عنصرًا فيها day,title,detail,minutes,category,subtasks), habits (1-4 عناصر فيها title,cue), reviewQuestion.",
     "كل خطوة يجب أن تحدد المادة والوحدة/الفرع والدرس وطريقة مذاكرته، لا عنوانًا عامًا.",
+    "قائمة الدروس المطلوبة في بيانات الطالب إلزامية: يجب أن يظهر كل درس منها في خطوة واحدة على الأقل بعنوانه أو باسمه الواضح. لا تدمج دروسًا متعددة في مهمة عامة ولا تحذف أي عنصر من القائمة.",
+    "لكل درس مطلوب، أضف subtasks بثلاث نقاط: مشاهدة/استكمال المحاضرة، الفهم والاسترجاع من الكتاب، ثم حل التدريبات وتصحيح الأخطاء. الحد الأقصى 120 خطوة.",
+    "لا تنشئ دروسًا لأرقام التراكم اليدوي غير المؤكد؛ اعرضها كبيانات تحتاج تأكيدًا منفصلًا.",
   ].join("\n");
   const user = "طلب الطالب أو قيوده الجديدة:\n" + prompt + "\n\nبيانات الملف الدراسي الحالية:\n" + context;
   let response;
   try {
     response = await invokeLLM({
-      maxTokens: 2500,
+      maxTokens: 8000,
       response_format: { type: "json_object" },
       messages: [{ role: "system", content: system }, { role: "user", content: user }],
     });
@@ -188,22 +216,27 @@ export async function generatePersonalPlan(
     const message = error instanceof Error ? error.message : String(error);
     if (!/response_format|json_object|structured output|unsupported|not support/i.test(message)) throw error;
     response = await invokeLLM({
-      maxTokens: 2500,
+      maxTokens: 8000,
       messages: [{ role: "system", content: system + "\nاكتب JSON صحيحًا فقط دون Markdown." }, { role: "user", content: user }],
     });
   }
   const result = response.choices[0] && response.choices[0].message ? response.choices[0].message.content : "";
   const text = contentAsText(result);
   if (!text) throw new Error("لم تصل استجابة من المخطط الذكي. حاول مرة أخرى.");
-  const plan = parseGeneratedPlan(text);
-  const minutesByDay = new Map<string, number>();
-  for (const step of plan.steps) {
-    minutesByDay.set(step.day, (minutesByDay.get(step.day) ?? 0) + step.minutes);
-  }
-  const overloadedDay = [...minutesByDay.entries()].find(([, minutes]) => minutes > dailyMinutes);
-  if (overloadedDay) {
-    throw new Error("الخطة المقترحة تجاوزت حدك اليومي في " + overloadedDay[0] + " (" + overloadedDay[1] + " دقيقة مقابل " + dailyMinutes + "). أعد المحاولة لتوليد توزيع أخف.");
-  }
+  const generatedPlan = parseGeneratedPlan(text);
+  const coverage = ensureRequiredLessonCoverage(generatedPlan.steps, learningInventory.requiredLessons, dailyMinutes);
+  const plan: GeneratedPlan = {
+    ...generatedPlan,
+    steps: coverage.steps as GeneratedPlan["steps"],
+    strategy: generatedPlan.strategy || generatedPlan.summary,
+    coverage: {
+      requiredLessons: learningInventory.requiredLessons.length,
+      coveredLessons: coverage.coveredLessons,
+      appendedLessons: coverage.appendedLessons,
+      unverifiedBacklog: learningInventory.unverifiedBacklog,
+    },
+  };
+  if (plan.steps.length > 120) throw new Error("حجم الفجوة أكبر من سعة الخطة الواحدة. قسّمها حسب المادة أو الفرع حتى لا تُحذف أي دروس.");
   await saveAiPlan(userId, { prompt, title: plan.title, planJson: JSON.stringify(plan) });
   return plan;
 }
