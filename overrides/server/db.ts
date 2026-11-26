@@ -983,11 +983,17 @@ export async function syncDailyPlanGoalTree(
         : step.priority === "low" ? "low" as const : "medium" as const;
       const stage = pendingStages[index];
       const linkedExistingTask = step.existingTask
-        ? (await tx.select({ id: tasks.id, status: tasks.status })
+        ? (await tx.select({ id: tasks.id, status: tasks.status, notes: tasks.notes })
             .from(tasks)
             .where(and(eq(tasks.id, step.existingTask.id), eq(tasks.userId, userId)))
             .limit(1))[0]
         : undefined;
+      if (linkedExistingTask && step.studyMethod && !linkedExistingTask.notes?.includes("طريقة المذاكرة:")) {
+        const methodNotes = formatStudyMethodNotes(step.studyMethod);
+        await tx.update(tasks).set({
+          notes: [linkedExistingTask.notes, methodNotes].filter(Boolean).join("\n\n"),
+        }).where(and(eq(tasks.id, linkedExistingTask.id), eq(tasks.userId, userId)));
+      }
 
       if (stage) {
         await tx.update(goals).set({
