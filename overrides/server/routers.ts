@@ -95,7 +95,7 @@ import type { InvokeParams } from "./_core/llm";
 import { formatTextbookEvidence, retrieveTextbookEvidence } from "./textbook-retrieval";
 import { createReminderCron, getReminderPreferences, listReminderNotifications, markReminderRead, saveReminderPreferences, saveReminderSchedule } from "./reminders";
 import { getTeacherCourseFactsWithRefresh } from "./teacher-course-research";
-import { STUDENT_LESSON_STATES, isStudentLessonState } from "@shared/sie-lesson-state";
+import { getEffectiveStudentLessonState, summarizeStudentLessonStates, STUDENT_LESSON_STATES, isStudentLessonState } from "@shared/sie-lesson-state";
 import { getDueTeacherClassFollowups, buildTeacherClassFollowupKey, type TeacherClassFollowupRecord } from "./teacherClassFollowups";
 
 
@@ -2545,12 +2545,43 @@ export const appRouter = router({
           schoolClassFrontierId: (selection.courseModes?.[subjectId] ?? record.courseMode) === "center" ? record.schoolClassFrontierId : "__UNKNOWN__",
         })];
       }));
+      const lessonStateByBranch = Object.fromEntries(activeSubjectIds.map(subjectId => {
+        const subjectRecord = courseProgress[subjectId] ?? {};
+        const branchRecords = (subjectRecord.branches ?? {}) as Record<string, Record<string, any>>;
+        const branches = getSIECheckpointProgressBranches(subjectId);
+        const summaries = Object.fromEntries(branches.map(branch => {
+          const saved = branchRecords[branch.branchId] ?? {};
+          const gap = gapByBranch[subjectId]?.[branch.branchId];
+          const frontier = gap?.studentFrontierId ?? "__UNKNOWN__";
+          const lessonStates = (saved.lessonStates ?? {}) as Record<string, { state?: unknown }>;
+          const states = branch.choices.map(choice => getEffectiveStudentLessonState({
+            choices: branch.choices,
+            nodeId: choice.nodeId,
+            studentFrontierId: frontier,
+            lessonStateModelVersion: Number(saved.lessonStateModelVersion ?? 0),
+            saved: lessonStates[choice.nodeId] as { state?: unknown } | undefined,
+          }));
+          const referencePosition = typeof gap?.referencePosition === "number" ? gap.referencePosition : null;
+          const teacherCoveredStates = referencePosition === null ? [] : states.slice(0, referencePosition);
+          return [branch.branchId, {
+            ...summarizeStudentLessonStates(states),
+            byNode: Object.fromEntries(branch.choices.map((choice, index) => [choice.nodeId, states[index]])),
+            teacherCoveredCount: referencePosition,
+            teacherCoveredNotStudiedCount: teacherCoveredStates.filter(state => state === "not_watched" || state === "watched_only").length,
+            teacherCoveredNeedsReviewCount: teacherCoveredStates.filter(state => state === "needs_review").length,
+            teacherCoveredStudiedCount: teacherCoveredStates.filter(state => state === "studied").length,
+            lessonStateModelVersion: Number(saved.lessonStateModelVersion ?? 0),
+          }];
+        }));
+        return [subjectId, summaries];
+      }));
       return {
         backlog: profile.backlog,
         obstacle: profile.obstacle,
         courseProgress,
         gapBySubject,
         gapByBranch,
+        lessonStateByBranch,
         activeExternalSession: selection.learningExternalSession ?? null,
         sq3rProgress: selection.sq3rProgress ?? selection.subjectLessonProgress ?? {},
         memoryUpdatedAt: selection.assistantMemoryUpdatedAt ?? null,
