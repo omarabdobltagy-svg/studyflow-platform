@@ -648,3 +648,48 @@ body[data-studyflow-sections-open="true"] .sf-hub-root {
   .sf-planner-flow-scene { min-height: 140px; }
   .sf-execution-task { padding: 13px; }
 }
+
+
+/* Per-lesson learning states: viewing progress is distinct from learning progress. */
+.sf-lesson-state-panel {
+  box-shadow: 0 14px 42px -38px rgba(201,237,98,.28);
+}
+.sf-lesson-state-row {
+  position: relative;
+  transition: background-color .2s ease, border-color .2s ease, box-shadow .2s ease;
+}
+.sf-lesson-state-row.is-frontier {
+  background: color-mix(in srgb, var(--primary) 5%, var(--card));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 20%, transparent),
+              inset 0 0 26px -22px color-mix(in srgb, var(--primary) 50%, transparent);
+}
+.sf-lesson-state-row.is-frontier::before {
+  position: absolute;
+  inset-block: 9px;
+  inset-inline-start: 0;
+  width: 3px;
+  border-radius: 4px;
+  background: var(--primary);
+  content: "";
+  box-shadow: 0 0 14px color-mix(in srgb, var(--primary) 50%, transparent);
+}
+.sf-lesson-state-row.is-missed {
+  background: color-mix(in srgb, var(--muted) 22%, transparent);
+}
+.sf-lesson-state-marker {
+  transition: box-shadow .25s ease, transform .25s ease;
+}
+.sf-lesson-state-row.is-frontier .sf-lesson-state-marker {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 8%, transparent),
+              0 0 18px -8px color-mix(in srgb, var(--primary) 75%, transparent);
+  transform: translateY(-1px);
+}
+.sf-lesson-frontier-badge {
+  box-shadow: 0 0 16px -10px color-mix(in srgb, var(--primary) 70%, transparent);
+}
+.sf-lesson-state-row select {
+  color-scheme: dark;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sf-lesson-state-row, .sf-lesson-state-marker { transition: none !important; }
+}
