@@ -3,6 +3,7 @@ import { getSIECheckpointProgressBranches, getSIESubject, getSIETeacher, normali
 import { calculateLearningGap } from "@shared/sie-learning-progress";
 import { invokeLLM, invokeNvidiaLLM } from "./_core/llm";
 import { isPrimaryProviderFallbackEligible } from "./_core/llmFallback";
+import { updateAIActivity } from "./aiActivity";
 import { getStudentProfile, saveAiPlan } from "./db";
 import { formatTextbookEvidence, getCurriculumBranchPriorityGuidance, orderPlanStepsByCurriculumDependencies, retrieveTextbookEvidence } from "./textbook-retrieval";
 import { buildExamBlueprintContext, SECOND_YEAR_BAC_EXAM_WINDOW_2026_2027 } from "./exam-blueprints";
@@ -38,6 +39,7 @@ function updatePlanGenerationProgress(
   stage: PlanGenerationStage,
   status: PlanGenerationProgress["status"] = stage === "complete" ? "complete" : "running",
   detail?: string,
+  activityId?: string,
 ): void {
   const stageIndex = PLAN_GENERATION_STAGES.indexOf(stage);
   const completedStages = status === "complete"
@@ -51,6 +53,19 @@ function updatePlanGenerationProgress(
     updatedAt: Date.now(),
     expiresAt: Date.now() + 2 * 60 * 1000,
   });
+
+  if (activityId) {
+    const visibleStages: Record<PlanGenerationStage, { title: string; detail: string }> = {
+      profile: { title: "قراءة ملفك الدراسي", detail: "يجمع مواضع التقدم والمهام وظروف الدراسة الحالية." },
+      curriculum: { title: "مراجعة المنهج", detail: "يربط الدروس المتاحة بفهرس المنهج وموضعك وموضع المدرس." },
+      model: { title: "تحليل الأولويات وبناء المسودة", detail: "يرسل السياق المجمّع إلى نموذج الذكاء الاصطناعي لتكوين الخطة." },
+      validation: { title: "مراجعة المسودة", detail: "يتحقق من الدروس المكتملة، وترتيب المتطلبات، وتكرار المهام." },
+      saving: { title: "حفظ المسودة", detail: "يحفظ الخطة قبل عرضها أو مزامنتها مع المهام." },
+      complete: { title: "تجهيز الخطة", detail: "اكتمل تكوين المسودة وأصبحت جاهزة للخطوة التالية." },
+    };
+    const visible = visibleStages[stage];
+    updateAIActivity(userId, activityId, visible.title, detail || visible.detail);
+  }
 }
 
 export function getPlanGenerationProgress(userId: number): PlanGenerationProgress | null {
@@ -1170,6 +1185,7 @@ export async function generatePersonalPlan(
     pace?: "intensive" | "balanced" | "relaxed";
     paceLevel?: 1 | 2 | 3;
     deadline?: string | null;
+    activityId?: string;
   } = {}
 ): Promise<GeneratedPlan> {
   const dailyMinutes = Math.max(20, Math.min(600, Math.trunc(constraints.dailyMinutes ?? 120)));
@@ -1204,7 +1220,7 @@ export async function generatePersonalPlan(
   };
   const paceLevelLabel = paceLevelLabels[selectedPace][paceLevel - 1];
   const paceLevelInstruction = paceLevelGuidance[selectedPace][paceLevel - 1];
-  updatePlanGenerationProgress(userId, "profile");
+  updatePlanGenerationProgress(userId, "profile", undefined, undefined, constraints.activityId);
   const additionalContext = String(constraints.context ?? "").trim().slice(0, 3_000);
   const loadedProfile = includeStudentProfile ? await getStudentProfile(userId) : null;
   const partOneSubjectIds = new Set(["ARB_G2_BAC", "ENG1_G2_BAC", "HIS_G2_BAC", "PROG_AI_G2_BAC"]);
@@ -1214,7 +1230,7 @@ export async function generatePersonalPlan(
         subjectIds: (loadedProfile.subjectIds || []).filter(subjectId => partOneSubjectIds.has(subjectId)),
       }
     : null;
-  updatePlanGenerationProgress(userId, "curriculum");
+  updatePlanGenerationProgress(userId, "curriculum", undefined, undefined, constraints.activityId);
   const curriculumTitles = profile
     ? (profile.subjectIds || []).flatMap(subjectId =>
         getPlanningBranches(subjectId).flatMap(branch =>
@@ -1307,7 +1323,7 @@ export async function generatePersonalPlan(
     "\nبيانات الملف الدراسي الحالية:",
     context,
   ].join("\n");
-  updatePlanGenerationProgress(userId, "model");
+  updatePlanGenerationProgress(userId, "model", undefined, undefined, constraints.activityId);
   let response: Awaited<ReturnType<typeof invokeLLM>>;
   const invokeCompact = async (
     provider: typeof invokeLLM,
@@ -1414,7 +1430,7 @@ export async function generatePersonalPlan(
   if (providerUsed === "NVIDIA") {
     plan = parseProviderResponse(response, "NVIDIA");
   }
-  updatePlanGenerationProgress(userId, "validation");
+  updatePlanGenerationProgress(userId, "validation", undefined, undefined, constraints.activityId);
   if (!plan) {
     throw new Error("تعذّر إنشاء خطة دراسية صالحة. لم يتم حفظ أي بيانات ناقصة.");
   }
@@ -1518,8 +1534,8 @@ export async function generatePersonalPlan(
       summary: (plan.summary + "\n\n" + "هذه خطة للفترة القادمة فقط. ستُعاد مواءمتها عند تغير المهام أو التقدم أو مواعيد الحصص.") .slice(0, 1_500),
     };
   }
-  updatePlanGenerationProgress(userId, "saving");
+  updatePlanGenerationProgress(userId, "saving", undefined, undefined, constraints.activityId);
   await saveAiPlan(userId, { prompt, title: plan.title, planJson: JSON.stringify(plan) });
-  updatePlanGenerationProgress(userId, "complete");
+  updatePlanGenerationProgress(userId, "complete", undefined, undefined, constraints.activityId);
   return plan;
 }
