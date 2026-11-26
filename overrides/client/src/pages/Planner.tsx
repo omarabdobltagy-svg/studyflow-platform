@@ -1,4 +1,6 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import ThreeAmbientScene from "@/components/ThreeAmbientScene";
+import { motion } from "framer-motion";
 import PlanExportActions from "@/components/PlanExportActions";
 import QueryErrorNotice from "@/components/QueryErrorNotice";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -11,7 +13,7 @@ import { BrainCircuit, CheckCircle2, Clock3, Lightbulb, ListTree, Loader2, Spark
 import { FormEvent, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-type PlanView = { title: string; summary: string; durationLabel: string; steps: { day: string; title: string; detail: string; minutes: number; category: string }[]; habits: { title: string; cue: string }[]; reviewQuestion: string };
+type PlanView = { title: string; summary: string; strategy?: string; durationLabel: string; coverage?: { requiredLessons: number; coveredLessons: number; appendedLessons: number; unverifiedBacklog: { subject: string; count: number }[] }; steps: { day: string; title: string; detail: string; minutes: number; category: string; subtasks?: string[] }[]; habits: { title: string; cue: string }[]; reviewQuestion: string };
 const todayCairo = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
 const starters = ["أريد إنهاء فصلين من مادة صعبة خلال هذا الأسبوع، لدي ساعة واحدة مساءً.", "لدي تراكم محاضرات وأشعر بقلة الطاقة، اصنع لي خطة عودة تدريجية.", "لدي اختبار بعد 14 يومًا وأريد خطة مراجعة واقعية دون ضغط مفرط."];
 
@@ -36,7 +38,26 @@ export default function Planner() {
   return <DashboardLayout title="المخطط الذكي" description="اكتب ما تريد إنجازه، وسنحوّله إلى مسار واقعي يراعي ملفك الدراسي ووقتك وطاقة يومك." action={<div className="hidden items-center gap-2 rounded-2xl bg-secondary px-3 py-2 text-xs font-semibold text-primary sm:flex"><BrainCircuit className="size-4" />تخطيط متكيف</div>}>
     {history.isError && <QueryErrorNotice onRetry={() => void history.refetch()} label="تعذّر تحميل خططك المحفوظة." />}
     {profile.isError && <QueryErrorNotice onRetry={() => void profile.refetch()} label="تعذّر تحميل ملفك الدراسي؛ يمكنك إنشاء خطة عامة، لكن لن تُخصّص حتى يعود الملف." />}
-    <section className="sf-feature-hero relative mb-6 overflow-hidden rounded-[1.55rem] p-6 text-primary-foreground shadow-2xl sm:p-8"><div className="onboarding-orb onboarding-orb-one" /><div className="onboarding-orb onboarding-orb-two" /><div className="relative grid gap-6 lg:grid-cols-[1.1fr_.9fr]"><div><p className="eyebrow text-primary-foreground/65">من الوصف إلى مسار عملي</p><h2 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">خطة تناسبك أنت، لا نسخة مثالية من طالب آخر.</h2><p className="mt-3 max-w-xl text-sm leading-7 text-primary-foreground/72">يقرأ المخطط ملفك الدراسي والتراكم والعائق الذي كتبته، ثم يقترح بداية صغيرة يمكن الاستمرار عليها.</p><div className="mt-5 flex flex-wrap gap-2">{["تخصيص بالملف الدراسي", "عودة من التراكم", "موافقة قبل الإنشاء"].map(item => <span key={item} className="rounded-full border border-white/12 bg-white/8 px-3 py-1.5 text-xs text-primary-foreground/75">{item}</span>)}</div></div><div className="rounded-2xl border border-white/12 bg-white/8 p-4 backdrop-blur-sm"><div className="flex items-center gap-3"><span className="flex size-10 items-center justify-center rounded-xl bg-white/12"><Sparkles className="size-5 text-violet-200" /></span><div><p className="font-semibold">مبدأ التخطيط</p><p className="mt-1 text-xs leading-5 text-primary-foreground/65">جلسة تبدأ بها اليوم أفضل من خطة لا تفتحها.</p></div></div>{profile.data && <div className="mt-4 flex items-center gap-2 rounded-xl bg-black/10 p-3 text-xs text-primary-foreground/75"><UserRound className="size-4" />ملف {profile.data.studentName} · {profile.data.track}</div>}</div></div></section>
+    <motion.section className="sf-feature-hero sf-planner-hero relative mb-6 overflow-hidden rounded-[1.55rem] p-6 text-primary-foreground shadow-2xl sm:p-8"
+      initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.55, ease: "easeOut" }}>
+      <div className="sf-planner-hero-grid">
+        <div className="sf-planner-hero-copy">
+          <p className="eyebrow text-primary-foreground/65">STUDYFLOW / INTELLIGENT PLANNING</p>
+          <h2 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">كل درس معروف. وكل خطوة لها موعد وسبب.</h2>
+          <p className="mt-3 max-w-xl text-sm leading-7 text-primary-foreground/75">لا نختزل التراكم في مهمتين عامتين. نقرأ الفجوات المؤكدة داخل كل فرع، ثم نحول كل درس مطلوب إلى مسار مذاكرة قابل للتنفيذ.</p>
+          <div className="sf-planner-proof-row mt-5"><span>تغطية الدروس المطلوبة</span><span>ترتيب حسب الأولوية</span><span>توزيع حسب وقتك</span></div>
+          {profile.data && <p className="mt-5 text-xs text-primary-foreground/70">مساحة {profile.data.studentName} · {profile.data.track}</p>}
+        </div>
+        <div className="sf-planner-scene" aria-hidden="true">
+          <div className="sf-planner-scene-glow" />
+          <ThreeAmbientScene />
+          <span className="sf-planner-orbit-label sf-planner-orbit-label-one">LEARN</span>
+          <span className="sf-planner-orbit-label sf-planner-orbit-label-two">PLAN</span>
+        </div>
+      </div>
+      <div className="sf-planner-hero-footer"><span><span className="sf-planner-live-dot" />محرك التخطيط نشط</span><span>الموافقة تسبق إنشاء المهام</span></div>
+    </motion.section>
     {profile.data && <section className="app-card mb-6 p-5 sm:p-6">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><p className="eyebrow">قراءة الملف تلقائيًا</p><h2 className="mt-1 font-bold">المواد والمدرسون ونقطة التقدم</h2><p className="mt-1 text-xs text-muted-foreground">يستخدم المخطط ما هو مسجل بالفعل بدل مطالبتك بإدخاله مرة أخرى.</p></div><span className="rounded-xl bg-secondary px-3 py-2 text-xs font-semibold text-primary">{profile.data.subjects.length} مواد</span></div>
       <div className="grid gap-3 md:grid-cols-2">
@@ -68,4 +89,67 @@ export default function Planner() {
 
 function PlanLoading() { return <section className="enter app-card mb-6 p-5" role="status" aria-live="polite"><div className="flex items-center gap-3"><span className="flex size-10 items-center justify-center rounded-xl bg-secondary text-primary"><Sparkles className="size-5 animate-pulse" /></span><div><p className="font-bold">نرتب الخطة على مقاسك...</p><p className="mt-1 text-xs text-muted-foreground">نوازن المواد والتراكم ووقت البداية.</p></div></div><div className="mt-5 space-y-3"><div className="loading-shimmer h-14 rounded-2xl" /><div className="loading-shimmer h-14 rounded-2xl" /><div className="loading-shimmer h-14 rounded-2xl" /></div></section>; }
 function Feature({ icon, title, copy }: { icon: React.ReactNode; title: string; copy: string }) { return <article className="app-card p-5 transition-transform duration-200 hover:-translate-y-1"><span className="flex size-10 items-center justify-center rounded-2xl bg-secondary text-primary">{icon}</span><h2 className="mt-4 font-bold">{title}</h2><p className="mt-1.5 text-sm leading-6 text-muted-foreground">{copy}</p></article>; }
-function PlanCard({ plan, title, onApprove, isApproving, isApproved, approvalResult, studentName }: { plan: PlanView; title: string; onApprove?: () => void; isApproving?: boolean; isApproved?: boolean; approvalResult?: { stageCount: number; taskCount: number } | null; studentName?: string }) { return <section className="enter app-card overflow-hidden"><div className="border-b border-border/65 bg-gradient-to-l from-secondary/65 to-card p-5 sm:p-6"><div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div><p className="eyebrow">{title}</p><h2 className="mt-1 text-xl font-bold">{plan.title}</h2><p className="mt-2 max-w-2xl text-sm leading-7 text-muted-foreground">{plan.summary}</p>{studentName && <p className="mt-3 text-xs text-primary">مخصصة لـ {studentName}</p>}</div><div className="flex flex-wrap items-center gap-2"><span className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-card px-3 py-2 text-xs font-semibold text-primary shadow-sm"><Clock3 className="size-3.5" />{plan.durationLabel}</span><PlanExportActions plan={plan} studentName={studentName} /></div></div>{onApprove && <div className="no-print mt-5 flex flex-col gap-3 rounded-2xl border border-primary/15 bg-card/80 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-bold text-primary">جاهزة للتحويل إلى أهدافك؟</p><p className="mt-1 text-xs leading-5 text-muted-foreground">ستراجع الأعداد والعناوين أولًا، ثم توافق صراحة قبل الإنشاء.</p></div><Button type="button" disabled={isApproving || isApproved} onClick={onApprove} className="pressable shrink-0 rounded-xl bg-primary">{isApproved ? <><CheckCircle2 className="size-4" />تم اعتماد الخطة</> : isApproving ? <><Loader2 className="size-4 animate-spin" />يجري الاعتماد...</> : <><CheckCircle2 className="size-4" />مراجعة واعتماد</>}</Button></div>}</div><div className="grid gap-6 p-5 lg:grid-cols-[1.3fr_.7fr] sm:p-6"><div><h3 className="mb-4 flex items-center gap-2 font-bold"><ListTree className="size-4 text-primary" />مسار التنفيذ</h3><div className="space-y-3">{plan.steps.map((step, index) => <div key={`${step.day}-${index}`} className="enter relative flex gap-3 rounded-2xl border border-border/70 bg-muted/20 p-4" style={{ animationDelay: `${index * 45}ms` }}><span className="num flex size-8 shrink-0 items-center justify-center rounded-xl bg-primary text-xs font-semibold text-primary-foreground">{index + 1}</span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className="text-xs font-semibold text-primary">{step.day}</span><span className="text-xs text-muted-foreground">·</span><span className="text-xs text-muted-foreground">{step.category}</span><span className="mr-auto inline-flex items-center gap-1 text-[11px] text-muted-foreground"><Clock3 className="size-3" />{step.minutes} د</span></div><h4 className="mt-1.5 font-semibold">{step.title}</h4><p className="mt-1 text-sm leading-6 text-muted-foreground">{step.detail}</p></div></div>)}</div></div><aside><div className="rounded-2xl bg-primary p-5 text-primary-foreground"><Lightbulb className="size-5 text-violet-200" /><h3 className="mt-3 font-bold">عادات داعمة</h3><div className="mt-4 space-y-3">{plan.habits.map((habit, index) => <div key={`${habit.title}-${index}`} className="rounded-xl bg-white/8 p-3"><p className="text-sm font-semibold">{habit.title}</p><p className="mt-1 text-xs leading-5 text-primary-foreground/65">عند: {habit.cue}</p></div>)}</div></div><div className="mt-4 rounded-2xl border border-border bg-muted/35 p-4"><div className="flex items-center gap-2 font-semibold"><CheckCircle2 className="size-4 text-emerald-600" />سؤال المراجعة</div><p className="mt-2 text-sm leading-6 text-muted-foreground">{plan.reviewQuestion}</p></div></aside></div></section>; }
+function PlanCard({ plan, title, onApprove, isApproving, isApproved, approvalResult, studentName }: {
+  plan: PlanView; title: string; onApprove?: () => void; isApproving?: boolean; isApproved?: boolean;
+  approvalResult?: { stageCount: number; taskCount: number } | null; studentName?: string;
+}) {
+  const coverage = plan.coverage;
+  return (
+    <motion.section className="sf-planner-result enter app-card overflow-hidden"
+      initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.45, ease: "easeOut" }}>
+      <div className="sf-planner-result-heading">
+        <div className="min-w-0"><p className="eyebrow">{title}</p><h2 className="mt-1 text-xl font-bold">{plan.title}</h2>
+          <p className="mt-2 max-w-3xl text-sm leading-7 text-muted-foreground">{plan.summary}</p>
+          {studentName && <p className="mt-2 text-xs text-primary">مخصصة لـ {studentName}</p>}
+        </div>
+        <div className="flex flex-wrap items-center gap-2"><span className="sf-planner-duration"><Clock3 className="size-3.5" />{plan.durationLabel}</span><PlanExportActions plan={plan} studentName={studentName} /></div>
+      </div>
+      <div className="sf-planner-analysis-grid">
+        <div className="sf-planner-analysis-main">
+          <div className="sf-planner-analysis-title"><div><p className="eyebrow">COVERAGE CHECK</p><h3>تغطية التراكم المؤكد</h3></div>
+            <span className="sf-planner-coverage-total">{coverage?.coveredLessons ?? plan.steps.length}<small>عنصر</small></span>
+          </div>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            {coverage?.requiredLessons ? `تم فحص ${coverage.requiredLessons} درسًا مطلوبًا داخل فروع المنهج، وإضافة ${coverage.appendedLessons} درسًا لم تتضمنه استجابة التخطيط الأولى.` : "لا توجد فجوة منهجية قابلة للقياس حاليًا؛ لا يتم افتراض تراكم من بيانات غير مكتملة."}
+          </p>
+          {coverage?.unverifiedBacklog?.length ? <div className="sf-planner-unverified-note"><b>تراكم يدوي يحتاج تأكيدًا</b>
+            <span>{coverage.unverifiedBacklog.map(item => `${item.subject}: ${item.count}`).join(" · ")}</span>
+            <small>لم نخلطه مع فجوات المنهج المؤكدة ولم نخترع أسماء دروس له.</small></div> : null}
+          {plan.strategy && <div className="sf-planner-strategy"><b>لماذا هذا الترتيب؟</b><p>{plan.strategy}</p></div>}
+        </div>
+        <aside className="sf-planner-principles"><span className="sf-planner-principle-icon"><Lightbulb className="size-5" /></span>
+          <h3>طريقة تنفيذ الدرس</h3><p>شرح أو محاضرة، ثم فهم واسترجاع، ثم حل وتصحيح. لا تعتبر المهمة منتهية بمجرد مشاهدة الفيديو.</p>
+        </aside>
+      </div>
+      <div className="sf-planner-path">
+        <div className="sf-planner-path-heading"><div><p className="eyebrow">EXECUTION MAP</p><h3>مسار التنفيذ</h3></div><span>{plan.steps.length} مهام تنفيذية</span></div>
+        <div className="sf-planner-step-list">
+          {plan.steps.map((step, index) => <motion.article key={`${step.day}-${index}-${step.title}`} className="sf-planner-step"
+            initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.32, delay: Math.min(index * 0.025, 0.45) }}>
+            <span className="sf-planner-step-index">{String(index + 1).padStart(2, "0")}</span>
+            <div className="min-w-0 flex-1">
+              <div className="sf-planner-step-meta"><span>{step.day}</span><span>{step.category}</span><span className="sf-planner-step-time"><Clock3 className="size-3" />{step.minutes} دقيقة</span></div>
+              <h4>{step.title}</h4><p>{step.detail}</p>
+              {step.subtasks?.length ? <ul className="sf-planner-subtasks">{step.subtasks.map((subtask, subtaskIndex) => <li key={`${index}-${subtaskIndex}`}>{subtask}</li>)}</ul> : null}
+            </div>
+          </motion.article>)}
+        </div>
+      </div>
+      <div className="sf-planner-support-grid">
+        <div className="sf-planner-habits"><Lightbulb className="size-5" /><h3>عادات داعمة</h3>
+          {plan.habits.map((habit, index) => <div key={`${habit.title}-${index}`}><b>{habit.title}</b><span>{habit.cue}</span></div>)}
+        </div>
+        <div className="sf-planner-review"><CheckCircle2 className="size-5" /><h3>سؤال المراجعة</h3><p>{plan.reviewQuestion}</p></div>
+      </div>
+      {onApprove && <div className="no-print sf-planner-approval">
+        <div><b>جاهزة للتحويل إلى أهدافك ومهامك؟</b><p>ستُنشأ {plan.steps.length} مهمة مرتبطة بمرحلة واضحة. راجعها أولًا؛ لن يتغير شيء قبل موافقتك.</p></div>
+        <Button type="button" disabled={isApproving || isApproved} onClick={onApprove} className="pressable shrink-0 rounded-xl bg-primary">
+          {isApproved ? <><CheckCircle2 className="size-4" />تم اعتماد الخطة</> : isApproving ? <><Loader2 className="size-4 animate-spin" />يجري الاعتماد...</> : <><CheckCircle2 className="size-4" />مراجعة واعتماد</>}
+        </Button>
+      </div>}
+      {isApproved && approvalResult && <p className="sf-planner-approved-message"><CheckCircle2 className="size-4" />تم إنشاء {approvalResult.stageCount} مراحل و{approvalResult.taskCount} مهام.</p>}
+    </motion.section>
+  );
+}

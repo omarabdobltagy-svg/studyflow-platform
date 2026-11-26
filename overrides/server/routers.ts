@@ -1321,8 +1321,9 @@ export const appRouter = router({
             title: z.string().trim().min(2).max(120),
             detail: z.string().trim().max(350),
             minutes: z.number().int().min(5).max(480),
-            category: z.string().trim().min(2).max(60),
-          })).min(1).max(10),
+            category: z.string().trim().min(2).max(100),
+            subtasks: z.array(z.string().trim().min(2).max(220)).max(5).optional(),
+          })).min(1).max(120),
         }),
         schedule: z.object({
           startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),

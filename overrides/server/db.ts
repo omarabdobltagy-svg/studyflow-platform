@@ -530,6 +530,7 @@ export type ApprovedPlanStep = {
   detail: string;
   minutes: number;
   category: string;
+  subtasks?: string[];
 };
 
 export function normalizeApprovedPlanSteps(steps: ApprovedPlanStep[]) {
@@ -541,6 +542,7 @@ export function normalizeApprovedPlanSteps(steps: ApprovedPlanStep[]) {
       detail: step.detail.trim(),
       minutes: Math.min(480, Math.max(5, Math.round(step.minutes || 25))),
       category: step.category.trim() || "دراسة",
+      subtasks: Array.isArray(step.subtasks) ? step.subtasks.map(item => item.trim()).filter(Boolean).slice(0, 5) : [],
     }))
     .filter(step => step.title.length > 0);
 }
@@ -607,7 +609,7 @@ export async function approvePlanAsGoalTree(
         userId,
         goalId: stageGoalId,
         title: step.title,
-        notes: step.detail || `جلسة اليوم ${step.day} من خطة «${plan.title.trim()}».`,
+        notes: [step.detail || `جلسة اليوم ${step.day} من خطة «${plan.title.trim()}».`, ...(step.subtasks || []).map((item, subtaskIndex) => `${subtaskIndex + 1}. ${item}`)].join("\n"),
         category: step.category,
         priority: "medium",
         estimatedMinutes: step.minutes,
