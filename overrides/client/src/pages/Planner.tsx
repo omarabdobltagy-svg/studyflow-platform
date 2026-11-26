@@ -14,6 +14,7 @@ import {
   ArrowUp,
   ArrowUpRight,
   BrainCircuit,
+  CalendarClock,
   CheckCircle2,
   MessageCircle,
   Send,
@@ -24,7 +25,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 type PlanningMode = "smart" | "backlog" | "teacher_sync";
@@ -43,12 +44,13 @@ type PlanStep = {
   studyMethod?: { stages: Array<{ title: string; instruction: string; reason: string; optional?: boolean }>; completionCriteria: string; teacherPolicyNote?: string };
   minutes: number;
   category: string;
+  phaseId?: "backlog" | "teacher_sync" | "steady";
   priority?: "critical" | "high" | "medium" | "low";
   priorityScore?: number;
   priorityReason?: string;
   priorityEvidenceConfidence?: "low" | "medium" | "high";
   curriculumNodeIds?: string[];
-  existingTask?: { id: number; title: string; status: "todo" | "done"; confidence: "exact" | "strong" };
+  existingTask?: { id: number; title: string; status: "todo" | "done"; confidence: "exact" | "strong"; dueAt?: string | null };
   resourceRecommendation?: { title: string; url: string; teacherName?: string; reason: string };
   difficulty?: "easy" | "medium" | "hard" | "unknown";
   lessonSize?: "small" | "medium" | "large" | "unknown";
@@ -82,9 +84,11 @@ type PlanQuality = {
     maxSessionMinutes: number;
   };
 };
+type ExecutionStrategyPhase = { id: "backlog" | "teacher_sync" | "steady"; title: string; purpose: string; actions: string[]; completionCriteria: string };
 type PlanView = {
   title: string;
   summary: string;
+  executionStrategy?: { objective: string; rationale: string; phases: ExecutionStrategyPhase[] };
   durationLabel: string;
   steps: PlanStep[];
   habits: { title: string; cue: string }[];
@@ -105,6 +109,18 @@ const planningModeOptions: Array<{ value: PlanningMode; title: string; descripti
   { value: "backlog", title: "المتراكم أولًا", description: "ركّز على المهام المفتوحة والفجوات المؤكدة قبل إضافة الجديد.", marker: "تركيز" },
   { value: "teacher_sync", title: "مواكبة المدرس", description: "حضّر للموضوع القادم قبل موعد الحصة وحافظ على متابعة الجديد.", marker: "استمرارية" },
 ];
+const PlannerFlowScene = lazy(() => import("@/components/PlannerFlowScene"));
+
+function DeferredPlannerFlowScene() {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setReady(true), 450);
+    return () => window.clearTimeout(timer);
+  }, []);
+  const fallback = <div className="sf-planner-flow-placeholder" aria-hidden="true"><span /><span /><span /></div>;
+  return ready ? <Suspense fallback={fallback}><PlannerFlowScene /></Suspense> : fallback;
+}
+
 function parseSavedPlan(record: { planJson: string }): PlanView | null {
   try {
     const saved = JSON.parse(record.planJson) as Partial<PlanView>;
