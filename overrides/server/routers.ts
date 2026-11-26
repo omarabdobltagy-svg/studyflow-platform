@@ -1413,6 +1413,13 @@ export const appRouter = router({
         context: z.string().trim().max(8_000).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        const activityId = startAIActivity(ctx.user.id, {
+          kind: "assistant",
+          title: "المساعد الدراسي",
+          stage: "تجميع سياقك الدراسي",
+          detail: "يجمع ملفك ومواضع التقدم والمهام والمواعيد المسجلة.",
+        });
+        try {
         const [profile, taskRows, goalRows, bookRows, routineRows, calendarRows, recentActivity] = await Promise.all([
           getStudentProfile(ctx.user.id),
           listTasks(ctx.user.id),
@@ -1422,6 +1429,7 @@ export const appRouter = router({
           listCalendarEvents(ctx.user.id, "Africa/Cairo"),
           listRecentStudentActivityEvents(ctx.user.id, 30),
         ]);
+        updateAIActivity(ctx.user.id, activityId, "ربط التقدم بالمنهج", "يراجع موضعك وموضع المدرس والفجوات المسجلة في كل فرع.");
         const selection = (profile?.selection ?? {}) as Record<string, unknown>;
         const personalMemory = buildStudentMemory(String(selection.assistantMemory ?? ""), input.memory, input.messages);
         const firstPartBranches = (subjectId: string) => {
@@ -1533,6 +1541,7 @@ export const appRouter = router({
             "حالة متابعة الطالب: " + (record.status || "غير محددة"),
           ].join(" | ");
         }).join("\\n");
+        updateAIActivity(ctx.user.id, activityId, "البحث في فهرس المنهج", "يبحث عن مقاطع وبيانات مرتبطة بسؤالك في المصادر التعليمية المتاحة داخل المنصة.");
         const studentQuestion = input.messages
           .slice(-6)
           .filter(message => message.role === "user")
@@ -1541,6 +1550,14 @@ export const appRouter = router({
           .slice(-2_400);
         const textbookRetrieval = retrieveTextbookEvidence(profile?.subjects ?? [], studentQuestion, 5);
         const textbookEvidenceContext = formatTextbookEvidence(textbookRetrieval);
+        updateAIActivity(
+          ctx.user.id,
+          activityId,
+          "تجهيز السياق للنموذج",
+          textbookRetrieval.passages.length
+            ? "استرجع " + textbookRetrieval.passages.length + " مقطعًا من المصادر المتاحة، ويجهزها مع سياقك الدراسي."
+            : "لم يجد مقطعًا مطابقًا في النصوص المفهرسة؛ سيعتمد على البيانات المتاحة دون ادعاء قراءة نص غير مسترجع.",
+        );
         const appContext = [
           `المهام غير المكتملة: ${taskRows.filter(task => task.status !== "done").slice(0, 12).map(task => `- ${task.title} (${task.category}, ${task.priority}, ${dateLabel(task.dueAt)})`).join("\n") || "لا توجد مهام غير مكتملة مسجلة."}`,
           `الأهداف النشطة: ${goalRows.filter(goal => goal.status === "active").slice(0, 8).map(goal => `- ${goal.title} (${goal.progress}%، ${goal.completedTaskCount}/${goal.taskCount})`).join("\n") || "لا توجد أهداف نشطة."}`,
@@ -1556,6 +1573,7 @@ export const appRouter = router({
           "- " + event.summary + " [" + event.eventType + ", " + new Date(event.createdAt).toLocaleString("ar-EG", { timeZone: "Africa/Cairo" }) + "]"
         ).join("\\n");
         const context = `${profileContext}\\n\\nحالة التطبيق الحالية (قد تتغير بعد تحديث الصفحة):\\n${appContext}\\n\\nسجل أنشطة الطالب الحديث: ${activityContext || "لا توجد أحداث مسجلة بعد."}${input.context ? "\\n\\nسياق إضافي من الصفحة الحالية (معلومات للمناقشة وليست تغييرات منفذة):\\n" + input.context : ""}`;
+        updateAIActivity(ctx.user.id, activityId, "توليد الرد", "يرسل السؤال والسياق إلى مزود الذكاء الاصطناعي وينتظر الاستجابة.");
         let response;
         try {
           response = await invokeLLMWithNvidiaFallback({
@@ -1578,10 +1596,12 @@ export const appRouter = router({
           const message = error instanceof Error ? error.message : String(error);
           console.error("[StudyFlow AI] Provider request failed:", message);
           if (message.includes("AI_API_KEY is not configured")) {
+            failAIActivity(ctx.user.id, activityId, "المساعد غير مفعّل لأن مفتاح مزود الذكاء الاصطناعي غير مهيأ.");
             return { content: "المساعد الذكي لم يُفعّل بعد. أضف مفتاح مزود الذكاء الاصطناعي في متغير AI_API_KEY داخل Railway، وسيعمل المساعد دون تغيير بياناتك." };
           }
           throw new TRPCError({ code: "BAD_GATEWAY", message: "المساعد غير متاح حاليًا من مزود الذكاء الاصطناعي. حاول مرة أخرى لاحقًا." });
         }
+        updateAIActivity(ctx.user.id, activityId, "مراجعة الاستجابة", "وصل رد المزود؛ يتحقق النظام من محتواه ويجهز حفظ الذاكرة الدراسية إن وجدت.");
         const content = response.choices[0]?.message?.content;
         if (profile && personalMemory) {
           try {
@@ -1596,7 +1616,12 @@ export const appRouter = router({
             console.warn("[StudyFlow AI] Could not persist private student memory:", memoryError);
           }
         }
+        completeAIActivity(ctx.user.id, activityId, "اكتمل الرد وأصبح جاهزًا للعرض في المحادثة.");
         return { content: typeof content === "string" ? content : "لم أتمكن من تكوين رد الآن. جرّب مرة أخرى." };
+        } catch (error) {
+          failAIActivity(ctx.user.id, activityId, "تعذّر إكمال رد المساعد. يمكنك المحاولة مرة أخرى.");
+          throw error;
+        }
       }),
   }),
 
