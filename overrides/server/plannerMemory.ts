@@ -75,7 +75,7 @@ function safeTimestamp(value: unknown): string | null {
 }
 
 function confidenceFromFrontier(value: unknown, confirmedAt: unknown, level: "student" | "teacher" | "school"): PlannerMemoryConfidence {
-  if (typeof value !== "string" || !value || value === "__UNKNOWN__") return "unknown";
+  if (typeof value !== "string" || !value || value === "__UNKNOWN__" || value === "__NOT_STARTED__") return "unknown";
   if (confirmedAt) return "high";
   return level === "student" ? "medium" : "low";
 }
@@ -125,11 +125,29 @@ export function buildPlannerMemorySnapshot(input: PlannerMemoryInput): PlannerMe
     const teacherState = asRecord(teacherProgressState[subjectId]);
     for (const [branchId, raw] of Object.entries(branches)) {
       const branch = asRecord(raw);
-      const studentFrontier = branch.lastCompletedLessonId
-        ?? (typeof legacyFrontiers[subjectId] === "string" ? legacyFrontiers[subjectId] : "__UNKNOWN__");
-      const teacherFrontier = branch.teacherTeachingFrontierId ?? "__UNKNOWN__";
-      const schoolFrontier = branch.schoolClassFrontierId ?? "__UNKNOWN__";
-      if (studentFrontier !== "__UNKNOWN__") {
+      const explicitStudentFrontier = branch.lastCompletedLessonId;
+      const studentFrontier = explicitStudentFrontier === "__UNKNOWN__" && branch.studentFrontierConfirmedAt
+        ? "__UNKNOWN__"
+        : typeof explicitStudentFrontier === "string" && explicitStudentFrontier
+          ? explicitStudentFrontier
+          : (typeof course.lastCompletedLessonId === "string" ? course.lastCompletedLessonId : null)
+            ?? (typeof legacyFrontiers[subjectId] === "string" ? legacyFrontiers[subjectId] : null)
+            ?? (typeof teacherState.studentAttendedFrontier === "string" ? teacherState.studentAttendedFrontier : "__UNKNOWN__");
+
+      const explicitTeacherFrontier = branch.teacherTeachingFrontierId;
+      const teacherFrontier = explicitTeacherFrontier === "__UNKNOWN__" && branch.teacherFrontierConfirmedAt
+        ? "__UNKNOWN__"
+        : typeof explicitTeacherFrontier === "string" && explicitTeacherFrontier
+          ? explicitTeacherFrontier
+          : (typeof course.teacherTeachingFrontierId === "string" ? course.teacherTeachingFrontierId : "__UNKNOWN__");
+
+      const explicitSchoolFrontier = branch.schoolClassFrontierId;
+      const schoolFrontier = explicitSchoolFrontier === "__UNKNOWN__" && branch.schoolFrontierConfirmedAt
+        ? "__UNKNOWN__"
+        : typeof explicitSchoolFrontier === "string" && explicitSchoolFrontier
+          ? explicitSchoolFrontier
+          : (typeof course.schoolClassFrontierId === "string" ? course.schoolClassFrontierId : "__UNKNOWN__");
+      if (studentFrontier !== "__UNKNOWN__" && studentFrontier !== "__NOT_STARTED__") {
         curriculumEvidence.push(evidence(
           "student_frontier",
           studentFrontier,
@@ -139,7 +157,7 @@ export function buildPlannerMemorySnapshot(input: PlannerMemoryInput): PlannerMe
           { subjectId, branchId },
         ));
       }
-      if (teacherFrontier !== "__UNKNOWN__") {
+      if (teacherFrontier !== "__UNKNOWN__" && teacherFrontier !== "__NOT_STARTED__") {
         curriculumEvidence.push(evidence(
           "teacher_frontier",
           teacherFrontier,
@@ -149,7 +167,7 @@ export function buildPlannerMemorySnapshot(input: PlannerMemoryInput): PlannerMe
           { subjectId, branchId },
         ));
       }
-      if (schoolFrontier !== "__UNKNOWN__") {
+      if (schoolFrontier !== "__UNKNOWN__" && schoolFrontier !== "__NOT_STARTED__") {
         curriculumEvidence.push(evidence(
           "school_frontier",
           schoolFrontier,

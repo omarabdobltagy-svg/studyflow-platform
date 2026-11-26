@@ -93,4 +93,22 @@ describe("structured planner memory", () => {
     });
     expect(snapshot.sourceCoverage.routineRecords).toBe(1);
   });
+
+  it("does not treat not-started markers as completed curriculum frontiers", () => {
+    const snapshot = buildPlannerMemorySnapshot({
+      profile: {
+        subjectIds: ["ARB_G2_BAC"],
+        selection: {
+          learningCourseProgress: {
+            ARB_G2_BAC: {
+              branches: {
+                ARB_NAHW: { lastCompletedLessonId: "__NOT_STARTED__" },
+              },
+            },
+          },
+        },
+      },
+    });
+    expect(snapshot.curriculumEvidence).toHaveLength(0);
+  });
 });

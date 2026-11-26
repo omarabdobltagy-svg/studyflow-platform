@@ -686,6 +686,7 @@ async function reconcileDailyPlanTaskState(userId: number) {
     return;
   }
   if (!plan || !Array.isArray(plan.steps)) return;
+
   const tasks = await listTasks(userId);
   const taskById = new Map(tasks.map(task => [task.id, task]));
   let changed = false;
@@ -699,16 +700,60 @@ async function reconcileDailyPlanTaskState(userId: number) {
     changed = true;
     return { ...step, plannerTaskStatus: nextStatus };
   });
-  if (changed) {
-    await updateAiPlanContent(userId, activePlan.id, JSON.stringify({ ...plan, steps: nextSteps }));
+
+  let nextMemorySnapshot = plan.memorySnapshot;
+  if (nextMemorySnapshot && typeof nextMemorySnapshot === "object") {
+    const snapshot = nextMemorySnapshot as Record<string, any>;
+    const allTaskEvidence = [
+      ...(Array.isArray(snapshot.openTasks) ? snapshot.openTasks : []),
+      ...(Array.isArray(snapshot.completedTasks) ? snapshot.completedTasks : []),
+    ];
+    const updatedEvidence = allTaskEvidence.flatMap((item: Record<string, any>) => {
+      const task = taskById.get(Number(item.entityId));
+      if (!task) return [item];
+      const nextStatus = task.status === "done" ? "done" : "todo";
+      const currentStatus = item.value?.status;
+      if (currentStatus === nextStatus) return [item];
+      changed = true;
+      return [{
+        ...item,
+        kind: nextStatus === "done" ? "completed_task" : "open_task",
+        value: {
+          ...(item.value && typeof item.value === "object" ? item.value : {}),
+          status: nextStatus,
+          dueAt: task.dueAt?.toISOString?.() ?? null,
+          priority: task.priority,
+          estimatedMinutes: task.estimatedMinutes,
+        },
+        provenance: {
+          ...(item.provenance && typeof item.provenance === "object" ? item.provenance : {}),
+          observedAt: (task.updatedAt ?? task.completedAt ?? task.createdAt)?.toISOString?.() ?? null,
+        },
+      }];
+    });
+    nextMemorySnapshot = {
+      ...snapshot,
+      capturedAt: new Date().toISOString(),
+      openTasks: updatedEvidence.filter((item: Record<string, any>) => item.value?.status !== "done"),
+      completedTasks: updatedEvidence.filter((item: Record<string, any>) => item.value?.status === "done"),
+    };
   }
+
+  if (changed) {
+    await updateAiPlanContent(userId, activePlan.id, JSON.stringify({
+      ...plan,
+      steps: nextSteps,
+      ...(nextMemorySnapshot ? { memorySnapshot: nextMemorySnapshot } : {}),
+    }));
+  }
+
   const profile = await getStudentProfile(userId);
   const conditions = (profile?.selection as Record<string, any> | undefined)?.studyConditions;
   const dailyMinutes = Math.max(20, Math.min(600, Math.trunc(Number(conditions?.dailyMinutes) || 120)));
   const startDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
   const fingerprint = await getDailyPlanSourceFingerprint(userId, dailyMinutes, startDate);
   await updateAiPlanPrompt(userId, activePlan.id, DAILY_PLAN_PREFIX + fingerprint + ":");
-  await logStudentActivity(userId, "planner.local_sync", "daily_plan", activePlan.id, "تم تحديث حالة مهام الخطة دون إعادة توليدها أو تغيير تقدم المنهج");
+  await logStudentActivity(userId, "planner.local_sync", "daily_plan", activePlan.id, "تم تحديث حالة مهام الخطة والذاكرة المنظمة دون إعادة توليدها أو تغيير تقدم المنهج");
 }
 
 async function reconcileDailyPlanAfterChange(
