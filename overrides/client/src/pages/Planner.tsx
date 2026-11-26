@@ -130,6 +130,12 @@ export default function Planner() {
   });
   const learning = trpc.learning.get.useQuery(undefined, { staleTime: 15_000 });
   const tasksQuery = trpc.tasks.list.useQuery(undefined, { staleTime: 15_000 });
+  const activeDailyPlan = trpc.plans.currentDaily.useQuery(undefined, {
+    enabled: !profile.isLoading && !profile.isError && Boolean(profile.data?.subjectIds?.length),
+    staleTime: 15_000,
+    refetchOnWindowFocus: false,
+    refetchInterval: query => query.state.data?.needsRefresh ? 30_000 : false,
+  });
 
   const progressPreview = useMemo(() => {
     const subjects = profile.data?.subjectIds ?? [];
@@ -179,12 +185,12 @@ export default function Planner() {
       const isLegacyAnnualPlan = prompt.startsWith(ANNUAL_PLAN_PREFIX)
         || saved?.title.includes("الخطة السنوية")
         || saved?.title.includes("الخطة القديمة");
-      const isActiveDailyPlan = prompt.startsWith(DAILY_SNAPSHOT_PREFIX)
-        && /^[a-f0-9]{32}:$/.test(prompt.slice(DAILY_SNAPSHOT_PREFIX.length));
-      const isOldDailySnapshot = prompt.startsWith(DAILY_SNAPSHOT_PREFIX) && !isActiveDailyPlan;
+      const isDailyPlanRecord = prompt.startsWith(DAILY_SNAPSHOT_PREFIX);
       const isUncommittedAutoDraft = prompt.startsWith(DAILY_PLAN_DRAFT_PREFIX);
-      if (!saved || isLegacyAnnualPlan || isOldDailySnapshot || isUncommittedAutoDraft) return [];
-      return [{ id: record.id, createdAt: record.createdAt, plan: saved, isActive: isActiveDailyPlan }];
+      const isLegacyApprovedRecord = prompt.startsWith(STUDY_PLAN_PREFIX)
+        && /^[a-f0-9]{32}:$/.test(prompt.slice(STUDY_PLAN_PREFIX.length));
+      if (!saved || isLegacyAnnualPlan || isDailyPlanRecord || isUncommittedAutoDraft || isLegacyApprovedRecord) return [];
+      return [{ id: record.id, createdAt: record.createdAt, plan: saved }];
     })
     .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()), [history.data]);
 
@@ -291,17 +297,43 @@ export default function Planner() {
   };
 
   useEffect(() => {
-    if (history.isLoading || history.isError || historyInitialized.current) return;
+    const waitingForActivePlan = Boolean(profile.data?.subjectIds?.length) && activeDailyPlan.isLoading;
+    if (history.isLoading || history.isError || waitingForActivePlan || historyInitialized.current) return;
     historyInitialized.current = true;
-    // Open the most recent saved annual draft instead of silently generating
-    // and storing another copy every time the student visits this page.
-    if (savedPlans.length > 0) {
-      const latest = savedPlans[0];
-      setPlan(latest.plan);
-      setApproved(latest.isActive);
-      setLoadedSavedDraft(!latest.isActive);
+
+    // The current active plan is not a deletable history draft. Load it from the
+    // read-only daily snapshot; otherwise fall back to the latest saved draft.
+    const active = activeDailyPlan.data?.plan
+      ? parseSavedPlan({ planJson: JSON.stringify(activeDailyPlan.data.plan) })
+      : null;
+    if (active) {
+      setPlan(active);
+      setApproved(true);
+      setLoadedSavedDraft(false);
+      return;
     }
-  }, [history.isLoading, history.isError, savedPlans]);
+
+    if (savedPlans.length > 0) {
+      setPlan(savedPlans[0].plan);
+      setApproved(false);
+      setLoadedSavedDraft(true);
+    }
+  }, [
+    history.isLoading,
+    history.isError,
+    savedPlans,
+    profile.data?.subjectIds,
+    activeDailyPlan.isLoading,
+    activeDailyPlan.data?.plan,
+  ]);
+
+  useEffect(() => {
+    // Reflect successful background replans only while the page still displays
+    // an untouched active plan. Manual edits and opened drafts are never replaced.
+    if (!historyInitialized.current || !approved || loadedSavedDraft || !activeDailyPlan.data?.plan) return;
+    const refreshed = parseSavedPlan({ planJson: JSON.stringify(activeDailyPlan.data.plan) });
+    if (refreshed) setPlan(refreshed);
+  }, [activeDailyPlan.data?.plan, approved, loadedSavedDraft]);
 
   const updatePlan = (next: PlanView) => {
     setPlan(next);
@@ -583,7 +615,7 @@ export default function Planner() {
           </section>
         )}
 
-        {(savedPlans.length === 0 && !history.isLoading) && (
+        {(savedPlans.length === 0 && !history.isLoading && !activeDailyPlan.data?.plan) && (
           <div className="flex justify-end">
             <Button type="button" variant="ghost" className="text-xs text-muted-foreground" onClick={handleDeleteAll} disabled={deleteAllPlans.isPending}>
               مسح بيانات خطط المذاكرة السابقة
