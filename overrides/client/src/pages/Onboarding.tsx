@@ -53,6 +53,7 @@ type FormState = {
   customTeacherNames: Record<string, string>;
   teacherSchedules: TeacherScheduleMap;
   teacherScheduleUnfixed: Record<string, boolean>;
+  teacherAccessRequirements: Record<string, "homework_and_exam" | "homework_only" | "exam_only" | "none" | "unknown">;
 };
 
 const steps = ["بياناتك", "النظام الدراسي", "المسار", "المواد", "طريقة الدراسة لكل مادة"];
@@ -119,6 +120,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
     customTeacherNames: {},
     teacherSchedules: {},
     teacherScheduleUnfixed: {},
+    teacherAccessRequirements: {},
   });
 
   useEffect(() => {
@@ -142,6 +144,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
       teacherScheduleUnfixed: Object.keys(current.teacherScheduleUnfixed).length
         ? current.teacherScheduleUnfixed
         : Object.fromEntries((saved?.teacherScheduleUnfixedSubjectIds ?? []).map((subjectId: string) => [subjectId, true])),
+      teacherAccessRequirements: Object.keys(current.teacherAccessRequirements).length ? current.teacherAccessRequirements : (saved?.teacherAccessRequirements ?? {}),
     }));
   }, [auth.data, profile.data]);
 
@@ -188,7 +191,8 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
           ? Boolean(track && (track.fixedSubjectIds || firstElectiveGroup.length === 0 || firstElectiveGroup.some(item => item.subjectId === form.electiveSubjectId)))
           : Boolean(currentSetupSubject && form.courseModes[currentSetupSubject.subjectId]
             && (form.teacherScheduleUnfixed[currentSetupSubject.subjectId]
-              || (form.teacherSchedules[currentSetupSubject.subjectId] ?? []).length > 0));
+              || (form.teacherSchedules[currentSetupSubject.subjectId] ?? []).length > 0)
+            && Boolean(form.teacherAccessRequirements[currentSetupSubject.subjectId]));
 
   const next = () => {
     if (!stepValid) {
@@ -216,6 +220,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
     setSubjectSetupIndex(0);
     setForm(current => ({
       ...current, systemId, trackId: "", electiveSubjectId: "", teacherSelections: {}, checkpointSelections: {}, courseModes: {}, customTeacherNames: {}, teacherSchedules: {}, teacherScheduleUnfixed: {},
+      teacherAccessRequirements: {},
     }));
   };
 
@@ -223,6 +228,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
     setSubjectSetupIndex(0);
     setForm(current => ({
       ...current, trackId, electiveSubjectId: "", teacherSelections: {}, checkpointSelections: {}, courseModes: {}, customTeacherNames: {}, teacherSchedules: {}, teacherScheduleUnfixed: {},
+      teacherAccessRequirements: {},
     }));
   };
 
@@ -269,6 +275,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
       teacherScheduleUnfixedSubjectIds: selectedSubjects
         .filter(subject => form.teacherScheduleUnfixed[subject.subjectId])
         .map(subject => subject.subjectId),
+      teacherAccessRequirements: Object.fromEntries(selectedSubjects.map(subject => [subject.subjectId, form.teacherAccessRequirements[subject.subjectId] ?? "unknown"])),
       teacherFrontierReports: {},
     });
   };
@@ -634,6 +641,20 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                       </Button>}
                     </div>
                     <p className="mt-3 text-[10px] leading-5 text-muted-foreground">المواعيد هنا أسبوعية ومتكررة. لو المحاضرة لها موعد استثنائي أو اتلغت، متابعة الإعلانات العامة ستتعامل معه بشكل منفصل.</p>
+                  </section>
+                  <section className="rounded-2xl border border-primary/20 bg-primary/[.035] p-4 sm:p-5">
+                    <p className="text-sm font-bold">إيه شرط المدرس قبل ما تدخل المحاضرة التالية؟</p>
+                    <p className="mt-1 text-xs leading-6 text-muted-foreground">اختار النظام اللي المدرس بيطبّقه في مادة {currentSetupSubject.nameAr}. هنستخدم المعلومة في ترتيب مهامك، ومش هنفترض إنك خلّصت واجب أو امتحان من غير تأكيد منك.</p>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      {([
+                        ["homework_and_exam", "واجب وامتحان"], ["homework_only", "واجب بس"], ["exam_only", "امتحان بس"], ["none", "مفيش شرط"], ["unknown", "مش عارف / مش ثابت"],
+                      ] as const).map(([value,label]) => {
+                        const selected=form.teacherAccessRequirements[currentSetupSubjectId]===value;
+                        return <button key={value} type="button" aria-pressed={selected}
+                          onClick={() => setForm(current=>({...current,teacherAccessRequirements:{...current.teacherAccessRequirements,[currentSetupSubjectId]:value}}))}
+                          className={"rounded-xl border px-4 py-3 text-right text-sm font-semibold transition "+(selected?"border-primary bg-primary/10 text-primary ring-1 ring-primary/20":"border-border bg-card hover:border-primary/35")}>{label}</button>;
+                      })}
+                    </div>
                   </section>
 
                 </div>
