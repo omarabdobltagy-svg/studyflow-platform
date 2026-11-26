@@ -1554,7 +1554,7 @@ export async function createCalendarEvent(
   data: { title: string; type?: "event" | "study" | "goal"; startAt: Date; endAt?: Date | null; allDay?: boolean; color?: string }
 ) {
   const db = await requireDb();
-  await db.insert(calendarEvents).values({
+  const result = await db.insert(calendarEvents).values({
     userId,
     title: data.title,
     type: data.type ?? "event",
@@ -1563,6 +1563,7 @@ export async function createCalendarEvent(
     allDay: data.allDay ?? false,
     color: data.color ?? "violet",
   });
+  return Number(result[0].insertId);
 }
 
 export async function updateCalendarEvent(userId: number, eventId: number, data: { title: string; type: "event" | "study" | "goal"; startAt: Date; endAt?: Date | null; allDay: boolean; color: string }) {
