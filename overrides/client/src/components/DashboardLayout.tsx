@@ -303,7 +303,6 @@ export default function DashboardLayout({ title, description, children, action }
                 >
                   <item.icon className="sf-nav-icon" />
                   <span>{item.label}</span>
-                  {active && }
                 </motion.button>
               );
             })}
