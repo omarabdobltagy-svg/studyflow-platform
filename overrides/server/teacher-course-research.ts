@@ -78,8 +78,8 @@ export function normalizeTeacherSearchText(value: string): string {
     .replace(/ى/g, "ي")
     .replace(/ة/g, "ه")
     .replace(/[ً-ٰٟـ]/g, "")
-    .replace(/[^\\p{L}\\p{N}\\s]/gu, " ")
-    .replace(/\\s+/g, " ")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
