@@ -383,9 +383,9 @@ export default function DashboardLayout({ title, description, children, action }
             <motion.main
               key={location}
               className={"sf-main sf-main-" + pageKey}
-              initial={reduceMotion ? false : { opacity: 0, y: 18, filter: "blur(5px)" }}
-              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-              exit={reduceMotion ? undefined : { opacity: 0, y: -10, filter: "blur(3px)" }}
+              initial={reduceMotion ? false : { opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={reduceMotion ? undefined : { opacity: 0, y: -6 }}
               transition={{ duration: reduceMotion ? 0 : 0.34, ease: [0.22, 1, 0.36, 1] }}
             >
               <div ref={pageContentRef} className={"sf-page sf-page-" + pageKey} data-page={pageKey}>
