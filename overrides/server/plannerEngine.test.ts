@@ -74,7 +74,8 @@ describe("planner deterministic scheduler", () => {
 
   it("classifies small completions separately from structural changes", () => {
     expect(classifyPlannerEventImpact("task.completed", "task")).toBe("local");
-    expect(classifyPlannerEventImpact("task.reopened", "task")).toBe("structural");
+    expect(classifyPlannerEventImpact("task.reopened", "task")).toBe("local");
+    expect(classifyPlannerEventImpact("task.deleted", "task")).toBe("structural");
     expect(classifyPlannerEventImpact("teacher.progress.updated", "curriculum")).toBe("structural");
     expect(combinePlannerEventImpacts(["local", "none"])).toBe("local");
     expect(combinePlannerEventImpacts(["local", "structural"])).toBe("structural");

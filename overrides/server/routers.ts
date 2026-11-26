@@ -78,7 +78,7 @@ import { generatePersonalPlan, getPlanGenerationProgress, markPlanGenerationFail
 import { completeAIActivity, failAIActivity, getAIActivitySnapshot, startAIActivity, updateAIActivity } from "./aiActivity";
 import { classifyTeacherPublicUpdate, isHighConfidenceScheduleAnnouncement, isSecondYearBaccalaureateUpdate, parseYoutubeAtomFeed, scanSelectedTeacherSources, selectedTeacherIds } from "./teacher-content-monitor";
 import { isDailyPlanStale } from "./planLifecycle";
-import { evaluatePlanQuality, schedulePlanSteps } from "./plannerEngine";
+import { classifyPlannerEventImpact, combinePlannerEventImpacts, evaluatePlanQuality, schedulePlanSteps } from "./plannerEngine";
 import { createDailyPlanSourceFingerprint } from "./dailyPlanFingerprint";
 import { storageDelete, storagePut } from "./storage";
 import { decodeAndValidateAttachment } from "./attachments";
@@ -544,22 +544,33 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): 
       goalCategory: "خطة مذاكرة",
       supersedeCategories: ["خطة مذاكرة", "خطة يومية", "خطة ذكية"],
     });
+    const taskIdsByStep = new Map(taskSync.taskLinks.map(link => [link.planStepIndex, link]));
+    const planWithTaskLinks = {
+      ...plan,
+      steps: plan.steps.map((step, index) => {
+        const taskLink = taskIdsByStep.get(index);
+        return taskLink
+          ? { ...step, plannerTaskId: taskLink.taskId, plannerTaskStatus: taskLink.status }
+          : step;
+      }),
+    };
     const generatedDraft = await getLatestAiPlanByPromptPrefix(userId, DAILY_PLAN_DRAFT_PREFIX);
     const refreshedFingerprint = await getDailyPlanSourceFingerprint(userId, dailyMinutes, startDate);
     if (generatedDraft) {
       // Promote the generated draft only after task reconciliation succeeds.
+      await updateAiPlanContent(userId, generatedDraft.id, JSON.stringify(planWithTaskLinks));
       await updateAiPlanPrompt(userId, generatedDraft.id, DAILY_PLAN_PREFIX + refreshedFingerprint + ":");
     } else {
       // Keep activation explicit even if the generator's internal draft persistence changes.
       await saveAiPlan(userId, {
         prompt: DAILY_PLAN_PREFIX + refreshedFingerprint + ":",
         title: plan.title || "خطة المذاكرة",
-        planJson: JSON.stringify(plan),
+        planJson: JSON.stringify(planWithTaskLinks),
       });
     }
     completeAIActivity(userId, activityId, "اكتملت إعادة ترتيب الخطة ومزامنة المهام.");
     return {
-      plan,
+      plan: planWithTaskLinks,
       generatedAt: new Date(),
       generated: true,
       tasksAdded: taskSync.createdTaskCount,

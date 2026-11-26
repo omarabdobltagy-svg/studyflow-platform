@@ -257,7 +257,7 @@ export function classifyPlannerEventImpact(eventType: string, entityType?: strin
   const event = eventType.trim().toLowerCase();
   const entity = (entityType ?? "").trim().toLowerCase();
   if (["ui.opened", "plan.viewed", "activity.read", "notification.read"].includes(event)) return "none";
-  if (event === "task.completed" && (entity === "" || entity === "task")) return "local";
+  if ((event === "task.completed" || event === "task.reopened") && (entity === "" || entity === "task")) return "local";
   if (event.startsWith("task.") || event.startsWith("curriculum.") || event.startsWith("teacher.")
     || event.startsWith("calendar.") || event.startsWith("profile.") || event.startsWith("planner.")
     || event.startsWith("goal.") || event.startsWith("book.") || event.startsWith("routine.")) return "structural";
