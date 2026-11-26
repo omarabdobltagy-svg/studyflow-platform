@@ -8,7 +8,7 @@ export type TeacherScheduleSlot = { dayOfWeek: number; startTime: string };
 export type TeacherClassFollowupRecord = {
   status?: "answered" | "auto_processed" | "cancelled";
   answeredAt?: string;
-  outcome?: "covered" | "no_new_topics" | "cancelled";
+  outcome?: "covered" | "no_new_topics" | "cancelled" | "scheduled_only";
   branchFrontiers?: Record<string, string>;
   snoozedUntil?: string;
   nextSessionAt?: string;
