@@ -276,7 +276,7 @@ function Metric({ label, value, hint, tone = "default" }: { label: string; value
   return <article className={"sf-ops-metric " + (tone === "warm" ? "is-warm" : "")}><small>{label}</small><b>{value}</b><span>{hint}</span></article>;
 }
 
-function PanelMessage({ children }: { children: React.ReactNode }) {
+function PanelMessage({ children }: { children: ReactHooks.ReactNode }) {
   return <div className="sf-ops-panel-message">{children}</div>;
 }
 
@@ -287,7 +287,7 @@ function FunctionScene({ nodes, selectedId, onSelect }: { nodes: SceneNode[]; se
   callbackRef.current = onSelect;
   selectedRef.current = selectedId;
 
-  ReactSceneEffect(hostRef, nodes, selectedId, callbackRef, selectedRef);
+  useReactSceneEffect(hostRef, nodes, selectedId, callbackRef, selectedRef);
 
   return <div className="sf-ops-scene-viewport">
     <div ref={element => { hostRef.current = element; }} className="sf-ops-scene-canvas" aria-label="مشهد ثلاثي الأبعاد تفاعلي لوظائف StudyFlow" role="img" />
@@ -295,7 +295,7 @@ function FunctionScene({ nodes, selectedId, onSelect }: { nodes: SceneNode[]; se
   </div>;
 }
 
-function ReactSceneEffect(
+function useReactSceneEffect(
   hostRef: { current: HTMLDivElement | null },
   nodes: SceneNode[],
   selectedId: LayerId,
