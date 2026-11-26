@@ -701,7 +701,7 @@ export async function approvePlanAsGoalTree(
         category: step.category,
         priority: step.priority === "critical" || step.priority === "high" ? "high" as const
           : step.priority === "low" ? "low" as const : "medium" as const,
-        estimatedMinutes: step.minutes,
+        estimatedMinutes: null,
         dueAt: dueDates[index] ?? null,
       });
     }
@@ -769,7 +769,7 @@ export async function syncDailyPlanGoalTree(
   if (!plan.title.trim() || steps.length === 0) {
     throw new Error("لا يمكن إنشاء مهام يومية من خطة بلا خطوات عملية.");
   }
-  const dueDates = schedulePlanStepDates(schedule.startDate, steps, schedule.dailyMinutes, schedule.daysPerWeek ?? 7);
+  const dueDates = steps.map(() => null);
   const taskNotes = (step: typeof steps[number]) => [
     step.detail,
     ...(step.scheduleNote ? [step.scheduleNote] : []),
@@ -779,7 +779,6 @@ export async function syncDailyPlanGoalTree(
       "سبب التوصية: " + step.resourceRecommendation.reason,
     ] : []),
   ].filter(Boolean).join("\n\n");
-  const startDate = new Date(`${schedule.startDate}T12:00:00.000Z`);
 
   return db.transaction(async tx => {
     // Retire open tasks from older AI-generated plans before writing the new one.
@@ -837,7 +836,7 @@ export async function syncDailyPlanGoalTree(
       parentGoalId = existingParents[0].id;
       await tx.update(goals).set({
         description: plan.summary.trim() || "خطة يومية مبنية على ملف الدراسة والتراكم.",
-        targetDate: startDate,
+        targetDate: null,
         status: "active",
         color: "gold",
       }).where(and(eq(goals.id, parentGoalId), eq(goals.userId, userId)));
@@ -849,7 +848,7 @@ export async function syncDailyPlanGoalTree(
         kind: "long",
         category: goalCategory,
         color: "gold",
-        targetDate: startDate,
+        targetDate: null,
         status: "active",
         sortOrder: -100,
       });
@@ -935,7 +934,7 @@ export async function syncDailyPlanGoalTree(
             notes: taskNotes(step),
             category: step.category || "دراسة",
             priority,
-            estimatedMinutes: step.minutes,
+            estimatedMinutes: null,
             dueAt,
           }).where(and(eq(tasks.id, task.id), eq(tasks.userId, userId)));
           refreshedTaskCount += 1;
@@ -951,7 +950,7 @@ export async function syncDailyPlanGoalTree(
             notes: taskNotes(step),
             category: step.category || "دراسة",
             priority,
-            estimatedMinutes: step.minutes,
+            estimatedMinutes: null,
             dueAt,
           });
           createdTaskCount += 1;
@@ -983,7 +982,7 @@ export async function syncDailyPlanGoalTree(
           notes: taskNotes(step),
           category: step.category || "دراسة",
           priority,
-          estimatedMinutes: step.minutes,
+          estimatedMinutes: null,
           dueAt,
         });
         createdTaskCount += 1;
