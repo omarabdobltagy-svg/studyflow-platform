@@ -147,17 +147,32 @@ export default function Home() {
 
   const priority = useMemo<Priority | null>(() => {
     const gaps = ((learning.data as any)?.gapByBranch ?? {}) as Record<string, Record<string, any>>;
+    const lessonStateByBranch = ((learning.data as any)?.lessonStateByBranch ?? {}) as Record<string, Record<string, any>>;
     const candidates = Object.entries(gaps).flatMap(([subjectId, subjectGaps]) =>
       getSIECheckpointProgressBranches(subjectId).flatMap(branch => {
         const gap = subjectGaps[branch.branchId];
-        if (gap?.status !== "calculated" || gap.gapCount === null || gap.gapCount <= 0 || gap.referencePosition === null) return [];
-        const next = typeof gap.studentPosition === "number" ? branch.choices[gap.studentPosition] : undefined;
+        if (gap?.referencePosition === null || gap?.referencePosition === undefined) return [];
+        const lessonState = lessonStateByBranch[subjectId]?.[branch.branchId];
+        const stateBacklog = lessonState
+          ? Number(lessonState.teacherCoveredNotStudiedCount || 0) + Number(lessonState.teacherCoveredNeedsReviewCount || 0)
+          : null;
+        const backlogCount = stateBacklog !== null
+          ? stateBacklog
+          : gap?.status === "calculated" && typeof gap.gapCount === "number" ? gap.gapCount : 0;
+        if (backlogCount <= 0) return [];
+        const byNode = (lessonState?.byNode ?? {}) as Record<string, string>;
+        const teacherCovered = branch.choices.slice(0, gap.referencePosition);
+        const next = teacherCovered.find(choice =>
+          byNode[choice.nodeId] === "not_watched"
+          || byNode[choice.nodeId] === "watched_only"
+          || byNode[choice.nodeId] === "needs_review"
+        ) ?? (typeof gap.studentPosition === "number" ? branch.choices[gap.studentPosition] : undefined);
         return [{
           subjectId, subjectName: getSIESubject(subjectId)?.nameAr ?? subjectId,
-          branchId: branch.branchId, branchTitle: branch.branchId === "ARB_READING" ? "نصوص الوحدة" : branch.branchTitle, gapCount: gap.gapCount as number,
+          branchId: branch.branchId, branchTitle: branch.branchId === "ARB_READING" ? "نصوص الوحدة" : branch.branchTitle, gapCount: backlogCount,
           pointLabel: branch.branchType === "official_section" ? "موضوع" : "درس",
           nextLesson: next ? { nodeId: next.nodeId, title: next.title } : null,
-          ratio: gap.referencePosition > 0 ? gap.gapCount / gap.referencePosition : 0,
+          ratio: gap.referencePosition > 0 ? backlogCount / gap.referencePosition : 0,
         }];
       })
     );
