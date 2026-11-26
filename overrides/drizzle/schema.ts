@@ -362,6 +362,33 @@ export const studentActivityEvents = mysqlTable(
   ]
 );
 
+export const teacherCourseFacts = mysqlTable(
+  "teacherCourseFacts",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    teacherId: varchar("teacherId", { length: 80 }).notNull(),
+    teacherName: varchar("teacherName", { length: 120 }).notNull(),
+    subjectId: varchar("subjectId", { length: 80 }).notNull(),
+    educationSystem: varchar("educationSystem", { length: 40 }).notNull(),
+    gradeYear: varchar("gradeYear", { length: 60 }).notNull(),
+    availableModesJson: text("availableModesJson").notNull(),
+    homeworkPolicy: varchar("homeworkPolicy", { length: 20 }).default("unknown").notNull(),
+    homeworkRequiredBeforeNextLecture: varchar("homeworkRequiredBeforeNextLecture", { length: 20 }).default("unknown").notNull(),
+    preLectureExamRequired: varchar("preLectureExamRequired", { length: 20 }).default("unknown").notNull(),
+    evidenceJson: text("evidenceJson").notNull(),
+    confidence: varchar("confidence", { length: 20 }).default("low").notNull(),
+    verificationStatus: varchar("verificationStatus", { length: 30 }).default("insufficient_evidence").notNull(),
+    checkedAt: timestamp("checkedAt").defaultNow().notNull(),
+    expiresAt: timestamp("expiresAt").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [
+    uniqueIndex("teacher_course_facts_scope_unique").on(table.teacherId, table.subjectId, table.educationSystem, table.gradeYear),
+    index("teacher_course_facts_expiry_idx").on(table.expiresAt, table.verificationStatus),
+  ],
+);
+
 export const plannerReconciliationJobs = mysqlTable(
   "plannerReconciliationJobs",
   {
