@@ -19,11 +19,16 @@ export const users = mysqlTable("users", {
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
   phone: varchar("phone", { length: 20 }),
+  username: varchar("username", { length: 80 }),
+  passwordHash: varchar("passwordHash", { length: 255 }),
+  sessionVersion: int("sessionVersion").default(0).notNull(),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
-});
+}, table => [
+  uniqueIndex("users_username_unique").on(table.username),
+]);
 
 export const studentProfiles = mysqlTable(
   "studentProfiles",
@@ -145,7 +150,7 @@ export const tasks = mysqlTable(
     priority: mysqlEnum("priority", ["low", "medium", "high"])
       .default("medium")
       .notNull(),
-    estimatedMinutes: int("estimatedMinutes").default(25).notNull(),
+    estimatedMinutes: int("estimatedMinutes"),
     status: mysqlEnum("status", ["todo", "done"])
       .default("todo")
       .notNull(),
@@ -337,6 +342,46 @@ export const reminderNotifications = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   table => [index("reminder_notifications_user_read_idx").on(table.userId, table.readAt)]
+);
+
+export const studentActivityEvents = mysqlTable(
+  "studentActivityEvents",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+    eventType: varchar("eventType", { length: 80 }).notNull(),
+    entityType: varchar("entityType", { length: 60 }).notNull(),
+    entityId: varchar("entityId", { length: 100 }),
+    summary: varchar("summary", { length: 500 }).notNull(),
+    metadataJson: text("metadataJson").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => [
+    index("student_activity_user_created_idx").on(table.userId, table.createdAt),
+    index("student_activity_entity_idx").on(table.entityType, table.entityId),
+  ]
+);
+
+export const plannerReconciliationJobs = mysqlTable(
+  "plannerReconciliationJobs",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+    impact: mysqlEnum("impact", ["local", "structural"]).default("structural").notNull(),
+    eventType: varchar("eventType", { length: 80 }).notNull(),
+    status: mysqlEnum("status", ["queued", "running", "completed", "failed"]).default("queued").notNull(),
+    attempts: int("attempts").default(0).notNull(),
+    revision: int("revision").default(1).notNull(),
+    nextRunAt: timestamp("nextRunAt").defaultNow().notNull(),
+    lockedUntil: timestamp("lockedUntil"),
+    lastError: varchar("lastError", { length: 500 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [
+    uniqueIndex("planner_reconcile_user_unique").on(table.userId),
+    index("planner_reconcile_due_idx").on(table.status, table.nextRunAt, table.lockedUntil),
+  ],
 );
 
 export type User = typeof users.$inferSelect;

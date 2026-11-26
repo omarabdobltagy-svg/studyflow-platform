@@ -1,4 +1,6 @@
 import { Toaster } from "@/components/ui/sonner";
+import WorkspaceInteractionHub from "@/components/WorkspaceInteractionHub";
+import AIActivityCenter from "@/components/AIActivityCenter";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Books from "@/pages/Books";
 import Calendar from "@/pages/Calendar";
@@ -9,13 +11,15 @@ import Planner from "@/pages/Planner";
 import Reminders from "@/pages/Reminders";
 import Routines from "@/pages/Routines";
 import Study from "@/pages/Study";
+import SQ3R from "@/pages/SQ3R";
 import Tasks from "@/pages/Tasks";
-import { Route, Switch } from "wouter";
+import { Route, Switch, Router as WouterRouter } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import Assistant from "./pages/Assistant";
 import Analytics from "./pages/Analytics";
+import CurriculumMap from "./pages/CurriculumMap";
 import Settings from "./pages/Settings";
 
 function Router() {
@@ -27,6 +31,8 @@ function Router() {
       <Route path={"/books/:id"} component={Books} />
       <Route path={"/books"} component={Books} />
       <Route path={"/study"} component={Study} />
+      <Route path={"/sq3r"} component={SQ3R} />
+      <Route path={"/learning-map"} component={CurriculumMap} />
       <Route path={"/routines"} component={Routines} />
       <Route path={"/calendar"} component={Calendar} />
       <Route path={"/planner"} component={Planner} />
@@ -47,8 +53,13 @@ function App() {
     <ErrorBoundary>
       <ThemeProvider defaultTheme="light" switchable>
         <TooltipProvider>
-          <Toaster />
-          <Router />
+          <WouterRouter>
+            <Toaster />
+            <Router />
+            {/* Keep the global tools layer above routed page surfaces. */}
+            <WorkspaceInteractionHub />
+            <AIActivityCenter />
+          </WouterRouter>
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>

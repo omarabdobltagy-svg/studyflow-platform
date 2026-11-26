@@ -12,7 +12,7 @@ const STORAGE_KEY = "studyflow.assistant.conversations.v2";
 const SELECTED_KEY = "studyflow.assistant.selected.v2";
 const suggestions = [
   "اشرح لي درسًا من منهج المادة التي أدرسها خطوة بخطوة.",
-  "اختبر فهمي في آخر درس وصلت إليه، ولا تعرض الإجابة قبل محاولتي.",
+  "وضّح لي فكرة في آخر درس وصلت إليه، واربطها بشرح المدرس.",
   "ما الفرق بين المفاهيم الأساسية في هذا الموضوع؟",
 ];
 
@@ -110,7 +110,7 @@ export default function Assistant() {
   };
 
   return (
-    <DashboardLayout title="المساعد الدراسي" description="محادثة مستقلة لكل موضوع، مع سياق ملفك الدراسي ومواضعك المسجلة في المنهج.">
+    <DashboardLayout title="المساعد الدراسي الذكي" description="ذكاء دراسي متصل بسياق مساحتك، وأنشطتك، والمهام والروتين والتقويم والتقدم المنهجي.">
       <section className="mb-5 overflow-hidden rounded-[1.5rem] border border-border/70 bg-card">
         <div className="flex flex-col gap-4 border-b border-border/70 bg-gradient-to-l from-secondary/75 via-card to-card p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
           <div className="flex items-start gap-3">
@@ -161,7 +161,7 @@ export default function Assistant() {
               isLoading={chat.isPending}
               height="min(72vh, 760px)"
               placeholder="اسأل عن درس أو مفهوم في منهجك..."
-              emptyStateMessage="ابدأ بسؤال عن أي درس أو اطلب اختبارًا سريعًا."
+              emptyStateMessage="ابدأ بسؤال عن درس أو مفهوم، أو اطلب توضيحًا لشرح المدرس."
               suggestedPrompts={suggestions}
             />
           </div>

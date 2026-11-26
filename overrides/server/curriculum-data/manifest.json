@@ -1,48 +1,199 @@
 {
-  "schemaVersion": 1,
-  "ingestionDate": "2026-11-22",
+  "schemaVersion": 3,
+  "ingestionDate": "2026-11-24",
+  "scope": "first_part_first_term_only",
+  "storagePolicy": "derived_curriculum_metadata_only",
   "books": {
     "ARB_G2_BAC": {
       "title": "كتاب اللغة العربية - البكالوريا المصرية - الصف الثاني - الجزء الأول",
-      "files": [
-        "arabic-part1.txt",
-        "arabic-part2.txt"
-      ],
-      "coverage": "full_text_part_1",
-      "sourceType": "official_textbook"
-    },
-    "HIS_G2_BAC": {
-      "title": "كتاب التاريخ الوطني - البكالوريا المصرية - الصف الثاني - الجزء الأول",
-      "files": [
-        "history-part1.txt",
-        "history-part2.txt"
-      ],
-      "coverage": "full_text_part_1",
-      "sourceType": "official_textbook"
-    },
-    "PROG_AI_G2_BAC": {
-      "title": "كتاب البرمجة والذكاء الاصطناعي - البكالوريا المصرية - الصف الثاني - الجزء الثاني",
-      "files": [
-        "programming-part2.txt"
-      ],
-      "coverage": "full_text_part_2_chapters_5_7",
-      "sourceType": "official_textbook"
+      "part": 1,
+      "term": 1,
+      "coverage": "derived_toc_lesson_ranges_and_provisional_profiles",
+      "pageBodyIndexed": false,
+      "unitCount": 3,
+      "lessonCount": 9,
+      "manifestFile": "curriculum-intelligence-part1.json"
     },
     "ENG1_G2_BAC": {
       "title": "English - Egyptian Baccalaureate - 2nd Year - Part 1",
-      "files": [],
-      "coverage": "toc_only",
-      "tocPdfPages": [
-        10,
-        11
-      ],
-      "sourceType": "official_textbook"
+      "part": 1,
+      "term": 1,
+      "coverage": "visually_verified_toc_and_unit_page_ranges",
+      "pageBodyIndexed": false,
+      "unitCount": 5,
+      "topicCount": 20,
+      "manifestFile": "curriculum-intelligence-part1.json",
+      "limitation": "Scanned PDF; lesson-level page ranges not verified."
+    },
+    "HIS_G2_BAC": {
+      "title": "كتاب التاريخ الوطني - البكالوريا المصرية - الصف الثاني - الجزء الأول",
+      "part": 1,
+      "term": 1,
+      "coverage": "derived_toc_lesson_ranges_and_provisional_profiles",
+      "pageBodyIndexed": false,
+      "unitCount": 3,
+      "lessonCount": 12,
+      "manifestFile": "curriculum-intelligence-part1.json"
+    },
+    "PROG_AI_G2_BAC": {
+      "title": "كتاب البرمجة والذكاء الاصطناعي - البكالوريا المصرية - الصف الثاني - الجزء الأول",
+      "part": 1,
+      "term": 1,
+      "coverage": "verified_toc_lesson_ranges_and_provisional_profiles",
+      "pageBodyIndexed": false,
+      "chapterCount": 4,
+      "lessonCount": 14,
+      "manifestFile": "curriculum-intelligence-part1.json",
+      "detailFile": "programming-part1-manifest.json"
     }
   },
+  "exclusions": [
+    "All Part 2 text and all extracted verbatim textbook page files have been removed from this branch's curriculum corpus.",
+    "No complete textbook page text or long verbatim quotations are stored in StudyFlow.",
+    "Only derived lesson metadata, unit/lesson names and printed-page ranges are retained."
+  ],
   "limitations": [
-    "Arabic, History, and Programming content is stored as page-labelled extracted text for retrieval.",
-    "English Part 1 is image-only in the provided PDF; only its table of contents has been verified. Do not claim that lesson body text is indexed.",
-    "Programming Part 1 was not among the newly available source PDFs; the catalog may contain its lesson titles but not its full text in this corpus.",
-    "The literary supplement 'من روائع الأدب العربي' is separate from the core Arabic textbook and is not included as an official syllabus source."
-  ]
+    "Difficulty levels in curriculum-intelligence-part1.json are provisional educational estimates from topic type and curriculum structure; they are not official Ministry difficulty labels.",
+    "Student self-rating and assessment history take precedence over provisional curriculum estimates.",
+    "English unit page spans are verified at unit level only; individual English topic page spans and difficulty remain unknown.",
+    "Arabic and History page ranges derive from the official tables of contents; exact page body content is not stored."
+  ],
+  "generalEgyptianSchoolSystem": {
+    "law": "Education Law 139/1981 as amended by Law 169/2025",
+    "effectiveDate": "2025-08-14",
+    "compulsoryYears": 12,
+    "basicEducation": {
+      "primaryYears": 6,
+      "preparatoryYears": 3,
+      "totalYears": 9
+    },
+    "generalSecondaryYears": 3,
+    "technicalSecondaryYears": 3,
+    "advancedTechnologicalYears": 5,
+    "vocationalSecondaryYears": {
+      "minimum": 1,
+      "maximum": 2
+    },
+    "academicYear2026_2027": {
+      "publicSchoolStart": "2026-09-12",
+      "schoolYearEnd": "2027-06-24",
+      "schoolWeeks": 39,
+      "actualSchoolDays": 183,
+      "firstTermActualSchoolDays": 93,
+      "secondTermActualSchoolDays": 90,
+      "firstTermTransferExams": [
+        "2027-01-09",
+        "2027-01-14"
+      ],
+      "preparatoryCertificateFirstTermExams": [
+        "2027-01-16",
+        "2027-01-21"
+      ],
+      "midyearBreak": [
+        "2027-01-23",
+        "2027-02-04"
+      ],
+      "secondTermStart": "2027-02-06",
+      "secondTermTransferExams": [
+        "2027-05-22",
+        "2027-05-27"
+      ],
+      "preparatoryCertificateSecondTermExams": [
+        "2027-05-29",
+        "2027-06-03"
+      ],
+      "generalSecondaryCertificateExams": [
+        "2027-06-26",
+        "2027-07-21"
+      ],
+      "technicalDiplomaExams": [
+        "2027-05-29",
+        "2027-06-10"
+      ]
+    },
+    "assessment": {
+      "firstMonthlyTransferGradeExams": [
+        "2026-10-18",
+        "2026-10-22"
+      ],
+      "firstMonthlyExamScope": "Only material taught from the start of the school year through the end of the first month",
+      "prepCertificateExamsAreGovernorateSpecific": true,
+      "ongoingAssessmentComponents": [
+        "monthly exams",
+        "weekly assessments",
+        "classwork",
+        "homework",
+        "attendance and participation"
+      ],
+      "lastCurriculumDistributionWeekReservedForRevision": true,
+      "gradeWeightsAreNotUniversalAcrossAllStages": true
+    },
+    "productRules": [
+      "A full-year index is not evidence that a teacher has already taught every listed lesson.",
+      "A monthly assessment covers taught content for that assessment period, not the full-year syllabus.",
+      "Preparatory certificate schedules must be treated as governorate-specific rather than nationwide-identical.",
+      "The platform does not infer individual teacher progress from calendar dates; teacher and student frontiers are recorded separately within the selected branch.",
+      "Saving a student's and teacher's frontiers in one branch advances the learner to the next branch automatically."
+    ],
+    "sourceDomains": [
+      "sis.gov.eg",
+      "cairo.gov.eg",
+      "eastlaws.com"
+    ]
+  },
+  "curriculumCatalogCoverage": {
+    "coverage": "full_year_lesson_metadata",
+    "academicYear": "2026/2027",
+    "note": "This catalog stores derived lesson titles and curriculum relationships only. It does not store full textbook page text. Textbook page-body retrieval remains separately limited to the indexed Part 1 sources listed under books.",
+    "subjects": {
+      "ARB_G2_BAC": {
+        "parts": [
+          1,
+          2
+        ],
+        "units": 6,
+        "textbookLessons": 18,
+        "teacherCourseSequenceEntries": 21,
+        "note": "Teacher course sequence and textbook lesson index are distinct views and may overlap; do not add their counts together."
+      },
+      "ENG1_G2_BAC": {
+        "parts": [
+          1,
+          2
+        ],
+        "textbookUnits": 10,
+        "textbookTopics": 40,
+        "storyBookChapters": 10,
+        "teacherCourseStreams": [
+          "Vocabulary",
+          "Grammar",
+          "GRE"
+        ],
+        "vocabularyUnitViews": 10,
+        "grammarUnitViews": 10,
+        "greSupplementalCheckpoints": 4,
+        "note": "Vocabulary and Grammar are separate unit-level progress views derived from the 10 textbook units; they are not claimed to be individual teacher lecture titles. GRE is a supplementary skills track, not part of the Ministry textbook. Student-entered out-of-index lesson creation is disabled."
+      },
+      "HIS_G2_BAC": {
+        "parts": [
+          1,
+          2
+        ],
+        "units": 6,
+        "lessons": 24,
+        "structure": "one linear course sequence"
+      },
+      "PROG_AI_G2_BAC": {
+        "parts": [
+          1,
+          2
+        ],
+        "chapters": 7,
+        "lessons": 23,
+        "structure": "one linear course sequence"
+      }
+    }
+  },
+  "scopeNotes": "The scope and books entries describe available Part 1 page-body and manifest sources only. They do not limit curriculumCatalogCoverage, which records full-year lesson metadata separately.",
+  "catalogScope": "full_year_lesson_metadata"
 }

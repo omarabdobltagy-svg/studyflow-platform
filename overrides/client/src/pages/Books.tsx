@@ -131,7 +131,25 @@ function BookLibrary() {
       <input id="studyflow-book-import" type="file" accept=".pdf,.docx,.txt,.jpg,.jpeg,.png,.webp,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,image/jpeg,image/png,image/webp" className="sr-only" disabled={uploadingFile} onChange={event => { void handleQuickUpload(event.target.files?.[0]); event.currentTarget.value = ""; }} />
       <p className="text-xs text-muted-foreground">PDF · DOCX · TXT · JPG/PNG/WEBP · حتى 8 MB</p>
     </section>
-    <section className="mb-6 rounded-[1.5rem] border border-primary/10 bg-gradient-to-l from-secondary/75 to-card p-5 sm:p-7"><div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center"><div><p className="eyebrow">رفّك الشخصي</p><h2 className="mt-1 text-2xl font-bold">{booksQuery.data?.length || 0} كتب ومسارات تعلّم</h2><p className="mt-2 text-sm text-muted-foreground">قسّم المادة الكبيرة إلى أجزاء، وسيظهر لك ما أنجزته بوضوح.</p></div><span className="flex size-14 items-center justify-center rounded-3xl bg-primary text-primary-foreground shadow-lg shadow-primary/20"><Layers3 className="size-6" /></span></div></section>
+    <section className="sf-library-overview" aria-labelledby="sf-library-overview-title">
+      <div className="sf-library-overview-copy">
+        <p className="sf-library-overview-kicker">YOUR LEARNING LIBRARY</p>
+        <h2 id="sf-library-overview-title">مكتبتك الدراسية</h2>
+        <p>كل كتاب في مكانه، وفصوله وتقدّمه واضحان. أضف ملفًا أو أنشئ كتابًا، ثم تابع إنجازك من نفس المساحة.</p>
+        <div className="sf-library-overview-stats">
+          <div><span>كتبك المضافة</span><strong>{booksQuery.isLoading ? "—" : (booksQuery.data?.length ?? 0)}</strong></div>
+          <div><span>متوسط الإنجاز</span><strong>{booksQuery.isLoading ? "—" : (booksQuery.data?.length ? Math.round(booksQuery.data.reduce((total, book) => total + (Number(book.progress) || 0), 0) / booksQuery.data.length) : 0) + "%"}</strong></div>
+        </div>
+      </div>
+      <div className="sf-library-art" aria-hidden="true">
+        <span className="sf-library-spine sf-library-spine-one" />
+        <span className="sf-library-spine sf-library-spine-two" />
+        <span className="sf-library-spine sf-library-spine-three" />
+        <span className="sf-library-spine sf-library-spine-four" />
+        <span className="sf-library-shelf" />
+        <span className="sf-library-art-caption">READ · TRACK · MASTER</span>
+      </div>
+    </section>
     <section className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">{booksQuery.isLoading ? [0, 1, 2].map(item => <div key={item} className="app-card h-72 animate-pulse bg-muted" />) : booksQuery.data?.length ? booksQuery.data.map(book => <button key={book.id} onClick={() => setLocation(`/books/${book.id}`)} className="app-card pressable group overflow-hidden text-right hover:-translate-y-0.5"><div className={cn("relative h-32 overflow-hidden bg-gradient-to-br p-5 text-white", coverClass[book.coverColor as keyof typeof coverClass] || coverClass.charcoal)}><div className="absolute -left-5 -top-8 size-28 rounded-full bg-white/10" /><BookOpenText className="relative size-7" /><span className="absolute bottom-4 left-4 rounded-lg bg-black/15 px-2 py-1 text-xs backdrop-blur-sm">{book.status === "completed" ? "مكتمل" : book.status === "reading" ? "قيد القراءة" : "في الانتظار"}</span></div><div className="p-5"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><h2 className="truncate font-bold">{book.title}</h2><p className="mt-1 truncate text-xs text-muted-foreground">{book.author || "بلا مؤلف"} · {book.subject}</p></div><span className="num text-lg font-semibold text-primary">{book.progress}%</span></div><Progress value={book.progress} className="mt-5 h-2 bg-muted" /><div className="mt-4 flex items-center justify-between text-xs text-muted-foreground"><span>{book.chapterCount} فصول</span><span className="inline-flex items-center gap-1 text-primary">فتح الكتاب<ChevronLeft className="size-3.5" /></span></div></div></button>) : <div className="app-card col-span-full flex min-h-80 flex-col items-center justify-center p-6 text-center"><BookOpenText className="mb-4 size-10 text-primary/40" /><h2 className="font-bold">ابدأ مكتبتك الخاصة</h2><p className="mt-2 max-w-md text-sm leading-7 text-muted-foreground">ارفع ملف الكتاب مباشرة أو أضف كتابًا يدويًا إذا لم يكن لديك ملف.</p><Button onClick={() => setFormOpen(true)} className="pressable mt-5 rounded-xl"><Plus className="size-4" />أضف أول كتاب</Button></div>}</section>
   </DashboardLayout>;
 }

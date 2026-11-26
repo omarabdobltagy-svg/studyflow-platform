@@ -1,71 +1,728 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import PlanExportActions from "@/components/PlanExportActions";
 import QueryErrorNotice from "@/components/QueryErrorNotice";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
-import { getSIECheckpointChoices, getSIESubject, getSIETeacher } from "@shared/sie-catalog";
-import { BrainCircuit, CheckCircle2, Clock3, Lightbulb, ListTree, Loader2, Sparkles, Target, UserRound } from "lucide-react";
-import { FormEvent, useMemo, useState } from "react";
+import {
+  getSIECheckpointProgressBranches,
+  getSIEStudentVisibleBranches,
+  getSIESubject,
+  matchSIECheckpointTask,
+} from "@shared/sie-catalog";
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpRight,
+  BrainCircuit,
+  CheckCircle2,
+  MessageCircle,
+  Send,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Sparkles,
+  Trash2,
+  X,
+} from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
-type PlanView = { title: string; summary: string; durationLabel: string; steps: { day: string; title: string; detail: string; minutes: number; category: string }[]; habits: { title: string; cue: string }[]; reviewQuestion: string };
+type PlanningMode = "smart" | "backlog" | "teacher_sync";
+type GenerationProgress = {
+  status: "running" | "complete" | "failed";
+  currentStage: "profile" | "curriculum" | "model" | "validation" | "saving" | "complete";
+  completedStages: Array<"profile" | "curriculum" | "model" | "validation" | "saving" | "complete">;
+  detail: string;
+  updatedAt: number;
+  error?: string;
+};
+type PlanStep = {
+  day: string;
+  title: string;
+  detail: string;
+  minutes: number;
+  category: string;
+  priority?: "critical" | "high" | "medium" | "low";
+  priorityScore?: number;
+  priorityReason?: string;
+  priorityEvidenceConfidence?: "low" | "medium" | "high";
+  curriculumNodeIds?: string[];
+  existingTask?: { id: number; title: string; status: "todo" | "done"; confidence: "exact" | "strong" };
+  resourceRecommendation?: { title: string; url: string; teacherName?: string; reason: string };
+  difficulty?: "easy" | "medium" | "hard" | "unknown";
+  lessonSize?: "small" | "medium" | "large" | "unknown";
+  difficultyBasis?: "student_report" | "curriculum_profile" | "unknown";
+  difficultyConfidence?: "low" | "medium" | "high";
+  printedPageRange?: [number, number];
+  sourcePages?: number[];
+  scheduleState?: "scheduled" | "deferred";
+  dayIndex?: number | null;
+  dateOffsetDays?: number | null;
+  scheduleNote?: string;
+  sourceTitle?: string;
+  sourceStepIndex?: number;
+  segmentIndex?: number;
+  segmentCount?: number;
+  plannerTaskId?: number;
+  plannerTaskStatus?: "todo" | "done";
+};
+type PlanQuality = {
+  score: number;
+  status: "ready" | "partial" | "blocked";
+  blockers: string[];
+  warnings: string[];
+  stats: {
+    availableStudyDays: number;
+    studyDaysUsed: number;
+    scheduledMinutes: number;
+    deferredMinutes: number;
+    deferredSteps: number;
+    maxDailyLoadMinutes: number;
+    maxSessionMinutes: number;
+  };
+};
+type PlanView = {
+  title: string;
+  summary: string;
+  durationLabel: string;
+  steps: PlanStep[];
+  habits: { title: string; cue: string }[];
+  quality?: PlanQuality;
+  memorySnapshot?: Record<string, any>;
+  // Export component compatibility only; deliberately blank so no AI self-test is created.
+  reviewQuestion: string;
+  taskSync?: { parentGoalId: number; stageCount: number; taskCount: number; routineId?: number | null };
+};
+const DAILY_SNAPSHOT_PREFIX = "SIE_DAILY_PLAN_V4:";
+const DAILY_PLAN_DRAFT_PREFIX = "SIE_DAILY_PLAN_DRAFT_V1:";
+const ANNUAL_PLAN_PREFIX = "SIE_ANNUAL_PLAN_V1:";
+const STUDY_PLAN_PREFIX = "SIE_STUDY_PLAN_V2:";
 const todayCairo = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
-const starters = ["أريد إنهاء فصلين من مادة صعبة خلال هذا الأسبوع، لدي ساعة واحدة مساءً.", "لدي تراكم محاضرات وأشعر بقلة الطاقة، اصنع لي خطة عودة تدريجية.", "لدي اختبار بعد 14 يومًا وأريد خطة مراجعة واقعية دون ضغط مفرط."];
+const initialPrompt = "كوّن لي خطة مذاكرة عملية للفترة القادمة. استخدم المهام الحالية وآخر موضع مكتمل وجدول حصص المدرسين، ووازن بين إنهاء المتراكم والاستعداد للمحاضرات الجديدة. لا تنشئ اختبارات أو أسئلة أو واجبات من عندك.";
+const planningModeOptions: Array<{ value: PlanningMode; title: string; description: string; marker: string }> = [
+  { value: "smart", title: "الخطة الذكية", description: "تخلّص المتراكم، وفي نفس الوقت تجهّزك لشرح المدرس القادم.", marker: "الموصى بها" },
+  { value: "backlog", title: "المتراكم أولًا", description: "ركّز على المهام المفتوحة والفجوات المؤكدة قبل إضافة الجديد.", marker: "تركيز" },
+  { value: "teacher_sync", title: "مواكبة المدرس", description: "حضّر للموضوع القادم قبل موعد الحصة وحافظ على متابعة الجديد.", marker: "استمرارية" },
+];
+function parseSavedPlan(record: { planJson: string }): PlanView | null {
+  try {
+    const saved = JSON.parse(record.planJson) as Partial<PlanView>;
+    if (!saved || typeof saved.title !== "string" || !Array.isArray(saved.steps) || saved.steps.length === 0) return null;
+    return {
+      title: saved.title,
+      summary: typeof saved.summary === "string" ? saved.summary : "خطة دراسية مبنية على ملفك وتقدمك.",
+      durationLabel: "مهام مرنة",
+      steps: saved.steps.map((raw: any, index) => ({
+        day: "",
+        title: typeof raw.title === "string" ? raw.title : "مهمة دراسية",
+        detail: typeof raw.detail === "string" ? raw.detail : "نفّذ المهمة ثم سجّل تقدمك.",
+        minutes: 0,
+        category: typeof raw.category === "string" ? raw.category : "دراسة",
+        ...raw,
+      })),
+      habits: Array.isArray(saved.habits) ? saved.habits : [],
+      quality: saved.quality,
+      memorySnapshot: saved.memorySnapshot,
+      reviewQuestion: "",
+    };
+  } catch {
+    return null;
+  }
+}
 
 export default function Planner() {
   const utils = trpc.useUtils();
-  const [prompt, setPrompt] = useState("");
   const [plan, setPlan] = useState<PlanView | null>(null);
-  const [approvedPlanKey, setApprovedPlanKey] = useState<string | null>(null);
-  const [approvalResult, setApprovalResult] = useState<{ parentGoalId: number; stageCount: number; taskCount: number } | null>(null);
-  const [approvalOpen, setApprovalOpen] = useState(false);
-  const [useProfile, setUseProfile] = useState(true);
-  const [startDate, setStartDate] = useState(todayCairo);
+  const planningMode: PlanningMode = "smart";
   const [dailyMinutes, setDailyMinutes] = useState(120);
+  const [approved, setApproved] = useState(false);
+  const [loadedSavedDraft, setLoadedSavedDraft] = useState(false);
+  const historyInitialized = useRef(false);
+  const plannerPreferencesInitialized = useRef(false);
+
   const history = trpc.plans.list.useQuery();
-  const profile = trpc.studentProfile.get.useQuery();
-  const generate = trpc.plans.generate.useMutation({ onSuccess: result => { setPlan(result); void utils.plans.list.invalidate(); toast.success("خطتك الشخصية جاهزة للمراجعة."); }, onError: error => toast.error(error.message) });
-  const approve = trpc.plans.approve.useMutation({ onSuccess: (result, variables) => { setApprovedPlanKey(`${variables.plan.title}|${variables.plan.summary}`); setApprovalResult(result); setApprovalOpen(false); void utils.goals.list.invalidate(); void utils.tasks.list.invalidate(); toast.success("تم اعتماد الخطة وتوزيع المهام على التقويم حسب وقتك اليومي."); }, onError: error => toast.error(error.message) });
-  const submit = (event: FormEvent) => { event.preventDefault(); const request = prompt.trim() || "حلّل ملفي الدراسي ومواضعي مع المدرسين والتراكم المسجل، ثم ابنِ خطة واقعية حسب الوقت المتاح وأولوية الدروس وصعوبتها. لا تطلب مني إعادة كتابة بيانات موجودة في ملفي."; generate.mutate({ prompt: request, includeStudentProfile: useProfile, dailyMinutes, startDate }); };
-  const planKey = plan ? `${plan.title}|${plan.summary}` : "";
-  const savedPlans = useMemo(() => (history.data || []).flatMap(record => { try { return [{ id: record.id, createdAt: record.createdAt, plan: JSON.parse(record.planJson) as PlanView }]; } catch { return []; } }), [history.data]);
-  const openApproval = () => { if (!plan || approvedPlanKey === planKey) return; setApprovalOpen(true); };
-  return <DashboardLayout title="المخطط الذكي" description="اكتب ما تريد إنجازه، وسنحوّله إلى مسار واقعي يراعي ملفك الدراسي ووقتك وطاقة يومك." action={<div className="hidden items-center gap-2 rounded-2xl bg-secondary px-3 py-2 text-xs font-semibold text-primary sm:flex"><BrainCircuit className="size-4" />تخطيط متكيف</div>}>
-    {history.isError && <QueryErrorNotice onRetry={() => void history.refetch()} label="تعذّر تحميل خططك المحفوظة." />}
-    {profile.isError && <QueryErrorNotice onRetry={() => void profile.refetch()} label="تعذّر تحميل ملفك الدراسي؛ يمكنك إنشاء خطة عامة، لكن لن تُخصّص حتى يعود الملف." />}
-    <section className="sf-feature-hero relative mb-6 overflow-hidden rounded-[1.55rem] p-6 text-primary-foreground shadow-2xl sm:p-8"><div className="onboarding-orb onboarding-orb-one" /><div className="onboarding-orb onboarding-orb-two" /><div className="relative grid gap-6 lg:grid-cols-[1.1fr_.9fr]"><div><p className="eyebrow text-primary-foreground/65">من الوصف إلى مسار عملي</p><h2 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">خطة تناسبك أنت، لا نسخة مثالية من طالب آخر.</h2><p className="mt-3 max-w-xl text-sm leading-7 text-primary-foreground/72">يقرأ المخطط ملفك الدراسي والتراكم والعائق الذي كتبته، ثم يقترح بداية صغيرة يمكن الاستمرار عليها.</p><div className="mt-5 flex flex-wrap gap-2">{["تخصيص بالملف الدراسي", "عودة من التراكم", "موافقة قبل الإنشاء"].map(item => <span key={item} className="rounded-full border border-white/12 bg-white/8 px-3 py-1.5 text-xs text-primary-foreground/75">{item}</span>)}</div></div><div className="rounded-2xl border border-white/12 bg-white/8 p-4 backdrop-blur-sm"><div className="flex items-center gap-3"><span className="flex size-10 items-center justify-center rounded-xl bg-white/12"><Sparkles className="size-5 text-violet-200" /></span><div><p className="font-semibold">مبدأ التخطيط</p><p className="mt-1 text-xs leading-5 text-primary-foreground/65">جلسة تبدأ بها اليوم أفضل من خطة لا تفتحها.</p></div></div>{profile.data && <div className="mt-4 flex items-center gap-2 rounded-xl bg-black/10 p-3 text-xs text-primary-foreground/75"><UserRound className="size-4" />ملف {profile.data.studentName} · {profile.data.track}</div>}</div></div></section>
-    {profile.data && <section className="app-card mb-6 p-5 sm:p-6">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><p className="eyebrow">قراءة الملف تلقائيًا</p><h2 className="mt-1 font-bold">المواد والمدرسون ونقطة التقدم</h2><p className="mt-1 text-xs text-muted-foreground">يستخدم المخطط ما هو مسجل بالفعل بدل مطالبتك بإدخاله مرة أخرى.</p></div><span className="rounded-xl bg-secondary px-3 py-2 text-xs font-semibold text-primary">{profile.data.subjects.length} مواد</span></div>
-      <div className="grid gap-3 md:grid-cols-2">
-        {profile.data.subjects.map((subjectId: string) => {
-          const selection = (profile.data?.selection || {}) as Record<string, any>;
-          const teacherId = selection.teacherChoices?.[subjectId] || profile.data?.teacherSelections?.[subjectId];
-          const teacher = teacherId ? getSIETeacher(teacherId) : undefined;
-          const studentFrontier = selection.teacherFrontiers?.[subjectId] || selection.teacherProgressState?.[subjectId]?.studentAttendedFrontier;
-          const lesson = getSIECheckpointChoices(subjectId).find(item => item.nodeId === studentFrontier);
-          const backlog = profile.data?.backlog?.[subjectId] || profile.data?.backlog?.[getSIESubject(subjectId)?.nameAr || ""] || 0;
-          const knownLessons = getSIECheckpointChoices(subjectId).length;
-          return <article key={subjectId} className="rounded-2xl border border-border/70 bg-muted/20 p-4">
-            <div className="flex items-start justify-between gap-3"><div><h3 className="font-bold">{getSIESubject(subjectId)?.nameAr || subjectId}</h3><p className="mt-1 text-xs text-muted-foreground">{teacher?.nameAr || "لم يحدد مدرس لهذه المادة"}</p></div><span className="rounded-lg bg-background px-2.5 py-1 text-xs font-semibold text-primary">{backlog} تراكم</span></div>
-            <div className="mt-3 grid gap-2 text-xs leading-5 text-muted-foreground">
-              <p>موضعك المسجل: <b className="text-foreground">{lesson?.title || (studentFrontier ? "نقطة مسجلة غير موجودة في الفهرس الحالي" : "لم تحدد بعد")}</b></p>
-              <p>آخر محتوى عام للمدرس: <b className="text-foreground">{teacher?.latestPublicCheckpoint || "غير متاح"}</b></p>
-              <p>دروس المنهج المتاحة: <b className="text-foreground">{knownLessons || "الفهرس غير محمّل"}</b></p>
+  const profile = trpc.studentProfile.get.useQuery(undefined, {
+    retry: 1,
+    refetchOnWindowFocus: true,
+  });
+  const learning = trpc.learning.get.useQuery(undefined, { staleTime: 15_000 });
+  const tasksQuery = trpc.tasks.list.useQuery(undefined, { staleTime: 15_000 });
+  const activeDailyPlan = trpc.plans.currentDaily.useQuery(undefined, {
+    enabled: !profile.isLoading && !profile.isError && Boolean(profile.data?.subjectIds?.length),
+    staleTime: 15_000,
+    refetchOnWindowFocus: false,
+    refetchInterval: query => query.state.data?.plan ? 15_000 : query.state.data?.needsRefresh ? 30_000 : false,
+  });
+
+  const progressPreview = useMemo(() => {
+    const subjects = profile.data?.subjectIds ?? [];
+    const gaps = (learning.data as any)?.gapByBranch ?? {};
+    return subjects.flatMap(subjectId =>
+      getSIEStudentVisibleBranches(subjectId).map(branch => {
+        const gap = gaps[subjectId]?.[branch.branchId];
+        const nextIndex = gap?.studentPosition;
+        const next = typeof nextIndex === "number" ? branch.choices[nextIndex] : null;
+        return {
+          key: subjectId + "::" + branch.branchId,
+          subject: getSIESubject(subjectId)?.nameAr ?? subjectId,
+          branch: branch.branchTitle,
+          lastCompleted: gap?.studentFrontierTitle || (nextIndex === 0 ? "لم يبدأ بعد" : "غير محدد"),
+          next: next?.title ?? (gap?.studentPosition === branch.choices.length ? "اكتمل الفرع" : "غير محدد"),
+          gapCount: gap?.gapCount ?? null,
+          reference: gap?.referenceFrontierTitle ?? "غير مسجل",
+        };
+      })
+    );
+  }, [profile.data?.subjectIds, learning.data]);
+
+  const mappedOpenTasks = useMemo(() => {
+    const subjects = profile.data?.subjectIds ?? [];
+    return (tasksQuery.data ?? [])
+      .filter((task: any) => task.status !== "done")
+      .map((task: any) => ({
+        task,
+        match: matchSIECheckpointTask(subjects, [task.title, task.notes || ""].join(" ")),
+      }));
+  }, [tasksQuery.data, profile.data?.subjectIds]);
+  const curriculumLinkedTasks = mappedOpenTasks.filter(item => item.match);
+  const taskProgressConflicts = curriculumLinkedTasks.filter(({ task, match }) => {
+    if (!match) return false;
+    const branch = getSIECheckpointProgressBranches(match.subjectId).find(item => item.branchId === match.branchId);
+    const gap = (learning.data as any)?.gapByBranch?.[match.subjectId]?.[match.branchId];
+    const index = branch?.choices.findIndex(choice => choice.nodeId === match.nodeId) ?? -1;
+    return index >= 0 && typeof gap?.studentPosition === "number" && index < gap.studentPosition;
+  });
+  const isPreflightReady = !profile.isLoading && !learning.isLoading && !tasksQuery.isLoading
+    && !profile.isError && !learning.isError && !tasksQuery.isError;
+
+  const savedPlans = useMemo(() => (history.data || [])
+    .flatMap(record => {
+      const saved = parseSavedPlan(record);
+      const prompt = String(record.prompt || "");
+      const isLegacyAnnualPlan = prompt.startsWith(ANNUAL_PLAN_PREFIX)
+        || saved?.title.includes("الخطة السنوية")
+        || saved?.title.includes("الخطة القديمة");
+      const isDailyPlanRecord = prompt.startsWith(DAILY_SNAPSHOT_PREFIX);
+      const isUncommittedAutoDraft = prompt.startsWith(DAILY_PLAN_DRAFT_PREFIX);
+      const isLegacyApprovedRecord = prompt.startsWith(STUDY_PLAN_PREFIX)
+        && /^[a-f0-9]{32}:$/.test(prompt.slice(STUDY_PLAN_PREFIX.length));
+      if (!saved || isLegacyAnnualPlan || isDailyPlanRecord || isUncommittedAutoDraft || isLegacyApprovedRecord) return [];
+      return [{ id: record.id, createdAt: record.createdAt, plan: saved }];
+    })
+    .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()), [history.data]);
+
+  useEffect(() => {
+    if (profile.isLoading || profile.isError || plannerPreferencesInitialized.current || !profile.data) return;
+    const selection = (profile.data.selection ?? {}) as Record<string, any>;
+    const conditions = (selection.studyConditions ?? {}) as Record<string, unknown>;
+    const configuredMinutes = Number(conditions.dailyMinutes);
+    if (Number.isFinite(configuredMinutes) && configuredMinutes > 0) setDailyMinutes(configuredMinutes <= 60 ? 60 : configuredMinutes <= 150 ? 120 : 180);
+    plannerPreferencesInitialized.current = true;
+  }, [profile.data, profile.isLoading, profile.isError]);
+
+  const generate = trpc.plans.generate.useMutation({
+    onSuccess: result => {
+      setPlan({
+        ...result,
+        habits: Array.isArray(result.habits) ? result.habits : [],
+        steps: Array.isArray(result.steps) ? result.steps : [],
+        reviewQuestion: "",
+      });
+      setApproved(false);
+      setLoadedSavedDraft(false);
+      void utils.plans.list.invalidate();
+      toast.success("قائمة المهام الذكية جاهزة. راجعها قبل إضافتها إلى مهامك.");
+    },
+    onError: error => toast.error("تعذّر بناء الخطة: " + error.message),
+  });
+
+  const generationProgress = trpc.plans.generationProgress.useQuery(undefined, {
+    enabled: generate.isPending,
+    refetchInterval: generate.isPending ? 750 : false,
+    refetchOnWindowFocus: false,
+  });
+
+  const approvePlan = trpc.plans.approve.useMutation({
+    onSuccess: async result => {
+      setApproved(true);
+      setPlan(current => {
+        if (!current) return current;
+        const authoritative = "plan" in result && result.plan
+          ? { ...(result.plan as unknown as PlanView), reviewQuestion: "" }
+          : current;
+        return {
+          ...authoritative,
+          taskSync: {
+            parentGoalId: result.parentGoalId,
+            stageCount: result.taskCount,
+            taskCount: result.taskCount,
+            routineId: result.routineId ?? null,
+          },
+        };
+      });
+      await Promise.all([
+        utils.plans.currentDaily.invalidate(),
+        utils.tasks.list.invalidate(),
+        utils.goals.list.invalidate(),
+        utils.dashboard.summary.invalidate(),
+        utils.plans.list.invalidate(),
+      ]);
+      toast.success(`تم اعتماد خطة المذاكرة وربط ${result.taskCount} خطوة بالمهام.`);
+    },
+    onError: error => toast.error("تعذّر اعتماد الخطة: " + error.message),
+  });
+
+  const deleteSavedPlan = trpc.plans.delete.useMutation({
+    onSuccess: async () => {
+      await utils.plans.list.invalidate();
+      toast.success("تم حذف الخطة من السجل.");
+    },
+    onError: error => toast.error("تعذّر حذف الخطة: " + error.message),
+  });
+
+  const deleteAllPlans = trpc.plans.deleteAll.useMutation({
+    onSuccess: async result => {
+      setPlan(null);
+      setApproved(false);
+      setLoadedSavedDraft(false);
+      historyInitialized.current = true;
+      await Promise.all([
+        utils.plans.list.invalidate(),
+        utils.plans.currentDaily.invalidate(),
+        utils.tasks.list.invalidate(),
+        utils.goals.list.invalidate(),
+        utils.dashboard.summary.invalidate(),
+      ]);
+      toast.success(`تم حذف ${result.deletedPlans} خطة و${result.deletedTasks} مهمة مولّدة من الخطط.`);
+    },
+    onError: error => toast.error("تعذّر مسح الخطط: " + error.message),
+  });
+
+  const runGeneration = (minutes: number) => {
+    generate.mutate({
+      prompt: initialPrompt,
+      includeStudentProfile: true,
+      planningMode: "smart",
+      horizonDays: 7,
+      dailyMinutes: minutes,
+      daysPerWeek: 6,
+      startDate: todayCairo,
+      pace: "balanced",
+      paceLevel: 2,
+      deadline: null,
+    });
+  };
+
+  useEffect(() => {
+    const waitingForActivePlan = Boolean(profile.data?.subjectIds?.length) && activeDailyPlan.isLoading;
+    if (history.isLoading || history.isError || waitingForActivePlan || historyInitialized.current) return;
+    historyInitialized.current = true;
+
+    // The current active plan is not a deletable history draft. Load it from the
+    // read-only daily snapshot; otherwise fall back to the latest saved draft.
+    const active = activeDailyPlan.data?.plan
+      ? parseSavedPlan({ planJson: JSON.stringify(activeDailyPlan.data.plan) })
+      : null;
+    if (active) {
+      setPlan(active);
+      setApproved(true);
+      setLoadedSavedDraft(false);
+      return;
+    }
+
+    if (savedPlans.length > 0) {
+      setPlan(savedPlans[0].plan);
+      setApproved(false);
+      setLoadedSavedDraft(true);
+    }
+  }, [
+    history.isLoading,
+    history.isError,
+    savedPlans,
+    profile.data?.subjectIds,
+    activeDailyPlan.isLoading,
+    activeDailyPlan.data?.plan,
+  ]);
+
+  useEffect(() => {
+    // Reflect successful background replans only while the page still displays
+    // an untouched active plan. Manual edits and opened drafts are never replaced.
+    if (!historyInitialized.current || !approved || loadedSavedDraft || !activeDailyPlan.data?.plan) return;
+    const refreshed = parseSavedPlan({ planJson: JSON.stringify(activeDailyPlan.data.plan) });
+    if (refreshed) setPlan(refreshed);
+  }, [activeDailyPlan.data?.plan, approved, loadedSavedDraft]);
+
+  const updatePlan = (next: PlanView) => {
+    // Any manual edit invalidates the previous quality report. The server will
+    // recalculate the schedule and quality before creating tasks.
+    setPlan({ ...next, quality: undefined });
+    setApproved(false);
+  };
+
+  const updateStep = (index: number, patch: Partial<PlanStep>) => {
+    if (!plan) return;
+    updatePlan({ ...plan, steps: plan.steps.map((step, stepIndex) => stepIndex === index ? { ...step, ...patch } : step) });
+  };
+
+  const moveStep = (index: number, direction: -1 | 1) => {
+    if (!plan) return;
+    const destination = index + direction;
+    if (destination < 0 || destination >= plan.steps.length) return;
+    const steps = [...plan.steps];
+    [steps[index], steps[destination]] = [steps[destination], steps[index]];
+    updatePlan({ ...plan, steps });
+  };
+
+  const removeStep = (index: number) => {
+    if (!plan || plan.steps.length <= 1) return;
+    updatePlan({ ...plan, steps: plan.steps.filter((_, stepIndex) => stepIndex !== index) });
+  };
+
+  const addStep = () => {
+    if (!plan) return;
+    updatePlan({
+      ...plan,
+      steps: [...plan.steps, {
+        day: `اليوم ${plan.steps.length + 1}`,
+        title: "مهمة جديدة",
+        detail: "اكتب ما الذي تريد إنجازه في هذه الجلسة.",
+        minutes: 0,
+        category: "دراسة",
+        priority: "medium",
+        difficulty: "unknown",
+        lessonSize: "unknown",
+        difficultyBasis: "unknown",
+        difficultyConfidence: "low",
+        curriculumNodeIds: [],
+      }],
+    });
+  };
+
+  const approveCurrentPlan = () => {
+    if (!plan) return;
+    approvePlan.mutate({
+      plan: {
+        title: plan.title,
+        summary: plan.summary,
+        steps: plan.steps.map((step, index) => ({
+          ...step,
+          day: step.day || `اليوم ${index + 1}`,
+        })),
+      },
+      schedule: { startDate: todayCairo, dailyMinutes, daysPerWeek: 6, horizonDays: 7, mode: "flexible" },
+    });
+  };
+
+  const handleDeleteAll = () => {
+    const confirmed = window.confirm(
+      "سيتم حذف كل خطط الذكاء الاصطناعي المحفوظة، مع المهام ومراحل الأهداف التي أنشأتها هذه الخطط فقط. لن تُحذف المهام اليدوية أو تقدمك في المنهج أو ملفك الدراسي. هل تؤكد؟",
+    );
+    if (confirmed) deleteAllPlans.mutate();
+  };
+
+  return (
+    <DashboardLayout
+      title="خطة المذاكرة"
+      description="خطة واقعية تتغير مع تقدمك والتزاماتك."
+    >
+      <div className="mx-auto w-full max-w-6xl space-y-5 pb-8">
+        {history.isError && <QueryErrorNotice onRetry={() => void history.refetch()} label="تعذّر تحميل خططك المحفوظة." />}
+        {profile.isError && <QueryErrorNotice onRetry={() => void profile.refetch()} label="تعذّر تحميل ملفك الدراسي. أعد المحاولة قبل إنشاء الخطة." />}
+
+        <section className="relative overflow-hidden rounded-[1.75rem] border border-border bg-card p-5 shadow-sm sm:p-7">
+          <div className="pointer-events-none absolute -left-20 -top-24 size-72 rounded-full bg-primary/[0.08] blur-3xl" />
+          <div className="relative flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+            <div className="max-w-2xl">
+              <p className="text-[10px] font-semibold tracking-[.22em] text-primary">STUDYFLOW / PLANNER</p>
+              <h2 className="mt-3 text-2xl font-bold tracking-tight sm:text-3xl">مذاكرتك، بترتيب واقعي.</h2>
+              <p className="mt-2 max-w-xl text-sm leading-7 text-muted-foreground">
+                المحرك يوازن تلقائيًا بين المتراكم، والدرس القادم مع المدرس، والمهام المسجلة، والوقت المتاح. لا تحتاج إلى اختيار طريقة التخطيط أو كتابة طلب طويل.
+              </p>
             </div>
-          </article>;
-        })}
+            <div className="grid grid-cols-3 gap-2 sm:min-w-[320px]">
+              <div className="rounded-xl border border-border/70 bg-background/80 p-3">
+                <p className="text-[10px] text-muted-foreground">المواد</p>
+                <p className="mt-1 text-xl font-bold tabular-nums">{(profile.data?.subjectIds?.length ?? 0).toLocaleString("ar-EG")}</p>
+              </div>
+              <div className="rounded-xl border border-border/70 bg-background/80 p-3">
+                <p className="text-[10px] text-muted-foreground">مهام مفتوحة</p>
+                <p className="mt-1 text-xl font-bold tabular-nums">{(tasksQuery.data ?? []).filter((task: any) => task.status !== "done").length.toLocaleString("ar-EG")}</p>
+              </div>
+              <div className="rounded-xl border border-border/70 bg-background/80 p-3">
+                <p className="text-[10px] text-muted-foreground">فروع المنهج</p>
+                <p className="mt-1 text-xl font-bold tabular-nums">{progressPreview.length.toLocaleString("ar-EG")}</p>
+              </div>
+            </div>
+          </div>
+          {profile.data && (
+            <div className="relative mt-5 flex flex-wrap items-center gap-2 border-t border-border/70 pt-4 text-xs text-muted-foreground">
+              <span className="rounded-full border border-border bg-muted/25 px-3 py-1.5">{profile.data.track}</span>
+              <span className="rounded-full border border-border bg-muted/25 px-3 py-1.5">{profile.data.subjectIds.length} مواد مختارة</span>
+              <span className="rounded-full border border-border bg-muted/25 px-3 py-1.5">مستوى الانشغال: {dailyMinutes === 60 ? "مرتفع جدًا" : dailyMinutes === 120 ? "متوسط" : "أقل نسبيًا"}</span>
+            </div>
+          )}
+        </section>
+
+        {!profile.isLoading && profile.data && (!profile.data.subjectIds || profile.data.subjectIds.length === 0) && (
+          <section className="rounded-2xl border border-border bg-card p-5">
+            <h3 className="font-semibold">أكمل ملفك الدراسي أولًا</h3>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">حدد نظامك وصفك وموادك حتى يختار المحرك الدروس الصحيحة بدل إنشاء خطة عامة.</p>
+            <a href="/profile" className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-primary">فتح الملف الدراسي <ArrowUpRight className="size-4" /></a>
+          </section>
+        )}
+
+        <section className="rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
+          <div>
+            <p className="text-[10px] font-semibold tracking-[.18em] text-primary">YOUR STUDY CAPACITY</p>
+            <h3 className="mt-1 text-lg font-bold">قد إيه وقتك متاح في حياتك غالبًا؟</h3>
+            <p className="mt-1 max-w-2xl text-xs leading-6 text-muted-foreground">ده مؤشر لانشغالك وحجم المهام المناسب ليك، مش مدة للمحاضرات أو جدول بمواعيد. تقدر تغيّره في أي وقت، ومش هنحدد وقتًا لأي مهمة إلا لو أنت اخترت ده بنفسك.</p>
+          </div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-3">
+            {([[60,"ساعة تقريبًا","مشغول جدًا — مهام أقل وبأولوية أعلى"],[120,"ساعتان تقريبًا","انشغال متوسط — حمل متوازن"],[180,"3 ساعات أو أكثر","مساحة أكبر — مهام أكثر عند الحاجة"]] as const).map(([value,label,description]) => (
+              <button key={value} type="button" aria-pressed={dailyMinutes===value} onClick={() => setDailyMinutes(value)}
+                className={"rounded-xl border p-4 text-right transition " + (dailyMinutes===value ? "border-primary bg-primary/[.06] ring-1 ring-primary/25" : "border-border bg-background hover:border-primary/35")}>
+                <span className="block text-sm font-bold">{label}</span><span className="mt-1 block text-xs leading-5 text-muted-foreground">{description}</span>
+              </button>
+            ))}
+          </div>
+          <div className="mt-4 flex flex-col gap-3 border-t border-border/70 pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="max-w-xl text-xs leading-6 text-muted-foreground">المخطط هيقرأ موادك وتقدمك والمهام وشروط المدرسين، ثم يقترح قائمة مهام مرنة. لا يوجد يوم أو ساعة إلزامية لكل مهمة.</p>
+            <Button className="h-11 w-full rounded-xl px-6 sm:w-auto" onClick={() => runGeneration(dailyMinutes)} disabled={!isPreflightReady || generate.isPending || !profile.data?.subjectIds?.length}>
+              {generate.isPending ? <><Loader2 className="size-4 animate-spin" /> بنبني قائمتك…</> : <><Sparkles className="size-4" /> أنشئ قائمة مهامي</>}
+            </Button>
+          </div>
+        </section>
+
+        {plan && (
+          <PlanCard
+            plan={plan}
+            title={approved ? "الخطة المعتمدة" : loadedSavedDraft ? "مسودة محفوظة" : "مقترحك الدراسي"}
+            studentName={profile.data?.studentName}
+            editable={!approved}
+            onChange={updatePlan}
+            onApprove={approveCurrentPlan}
+            onAddStep={addStep}
+            onRemoveStep={removeStep}
+            onMoveStep={moveStep}
+            approving={approvePlan.isPending}
+            approved={approved}
+          />
+        )}
+
+        {savedPlans.length > 0 && (
+          <details className="rounded-2xl border border-border bg-card p-4 sm:p-5">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-semibold tracking-[.16em] text-muted-foreground">SAVED HISTORY</p>
+                <h3 className="mt-1 font-semibold">خطط سابقة <span className="text-xs font-normal text-muted-foreground">({savedPlans.length})</span></h3>
+              </div>
+              <span className="text-xs text-primary">عرض السجل</span>
+            </summary>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {savedPlans.map(item => (
+                <article key={item.id} className="rounded-xl border border-border/70 bg-muted/15 p-3">
+                  <button type="button" onClick={() => { setPlan(item.plan); setApproved(false); setLoadedSavedDraft(true); }} className="w-full text-right">
+                    <span className="block text-sm font-semibold">{item.plan.title}</span>
+                    <span className="mt-1 block line-clamp-2 text-xs leading-5 text-muted-foreground">{item.plan.summary}</span>
+                    <span className="mt-2 block text-[11px] text-muted-foreground">{new Intl.DateTimeFormat("ar-EG", { day: "numeric", month: "short", year: "numeric" }).format(new Date(item.createdAt))}</span>
+                  </button>
+                  <div className="mt-2 flex justify-end">
+                    <Button type="button" variant="ghost" size="sm" className="h-8 text-xs text-destructive" disabled={deleteSavedPlan.isPending} onClick={() => { if (window.confirm("حذف هذه المسودة من السجل؟")) deleteSavedPlan.mutate({ id: item.id }); }}>
+                      <Trash2 className="size-3.5" /> حذف
+                    </Button>
+                  </div>
+                </article>
+              ))}
+            </div>
+            <div className="mt-4 flex justify-end border-t border-border pt-3">
+              <Button type="button" variant="ghost" size="sm" className="text-xs text-destructive" onClick={handleDeleteAll} disabled={deleteAllPlans.isPending}>
+                {deleteAllPlans.isPending ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-3.5" />}
+                مسح كل الخطط
+              </Button>
+            </div>
+          </details>
+        )}
       </div>
-    </section>}
-    <section className="app-card mb-6 overflow-hidden"><form onSubmit={submit} className="p-5 sm:p-6"><label className="mb-2 flex items-center gap-2 font-bold"><Target className="size-4 text-primary" />قيود إضافية للمخطط (اختياري)</label><Textarea value={prompt} onChange={event => setPrompt(event.target.value)} placeholder="اكتب اختبارًا قريبًا أو ظرفًا جديدًا غير موجود في ملفك. يمكنك تركه فارغًا ليستخدم المخطط بياناتك تلقائيًا." className="min-h-36 rounded-2xl bg-muted/25 p-4 leading-8" /><div className="mt-3 flex flex-col gap-4"><div className="flex flex-wrap gap-2">{starters.map((starter, index) => <button type="button" key={starter} onClick={() => setPrompt(starter)} className="pressable rounded-lg bg-muted px-2.5 py-1.5 text-right text-[11px] text-muted-foreground hover:bg-secondary hover:text-primary">فكرة {index + 1}</button>)}</div><div className="grid gap-3 border-t border-border/60 pt-4 sm:grid-cols-2"><div><label htmlFor="plan-start-date" className="mb-1.5 block text-xs font-semibold text-muted-foreground">تاريخ بدء تنفيذ الخطة</label><Input id="plan-start-date" type="date" min={todayCairo} value={startDate} onChange={event => setStartDate(event.target.value)} className="h-10 rounded-xl bg-background" /></div><div><label htmlFor="plan-daily-minutes" className="mb-1.5 block text-xs font-semibold text-muted-foreground">الوقت المتاح يوميًا بالدقائق</label><Input id="plan-daily-minutes" type="number" min={20} max={600} step={5} value={dailyMinutes} onChange={event => setDailyMinutes(Math.min(600, Math.max(20, Number(event.target.value) || 20)))} className="h-10 rounded-xl bg-background" /></div></div><div className="flex flex-col gap-3 border-t border-border/60 pt-3 sm:flex-row sm:items-center sm:justify-between"><label className="flex items-center gap-3 text-sm text-muted-foreground"><input type="checkbox" checked={useProfile} onChange={event => setUseProfile(event.target.checked)} className="size-4 accent-[var(--primary)]" />استخدم ملفي الدراسي والتراكم لتخصيص الخطة</label><Button disabled={generate.isPending || !startDate} className="pressable min-w-44 rounded-xl bg-primary">{generate.isPending ? <><Loader2 className="size-4 animate-spin" />يبني خطة مناسبة...</> : <><Sparkles className="size-4" />ولّد خطتي</>}</Button></div></div></form></section>
-    {generate.isPending && <PlanLoading />}
-    {plan ? <><PlanCard plan={plan} title="خطتك المقترحة" onApprove={openApproval} isApproving={approve.isPending} isApproved={approvedPlanKey === planKey} approvalResult={approvedPlanKey === planKey ? approvalResult : null} studentName={profile.data?.studentName} /><AlertDialog open={approvalOpen} onOpenChange={setApprovalOpen}><AlertDialogContent dir="rtl"><AlertDialogHeader><AlertDialogTitle>تأكيد إنشاء هيكل الخطة</AlertDialogTitle><AlertDialogDescription>سيُنشأ هدف رئيسي باسم «{plan.title}»، وتحته {plan.steps.length} مراحل و{plan.steps.length} مهام مرتبطة. ستتوزع مواعيد المهام ابتداءً من {new Intl.DateTimeFormat("ar-EG", { day: "numeric", month: "long", year: "numeric", timeZone: "Africa/Cairo" }).format(new Date(`${startDate}T12:00:00`))} مع حد يومي قدره {dailyMinutes} دقيقة، وستظهر في التقويم. لن يحدث أي تغيير قبل اختيار «اعتماد وإنشاء».</AlertDialogDescription></AlertDialogHeader><div className="rounded-2xl bg-secondary/60 p-4 text-sm leading-7"><p className="font-bold text-primary">راجع قبل الاعتماد</p><p className="mt-1 text-muted-foreground">{plan.steps.slice(0, 3).map(step => step.title).join(" · ")}{plan.steps.length > 3 ? " · ..." : ""}</p></div><AlertDialogFooter><AlertDialogCancel>رجوع للمراجعة</AlertDialogCancel><AlertDialogAction onClick={() => approve.mutate({ plan, schedule: { startDate, dailyMinutes } })} disabled={approve.isPending} className="bg-primary">{approve.isPending ? <><Loader2 className="size-4 animate-spin" />يجري الإنشاء...</> : <><CheckCircle2 className="size-4" />اعتماد وإنشاء</>}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>{approvedPlanKey === planKey && approvalResult && <section className="no-print enter mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950 dark:border-emerald-900/60 dark:bg-emerald-950/35 dark:text-emerald-100"><div className="flex items-start gap-3"><CheckCircle2 className="mt-0.5 size-5 shrink-0" /><div><p className="font-bold">تم اعتماد الخطة داخل أهدافك</p><p className="mt-1 text-sm leading-6">أُنشئ هدف رئيسي واحد، وتحته {approvalResult.stageCount} مراحل و{approvalResult.taskCount} مهام موزعة حسب الوقت اليومي، مع مواعيد ظاهرة في التقويم.</p><div className="mt-3 flex flex-wrap gap-2"><a href="/goals" className="pressable inline-flex rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-800 dark:bg-emerald-500 dark:text-emerald-950">فتح صفحة الأهداف</a><a href="/tasks" className="pressable inline-flex rounded-lg border border-emerald-700/20 px-3 py-2 text-xs font-bold text-emerald-800 dark:text-emerald-100">متابعة المهام اليومية</a></div></div></div></section>}</> : <section className="grid gap-4 md:grid-cols-3"><Feature icon={<ListTree className="size-5" />} title="مراحل قابلة للمتابعة" copy="تحويل الخطة إلى هدف ومراحل ومهام بعد موافقتك فقط." /><Feature icon={<Clock3 className="size-5" />} title="وقت يناسب طاقتك" copy="جلسات قصيرة وخيارات حد أدنى عندما يكون اليوم ثقيلًا." /><Feature icon={<Lightbulb className="size-5" />} title="عودة بلا جلد ذات" copy="خطة تعيدك تدريجيًا من التراكم بدل أن تضاعف الضغط." /></section>}
-    {savedPlans.length > 0 && <section className="no-print mt-8"><div className="mb-4 flex items-center justify-between"><div><p className="eyebrow">محفوظاتك</p><h2 className="mt-1 font-bold">خطط سابقة</h2></div><span className="text-xs text-muted-foreground">{savedPlans.length} خطط محفوظة</span></div><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{savedPlans.map(item => <button key={item.id} onClick={() => setPlan(item.plan)} className="app-card pressable p-4 text-right hover:border-primary/25"><div className="flex items-start gap-3"><span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-secondary text-primary"><BrainCircuit className="size-4" /></span><div className="min-w-0 flex-1"><p className="truncate font-semibold">{item.plan.title}</p><p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{item.plan.summary}</p><p className="mt-2 text-[11px] text-muted-foreground">{new Intl.DateTimeFormat("ar-EG", { day: "numeric", month: "short" }).format(new Date(item.createdAt))}</p></div></div></button>)}</div></section>}
-  </DashboardLayout>;
+    </DashboardLayout>
+  );
 }
 
-function PlanLoading() { return <section className="enter app-card mb-6 p-5" role="status" aria-live="polite"><div className="flex items-center gap-3"><span className="flex size-10 items-center justify-center rounded-xl bg-secondary text-primary"><Sparkles className="size-5 animate-pulse" /></span><div><p className="font-bold">نرتب الخطة على مقاسك...</p><p className="mt-1 text-xs text-muted-foreground">نوازن المواد والتراكم ووقت البداية.</p></div></div><div className="mt-5 space-y-3"><div className="loading-shimmer h-14 rounded-2xl" /><div className="loading-shimmer h-14 rounded-2xl" /><div className="loading-shimmer h-14 rounded-2xl" /></div></section>; }
-function Feature({ icon, title, copy }: { icon: React.ReactNode; title: string; copy: string }) { return <article className="app-card p-5 transition-transform duration-200 hover:-translate-y-1"><span className="flex size-10 items-center justify-center rounded-2xl bg-secondary text-primary">{icon}</span><h2 className="mt-4 font-bold">{title}</h2><p className="mt-1.5 text-sm leading-6 text-muted-foreground">{copy}</p></article>; }
-function PlanCard({ plan, title, onApprove, isApproving, isApproved, approvalResult, studentName }: { plan: PlanView; title: string; onApprove?: () => void; isApproving?: boolean; isApproved?: boolean; approvalResult?: { stageCount: number; taskCount: number } | null; studentName?: string }) { return <section className="enter app-card overflow-hidden"><div className="border-b border-border/65 bg-gradient-to-l from-secondary/65 to-card p-5 sm:p-6"><div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div><p className="eyebrow">{title}</p><h2 className="mt-1 text-xl font-bold">{plan.title}</h2><p className="mt-2 max-w-2xl text-sm leading-7 text-muted-foreground">{plan.summary}</p>{studentName && <p className="mt-3 text-xs text-primary">مخصصة لـ {studentName}</p>}</div><div className="flex flex-wrap items-center gap-2"><span className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-card px-3 py-2 text-xs font-semibold text-primary shadow-sm"><Clock3 className="size-3.5" />{plan.durationLabel}</span><PlanExportActions plan={plan} studentName={studentName} /></div></div>{onApprove && <div className="no-print mt-5 flex flex-col gap-3 rounded-2xl border border-primary/15 bg-card/80 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-bold text-primary">جاهزة للتحويل إلى أهدافك؟</p><p className="mt-1 text-xs leading-5 text-muted-foreground">ستراجع الأعداد والعناوين أولًا، ثم توافق صراحة قبل الإنشاء.</p></div><Button type="button" disabled={isApproving || isApproved} onClick={onApprove} className="pressable shrink-0 rounded-xl bg-primary">{isApproved ? <><CheckCircle2 className="size-4" />تم اعتماد الخطة</> : isApproving ? <><Loader2 className="size-4 animate-spin" />يجري الاعتماد...</> : <><CheckCircle2 className="size-4" />مراجعة واعتماد</>}</Button></div>}</div><div className="grid gap-6 p-5 lg:grid-cols-[1.3fr_.7fr] sm:p-6"><div><h3 className="mb-4 flex items-center gap-2 font-bold"><ListTree className="size-4 text-primary" />مسار التنفيذ</h3><div className="space-y-3">{plan.steps.map((step, index) => <div key={`${step.day}-${index}`} className="enter relative flex gap-3 rounded-2xl border border-border/70 bg-muted/20 p-4" style={{ animationDelay: `${index * 45}ms` }}><span className="num flex size-8 shrink-0 items-center justify-center rounded-xl bg-primary text-xs font-semibold text-primary-foreground">{index + 1}</span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className="text-xs font-semibold text-primary">{step.day}</span><span className="text-xs text-muted-foreground">·</span><span className="text-xs text-muted-foreground">{step.category}</span><span className="mr-auto inline-flex items-center gap-1 text-[11px] text-muted-foreground"><Clock3 className="size-3" />{step.minutes} د</span></div><h4 className="mt-1.5 font-semibold">{step.title}</h4><p className="mt-1 text-sm leading-6 text-muted-foreground">{step.detail}</p></div></div>)}</div></div><aside><div className="rounded-2xl bg-primary p-5 text-primary-foreground"><Lightbulb className="size-5 text-violet-200" /><h3 className="mt-3 font-bold">عادات داعمة</h3><div className="mt-4 space-y-3">{plan.habits.map((habit, index) => <div key={`${habit.title}-${index}`} className="rounded-xl bg-white/8 p-3"><p className="text-sm font-semibold">{habit.title}</p><p className="mt-1 text-xs leading-5 text-primary-foreground/65">عند: {habit.cue}</p></div>)}</div></div><div className="mt-4 rounded-2xl border border-border bg-muted/35 p-4"><div className="flex items-center gap-2 font-semibold"><CheckCircle2 className="size-4 text-emerald-600" />سؤال المراجعة</div><p className="mt-2 text-sm leading-6 text-muted-foreground">{plan.reviewQuestion}</p></div></aside></div></section>; }
+
+function PlanLoading({ progress }: { progress: GenerationProgress | null }) {
+  const stages: Array<{ id: GenerationProgress["currentStage"]; title: string }> = [
+    { id: "profile", title: "قراءة ملف الطالب والتقدم المسجل" },
+    { id: "curriculum", title: "تحميل خريطة الكتب والفروع والمتطلبات" },
+    { id: "model", title: "تحليل الأولويات وتكوين المسودة" },
+    { id: "validation", title: "مراجعة المسودة والقواعد المعتمدة" },
+    { id: "saving", title: "حفظ المسودة للمراجعة" },
+  ];
+  return (
+    <section className="app-card rounded-2xl p-5 sm:p-6" role="status" aria-live="polite">
+      <div className="flex items-center gap-3">
+        <span className="flex size-11 items-center justify-center rounded-xl bg-secondary text-primary"><Sparkles className="size-5 animate-pulse" /></span>
+        <div>
+          <h3 className="font-bold">ببني مسودة خطتك</h3>
+          <p className="mt-1 text-sm text-muted-foreground">{progress?.detail || "جارٍ بدء المعالجة وقراءة بياناتك."}</p>
+        </div>
+        <Loader2 className="mr-auto size-5 animate-spin text-primary" />
+      </div>
+      <ol className="mt-5 space-y-2">
+        {stages.map((stage, index) => {
+          const done = progress?.completedStages.includes(stage.id) ?? false;
+          const current = progress?.status === "running" && progress.currentStage === stage.id;
+          return (
+            <li key={stage.id} className={"flex items-center gap-3 rounded-xl border px-3 py-3 " + (current
+              ? "border-primary/40 bg-primary/5"
+              : done ? "border-emerald-500/20 bg-emerald-500/5" : "border-border/60 bg-muted/10")}>
+              <span className="flex size-7 shrink-0 items-center justify-center rounded-full border border-border/70 text-xs">
+                {done ? <CheckCircle2 className="size-4 text-emerald-600" /> : current ? <Loader2 className="size-4 animate-spin text-primary" /> : index + 1}
+              </span>
+              <span className={"text-sm " + (current || done ? "font-semibold" : "text-muted-foreground")}>{stage.title}</span>
+              {current && <span className="mr-auto text-[11px] font-medium text-primary">جارٍ الآن</span>}
+              {done && <span className="mr-auto text-[11px] text-emerald-700">اكتملت</span>}
+            </li>
+          );
+        })}
+      </ol>
+    </section>
+  );
+}
+
+function PlanCard({ plan, title, studentName, editable, onChange, onApprove, onAddStep, onRemoveStep, onMoveStep, approving, approved }: {
+  plan: PlanView; title: string; studentName?: string; editable: boolean;
+  onChange: (next: PlanView) => void; onApprove: () => void; onAddStep: () => void;
+  onRemoveStep: (index: number) => void; onMoveStep: (index: number, direction: -1 | 1) => void;
+  approving: boolean; approved: boolean;
+}) {
+  const [editing,setEditing]=useState<{index:number;title:string;detail:string}|null>(null);
+  const completedCount=plan.steps.filter(step=>step.plannerTaskStatus==="done"||step.existingTask?.status==="done").length;
+  const saveEdit=()=>{if(!editing)return;onChange({...plan,steps:plan.steps.map((step,index)=>index===editing.index?{...step,title:editing.title.trim()||step.title,detail:editing.detail.trim()||step.detail}:step)});setEditing(null);};
+  return <section className="overflow-hidden rounded-[1.65rem] border border-border bg-card shadow-sm">
+    <header className="border-b border-border/70 p-4 sm:p-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="text-[10px] font-semibold tracking-[.16em] text-primary">STUDYFLOW / TASK LIST</span><span className="rounded-full border border-border px-2.5 py-1 text-[10px] text-muted-foreground">{title}</span></div>
+          <h2 className="mt-2 text-xl font-bold sm:text-2xl">المهام المقترحة ليك</h2><p className="mt-2 max-w-2xl whitespace-pre-line text-sm leading-7 text-muted-foreground">{plan.summary.split("\n\n")[0]}</p>{studentName&&<p className="mt-2 text-xs text-muted-foreground">مبنية على ملف {studentName}</p>}</div>
+        <div className="flex flex-wrap items-center gap-2"><span className={"rounded-full border px-3 py-1.5 text-xs font-semibold "+(approved?"border-primary/20 bg-primary/[0.05] text-primary":"border-border bg-muted/30 text-muted-foreground")}>{approved?"قائمة مهام معتمدة":"مسودة للمراجعة"}</span><PlanExportActions plan={plan} studentName={studentName}/></div>
+      </div>
+      <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <div className="rounded-xl border border-border/70 bg-muted/15 p-3"><p className="text-[10px] text-muted-foreground">إجمالي المهام</p><p className="mt-1 text-base font-bold tabular-nums">{plan.steps.length.toLocaleString("ar-EG")}</p></div>
+        <div className="rounded-xl border border-border/70 bg-muted/15 p-3"><p className="text-[10px] text-muted-foreground">المهام المكتملة</p><p className="mt-1 text-base font-bold tabular-nums">{completedCount.toLocaleString("ar-EG")}</p></div>
+        <div className="col-span-2 rounded-xl border border-border/70 bg-muted/15 p-3 sm:col-span-1"><p className="text-[10px] text-muted-foreground">طريقة التنفيذ</p><p className="mt-1 text-sm font-bold">مرنة — بدون توقيت إلزامي</p></div>
+      </div>
+    </header>
+    <div className="space-y-4 p-4 sm:p-6">
+      <div className="flex flex-wrap items-end justify-between gap-2"><div><h3 className="font-bold">قائمة التنفيذ</h3><p className="mt-1 text-xs text-muted-foreground">ابدأ بالمهمة المناسبة لظروفك. لا يوجد يوم أو ساعة محددة لها.</p></div>{editable&&<Button type="button" size="sm" variant="outline" className="h-9 rounded-lg" onClick={onAddStep}><Plus className="size-3.5"/> إضافة مهمة</Button>}</div>
+      <div className="divide-y divide-border/60 rounded-2xl border border-border/80 bg-background">{plan.steps.map((step,index)=><article key={step.plannerTaskId??step.sourceStepIndex??index} className="p-4 sm:p-5">
+        {editing?.index===index?<div className="space-y-3">
+          <label className="block"><span className="mb-1 block text-[11px] font-semibold text-muted-foreground">عنوان المهمة</span><input value={editing.title} onChange={e=>setEditing(v=>v?{...v,title:e.target.value}:v)} className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"/></label>
+          <label className="block"><span className="mb-1 block text-[11px] font-semibold text-muted-foreground">تفاصيل التنفيذ</span><textarea rows={3} value={editing.detail} onChange={e=>setEditing(v=>v?{...v,detail:e.target.value}:v)} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm leading-6"/></label>
+          <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="ghost" size="sm" onClick={()=>setEditing(null)}>إلغاء</Button><Button type="button" size="sm" onClick={saveEdit}>حفظ التعديل</Button></div>
+        </div>:<div className="flex items-start gap-3">
+          <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-[11px] font-semibold text-muted-foreground">{index+1}</span>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2"><span className="rounded-md bg-muted/60 px-2 py-1 text-[10px] font-semibold text-muted-foreground">{step.category}</span>{step.priority==="critical"&&<span className="text-[10px] font-semibold text-destructive">عاجل</span>}{step.priority==="high"&&<span className="text-[10px] font-semibold text-amber-600">أولوية عالية</span>}{(step.plannerTaskStatus==="done"||step.existingTask?.status==="done")&&<span className="text-[10px] text-primary">مكتملة</span>}{step.resourceRecommendation&&<span className="text-[10px] font-semibold text-primary">مصدر مدرس متاح</span>}</div>
+            <h5 className="mt-2 text-sm font-bold leading-6">{step.title}</h5><p className="mt-1 whitespace-pre-line text-xs leading-6 text-muted-foreground">{step.detail}</p>
+            {step.priorityReason&&<details className="mt-2 text-[11px] text-muted-foreground"><summary className="cursor-pointer">لماذا هذه المهمة؟</summary><p className="mt-2 max-w-xl leading-6">{step.priorityReason}</p></details>}
+            {step.resourceRecommendation&&<a href={step.resourceRecommendation.url} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-[11px] font-semibold text-primary">افتح شرح المدرس المقترح</a>}
+            {editable&&<div className="mt-3 flex flex-wrap items-center gap-1 border-t border-border/50 pt-2"><Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={()=>setEditing({index,title:step.title,detail:step.detail})}>تعديل</Button><Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" disabled={index===0} onClick={()=>onMoveStep(index,-1)}><ArrowUp className="size-3.5"/> لأعلى</Button><Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" disabled={index===plan.steps.length-1} onClick={()=>onMoveStep(index,1)}><ArrowDown className="size-3.5"/> لأسفل</Button><Button type="button" variant="ghost" size="sm" className="mr-auto h-8 px-2 text-xs text-destructive" disabled={plan.steps.length<=1} onClick={()=>onRemoveStep(index)}><X className="size-3.5"/> حذف</Button></div>}
+          </div>
+        </div>}
+      </article>)}</div>
+      {editable&&<div className="flex flex-col gap-3 border-t border-border/70 pt-4 sm:flex-row sm:items-center sm:justify-between"><p className="text-xs leading-5 text-muted-foreground">اعتماد القائمة ينشئ مهامًا بدون وقت أو موعد إلزامي. يمكنك تحديد موعد لمهمة منفردة لاحقًا عند الحاجة.</p><Button type="button" className="h-11 rounded-xl px-6" onClick={onApprove} disabled={approving||plan.steps.length===0||!plan.title.trim()}>{approving?<Loader2 className="size-4 animate-spin"/>:<CheckCircle2 className="size-4"/>} اعتماد المهام وإضافتها</Button></div>}
+      <details className="rounded-xl border border-border/70 bg-muted/10 p-3"><summary className="cursor-pointer text-xs font-semibold">تفاصيل إضافية</summary><div className="mt-3 whitespace-pre-line text-xs leading-6 text-muted-foreground">{plan.summary}</div>{plan.habits.length>0&&<div className="mt-3 grid gap-2 sm:grid-cols-2">{plan.habits.map((habit,index)=><div key={habit.title+":"+index} className="rounded-lg bg-background p-3"><p className="text-xs font-semibold text-foreground">{habit.title}</p><p className="mt-1 text-xs leading-5">{habit.cue}</p></div>)}</div>}</details>
+      <details className="rounded-xl border border-border/70"><summary className="cursor-pointer px-4 py-3 text-xs font-semibold text-muted-foreground">اسأل مساعد الخطة</summary><div className="p-3"><PlanAssistantChat plan={plan}/></div></details>
+    </div>
+  </section>;
+}
+
+function PlanAssistantChat({ plan }: { plan: PlanView }) {
+  const [messages, setMessages] = useState<Array<{ role: "user" | "assistant"; content: string }>>([]);
+  const [draft, setDraft] = useState("");
+  const context = useMemo(() => [
+    "السياق: المستخدم يتحدث من صفحة خطة المذاكرة في StudyFlow.",
+    "اسم الخطة: " + plan.title,
+    "ملخص الخطة: " + plan.summary,
+    "مدة التنفيذ: " + plan.durationLabel,
+    "خطوات الخطة الحالية:",
+    ...plan.steps.map((step, index) =>
+      `${index + 1}. ${step.day} | ${step.title} | ${step.minutes} دقيقة | ${step.category} | ${step.detail}${step.priorityReason ? " | سبب الأولوية: " + step.priorityReason : ""}`
+    ),
+  ].join("\n").slice(0, 7_500), [plan]);
+
+  const chat = trpc.ai.chat.useMutation({
+    onSuccess: result => setMessages(current => [...current, { role: "assistant" as const, content: result.content }].slice(-20)),
+    onError: error => toast.error(error.message || "تعذّر الوصول إلى مساعد الخطة."),
+  });
+
+  const sendMessage = () => {
+    const content = draft.trim();
+    if (!content || chat.isPending) return;
+    const nextMessages = [...messages, { role: "user" as const, content }].slice(-20);
+    setMessages(nextMessages);
+    setDraft("");
+    chat.mutate({ messages: nextMessages, memory: "", context });
+  };
+
+  return (
+    <section className="sf-plan-chat lg:col-span-2 overflow-hidden rounded-2xl border border-border bg-card">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 bg-muted/20 p-4 sm:p-5">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><MessageCircle className="size-5" /></span>
+          <div className="min-w-0">
+            <h3 className="font-bold">اتكلم مع مساعد خطتك</h3>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">اسأله عن ترتيب الأيام أو وقت أي خطوة أو اطلب اقتراحًا لتعديل الخطة.</p>
+          </div>
+        </div>
+        <span className="rounded-full border border-border bg-background px-3 py-1.5 text-[10px] text-muted-foreground">مرتبط بالخطة الحالية</span>
+      </header>
+      <div className="grid gap-3 p-3 sm:p-4">
+        <div className="max-h-[360px] min-h-24 space-y-3 overflow-y-auto rounded-xl bg-muted/15 p-3" aria-live="polite">
+          {!messages.length && (
+            <div className="flex min-h-20 items-center gap-3 text-sm text-muted-foreground">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><BrainCircuit className="size-4" /></span>
+              <p>أنا شايف تفاصيل الخطة الحالية. اسألني مثلاً: ليه حطيت الدرس ده في اليوم ده؟ أو اقترح توزيعًا أخف.</p>
+            </div>
+          )}
+          {messages.map((message, index) => (
+            <div key={`${index}-${message.role}`} className={message.role === "user" ? "flex justify-start" : "flex justify-end"}>
+              <div className={"max-w-[92%] whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-sm leading-7 " + (message.role === "user"
+                ? "rounded-br-md bg-primary text-primary-foreground"
+                : "rounded-bl-md border border-border bg-card text-foreground")}>
+                {message.content}
+              </div>
+            </div>
+          ))}
+          {chat.isPending && <div className="flex justify-end"><span className="rounded-xl border border-border bg-card px-3 py-2 text-xs text-muted-foreground">المساعد بيحلل الخطة...</span></div>}
+        </div>
+        <div className="flex items-end gap-2">
+          <textarea
+            value={draft}
+            onChange={event => setDraft(event.target.value)}
+            onKeyDown={event => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+              }
+            }}
+            rows={2}
+            maxLength={4_000}
+            placeholder="اكتب سؤالك عن الخطة..."
+            aria-label="اكتب رسالة لمساعد الخطة"
+            className="min-h-12 max-h-32 min-w-0 flex-1 resize-y rounded-xl border border-border bg-background px-3 py-2.5 text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground focus:border-primary/60"
+          />
+          <Button type="button" onClick={sendMessage} disabled={!draft.trim() || chat.isPending} className="h-12 shrink-0 rounded-xl px-4">
+            <Send className="size-4" /><span className="hidden sm:inline">إرسال</span>
+          </Button>
+        </div>
+        <p className="px-1 text-[10px] text-muted-foreground">المساعد يقترح ويشرح؛ تعديل المهام أو ترتيبها يتم من أدوات الخطة نفسها قبل الاعتماد.</p>
+      </div>
+    </section>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-xl border border-border/70 bg-card/75 p-3">
+    <span className="text-[11px] text-muted-foreground">{label}</span>
+    <b className="mt-1 block text-sm font-bold">{value}</b>
+  </div>;
+}

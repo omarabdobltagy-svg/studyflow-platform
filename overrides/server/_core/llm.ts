@@ -212,14 +212,14 @@ const normalizeToolChoice = (
   return toolChoice;
 };
 
-const resolveApiUrl = () => {
-  const configured = ENV.aiApiBaseUrl.trim() || "https://openrouter.ai/api/v1";
+const resolveApiUrl = (configuredBaseUrl: string, fallbackBaseUrl: string) => {
+  const configured = configuredBaseUrl.trim() || fallbackBaseUrl;
   if (/\/chat\/completions\/?$/.test(configured)) return configured;
-  return `${configured.replace(/\/+$/, "")}/chat/completions`;
+  return configured.replace(/\/+$/, "") + "/chat/completions";
 };
 
-const assertApiKey = () => {
-  if (!ENV.aiApiKey) throw new Error("AI_API_KEY is not configured");
+const assertApiKey = (apiKey: string, variableName: string) => {
+  if (!apiKey) throw new Error(variableName + " is not configured");
 };
 
 const normalizeResponseFormat = ({
@@ -296,8 +296,11 @@ const computeBackoffDelay = (
   return Math.min(Math.max(jittered, retryAfterMs ?? 0), RETRY_MAX_DELAY_MS);
 };
 
-// Retries non-2xx responses and network errors with exponential backoff, then
-// returns the final Response so callers keep their existing error handling.
+// Retries transient provider responses and network errors with exponential backoff.
+// Deterministic 4xx responses return immediately for caller-side fallback/error handling.
+const isRetryableStatus = (status: number) =>
+  status === 408 || status === 425 || status === 429 || status >= 500;
+
 const fetchWithBackoff = async (
   url: string,
   init: FetchInit
@@ -307,20 +310,28 @@ const fetchWithBackoff = async (
   for (let attempt = 0; attempt <= RETRY_MAX_RETRIES; attempt++) {
     try {
       const response = await fetch(url, init);
-      if (response.ok || attempt === RETRY_MAX_RETRIES) {
+      // A 429 caused by exhausted billing/quota is deterministic. Do not retry
+      // it repeatedly; return it so the planner can switch providers.
+      if (response.status === 429) {
+        const errorPreview = await response.clone().text().catch(() => "");
+        if (/insufficient[_\s-]?(?:credits?|quota|balance)|out of credits|credit balance|quota.{0,30}(?:exceeded|exhausted)|payment required/i.test(errorPreview)) {
+          return response;
+        }
+      }
+      // Authentication, billing, validation and unsupported-feature 4xx errors
+      // are deterministic. Return them immediately so callers can react/fallback.
+      if (response.ok || !isRetryableStatus(response.status) || attempt === RETRY_MAX_RETRIES) {
         return response;
       }
 
-      const retryAfterMs = parseRetryAfter(
-        response.headers.get("retry-after")
-      );
+      const retryAfterMs = parseRetryAfter(response.headers.get("retry-after"));
       try {
         await response.body?.cancel();
       } catch {
         // Body already settled; nothing to clean up.
       }
       console.warn(
-        `LLM request retry ${attempt + 1}/${RETRY_MAX_RETRIES} after status ${response.status}`
+        `LLM request retry ${attempt + 1}/${RETRY_MAX_RETRIES} after transient status ${response.status}`
       );
       await sleep(computeBackoffDelay(attempt, retryAfterMs));
     } catch (error) {
@@ -338,84 +349,168 @@ const fetchWithBackoff = async (
     : new Error("LLM request failed after exhausting retries");
 };
 
-export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
-  assertApiKey();
+type ProviderRequestConfig = {
+  apiBaseUrl: string;
+  fallbackBaseUrl: string;
+  apiKey: string;
+  apiKeyVariable: string;
+  defaultModel: string;
+  errorPrefix: string;
+  omitResponseFormat?: boolean;
+  pollPending?: boolean;
+  additionalBody?: Record<string, unknown>;
+};
 
+const NVIDIA_POLL_INTERVAL_MS = 1_000;
+const NVIDIA_POLL_TIMEOUT_MS = 90_000;
+
+async function pollNvidiaPendingResponse(
+  initialResponse: Response,
+  provider: ProviderRequestConfig
+): Promise<InvokeResult> {
+  const initialPayload = await initialResponse.json().catch(() => ({})) as Record<string, unknown>;
+  const requestId = [
+    initialPayload.requestId,
+    initialPayload.request_id,
+    initialResponse.headers.get("NVCF-REQID"),
+    initialResponse.headers.get("NVCF-REQUEST-ID"),
+  ].find(value => typeof value === "string" && value.length > 0) as string | undefined;
+
+  if (!requestId) {
+    throw new Error(provider.errorPrefix + ": HTTP 202 returned without a requestId");
+  }
+
+  const statusBaseUrl = resolveApiUrl(provider.apiBaseUrl, provider.fallbackBaseUrl)
+    .replace(/\/chat\/completions\/?$/i, "");
+  const statusUrl = statusBaseUrl + "/status/" + encodeURIComponent(requestId);
+  const deadline = Date.now() + NVIDIA_POLL_TIMEOUT_MS;
+
+  while (Date.now() < deadline) {
+    await sleep(NVIDIA_POLL_INTERVAL_MS);
+    const pollResponse = await fetchWithBackoff(statusUrl, {
+      method: "GET",
+      headers: {
+        accept: "application/json",
+        authorization: "Bearer " + provider.apiKey,
+      },
+    });
+
+    if (pollResponse.status === 202) {
+      try {
+        await pollResponse.body?.cancel();
+      } catch {
+        // The response body may already be consumed or closed.
+      }
+      continue;
+    }
+
+    if (!pollResponse.ok) {
+      const errorText = (await pollResponse.text()).slice(0, 1_600);
+      throw new Error(
+        provider.errorPrefix + " status polling failed: " +
+        pollResponse.status + " " + pollResponse.statusText + " – " + errorText
+      );
+    }
+
+    const result = await pollResponse.json() as InvokeResult;
+    if (!result || !Array.isArray(result.choices)) {
+      throw new Error(provider.errorPrefix + ": status polling returned an invalid completion payload");
+    }
+    return result;
+  }
+
+  throw new Error(provider.errorPrefix + ": timed out while waiting for the pending request");
+}
+
+async function invokeWithProvider(
+  params: InvokeParams,
+  provider: ProviderRequestConfig
+): Promise<InvokeResult> {
+  assertApiKey(provider.apiKey, provider.apiKeyVariable);
   const {
-    messages,
-    tools,
-    toolChoice,
-    tool_choice,
-    outputSchema,
-    output_schema,
-    responseFormat,
-    response_format,
-    model,
-    thinking,
-    reasoning,
-    maxTokens,
-    max_tokens,
+    messages, tools, toolChoice, tool_choice, outputSchema, output_schema,
+    responseFormat, response_format, model, thinking, reasoning, maxTokens, max_tokens,
   } = params;
 
   const payload: Record<string, unknown> = {
     messages: messages.map(normalizeMessage),
   };
-
-  const resolvedModel = model || ENV.aiModel;
+  const resolvedModel = model || provider.defaultModel;
   if (resolvedModel) payload.model = resolvedModel;
+  if (tools && tools.length > 0) payload.tools = tools;
 
-  if (tools && tools.length > 0) {
-    payload.tools = tools;
-  }
-
-  const normalizedToolChoice = normalizeToolChoice(
-    toolChoice || tool_choice,
-    tools
-  );
-  if (normalizedToolChoice) {
-    payload.tool_choice = normalizedToolChoice;
-  }
+  const normalizedToolChoice = normalizeToolChoice(toolChoice || tool_choice, tools);
+  if (normalizedToolChoice) payload.tool_choice = normalizedToolChoice;
 
   const resolvedMaxTokens = max_tokens ?? maxTokens;
-  if (typeof resolvedMaxTokens === "number") {
-    payload.max_tokens = resolvedMaxTokens;
+  if (typeof resolvedMaxTokens === "number") payload.max_tokens = resolvedMaxTokens;
+  if (thinking) payload.thinking = thinking;
+  if (reasoning) payload.reasoning = reasoning;
+
+  // Nemotron supports JSON-object response mode. The planner additionally
+  // validates the returned object against its Zod schema before saving.
+  const normalizedResponseFormat = provider.omitResponseFormat
+    ? undefined
+    : normalizeResponseFormat({ responseFormat, response_format, outputSchema, output_schema });
+  if (normalizedResponseFormat) payload.response_format = normalizedResponseFormat;
+  if (provider.additionalBody) Object.assign(payload, provider.additionalBody);
+
+  const response = await fetchWithBackoff(
+    resolveApiUrl(provider.apiBaseUrl, provider.fallbackBaseUrl),
+    {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+        authorization: "Bearer " + provider.apiKey,
+      },
+      body: JSON.stringify(payload),
+    }
+  );
+
+  if (response.status === 202 && provider.pollPending) {
+    return pollNvidiaPendingResponse(response, provider);
   }
-
-  if (thinking) {
-    payload.thinking = thinking;
-  }
-  if (reasoning) {
-    payload.reasoning = reasoning;
-  }
-
-  const normalizedResponseFormat = normalizeResponseFormat({
-    responseFormat,
-    response_format,
-    outputSchema,
-    output_schema,
-  });
-
-  if (normalizedResponseFormat) {
-    payload.response_format = normalizedResponseFormat;
-  }
-
-  const response = await fetchWithBackoff(resolveApiUrl(), {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${ENV.aiApiKey}`,
-    },
-    body: JSON.stringify(payload),
-  });
-
   if (!response.ok) {
-    const errorText = await response.text();
+    const errorText = (await response.text()).slice(0, 1_600);
     throw new Error(
-      `LLM invoke failed: ${response.status} ${response.statusText} – ${errorText}`
+      provider.errorPrefix + ": " + response.status + " " + response.statusText + " – " + errorText
     );
   }
-
   return (await response.json()) as InvokeResult;
+}
+
+export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
+  return invokeWithProvider(params, {
+    apiBaseUrl: ENV.aiApiBaseUrl,
+    fallbackBaseUrl: "https://openrouter.ai/api/v1",
+    apiKey: ENV.aiApiKey,
+    apiKeyVariable: "AI_API_KEY",
+    defaultModel: ENV.aiModel,
+    errorPrefix: "LLM invoke failed",
+  });
+}
+
+/** Dedicated NVIDIA NIM client with credentials isolated from the primary provider. */
+export async function invokeNvidiaLLM(params: InvokeParams): Promise<InvokeResult> {
+  return invokeWithProvider(params, {
+    apiBaseUrl: ENV.nvidiaApiBaseUrl,
+    fallbackBaseUrl: "https://integrate.api.nvidia.com/v1",
+    apiKey: ENV.nvidiaApiKey,
+    apiKeyVariable: "NVIDIA_API_KEY",
+    defaultModel: ENV.nvidiaModel,
+    errorPrefix: "NVIDIA LLM invoke failed",
+    pollPending: true,
+    // Disable hidden reasoning for this constrained JSON task so generation
+    // budget is spent on the actual plan content, not an internal reasoning trace.
+    // force_nonempty_content must be nested in chat_template_kwargs.
+    additionalBody: {
+      reasoning_effort: "none",
+      chat_template_kwargs: { force_nonempty_content: true },
+      temperature: 0.2,
+      stream: false,
+    },
+  });
 }
 
 export type ModelInfo = {
@@ -431,7 +526,7 @@ export type ModelsResponse = {
 };
 
 export async function listLLMModels(): Promise<ModelsResponse> {
-  assertApiKey();
+  assertApiKey(ENV.aiApiKey, "AI_API_KEY");
 
   // Model discovery must use the same OpenAI-compatible provider and API key
   // as chat completions; the old Forge endpoint belongs to the retired auth stack.

@@ -1,4 +1,6 @@
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, like, lt, lte, or, sql } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import { storageDelete } from "./storage";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   aiPlans,
@@ -11,6 +13,8 @@ import {
   routineCompletions,
   routineItems,
   routines,
+  studentActivityEvents,
+  plannerReconciliationJobs,
   studentProfiles,
   studySessions,
   taskChangeLogs,
@@ -18,6 +22,8 @@ import {
   users,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
+import { resolveStudentSubjectIds } from "./student-subjects";
+import { matchCompletedPlanSteps } from "./plannerTaskMatching";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 let testDbOverride: ReturnType<typeof drizzle> | null | undefined;
@@ -121,6 +127,25 @@ export function analyticsPeriodForDate(date: Date, now = new Date(), timeZone = 
   return analyticsPeriodsForDate(date, now, timeZone)[0] ?? null;
 }
 
+export type CalendarDisplayItem = {
+  id: string;
+  title: string;
+  type: "event" | "study" | "goal" | "task";
+  startAt: Date;
+  endAt: Date | null;
+  allDay: boolean;
+  color: string;
+  source: "event" | "task" | "routine";
+  completed?: boolean;
+  priority?: "low" | "medium" | "high";
+  routineId?: number;
+  routinePeriod?: "morning" | "evening" | "custom";
+  routineDate?: string;
+  completedCount?: number;
+  itemCount?: number;
+  routineItems?: Array<{ id: number; title: string; durationMinutes: number; completed: boolean }>;
+};
+
 type CalendarEventRow = {
   id: number;
   title: string;
@@ -136,9 +161,10 @@ type ScheduledTaskRow = {
   title: string;
   dueAt: Date | null;
   priority: "low" | "medium" | "high";
+  status: "todo" | "done";
 };
 
-export function mergeCalendarItems(events: CalendarEventRow[], scheduledTasks: ScheduledTaskRow[]) {
+export function mergeCalendarItems(events: CalendarEventRow[], scheduledTasks: ScheduledTaskRow[]): CalendarDisplayItem[] {
   const calendarItems = [
     ...events.map(event => ({
       id: `event-${event.id}`,
@@ -159,6 +185,8 @@ export function mergeCalendarItems(events: CalendarEventRow[], scheduledTasks: S
       allDay: true,
       color: task.priority === "high" ? "rose" : task.priority === "medium" ? "amber" : "sky",
       source: "task" as const,
+      completed: task.status === "done",
+      priority: task.priority,
     })),
   ];
   return calendarItems.sort((first, second) => first.startAt.getTime() - second.startAt.getTime());
@@ -187,58 +215,62 @@ export async function upsertUser(user: InsertUser): Promise<void> {
 }
 
 
-/**
- * Creates the single local StudyFlow account, or adopts the only existing user row.
- * Reusing the existing row preserves every study record linked by userId.
- * If multiple identities exist, refuse to guess which account owns the data.
- */
-export async function ensureLocalAuthUser(name: string) {
-  const db = await requireDb();
-  const openId = "studyflow-local-owner";
-  const localRows = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
-
-  if (localRows[0]) {
-    await db.update(users).set({
-      name,
-      loginMethod: "local",
-      role: "admin",
-      lastSignedIn: new Date(),
-    }).where(eq(users.id, localRows[0].id));
-  } else {
-    const existingRows = await db.select().from(users).orderBy(asc(users.id)).limit(2);
-    if (existingRows.length > 1) {
-      throw new Error("MULTIPLE_EXISTING_USERS");
-    }
-    if (existingRows.length === 1) {
-      // Keep the existing user id so profiles, tasks, books and other records remain linked.
-      await db.update(users).set({
-        openId,
-        name,
-        loginMethod: "local",
-        role: "admin",
-        lastSignedIn: new Date(),
-      }).where(eq(users.id, existingRows[0].id));
-    } else {
-      await db.insert(users).values({
-        openId,
-        name,
-        loginMethod: "local",
-        role: "admin",
-        lastSignedIn: new Date(),
-      });
-    }
-  }
-
-  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
-  if (!result[0]) throw new Error("LOCAL_USER_CREATION_FAILED");
-  return result[0];
-}
-
 export async function getUserByOpenId(openId: string) {
   const db = await getDb();
   if (!db) return undefined;
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
   return result[0];
+}
+
+export async function getUserByUsername(username: string) {
+  const db = await requireDb();
+  const result = await db.select().from(users).where(eq(users.username, username.trim().toLowerCase())).limit(1);
+  return result[0];
+}
+
+export async function createLocalAuthUser(input: { username: string; name: string; passwordHash: string }) {
+  const db = await requireDb();
+  const openId = "studyflow-user-" + randomUUID();
+  await db.insert(users).values({
+    openId,
+    username: input.username.trim().toLowerCase(),
+    passwordHash: input.passwordHash,
+    name: input.name.trim(),
+    loginMethod: "local",
+    role: "user",
+    lastSignedIn: new Date(),
+  });
+  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
+  if (!result[0]) throw new Error("LOCAL_USER_CREATION_FAILED");
+  return result[0];
+}
+
+export async function touchUserLastSignedIn(userId: number) {
+  const db = await requireDb();
+  await db.update(users).set({ lastSignedIn: new Date() }).where(eq(users.id, userId));
+}
+
+export async function changeLocalAuthPassword(userId: number, passwordHash: string) {
+  const db = await requireDb();
+  await db.update(users).set({
+    passwordHash,
+    sessionVersion: sql`${users.sessionVersion} + 1`,
+    lastSignedIn: new Date(),
+  }).where(eq(users.id, userId));
+  const result = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  if (!result[0]) throw new Error("ACCOUNT_NOT_FOUND");
+  return result[0];
+}
+
+export async function deleteLocalAuthUser(userId: number) {
+  const db = await requireDb();
+  const attachments = await db.select({ fileKey: libraryAttachments.fileKey })
+    .from(libraryAttachments)
+    .where(eq(libraryAttachments.userId, userId));
+  for (const attachment of attachments) await storageDelete(attachment.fileKey);
+  const result = await db.delete(users).where(eq(users.id, userId));
+  if (result[0].affectedRows === 0) throw new Error("ACCOUNT_NOT_FOUND");
+  return { deletedAttachments: attachments.length };
 }
 
 export type StudentProfileInput = {
@@ -261,13 +293,46 @@ export async function getStudentProfile(userId: number) {
   const rows = await db.select().from(studentProfiles).where(eq(studentProfiles.userId, userId)).limit(1);
   const profile = rows[0];
   if (!profile) return null;
+  const subjects = parseJson<string[]>(profile.subjectsJson, []);
+  const selection = parseJson<Record<string, unknown>>(profile.selectionJson ?? "{}", {});
+  const subjectIds = resolveStudentSubjectIds(
+    subjects,
+    selection,
+    profile.educationSystem as "baccalaureate" | "general_secondary" | "other",
+  );
   return {
     ...profile,
-    subjects: parseJson<string[]>(profile.subjectsJson, []),
+    subjects,
+    subjectIds,
     teacherSelections: parseJson<Record<string, string>>(profile.teacherSelectionsJson, {}),
-    selection: parseJson<Record<string, unknown>>(profile.selectionJson ?? "{}", {}),
+    selection,
     backlog: parseJson<Record<string, number>>(profile.backlogJson, {}),
   };
+}
+
+export async function listStudentTeacherMonitoringProfiles() {
+  const database = await requireDb();
+  const rows = await database.select({
+    userId: studentProfiles.userId,
+    educationSystem: studentProfiles.educationSystem,
+    gradeYear: studentProfiles.gradeYear,
+    subjectsJson: studentProfiles.subjectsJson,
+    teacherSelectionsJson: studentProfiles.teacherSelectionsJson,
+    selectionJson: studentProfiles.selectionJson,
+  }).from(studentProfiles);
+  return rows.map(row => {
+    const selection = parseJson<Record<string, unknown>>(row.selectionJson ?? "{}", {});
+    const subjects = parseJson<string[]>(row.subjectsJson, []);
+    const educationSystem = row.educationSystem as "baccalaureate" | "general_secondary" | "other";
+    return {
+      userId: row.userId,
+      educationSystem,
+      gradeYear: row.gradeYear,
+      subjectIds: resolveStudentSubjectIds(subjects, selection, educationSystem),
+      teacherSelections: parseJson<Record<string, string>>(row.teacherSelectionsJson, {}),
+      selection,
+    };
+  });
 }
 
 export async function saveStudentProfile(userId: number, data: StudentProfileInput) {
@@ -530,6 +595,13 @@ export type ApprovedPlanStep = {
   detail: string;
   minutes: number;
   category: string;
+  priority?: "critical" | "high" | "medium" | "low";
+  existingTask?: { id: number; title: string; status: "todo" | "done"; confidence: "exact" | "strong" };
+  resourceRecommendation?: { title: string; url: string; teacherName?: string; reason: string };
+  scheduleState?: "scheduled" | "deferred";
+  dayIndex?: number | null;
+  dateOffsetDays?: number | null;
+  scheduleNote?: string;
 };
 
 export function normalizeApprovedPlanSteps(steps: ApprovedPlanStep[]) {
@@ -545,30 +617,48 @@ export function normalizeApprovedPlanSteps(steps: ApprovedPlanStep[]) {
     .filter(step => step.title.length > 0);
 }
 
-export function schedulePlanStepDates(startDate: string, steps: Array<{ minutes: number }>, dailyMinutes: number) {
+export function schedulePlanStepDates(
+  startDate: string,
+  steps: Array<{ minutes: number; dayIndex?: number | null; dateOffsetDays?: number | null; scheduleState?: "scheduled" | "deferred" }>,
+  dailyMinutes: number,
+  daysPerWeek = 7,
+) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) throw new Error("تاريخ بداية الخطة غير صالح.");
   const parsedStart = new Date(`${startDate}T12:00:00.000Z`);
   if (Number.isNaN(parsedStart.getTime()) || parsedStart.toISOString().slice(0, 10) !== startDate) throw new Error("تاريخ بداية الخطة غير صالح.");
   const capacity = Math.min(600, Math.max(20, Math.round(dailyMinutes)));
-  let dayOffset = 0;
+  const weeklyDays = Math.min(7, Math.max(5, Math.round(daysPerWeek)));
+  let studyDayIndex = 0;
   let usedMinutes = 0;
   return steps.map(step => {
+    if (step.scheduleState === "deferred") return null;
+    const dueAt = new Date(parsedStart);
+    if (Number.isInteger(step.dateOffsetDays) && (step.dateOffsetDays ?? -1) >= 0) {
+      dueAt.setUTCDate(dueAt.getUTCDate() + (step.dateOffsetDays as number));
+      return dueAt;
+    }
     const duration = Math.min(480, Math.max(5, Math.round(step.minutes || 25)));
     if (usedMinutes > 0 && usedMinutes + duration > capacity) {
-      dayOffset += 1;
+      studyDayIndex += 1;
       usedMinutes = 0;
     }
-    const dueAt = new Date(parsedStart);
-    dueAt.setUTCDate(dueAt.getUTCDate() + dayOffset);
+    const calendarOffset = studyDayIndex + Math.floor(studyDayIndex / weeklyDays) * (7 - weeklyDays);
+    dueAt.setUTCDate(dueAt.getUTCDate() + calendarOffset);
     usedMinutes += duration;
     return dueAt;
   });
 }
 
+/**
+ * Inserts the actionable steps of the daily plan into the student's task list.
+ * Existing unfinished tasks and tasks already scheduled for today/future are
+ * reused instead of duplicated. Completed past tasks may be scheduled again.
+ */
 export async function approvePlanAsGoalTree(
   userId: number,
   plan: { title: string; summary: string; steps: ApprovedPlanStep[] },
-  schedule?: { startDate: string; dailyMinutes: number }
+  schedule?: { startDate: string; dailyMinutes: number },
+  routine?: { name: string; period: "morning" | "evening" | "custom"; accent?: string; items: Array<{ title: string; durationMinutes: number }> }
 ) {
   const db = await requireDb();
   const steps = normalizeApprovedPlanSteps(plan.steps);
@@ -595,7 +685,7 @@ export async function approvePlanAsGoalTree(
         userId,
         parentGoalId,
         title: `المرحلة ${index + 1}: ${step.title}`,
-        description: step.detail || `جلسة اليوم ${step.day} من الخطة المعتمدة.`,
+        description: step.detail || "مهمة من الخطة المعتمدة.",
         kind: "short",
         category: "مرحلة تدريبية",
         color: "indigo",
@@ -607,15 +697,316 @@ export async function approvePlanAsGoalTree(
         userId,
         goalId: stageGoalId,
         title: step.title,
-        notes: step.detail || `جلسة اليوم ${step.day} من خطة «${plan.title.trim()}».`,
+        notes: step.detail || `مهمة من خطة «${plan.title.trim()}».`,
         category: step.category,
-        priority: "medium",
-        estimatedMinutes: step.minutes,
+        priority: step.priority === "critical" || step.priority === "high" ? "high" as const
+          : step.priority === "low" ? "low" as const : "medium" as const,
+        estimatedMinutes: null,
         dueAt: dueDates[index] ?? null,
       });
     }
 
-    return { parentGoalId, stageCount: steps.length, taskCount: steps.length };
+    let routineId: number | null = null;
+    if (routine && routine.items.length > 0) {
+      const routineInsert = await tx.insert(routines).values({
+        userId,
+        name: routine.name.trim(),
+        period: routine.period,
+        accent: routine.accent ?? "amber",
+        isActive: true,
+      });
+      routineId = Number(routineInsert[0].insertId);
+      await tx.insert(routineItems).values(routine.items.map((item, index) => ({
+        routineId: routineId!,
+        title: item.title.trim(),
+        durationMinutes: item.durationMinutes,
+        sortOrder: index,
+        isActive: true,
+      })));
+    }
+
+    return { parentGoalId, stageCount: steps.length, taskCount: steps.length, ...(routineId !== null ? { routineId } : {}) };
+  });
+}
+
+/**
+ * Keeps one persistent daily-plan goal tree for each student.
+ * Completed matching steps are preserved; unfinished steps are refreshed in place,
+ * so reopening the home page never clones the same day's tasks.
+ */
+export async function syncDailyPlanGoalTree(
+  userId: number,
+  plan: {
+    title: string;
+    summary: string;
+    steps: Array<{
+      day: string;
+      title: string;
+      detail: string;
+      minutes: number;
+      category: string;
+      priority?: "critical" | "high" | "medium" | "low";
+      existingTask?: { id: number; title: string; status: "todo" | "done"; confidence: "exact" | "strong" };
+      resourceRecommendation?: { title: string; url: string; teacherName?: string; reason: string };
+      scheduleState?: "scheduled" | "deferred";
+      dayIndex?: number | null;
+      dateOffsetDays?: number | null;
+      scheduleNote?: string;
+      plannerTaskId?: number;
+      plannerTaskStatus?: "todo" | "done";
+    }>;
+  },
+  schedule: { startDate: string; dailyMinutes: number; daysPerWeek?: number },
+  identity: { goalTitle?: string; goalCategory?: string; supersedeCategories?: string[] } = {},
+) {
+  const db = await requireDb();
+  const goalTitle = identity.goalTitle?.trim() || "خطة StudyFlow اليومية";
+  const goalCategory = identity.goalCategory?.trim() || "خطة يومية";
+  const steps = normalizeApprovedPlanSteps(plan.steps.map((step, index) => ({
+    ...step,
+    day: index + 1,
+  })));
+  if (!plan.title.trim() || steps.length === 0) {
+    throw new Error("لا يمكن إنشاء مهام يومية من خطة بلا خطوات عملية.");
+  }
+  const dueDates = steps.map(() => null);
+  const taskNotes = (step: typeof steps[number]) => [
+    step.detail,
+    ...(step.scheduleNote ? [step.scheduleNote] : []),
+    ...(step.resourceRecommendation ? [
+      "مشاهدة إضافية موصى بها من " + (step.resourceRecommendation.teacherName || "المدرس") + ": " + step.resourceRecommendation.title,
+      step.resourceRecommendation.url,
+      "سبب التوصية: " + step.resourceRecommendation.reason,
+    ] : []),
+  ].filter(Boolean).join("\n\n");
+
+  return db.transaction(async tx => {
+    // Retire open tasks from older AI-generated plans before writing the new one.
+    // Completed tasks remain as historical evidence; manually created tasks are untouched.
+    const supersedeCategories = [...new Set(identity.supersedeCategories ?? [goalCategory])];
+    const previousParents = await tx.select().from(goals).where(and(
+      eq(goals.userId, userId),
+      inArray(goals.category, supersedeCategories),
+      isNull(goals.parentGoalId),
+    ));
+    for (const previousParent of previousParents) {
+      if (previousParent.title === goalTitle && previousParent.category === goalCategory) continue;
+      const previousStages = await tx.select().from(goals).where(and(
+        eq(goals.userId, userId),
+        eq(goals.parentGoalId, previousParent.id),
+      ));
+      const previousStageIds = previousStages.map(stage => stage.id);
+      if (!previousStageIds.length) {
+        await tx.delete(goals).where(and(eq(goals.id, previousParent.id), eq(goals.userId, userId)));
+        continue;
+      }
+      const previousTasks = await tx.select().from(tasks).where(and(
+        eq(tasks.userId, userId),
+        inArray(tasks.goalId, previousStageIds),
+      ));
+      await tx.delete(tasks).where(and(
+        eq(tasks.userId, userId),
+        inArray(tasks.goalId, previousStageIds),
+        eq(tasks.status, "todo"),
+      ));
+      const stagesWithCompletedWork = new Set(previousTasks.filter(task => task.status === "done").map(task => task.goalId));
+      for (const stage of previousStages) {
+        if (!stagesWithCompletedWork.has(stage.id)) {
+          await tx.delete(goals).where(and(eq(goals.id, stage.id), eq(goals.userId, userId)));
+        } else {
+          await tx.update(goals).set({ status: "completed" }).where(and(eq(goals.id, stage.id), eq(goals.userId, userId)));
+        }
+      }
+      if (stagesWithCompletedWork.size === 0) {
+        await tx.delete(goals).where(and(eq(goals.id, previousParent.id), eq(goals.userId, userId)));
+      } else {
+        await tx.update(goals).set({ status: "paused" }).where(and(eq(goals.id, previousParent.id), eq(goals.userId, userId)));
+      }
+    }
+
+    const existingParents = await tx.select().from(goals).where(and(
+      eq(goals.userId, userId),
+      eq(goals.title, goalTitle),
+      eq(goals.category, goalCategory),
+      isNull(goals.parentGoalId),
+    )).limit(1);
+
+    let parentGoalId: number;
+    if (existingParents[0]) {
+      parentGoalId = existingParents[0].id;
+      await tx.update(goals).set({
+        description: plan.summary.trim() || "خطة يومية مبنية على ملف الدراسة والتراكم.",
+        targetDate: null,
+        status: "active",
+        color: "gold",
+      }).where(and(eq(goals.id, parentGoalId), eq(goals.userId, userId)));
+    } else {
+      const parentInsert = await tx.insert(goals).values({
+        userId,
+        title: goalTitle,
+        description: plan.summary.trim() || "خطة دراسية مبنية على ملف الدراسة والتراكم.",
+        kind: "long",
+        category: goalCategory,
+        color: "gold",
+        targetDate: null,
+        status: "active",
+        sortOrder: -100,
+      });
+      parentGoalId = Number(parentInsert[0].insertId);
+    }
+
+    const stageRows = await tx.select().from(goals).where(and(
+      eq(goals.userId, userId),
+      eq(goals.parentGoalId, parentGoalId),
+    )).orderBy(asc(goals.sortOrder), asc(goals.createdAt));
+    const stageIds = stageRows.map(stage => stage.id);
+    const taskRows = stageIds.length
+      ? await tx.select().from(tasks).where(and(
+          eq(tasks.userId, userId),
+          inArray(tasks.goalId, stageIds),
+        )).orderBy(asc(tasks.createdAt))
+      : [];
+    const tasksByStage = new Map<number, typeof taskRows>();
+    for (const task of taskRows) {
+      if (task.goalId === null) continue;
+      const current = tasksByStage.get(task.goalId) ?? [];
+      current.push(task);
+      tasksByStage.set(task.goalId, current);
+    }
+
+    const completedTasks = taskRows.filter(task => task.status === "done");
+    const completedMatches = matchCompletedPlanSteps(steps, completedTasks);
+    const consumedCompletedIds = new Set(completedMatches.preservedCompletedTaskIds);
+    const pendingStepIndexes = new Set(completedMatches.pendingIndexes);
+    const pendingSteps = steps
+      .map((step, index) => ({ step, index }))
+      .filter(({ index }) => pendingStepIndexes.has(index));
+
+    const completedStageIds = new Set(stageRows.filter(stage =>
+      (tasksByStage.get(stage.id) ?? []).some(task => task.status === "done")
+    ).map(stage => stage.id));
+    const pendingStages = stageRows.filter(stage => !completedStageIds.has(stage.id));
+
+    // Remove obsolete unfinished stages only. Completed work remains as history.
+    for (const obsolete of pendingStages.slice(pendingSteps.length)) {
+      await tx.delete(tasks).where(and(
+        eq(tasks.userId, userId),
+        eq(tasks.goalId, obsolete.id),
+        eq(tasks.status, "todo"),
+      ));
+      await tx.delete(goals).where(and(eq(goals.id, obsolete.id), eq(goals.userId, userId)));
+    }
+
+    let refreshedTaskCount = 0;
+    let createdTaskCount = 0;
+    const taskLinks: Array<{ planStepIndex: number; taskId: number; status: "todo" | "done" }> = [];
+    for (let index = 0; index < pendingSteps.length; index += 1) {
+      const { step, index: sourceIndex } = pendingSteps[index];
+      const dueAt = dueDates[sourceIndex] ?? null;
+      const priority = step.priority === "critical" || step.priority === "high"
+        ? "high" as const
+        : step.priority === "low" ? "low" as const : "medium" as const;
+      const stage = pendingStages[index];
+      const linkedExistingTask = step.existingTask
+        ? (await tx.select({ id: tasks.id, status: tasks.status })
+            .from(tasks)
+            .where(and(eq(tasks.id, step.existingTask.id), eq(tasks.userId, userId)))
+            .limit(1))[0]
+        : undefined;
+
+      if (stage) {
+        await tx.update(goals).set({
+          title: `مهمة: ${step.title}`,
+          description: [step.detail, step.scheduleNote].filter(Boolean).join("\n\n"),
+          targetDate: dueAt,
+          status: "active",
+          sortOrder: 100 + index,
+          color: "gold",
+        }).where(and(eq(goals.id, stage.id), eq(goals.userId, userId)));
+
+        const task = (tasksByStage.get(stage.id) ?? []).find(item => item.status === "todo");
+        if (task && linkedExistingTask && task.id !== linkedExistingTask.id) {
+          await tx.delete(tasks).where(and(eq(tasks.id, task.id), eq(tasks.userId, userId)));
+        }
+        if (task && !linkedExistingTask) {
+          await tx.update(tasks).set({
+            title: step.title,
+            notes: taskNotes(step),
+            category: step.category || "دراسة",
+            priority,
+            estimatedMinutes: null,
+            dueAt,
+          }).where(and(eq(tasks.id, task.id), eq(tasks.userId, userId)));
+          refreshedTaskCount += 1;
+          taskLinks.push({ planStepIndex: sourceIndex, taskId: task.id, status: "todo" });
+          continue;
+        }
+
+        if (!linkedExistingTask) {
+          const taskInsert = await tx.insert(tasks).values({
+            userId,
+            goalId: stage.id,
+            title: step.title,
+            notes: taskNotes(step),
+            category: step.category || "دراسة",
+            priority,
+            estimatedMinutes: null,
+            dueAt,
+          });
+          createdTaskCount += 1;
+          taskLinks.push({ planStepIndex: sourceIndex, taskId: Number(taskInsert[0].insertId), status: "todo" });
+        } else {
+          taskLinks.push({ planStepIndex: sourceIndex, taskId: linkedExistingTask.id, status: linkedExistingTask.status });
+        }
+        continue;
+      }
+
+      const stageInsert = await tx.insert(goals).values({
+        userId,
+        parentGoalId,
+        title: `مهمة: ${step.title}`,
+        description: step.detail,
+        kind: "short",
+        category: "مهمة دراسية",
+        color: "gold",
+        targetDate: dueAt,
+        status: "active",
+        sortOrder: 100 + index,
+      });
+      const stageGoalId = Number(stageInsert[0].insertId);
+      if (!linkedExistingTask) {
+        const taskInsert = await tx.insert(tasks).values({
+          userId,
+          goalId: stageGoalId,
+          title: step.title,
+          notes: taskNotes(step),
+          category: step.category || "دراسة",
+          priority,
+          estimatedMinutes: null,
+          dueAt,
+        });
+        createdTaskCount += 1;
+        taskLinks.push({ planStepIndex: sourceIndex, taskId: Number(taskInsert[0].insertId), status: "todo" });
+      } else {
+        taskLinks.push({ planStepIndex: sourceIndex, taskId: linkedExistingTask.id, status: linkedExistingTask.status });
+      }
+    }
+
+    for (const stageId of completedStageIds) {
+      await tx.update(goals).set({ status: "completed" }).where(and(
+        eq(goals.id, stageId),
+        eq(goals.userId, userId),
+      ));
+    }
+
+    return {
+      parentGoalId,
+      taskCount: pendingSteps.length,
+      createdTaskCount,
+      refreshedTaskCount,
+      preservedCompletedTaskCount: consumedCompletedIds.size,
+      taskLinks,
+    };
   });
 }
 
@@ -939,7 +1330,9 @@ export async function createRoutine(
       sortOrder: index,
     })));
   }
+  return routineId;
 }
+
 
 export async function toggleRoutineItem(userId: number, itemId: number, done: boolean, timeZone = "UTC") {
   const db = await requireDb();
@@ -1012,13 +1405,66 @@ export async function deleteRoutine(userId: number, routineId: number) {
   if (result[0].affectedRows === 0) throw new Error("الروتين غير موجود أو لا تملك حذفه.");
 }
 
-export async function listCalendarEvents(userId: number) {
+export async function listCalendarEvents(userId: number, timeZone = "Africa/Cairo") {
   const db = await requireDb();
-  const [events, scheduledTasks] = await Promise.all([
+  const [events, scheduledTasks, routineRows] = await Promise.all([
     db.select().from(calendarEvents).where(eq(calendarEvents.userId, userId)),
-    db.select().from(tasks).where(and(eq(tasks.userId, userId), eq(tasks.status, "todo"))),
+    db.select().from(tasks).where(eq(tasks.userId, userId)),
+    listRoutines(userId, timeZone),
   ]);
-  return mergeCalendarItems(events, scheduledTasks);
+
+  const calendarItems = mergeCalendarItems(events, scheduledTasks);
+  const activeRoutines = routineRows
+    .filter(routine => routine.isActive)
+    .map(routine => ({ ...routine, items: routine.items.filter(item => item.isActive) }))
+    .filter(routine => routine.items.length > 0);
+
+  // The current routine model represents daily morning/evening/custom routines,
+  // but it has no weekday or clock-time fields. Keep them as all-day daily
+  // commitments until the student explicitly configures a time.
+  const routineItems: CalendarDisplayItem[] = [];
+  const todayKey = getDateKeyInTimezone(new Date(), timeZone);
+  const [year, month, day] = todayKey.split("-").map(Number);
+  const cursor = new Date(Date.UTC(year, month - 1, day, 12));
+
+  for (let dayOffset = 0; dayOffset < 90; dayOffset += 1) {
+    const date = new Date(cursor);
+    date.setUTCDate(cursor.getUTCDate() + dayOffset);
+    const dateKey = getDateKeyInTimezone(date, timeZone);
+    const startAt = new Date(`${dateKey}T12:00:00.000Z`);
+
+    for (const routine of activeRoutines) {
+      const completedCount = dayOffset === 0
+        ? routine.items.filter(item => item.completedToday).length
+        : 0;
+      routineItems.push({
+        id: `routine-${routine.id}-${dateKey}`,
+        title: routine.name,
+        type: "study",
+        startAt,
+        endAt: null,
+        allDay: true,
+        color: routine.period === "morning" ? "amber" : routine.period === "evening" ? "rose" : "stone",
+        source: "routine",
+        routineId: routine.id,
+        routinePeriod: routine.period,
+        routineDate: dateKey,
+        completed: routine.items.length > 0 && completedCount === routine.items.length,
+        completedCount,
+        itemCount: routine.items.length,
+        routineItems: routine.items.map(item => ({
+          id: item.id,
+          title: item.title,
+          durationMinutes: item.durationMinutes,
+          completed: dayOffset === 0 ? item.completedToday : false,
+        })),
+      });
+    }
+  }
+
+  return [...calendarItems, ...routineItems].sort((first, second) =>
+    new Date(first.startAt as Date).getTime() - new Date(second.startAt as Date).getTime()
+  );
 }
 
 export async function createCalendarEvent(
@@ -1057,6 +1503,285 @@ export async function saveAiPlan(userId: number, data: { prompt: string; title: 
 export async function listAiPlans(userId: number) {
   const db = await requireDb();
   return db.select().from(aiPlans).where(eq(aiPlans.userId, userId)).orderBy(desc(aiPlans.createdAt)).limit(12);
+}
+
+export async function deleteAiPlan(userId: number, planId: number) {
+  const db = await requireDb();
+  const result = await db.delete(aiPlans).where(and(eq(aiPlans.id, planId), eq(aiPlans.userId, userId)));
+  if (result[0].affectedRows === 0) throw new Error("الخطة غير موجودة أو لا تملك حذفها.");
+}
+
+/**
+ * Deletes one student's AI plan history and only the goal trees created by
+ * the AI planner. Manually created goals/tasks and learning progress are kept.
+ */
+export async function deleteAllAiPlansAndGoalTrees(userId: number) {
+  const db = await requireDb();
+  return db.transaction(async tx => {
+    const userGoals = await tx.select().from(goals).where(eq(goals.userId, userId));
+    const aiRootCategories = new Set(["خطة يومية", "خطة ذكية", "خطة تدريبية"]);
+    const aiRootTitles = new Set([
+      "خطة StudyFlow اليومية",
+      "خطة StudyFlow الذكية الحالية",
+    ]);
+    const goalIds = new Set<number>(
+      userGoals
+        .filter(goal => (goal.parentGoalId === null || goal.parentGoalId === undefined) && (
+          aiRootCategories.has(goal.category) || aiRootTitles.has(goal.title)
+        ))
+        .map(goal => goal.id),
+    );
+
+    // Include every descendant stage, not only one level deep.
+    let expanded = true;
+    while (expanded) {
+      expanded = false;
+      for (const goal of userGoals) {
+        if (goal.parentGoalId !== null && goalIds.has(goal.parentGoalId) && !goalIds.has(goal.id)) {
+          goalIds.add(goal.id);
+          expanded = true;
+        }
+      }
+    }
+
+    const ownedGoalIds = [...goalIds];
+    let deletedTasks = 0;
+    let deletedGoals = 0;
+    if (ownedGoalIds.length > 0) {
+      const taskRows = await tx.select({ id: tasks.id }).from(tasks).where(and(
+        eq(tasks.userId, userId),
+        inArray(tasks.goalId, ownedGoalIds),
+      ));
+      deletedTasks = taskRows.length;
+      await tx.delete(tasks).where(and(
+        eq(tasks.userId, userId),
+        inArray(tasks.goalId, ownedGoalIds),
+      ));
+      // Delete descendants before parents to remain safe even if the
+      // self-referencing goal relation uses RESTRICT instead of CASCADE.
+      for (const goalId of [...ownedGoalIds].reverse()) {
+        const goalResult = await tx.delete(goals).where(and(
+          eq(goals.userId, userId),
+          eq(goals.id, goalId),
+        ));
+        deletedGoals += Number(goalResult[0]?.affectedRows ?? 0);
+      }
+    }
+
+    const planResult = await tx.delete(aiPlans).where(eq(aiPlans.userId, userId));
+    return {
+      deletedPlans: Number(planResult[0]?.affectedRows ?? 0),
+      deletedTasks,
+      deletedGoals,
+    };
+  });
+}
+
+export async function getLatestAiPlanByPromptPrefix(userId: number, prefix: string) {
+  const db = await requireDb();
+  const rows = await db.select()
+    .from(aiPlans)
+    .where(and(eq(aiPlans.userId, userId), like(aiPlans.prompt, prefix + "%")))
+    .orderBy(desc(aiPlans.createdAt), desc(aiPlans.id))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function updateAiPlanContent(userId: number, planId: number, planJson: string) {
+  const db = await requireDb();
+  const result = await db.update(aiPlans)
+    .set({ planJson })
+    .where(and(eq(aiPlans.id, planId), eq(aiPlans.userId, userId)));
+  if (result[0].affectedRows === 0) throw new Error("خطة الدراسة المطلوب تحديثها غير موجودة.");
+}
+
+export async function updateAiPlanPrompt(userId: number, planId: number, prompt: string) {
+  const db = await requireDb();
+  const result = await db.update(aiPlans)
+    .set({ prompt })
+    .where(and(eq(aiPlans.id, planId), eq(aiPlans.userId, userId)));
+  if (result[0].affectedRows === 0) throw new Error("خطة الدراسة المطلوب تحديثها غير موجودة.");
+}
+
+export async function enqueuePlannerReconciliationJob(input: {
+  userId: number;
+  impact: "local" | "structural";
+  eventType: string;
+}) {
+  const db = await requireDb();
+  const nextRunAt = new Date(Date.now() + 1_500);
+  await db.insert(plannerReconciliationJobs).values({
+    userId: input.userId,
+    impact: input.impact,
+    eventType: input.eventType.slice(0, 80),
+    status: "queued",
+    attempts: 0,
+    revision: 1,
+    nextRunAt,
+    lockedUntil: null,
+    lastError: null,
+  }).onDuplicateKeyUpdate({
+    set: {
+      impact: sql`IF(${plannerReconciliationJobs.impact} = 'structural' OR VALUES(impact) = 'structural', 'structural', 'local')`,
+      eventType: input.eventType.slice(0, 80),
+      attempts: sql`IF(${plannerReconciliationJobs.status} = 'running', ${plannerReconciliationJobs.attempts}, 0)`,
+      nextRunAt,
+      lockedUntil: sql`IF(${plannerReconciliationJobs.status} = 'running', ${plannerReconciliationJobs.lockedUntil}, NULL)`,
+      status: sql`IF(${plannerReconciliationJobs.status} = 'running', 'running', 'queued')`,
+      revision: sql`${plannerReconciliationJobs.revision} + 1`,
+      lastError: null,
+    },
+  });
+}
+
+/** Atomically lease due jobs so multiple application replicas cannot run the same event. */
+export async function claimPlannerReconciliationJobs(limit = 3, leaseMs = 8 * 60 * 1_000) {
+  const db = await requireDb();
+  const now = new Date();
+  return db.transaction(async tx => {
+    const due = await tx.select()
+      .from(plannerReconciliationJobs)
+      .where(and(
+        lte(plannerReconciliationJobs.nextRunAt, now),
+        or(
+          and(
+            eq(plannerReconciliationJobs.status, "queued"),
+            or(
+              isNull(plannerReconciliationJobs.lockedUntil),
+              lt(plannerReconciliationJobs.lockedUntil, now),
+            ),
+          ),
+          and(
+            eq(plannerReconciliationJobs.status, "running"),
+            lt(plannerReconciliationJobs.lockedUntil, now),
+          ),
+        ),
+      ))
+      .orderBy(asc(plannerReconciliationJobs.nextRunAt), asc(plannerReconciliationJobs.id))
+      .limit(Math.max(1, Math.min(10, Math.trunc(limit))))
+      .for("update");
+
+    const lockedUntil = new Date(now.getTime() + leaseMs);
+    for (const job of due) {
+      await tx.update(plannerReconciliationJobs).set({
+        status: "running",
+        attempts: job.attempts + 1,
+        lockedUntil,
+      }).where(eq(plannerReconciliationJobs.id, job.id));
+    }
+    return due.map(job => ({ ...job, status: "running" as const, attempts: job.attempts + 1, lockedUntil }));
+  });
+}
+
+async function requeuePlannerJobAfterConcurrentChange(jobId: number, completedRevision: number) {
+  const db = await requireDb();
+  const current = (await db.select({
+    revision: plannerReconciliationJobs.revision,
+    status: plannerReconciliationJobs.status,
+  }).from(plannerReconciliationJobs)
+    .where(eq(plannerReconciliationJobs.id, jobId))
+    .limit(1))[0];
+  if (!current || current.status !== "running" || current.revision <= completedRevision) return false;
+
+  const result = await db.update(plannerReconciliationJobs).set({
+    status: "queued",
+    attempts: 0,
+    nextRunAt: new Date(Date.now() + 1_500),
+    lockedUntil: null,
+    lastError: null,
+  }).where(and(
+    eq(plannerReconciliationJobs.id, jobId),
+    eq(plannerReconciliationJobs.revision, current.revision),
+    eq(plannerReconciliationJobs.status, "running"),
+  ));
+  return Number(result[0]?.affectedRows ?? 0) > 0;
+}
+
+export async function completePlannerReconciliationJob(jobId: number, revision: number) {
+  const db = await requireDb();
+  const result = await db.update(plannerReconciliationJobs).set({
+    status: "completed",
+    lockedUntil: null,
+    lastError: null,
+  }).where(and(
+    eq(plannerReconciliationJobs.id, jobId),
+    eq(plannerReconciliationJobs.revision, revision),
+    eq(plannerReconciliationJobs.status, "running"),
+  ));
+  if (Number(result[0]?.affectedRows ?? 0) > 0) return true;
+
+  // A newer event arrived while this revision was executing. Requeue it now,
+  // instead of leaving it behind the previous worker's lease timeout.
+  await requeuePlannerJobAfterConcurrentChange(jobId, revision);
+  return false;
+}
+
+export async function failPlannerReconciliationJob(input: {
+  jobId: number;
+  revision: number;
+  attempts: number;
+  error: string;
+}) {
+  const db = await requireDb();
+  const delayMs = Math.min(5 * 60 * 1_000, 5_000 * (2 ** Math.max(0, input.attempts - 1)));
+  const terminal = input.attempts >= 5;
+  const result = await db.update(plannerReconciliationJobs).set({
+    status: terminal ? "failed" : "queued",
+    nextRunAt: new Date(Date.now() + delayMs),
+    lockedUntil: null,
+    lastError: input.error.slice(0, 500),
+  }).where(and(
+    eq(plannerReconciliationJobs.id, input.jobId),
+    eq(plannerReconciliationJobs.revision, input.revision),
+    eq(plannerReconciliationJobs.status, "running"),
+  ));
+  if (Number(result[0]?.affectedRows ?? 0) > 0) return true;
+
+  await requeuePlannerJobAfterConcurrentChange(input.jobId, input.revision);
+  return false;
+}
+
+export async function recordStudentActivityEvent(input: {
+  userId: number;
+  eventType: string;
+  entityType: string;
+  entityId?: string | number | null;
+  summary: string;
+  metadata?: Record<string, unknown>;
+}) {
+  const db = await requireDb();
+  const metadataJson = JSON.stringify(input.metadata ?? {});
+  const safeMetadata = metadataJson.length <= 8_000 ? metadataJson : "{}";
+  const result = await db.insert(studentActivityEvents).values({
+    userId: input.userId,
+    eventType: input.eventType.slice(0, 80),
+    entityType: input.entityType.slice(0, 60),
+    entityId: input.entityId == null ? null : String(input.entityId).slice(0, 100),
+    summary: input.summary.slice(0, 500),
+    metadataJson: safeMetadata,
+  });
+  return Number(result[0].insertId);
+}
+
+export async function listRecentStudentActivityEvents(userId: number, limit = 30) {
+  const db = await requireDb();
+  const rows = await db.select()
+    .from(studentActivityEvents)
+    .where(eq(studentActivityEvents.userId, userId))
+    .orderBy(desc(studentActivityEvents.createdAt), desc(studentActivityEvents.id))
+    .limit(Math.max(1, Math.min(100, Math.trunc(limit))));
+  return rows.reverse().map(row => ({
+    id: row.id,
+    eventType: row.eventType,
+    entityType: row.entityType,
+    entityId: row.entityId,
+    summary: row.summary,
+    metadata: (() => {
+      try { return JSON.parse(row.metadataJson || "{}") as Record<string, unknown>; }
+      catch { return {}; }
+    })(),
+    createdAt: row.createdAt,
+  }));
 }
 
 export async function getDashboard(userId: number, timeZone = "UTC") {
