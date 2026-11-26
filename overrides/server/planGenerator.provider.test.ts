@@ -124,6 +124,34 @@ describe("planner completed-curriculum guard", () => {
     },
   } as any;
 
+  const withStudiedLessons = (source: typeof profile, nodeIds: string[]) => {
+    const currentSubject = source.selection.learningCourseProgress.ARB_G2_BAC;
+    const currentBranch = currentSubject.branches.ARB_NAHW;
+    return {
+      ...source,
+      selection: {
+        ...source.selection,
+        learningCourseProgress: {
+          ...source.selection.learningCourseProgress,
+          ARB_G2_BAC: {
+            ...currentSubject,
+            branches: {
+              ...currentSubject.branches,
+              ARB_NAHW: {
+                ...currentBranch,
+                lessonStateModelVersion: 1,
+                lessonStates: {
+                  ...(currentBranch.lessonStates ?? {}),
+                  ...Object.fromEntries(nodeIds.map(nodeId => [nodeId, { state: "studied" as const, source: "student_self_report" as const }])),
+                },
+              },
+            },
+          },
+        },
+      },
+    } as any;
+  };
+
   const step = (title: string, nodeId: string) => ({
     day: "اليوم 1",
     title,
@@ -152,7 +180,8 @@ describe("planner completed-curriculum guard", () => {
       ],
     };
 
-    const guarded = applyPlannerProgressGuard(plan as any, profile);
+    const explicitlyStudied = withStudiedLessons(profile, ["ARB_U2_N3"]);
+    const guarded = applyPlannerProgressGuard(plan as any, explicitlyStudied);
 
     expect(guarded.steps.map(item => item.curriculumNodeIds)).toEqual([
       ["ARB_U3_N1_NAAT"],
@@ -269,7 +298,8 @@ describe("planner completed-curriculum guard", () => {
       ],
     };
 
-    const guarded = applyPlannerProgressGuard(plan as any, profile);
+    const explicitlyStudied = withStudiedLessons(profile, ["ARB_U2_N3"]);
+    const guarded = applyPlannerProgressGuard(plan as any, explicitlyStudied);
 
     expect(guarded.steps).toHaveLength(1);
     expect(guarded.steps[0].title).toBe("حل تدريبات على درس تالٍ");

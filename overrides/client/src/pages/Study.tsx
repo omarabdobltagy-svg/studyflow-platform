@@ -12,6 +12,12 @@ import {
   normalizeSIECheckpointFrontier,
 } from "@shared/sie-catalog";
 import { calculateLearningGap, getNextLearningTarget } from "@shared/sie-learning-progress";
+import {
+  getEffectiveStudentLessonState,
+  getStudentLessonStateLabel,
+  summarizeStudentLessonStates,
+  type StudentLessonState,
+} from "@shared/sie-lesson-state";
 import { BookOpenText, Check, ChevronLeft, ChevronRight, Search, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -168,6 +174,26 @@ export default function Study() {
     teacherTeachingFrontierId,
     schoolClassFrontierId: courseMode === "center" ? schoolClassFrontierId : "__UNKNOWN__",
   });
+  const savedLessonStates = (currentBranchProgress.lessonStates ?? {}) as Record<string, { state?: StudentLessonState; updatedAt?: string }>;
+  const lessonStateModelVersion = Number(currentBranchProgress.lessonStateModelVersion ?? 0);
+  const getLessonState = (nodeId: string) => getEffectiveStudentLessonState({
+    choices: branchChoices,
+    nodeId,
+    studentFrontierId: lastCompletedLessonId,
+    lessonStateModelVersion,
+    saved: savedLessonStates[nodeId],
+  });
+  const lessonStateSummary = summarizeStudentLessonStates(branchChoices.map(choice => getLessonState(choice.nodeId)));
+  const teacherCoveredChoices = currentGap.referencePosition === null
+    ? []
+    : branchChoices.slice(0, currentGap.referencePosition);
+  const teacherCoveredStates = teacherCoveredChoices.map(choice => getLessonState(choice.nodeId));
+  const teacherCoveredSummary = summarizeStudentLessonStates(teacherCoveredStates);
+  const notStudiedAfterTeacher = teacherCoveredSummary.notWatched + teacherCoveredSummary.watchedOnly;
+  const needsReviewAfterTeacher = teacherCoveredSummary.needsReview;
+  const studentFrontierIndex = lastCompletedLessonId === "__NOT_STARTED__"
+    ? -1
+    : branchChoices.findIndex(choice => choice.nodeId === lastCompletedLessonId);
   const nextStudentLesson = typeof currentGap.studentPosition === "number"
     ? branchChoices[currentGap.studentPosition]
     : undefined;
@@ -276,6 +302,18 @@ export default function Study() {
       else toast.success("تم حفظ التقدم.");
     },
     onError: error => toast.error(error.message || "تعذّر حفظ موضع المنهج."),
+  });
+  const updateLessonLearningState = trpc.learning.updateLessonLearningState.useMutation({
+    onSuccess: async (_result, variables) => {
+      await Promise.all([
+        utils.studentProfile.get.invalidate(),
+        utils.learning.get.invalidate(),
+        utils.plans.currentDaily.invalidate(),
+        utils.dashboard.summary.invalidate(),
+      ]);
+      toast.success("تم تحديث حالة الدرس؛ الخطة هتراعي إنك شاهدته أو ذاكرته فعلًا.");
+    },
+    onError: error => toast.error(error.message || "تعذّر تحديث حالة الدرس."),
   });
   const saveUnitFrontier = trpc.learning.updateBranchFrontier.useMutation({
     onSuccess: async () => {
@@ -414,7 +452,7 @@ export default function Study() {
     <DashboardLayout title="المذاكرة والتقدم" description="اختر المادة وحدّد موضعك وموضع شرح المدرس في المنهج.">
       {profile.isError && <div className="rounded-2xl border border-destructive/20 bg-destructive/5 p-4 text-sm">تعذّر تحميل ملفك الدراسي. <button className="font-bold underline" onClick={() => void profile.refetch()}>إعادة المحاولة</button></div>}
       <section className="grid gap-6">
-        <article className="app-card min-w-0 overflow-hidden rounded-2xl">
+        <article className="sf-study-subject-selector app-card min-w-0 overflow-hidden rounded-2xl">
           <header className="border-b border-border/70 bg-gradient-to-l from-secondary/65 to-card p-5">
             <p className="text-[10px] font-bold tracking-[0.12em] text-primary">المادة</p><h2 className="mt-1 text-xl font-bold">اختر المادة</h2>
             <p className="mt-1 text-sm leading-6 text-muted-foreground">كل مواد ملفك ظاهرة، والبحث يساعدك على الوصول للمادة فقط.</p>
@@ -508,7 +546,7 @@ export default function Study() {
               const complete = totalTopics > 0 && completedTopics === totalTopics;
               const percent = totalTopics ? Math.round(completedTopics / totalTopics * 100) : 0;
               return (
-                <article key={unit.unitId} className={"group relative overflow-hidden rounded-2xl border p-4 transition-all duration-300 " + (complete ? "border-primary/30 bg-primary/[0.045]" : "border-border/75 bg-card hover:-translate-y-1 hover:border-primary/35 hover:shadow-xl")}>
+                <article key={unit.unitId} className={"sf-study-unit-card group relative overflow-hidden rounded-2xl border p-4 transition-all duration-300 " + (complete ? "border-primary/30 bg-primary/[0.045]" : "border-border/75 bg-card hover:-translate-y-1 hover:border-primary/35 hover:shadow-xl")}>
                   <div className="pointer-events-none absolute -left-14 -top-14 size-36 rounded-full bg-primary/10 blur-3xl transition-opacity group-hover:opacity-100" />
                   <div className="relative">
                     <div className="flex items-start justify-between gap-2">
@@ -740,12 +778,12 @@ export default function Study() {
                     <div className="min-w-0 rounded-2xl border border-primary/20 bg-primary/[0.035] p-3 sm:p-4">
                       <div className="border-b border-border/70 pb-3">
                         <p className="text-[10px] font-bold tracking-[0.12em] text-primary">تقدمك</p>
-                        <h4 className="mt-1 break-words text-sm font-bold sm:text-base">آخر موضوع أنهيته</h4>
-                        <p className="mt-1 text-xs leading-5 text-muted-foreground">اختيارك يعني أنك أنهيت هذه النقطة بالفعل. النقطة التالية بعدها هي أول ما يدخل في تراكمك. يتم الحفظ تلقائيًا بعد تحديد موضع المدرس أيضًا.</p>
+                        <h4 className="mt-1 break-words text-sm font-bold sm:text-base">آخر درس وصلت له في شرح المدرس</h4>
+                        <p className="mt-1 text-xs leading-5 text-muted-foreground">النقطة المختارة تحدد آخر درس شاهدت شرحه أو حضرت حصته. ده لا يعني إنك ذاكرت الدرس أو فهمته؛ حالة المذاكرة والفهم هتتسجل لكل درس بشكل مستقل تحت.</p>
                       </div>
                       <div className="mt-4 grid gap-6 md:grid-cols-2">
                         <div className="min-w-0 rounded-xl border border-border/70 bg-background/70 p-3">
-                          <SearchableFrontierPicker label="آخر موضوع أنهيته" hint="اختيارك هنا يحدد آخر موضوع اكتمل. الموضوع الذي يليه يظل ضمن المتراكم عليك."
+                          <SearchableFrontierPicker label="آخر درس وصلت له في الشرح" hint="اختَر آخر محاضرة حضرتها أو درس وصل له شرح المدرس. هنعرض الدروس السابقة بعلامة مشاهدة، لكن المذاكرة والفهم حالة منفصلة."
                             value={hasStudentFrontierSelection ? lastCompletedLessonId : ""} onChange={setLastCompletedLessonId} disabled={saveBranchFrontier.isPending}
                             onPrevious={() => setLastCompletedLessonId(stepFrontier(lastCompletedLessonId, "previous"))}
                             onNext={() => setLastCompletedLessonId(stepFrontier(lastCompletedLessonId || "__UNKNOWN__", "next"))}
@@ -779,6 +817,90 @@ export default function Study() {
                         ) : null}
                       </div>
                     </div>
+                  )}
+                  {branchChoices.length > 0 && (
+                    <section className="sf-lesson-state-panel mt-4 overflow-hidden rounded-2xl border border-border/80 bg-background">
+                      <header className="border-b border-border/70 bg-muted/15 p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <p className="text-[10px] font-bold tracking-[.12em] text-primary">مشاهدة ≠ مذاكرة</p>
+                            <h4 className="mt-1 text-sm font-bold">حالة كل درس في الفرع</h4>
+                          </div>
+                          <span className="rounded-full border border-border bg-card px-3 py-1.5 text-[10px] font-semibold text-muted-foreground">{lessonStateSummary.studied} من {lessonStateSummary.total} تمت مذاكرتها</span>
+                        </div>
+                        <p className="mt-2 text-xs leading-6 text-muted-foreground">علامة الصح تعني إنك وصلت للدرس في الشرح. اختار حالة كل درس بنفسك: شاهدته فقط، ذاكرته وفهمته، أو محتاج تراجعه. ولو فوت درسًا في المنتصف، علّمه «لم أشاهد» حتى لو كملت اللي بعده.</p>
+                        {currentGap.referencePosition !== null && (
+                          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+                            <div className="rounded-xl border border-border/70 bg-card p-2.5">
+                              <p className="text-[10px] text-muted-foreground">لم يحدد الحالة</p>
+                              <p className="mt-1 text-sm font-bold tabular-nums">{teacherCoveredSummary.notRecorded.toLocaleString("ar-EG")}</p>
+                            </div>
+                            <div className="rounded-xl border border-border/70 bg-card p-2.5">
+                              <p className="text-[10px] text-muted-foreground">فاتته المحاضرة</p>
+                              <p className="mt-1 text-sm font-bold tabular-nums">{teacherCoveredSummary.notWatched.toLocaleString("ar-EG")}</p>
+                            </div>
+                            <div className="rounded-xl border border-border/70 bg-card p-2.5">
+                              <p className="text-[10px] text-muted-foreground">شاهد ولم يذاكر</p>
+                              <p className="mt-1 text-sm font-bold tabular-nums">{teacherCoveredSummary.watchedOnly.toLocaleString("ar-EG")}</p>
+                            </div>
+                            <div className="rounded-xl border border-border/70 bg-card p-2.5">
+                              <p className="text-[10px] text-muted-foreground">يحتاج مراجعة</p>
+                              <p className="mt-1 text-sm font-bold tabular-nums">{needsReviewAfterTeacher.toLocaleString("ar-EG")}</p>
+                            </div>
+                            <div className="col-span-2 rounded-xl border border-border/70 bg-card p-2.5 sm:col-span-1">
+                              <p className="text-[10px] text-muted-foreground">ذاكر وفهم</p>
+                              <p className="mt-1 text-sm font-bold tabular-nums">{teacherCoveredSummary.studied.toLocaleString("ar-EG")}</p>
+                            </div>
+                          </div>
+                        )}
+                      </header>
+                      <div className="max-h-[640px] divide-y divide-border/60 overflow-y-auto">
+                        {branchChoices.map((choice, index) => {
+                          const state = getLessonState(choice.nodeId);
+                          const isFrontier = choice.nodeId === lastCompletedLessonId;
+                          const reachedInLecture = index <= studentFrontierIndex && studentFrontierIndex >= 0 && state !== "not_watched" && state !== "not_recorded";
+                          const pending = updateLessonLearningState.isPending
+                            && updateLessonLearningState.variables?.nodeId === choice.nodeId;
+                          return (
+                            <article key={choice.nodeId} className={"sf-lesson-state-row flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:gap-4 sm:px-4 " + (isFrontier ? "is-frontier" : "") + (state === "not_watched" ? " is-missed" : "")}>
+                              <div className="flex min-w-0 items-center gap-3 sm:flex-1">
+                                <span className={"sf-lesson-state-marker flex size-8 shrink-0 items-center justify-center rounded-xl border text-xs font-bold " + (state === "not_recorded" || state === "not_watched" ? "border-border bg-muted text-muted-foreground" : isFrontier ? "border-primary/40 bg-primary/15 text-primary" : "border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300")}>
+                                  {state === "not_recorded" ? "؟" : state === "not_watched" ? <X className="size-3.5" /> : <Check className="size-4" />}
+                                </span>
+                                <div className="min-w-0 flex-1">
+                                  <p className="break-words text-xs font-bold leading-6">{choice.title}</p>
+                                  <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                                    <span className={"rounded-md px-2 py-1 text-[10px] font-semibold " + (state === "studied" ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-300" : state === "watched_only" ? "bg-primary/10 text-primary" : state === "needs_review" ? "bg-amber-500/10 text-amber-700 dark:text-amber-300" : "bg-muted text-muted-foreground")}>{getStudentLessonStateLabel(state)}</span>
+                                    {isFrontier && <span className="sf-lesson-frontier-badge rounded-md border border-primary/25 bg-primary/10 px-2 py-1 text-[10px] font-bold text-primary">آخر نقطة وصلت لها</span>}
+                                    {!reachedInLecture && state === "not_watched" && <span className="text-[10px] text-muted-foreground">لم يصل إليه الشرح بعد أو فاتتك محاضرته</span>}
+                                  </div>
+                                </div>
+                              </div>
+                              <label className="block w-full sm:w-[230px]">
+                                <span className="sr-only">حالة مذاكرتك: {choice.title}</span>
+                                <select
+                                  value={state}
+                                  disabled={pending}
+                                  onChange={event => updateLessonLearningState.mutate({
+                                    subjectId,
+                                    branchId: currentBranchId,
+                                    nodeId: choice.nodeId,
+                                    state: event.target.value as StudentLessonState,
+                                  })}
+                                  className="h-10 w-full rounded-xl border border-border bg-card px-3 text-xs font-semibold text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15 disabled:opacity-60"
+                                >
+                                  <option value="not_recorded">لم أحدد الحالة بعد</option>
+                                  <option value="not_watched">لم أشاهد الشرح / فاتتني الحصة</option>
+                                  <option value="watched_only">شاهدت المحاضرة فقط — لم أذاكرها</option>
+                                  <option value="studied">ذاكرت الدرس وفهمته</option>
+                                  <option value="needs_review">ذاكرت، لكن أحتاج مراجعة</option>
+                                </select>
+                              </label>
+                            </article>
+                          );
+                        })}
+                      </div>
+                    </section>
                   )}
                   <div className="border-t border-border/70 pt-4">
                     <AnimatePresence mode="wait" initial={false}>
@@ -838,7 +960,7 @@ export default function Study() {
             <p className="mt-1 text-[11px] text-muted-foreground">{currentGap.referenceSource === "teacher" ? "المدرس" : currentGap.referenceSource === "school" ? "السنتر / المجموعة" : "لا يوجد مرجع محفوظ"}</p>
           </div>
           <div className="rounded-xl border border-primary/25 bg-primary/5 p-4">
-            <p className="text-xs text-muted-foreground">الفجوة في هذا الفرع</p>
+            <p className="text-xs text-muted-foreground">فجوة شرح المدرس</p>
             <p className="mt-2 text-xl font-bold text-primary">
               {currentGap.status !== "calculated" ? "غير محسوبة" : currentGap.gapCount! > 0 ? currentGap.gapCount + " " + currentBranchPointLabel : currentGap.aheadCount! > 0 ? "متقدم بـ " + currentGap.aheadCount + " " + currentBranchPointLabel : "لا يوجد تراكم"}
             </p>
@@ -846,7 +968,7 @@ export default function Study() {
           <div className="rounded-xl border border-primary/20 bg-primary/[0.045] p-4">
             <p className="text-xs text-muted-foreground">التالي بعد آخر موضوع مكتمل</p>
             <p className="mt-2 font-bold text-foreground">{nextStudentLesson?.title || (isStudentDoneWithBranch ? "اكتملت موضوعات هذا الفرع" : "حدد آخر موضوع أنهيته")}</p>
-            <p className="mt-1 text-[11px] leading-5 text-muted-foreground">اختيارك لموضوع مكتمل يعني أن نقاطه الداخلية محسوبة بالكامل، وتبدأ المذاكرة من هذا الموضوع التالي.</p>
+            <p className="mt-1 text-[11px] leading-5 text-muted-foreground">ده موضع وصولك في شرح المدرس فقط. حالة المذاكرة والفهم لكل درس محسوبة منفصلة في قائمة الدروس.</p>
           </div>
           <p className="text-xs leading-6 text-muted-foreground sm:col-span-2 lg:col-span-4">
             {currentGap.status === "student_position_missing" ? "حدد موضعك أنت أولًا." : currentGap.status === "reference_missing" ? "لا يوجد مرجع محفوظ للمقارنة حتى الآن؛ يمكنك متابعة تقدمك دون إعداد إضافي هنا." : "الحساب يستخدم عدد نقاط الفهرس داخل هذا الفرع فقط؛ لا يعمم الرقم على بقية فروع المادة."}

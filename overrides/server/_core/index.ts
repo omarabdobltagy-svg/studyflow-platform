@@ -4,7 +4,7 @@ import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerStorageProxy } from "./storageProxy";
-import { appRouter, ingestYoutubeWebSubFeed, startPlannerReconciliationWorker } from "../routers";
+import { appRouter, assistantChatInputSchema, runAssistantChat, ingestYoutubeWebSubFeed, startPlannerReconciliationWorker } from "../routers";
 import { listStudentTeacherMonitoringProfiles } from "../db";
 import {
   resolveYoutubeWebhookTeacher,
@@ -91,6 +91,58 @@ async function startServer() {
       return res.status(500).json({ error: String(error), context: { path: req.path }, timestamp: new Date().toISOString() });
     }
   });
+  // Authenticated assistant streaming endpoint. It shares the same session
+  // context and resolver as the tRPC mutation; only the response transport differs.
+  app.post("/api/assistant/stream", async (req, res) => {
+    const origin = req.get("origin");
+    const requestHost = (req.get("x-forwarded-host") ?? req.get("host") ?? "").split(",")[0].trim();
+    if (origin) {
+      try {
+        if (new URL(origin).host !== requestHost) return res.status(403).json({ error: "cross-origin request rejected" });
+      } catch {
+        return res.status(403).json({ error: "invalid request origin" });
+      }
+    }
+    if (!req.is("application/json")) return res.status(415).json({ error: "application/json required" });
+
+    const context = await createContext({ req, res } as unknown as Parameters<typeof createContext>[0]);
+    if (!context.user) return res.status(401).json({ error: "authentication required" });
+    const parsed = assistantChatInputSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "invalid assistant request" });
+
+    res.status(200);
+    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.flushHeaders();
+
+    let emittedText = "";
+    const sendToken = (token: string) => {
+      if (!token || res.writableEnded || res.destroyed) return;
+      emittedText += token;
+      res.write("data: " + JSON.stringify({ token }) + "\n\n");
+    };
+
+    try {
+      const result = await runAssistantChat(context.user.id, parsed.data, sendToken);
+      // Configuration errors can return a helpful plain-text response without
+      // invoking the model; deliver that response through the same stream.
+      if (!emittedText && result.content) sendToken(result.content);
+      if (!res.writableEnded && !res.destroyed) {
+        res.write("data: [DONE]\n\n");
+        res.end();
+      }
+    } catch (error) {
+      console.error("[StudyFlow AI] Streaming request failed:", error instanceof Error ? error.message : String(error));
+      if (!res.headersSent) return res.status(502).json({ error: "assistant temporarily unavailable" });
+      if (!res.writableEnded && !res.destroyed) {
+        res.write("event: error\ndata: " + JSON.stringify({ error: "assistant temporarily unavailable" }) + "\n\n");
+        res.end();
+      }
+    }
+  });
+
   // tRPC API
   app.use(
     "/api/trpc",

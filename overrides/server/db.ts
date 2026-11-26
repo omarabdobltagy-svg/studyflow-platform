@@ -1,3 +1,4 @@
+import { formatStudyMethodNotes } from "./study-method";
 import { and, asc, desc, eq, inArray, isNull, like, lt, lte, or, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { storageDelete } from "./storage";
@@ -18,6 +19,7 @@ import {
   studentProfiles,
   studySessions,
   taskChangeLogs,
+  teacherCourseFacts,
   tasks,
   users,
 } from "../drizzle/schema";
@@ -431,6 +433,77 @@ export async function saveSIEOnboarding(userId: number, data: SIEOnboardingInput
   return getStudentProfile(userId);
 }
 
+export type TeacherCourseFactsInput = {
+  teacherId: string;
+  teacherName: string;
+  subjectId: string;
+  educationSystem: string;
+  gradeYear: string;
+  availableModes: Array<"center" | "online">;
+  homeworkPolicy: "yes" | "no" | "varies" | "unknown";
+  homeworkRequiredBeforeNextLecture: "yes" | "no" | "varies" | "unknown";
+  preLectureExamRequired: "yes" | "no" | "varies" | "unknown";
+  evidence: Array<{ title: string; url: string; source: string; excerpt?: string; publishedAt?: string }>;
+  confidence: "low" | "medium" | "high";
+  verificationStatus: "verified" | "partial" | "insufficient_evidence" | "research_failed";
+  checkedAt: Date;
+  expiresAt: Date;
+};
+
+export async function getTeacherCourseFacts(input: Pick<TeacherCourseFactsInput, "teacherId" | "subjectId" | "educationSystem" | "gradeYear">) {
+  const database = await requireDb();
+  const rows = await database.select().from(teacherCourseFacts).where(and(
+    eq(teacherCourseFacts.teacherId, input.teacherId),
+    eq(teacherCourseFacts.subjectId, input.subjectId),
+    eq(teacherCourseFacts.educationSystem, input.educationSystem),
+    eq(teacherCourseFacts.gradeYear, input.gradeYear),
+  )).limit(1);
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    ...row,
+    availableModes: parseJson<Array<"center" | "online">>(row.availableModesJson, []),
+    evidence: parseJson<TeacherCourseFactsInput["evidence"]>(row.evidenceJson, []),
+    isStale: row.expiresAt.getTime() <= Date.now(),
+  };
+}
+
+export async function upsertTeacherCourseFacts(input: TeacherCourseFactsInput) {
+  const database = await requireDb();
+  const values = {
+    teacherId: input.teacherId,
+    teacherName: input.teacherName,
+    subjectId: input.subjectId,
+    educationSystem: input.educationSystem,
+    gradeYear: input.gradeYear,
+    availableModesJson: JSON.stringify(input.availableModes),
+    homeworkPolicy: input.homeworkPolicy,
+    homeworkRequiredBeforeNextLecture: input.homeworkRequiredBeforeNextLecture,
+    preLectureExamRequired: input.preLectureExamRequired,
+    evidenceJson: JSON.stringify(input.evidence),
+    confidence: input.confidence,
+    verificationStatus: input.verificationStatus,
+    checkedAt: input.checkedAt,
+    expiresAt: input.expiresAt,
+  };
+  await database.insert(teacherCourseFacts).values(values).onDuplicateKeyUpdate({
+    set: {
+      teacherName: values.teacherName,
+      availableModesJson: values.availableModesJson,
+      homeworkPolicy: values.homeworkPolicy,
+      homeworkRequiredBeforeNextLecture: values.homeworkRequiredBeforeNextLecture,
+      preLectureExamRequired: values.preLectureExamRequired,
+      evidenceJson: values.evidenceJson,
+      confidence: values.confidence,
+      verificationStatus: values.verificationStatus,
+      checkedAt: values.checkedAt,
+      expiresAt: values.expiresAt,
+      updatedAt: new Date(),
+    },
+  });
+  return getTeacherCourseFacts(input);
+}
+
 export async function listTasks(userId: number) {
   const db = await requireDb();
   return db
@@ -593,6 +666,7 @@ export type ApprovedPlanStep = {
   day: number;
   title: string;
   detail: string;
+  studyMethod?: { stages: Array<{ title: string; instruction: string; reason: string; optional?: boolean }>; completionCriteria: string; teacherPolicyNote?: string };
   minutes: number;
   category: string;
   priority?: "critical" | "high" | "medium" | "low";
@@ -697,11 +771,11 @@ export async function approvePlanAsGoalTree(
         userId,
         goalId: stageGoalId,
         title: step.title,
-        notes: step.detail || `مهمة من خطة «${plan.title.trim()}».`,
+        notes: [step.detail || `مهمة من خطة «${plan.title.trim()}».`, ...(step.studyMethod ? [formatStudyMethodNotes(step.studyMethod)] : [])].filter(Boolean).join("\n\n"),
         category: step.category,
         priority: step.priority === "critical" || step.priority === "high" ? "high" as const
           : step.priority === "low" ? "low" as const : "medium" as const,
-        estimatedMinutes: null,
+        estimatedMinutes: step.minutes,
         dueAt: dueDates[index] ?? null,
       });
     }
@@ -743,6 +817,7 @@ export async function syncDailyPlanGoalTree(
       day: string;
       title: string;
       detail: string;
+      studyMethod?: { stages: Array<{ title: string; instruction: string; reason: string; optional?: boolean }>; completionCriteria: string; teacherPolicyNote?: string };
       minutes: number;
       category: string;
       priority?: "critical" | "high" | "medium" | "low";
@@ -772,6 +847,7 @@ export async function syncDailyPlanGoalTree(
   const dueDates = steps.map(() => null);
   const taskNotes = (step: typeof steps[number]) => [
     step.detail,
+    ...(step.studyMethod ? [formatStudyMethodNotes(step.studyMethod)] : []),
     ...(step.scheduleNote ? [step.scheduleNote] : []),
     ...(step.resourceRecommendation ? [
       "مشاهدة إضافية موصى بها من " + (step.resourceRecommendation.teacherName || "المدرس") + ": " + step.resourceRecommendation.title,
@@ -908,11 +984,17 @@ export async function syncDailyPlanGoalTree(
         : step.priority === "low" ? "low" as const : "medium" as const;
       const stage = pendingStages[index];
       const linkedExistingTask = step.existingTask
-        ? (await tx.select({ id: tasks.id, status: tasks.status })
+        ? (await tx.select({ id: tasks.id, status: tasks.status, notes: tasks.notes })
             .from(tasks)
             .where(and(eq(tasks.id, step.existingTask.id), eq(tasks.userId, userId)))
             .limit(1))[0]
         : undefined;
+      if (linkedExistingTask && step.studyMethod && !linkedExistingTask.notes?.includes("طريقة المذاكرة:")) {
+        const methodNotes = formatStudyMethodNotes(step.studyMethod);
+        await tx.update(tasks).set({
+          notes: [linkedExistingTask.notes, methodNotes].filter(Boolean).join("\n\n"),
+        }).where(and(eq(tasks.id, linkedExistingTask.id), eq(tasks.userId, userId)));
+      }
 
       if (stage) {
         await tx.update(goals).set({
@@ -1472,7 +1554,7 @@ export async function createCalendarEvent(
   data: { title: string; type?: "event" | "study" | "goal"; startAt: Date; endAt?: Date | null; allDay?: boolean; color?: string }
 ) {
   const db = await requireDb();
-  await db.insert(calendarEvents).values({
+  const result = await db.insert(calendarEvents).values({
     userId,
     title: data.title,
     type: data.type ?? "event",
@@ -1481,6 +1563,7 @@ export async function createCalendarEvent(
     allDay: data.allDay ?? false,
     color: data.color ?? "violet",
   });
+  return Number(result[0].insertId);
 }
 
 export async function updateCalendarEvent(userId: number, eventId: number, data: { title: string; type: "event" | "study" | "goal"; startAt: Date; endAt?: Date | null; allDay: boolean; color: string }) {

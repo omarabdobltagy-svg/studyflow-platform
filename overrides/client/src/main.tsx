@@ -14,6 +14,7 @@ import "./workspace-finish.css";
 import "./workspace-interaction-hub.css";
 import "./workspace-transitions.css";
 import "./studyflow-final-theme.css";
+import "./experience-refinement.css";
 
 // Analytics is optional. Do not emit a broken /umami request when no endpoint is configured.
 const analyticsEndpoint = import.meta.env.VITE_ANALYTICS_ENDPOINT?.trim();
@@ -26,7 +27,22 @@ if (analyticsEndpoint && analyticsWebsiteId) {
   document.head.appendChild(analyticsScript);
 }
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Keep recently visited screens responsive without refetching every time
+      // the student moves between sections. Critical queries can override this.
+      staleTime: 20_000,
+      gcTime: 5 * 60_000,
+      retry: 1,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: true,
+    },
+    mutations: {
+      retry: 0,
+    },
+  },
+});
 
 const showQueryError = (error: unknown, queryKey: readonly unknown[]) => {
   if (error instanceof TRPCClientError && error.message === UNAUTHED_ERR_MSG) return;

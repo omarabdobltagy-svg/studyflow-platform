@@ -7,7 +7,25 @@ import QueryErrorNotice from "@/components/QueryErrorNotice";
 import BrandMark from "@/components/BrandMark";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
-import StudyOrbScene from "@/components/StudyOrbScene";
+const StudyOrbScene = lazy(() => import("@/components/StudyOrbScene"));
+
+function DeferredStudyOrbScene({ className }: { className: string }) {
+  const [shouldRender, setShouldRender] = useState(false);
+
+  useEffect(() => {
+    // Let the interactive workspace paint before downloading the optional 3D layer.
+    const timer = window.setTimeout(() => setShouldRender(true), 1_200);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  const placeholder = <div className={"sf-3d-scene " + className} aria-hidden="true" />;
+  if (!shouldRender) return placeholder;
+  return (
+    <Suspense fallback={placeholder}>
+      <StudyOrbScene className={className} />
+    </Suspense>
+  );
+}
 import { gsap } from "gsap";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
@@ -16,7 +34,7 @@ import {
   Menu, Moon, Settings2, Sparkles, Sun,
 } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, type ReactNode, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 
 type NavigationGroup = {
@@ -93,6 +111,12 @@ export default function DashboardLayout({ title, description, children, action }
   const studentProfile = trpc.studentProfile.get.useQuery(undefined, { enabled: Boolean(user) });
   const { theme, toggleTheme } = useTheme();
   const reduceMotion = useReducedMotion();
+
+  useEffect(() => {
+    if (isMobileNavOpen) document.body.dataset.studyflowSectionsOpen = "true";
+    else delete document.body.dataset.studyflowSectionsOpen;
+    return () => { delete document.body.dataset.studyflowSectionsOpen; };
+  }, [isMobileNavOpen]);
 
   useEffect(() => {
     if (reduceMotion || !pageContentRef.current) return;
@@ -183,7 +207,7 @@ export default function DashboardLayout({ title, description, children, action }
           </g>
         </svg>
       </div>
-      <StudyOrbScene className="sf-login-3d" />
+      <DeferredStudyOrbScene className="sf-login-3d" />
       <div className="sf-login-frame sf-login-frame-v4">
         <section className="sf-login-form-side">
           <div className="sf-login-form-card">
@@ -279,7 +303,6 @@ export default function DashboardLayout({ title, description, children, action }
                 >
                   <item.icon className="sf-nav-icon" />
                   <span>{item.label}</span>
-                  {active && <motion.span layoutId="sf-sheet-active" className="sf-nav-indicator" />}
                 </motion.button>
               );
             })}
@@ -305,7 +328,7 @@ export default function DashboardLayout({ title, description, children, action }
   return (
     <div className="sf-app-shell sf-shell-v3">
       <div className="sf-app-frame" data-page={pageKey}>
-        <StudyOrbScene className="sf-workspace-3d" />
+        <DeferredStudyOrbScene className="sf-workspace-3d" />
         <div className="sf-app-main">
           <motion.header
             className="sf-topbar sf-topbar-editorial"
@@ -354,6 +377,19 @@ export default function DashboardLayout({ title, description, children, action }
               <Button
                 type="button"
                 variant="outline"
+                size="sm"
+                className="sf-sections-trigger hidden md:inline-flex"
+                onClick={() => setMobileNavOpen(true)}
+                aria-haspopup="dialog"
+                aria-expanded={isMobileNavOpen}
+                aria-label="عرض كل أقسام StudyFlow"
+              >
+                <Menu className="size-4" />
+                <span>كل الأقسام</span>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
                 size="icon"
                 className="sf-theme-button pressable"
                 onClick={toggleTheme}
@@ -370,9 +406,9 @@ export default function DashboardLayout({ title, description, children, action }
             <motion.main
               key={location}
               className={"sf-main sf-main-" + pageKey}
-              initial={reduceMotion ? false : { opacity: 0, y: 18, filter: "blur(5px)" }}
-              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-              exit={reduceMotion ? undefined : { opacity: 0, y: -10, filter: "blur(3px)" }}
+              initial={reduceMotion ? false : { opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={reduceMotion ? undefined : { opacity: 0, y: -6 }}
               transition={{ duration: reduceMotion ? 0 : 0.34, ease: [0.22, 1, 0.36, 1] }}
             >
               <div ref={pageContentRef} className={"sf-page sf-page-" + pageKey} data-page={pageKey}>

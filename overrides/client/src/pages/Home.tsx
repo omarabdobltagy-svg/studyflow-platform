@@ -42,9 +42,9 @@ function durationLabel(seconds: number) {
 }
 
 function dueLabel(value: Date | string | null | undefined) {
-  if (!value) return "بدون موعد محدد";
+  if (!value) return null;
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "بدون موعد محدد";
+  if (Number.isNaN(date.getTime())) return null;
   return new Intl.DateTimeFormat("ar-EG", { day: "numeric", month: "short", timeZone: "Africa/Cairo" }).format(date);
 }
 
@@ -147,17 +147,32 @@ export default function Home() {
 
   const priority = useMemo<Priority | null>(() => {
     const gaps = ((learning.data as any)?.gapByBranch ?? {}) as Record<string, Record<string, any>>;
+    const lessonStateByBranch = ((learning.data as any)?.lessonStateByBranch ?? {}) as Record<string, Record<string, any>>;
     const candidates = Object.entries(gaps).flatMap(([subjectId, subjectGaps]) =>
       getSIECheckpointProgressBranches(subjectId).flatMap(branch => {
         const gap = subjectGaps[branch.branchId];
-        if (gap?.status !== "calculated" || gap.gapCount === null || gap.gapCount <= 0 || gap.referencePosition === null) return [];
-        const next = typeof gap.studentPosition === "number" ? branch.choices[gap.studentPosition] : undefined;
+        if (gap?.referencePosition === null || gap?.referencePosition === undefined) return [];
+        const lessonState = lessonStateByBranch[subjectId]?.[branch.branchId];
+        const stateBacklog = lessonState && Number(lessonState.lessonStateModelVersion ?? 0) >= 1
+          ? Number(lessonState.teacherCoveredNotStudiedCount || 0) + Number(lessonState.teacherCoveredNeedsReviewCount || 0)
+          : null;
+        const backlogCount = stateBacklog !== null
+          ? stateBacklog
+          : gap?.status === "calculated" && typeof gap.gapCount === "number" ? gap.gapCount : 0;
+        if (backlogCount <= 0) return [];
+        const byNode = (lessonState?.byNode ?? {}) as Record<string, string>;
+        const teacherCovered = branch.choices.slice(0, gap.referencePosition);
+        const next = teacherCovered.find(choice =>
+          byNode[choice.nodeId] === "not_watched"
+          || byNode[choice.nodeId] === "watched_only"
+          || byNode[choice.nodeId] === "needs_review"
+        ) ?? (typeof gap.studentPosition === "number" ? branch.choices[gap.studentPosition] : undefined);
         return [{
           subjectId, subjectName: getSIESubject(subjectId)?.nameAr ?? subjectId,
-          branchId: branch.branchId, branchTitle: branch.branchId === "ARB_READING" ? "نصوص الوحدة" : branch.branchTitle, gapCount: gap.gapCount as number,
+          branchId: branch.branchId, branchTitle: branch.branchId === "ARB_READING" ? "نصوص الوحدة" : branch.branchTitle, gapCount: backlogCount,
           pointLabel: branch.branchType === "official_section" ? "موضوع" : "درس",
           nextLesson: next ? { nodeId: next.nodeId, title: next.title } : null,
-          ratio: gap.referencePosition > 0 ? gap.gapCount / gap.referencePosition : 0,
+          ratio: gap.referencePosition > 0 ? backlogCount / gap.referencePosition : 0,
         }];
       })
     );
@@ -371,7 +386,7 @@ export default function Home() {
       action={<Button onClick={() => setLocation("/planner")} className="gap-2 rounded-xl"><Sparkles className="size-4" />خطة المذاكرة</Button>}
     >
       <div className="space-y-6 pb-6">
-        <header className="flex flex-wrap items-end justify-between gap-3">
+        <header className="sf-home-greeting flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="text-sm font-medium text-muted-foreground">{cairoDate()}</p>
             <h2 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">أهلًا {firstName}، نبدأ بإيه النهارده؟</h2>
@@ -464,7 +479,7 @@ export default function Home() {
         )}
 
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(300px,.75fr)]">
-          <section className="relative overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
+          <section className="sf-next-action-card relative overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
             <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-l from-primary via-primary/50 to-transparent" />
             <div className="p-5 sm:p-7">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -519,7 +534,7 @@ export default function Home() {
             </div>
           </section>
 
-          <section className="rounded-3xl border border-border bg-card p-5 shadow-sm sm:p-6">
+          <section className="sf-progress-card rounded-3xl border border-border bg-card p-5 shadow-sm sm:p-6">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2 text-sm font-semibold"><ListChecks className="size-4 text-primary" />إنجازك</div>
               <span className="text-xs text-muted-foreground">{completion}%</span>
@@ -534,7 +549,7 @@ export default function Home() {
           </section>
         </div>
 
-        <section className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
+        <section className="sf-daily-plan-card overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4 sm:px-6">
             <div><p className="text-xs font-semibold text-muted-foreground">تخطيط تلقائي</p><h3 className="mt-1 text-lg font-bold">{plan?.title ?? "خطة المذاكرة"}</h3></div>
             <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setLocation("/planner")}>تفاصيل الخطة <ArrowLeft className="size-4" /></Button>
@@ -595,7 +610,7 @@ export default function Home() {
               ) : tasks.length ? tasks.slice(0, 5).map(task => (
                 <div key={task.id} className="flex items-center gap-3 px-5 py-4">
                   <button type="button" onClick={() => toggleTask.mutate({ id: task.id, done: true })} disabled={toggleTask.isPending} aria-label={"إكمال " + task.title} className="flex size-6 shrink-0 items-center justify-center rounded-full border border-primary/40 text-primary transition hover:bg-primary hover:text-primary-foreground disabled:opacity-50"><Check className="size-3.5" /></button>
-                  <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{task.title}</p><p className="mt-1 text-xs text-muted-foreground">{task.category || "مهمة دراسية"} · {dueLabel(task.dueAt)}</p></div>
+                  <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{task.title}</p><p className="mt-1 text-xs text-muted-foreground"><span>{task.category || "مهمة دراسية"}</span>{task.dueAt && dueLabel(task.dueAt) && <span> · {dueLabel(task.dueAt)}</span>}</p></div>
                   <Badge variant={task.priority === "high" ? "destructive" : "secondary"} className="shrink-0">{task.priority === "high" ? "مهمة" : task.priority === "medium" ? "متوسطة" : "مرنة"}</Badge>
                 </div>
               )) : (

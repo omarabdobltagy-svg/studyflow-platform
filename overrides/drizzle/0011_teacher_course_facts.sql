@@ -1,0 +1,22 @@
+CREATE TABLE IF NOT EXISTS `teacherCourseFacts` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `teacherId` varchar(80) NOT NULL,
+  `teacherName` varchar(120) NOT NULL,
+  `subjectId` varchar(80) NOT NULL,
+  `educationSystem` varchar(40) NOT NULL,
+  `gradeYear` varchar(60) NOT NULL,
+  `availableModesJson` text NOT NULL,
+  `homeworkPolicy` varchar(20) NOT NULL DEFAULT 'unknown',
+  `homeworkRequiredBeforeNextLecture` varchar(20) NOT NULL DEFAULT 'unknown',
+  `preLectureExamRequired` varchar(20) NOT NULL DEFAULT 'unknown',
+  `evidenceJson` text NOT NULL,
+  `confidence` varchar(20) NOT NULL DEFAULT 'low',
+  `verificationStatus` varchar(30) NOT NULL DEFAULT 'insufficient_evidence',
+  `checkedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `expiresAt` timestamp NOT NULL,
+  `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `teacher_course_facts_scope_unique` (`teacherId`, `subjectId`, `educationSystem`, `gradeYear`),
+  KEY `teacher_course_facts_expiry_idx` (`expiresAt`, `verificationStatus`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

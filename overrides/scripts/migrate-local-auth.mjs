@@ -102,6 +102,68 @@ try {
   await connection.query("INSERT IGNORE INTO `studyflow_migrations` (id) VALUES (?)", [STUDENT_ACTIVITY_MIGRATION_ID]);
   console.log("[student-activity] Activity event schema is ready.");
 
+  // The deployed Preview/Production hook does not run the full Drizzle migrator.
+  // Apply these additive, idempotent migrations explicitly before server startup.
+  const [plannerTables] = await connection.query("SHOW TABLES LIKE 'plannerReconciliationJobs'");
+  if (!Array.isArray(plannerTables) || plannerTables.length === 0) {
+    await connection.query(
+      "CREATE TABLE `plannerReconciliationJobs` (" +
+      "`id` int NOT NULL AUTO_INCREMENT, `userId` int NOT NULL, " +
+      "`impact` enum('local','structural') NOT NULL DEFAULT 'structural', " +
+      "`eventType` varchar(80) NOT NULL, `status` enum('queued','running','completed','failed') NOT NULL DEFAULT 'queued', " +
+      "`attempts` int NOT NULL DEFAULT 0, `revision` int NOT NULL DEFAULT 1, " +
+      "`nextRunAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP, `lockedUntil` timestamp NULL DEFAULT NULL, " +
+      "`lastError` varchar(500) DEFAULT NULL, `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP, " +
+      "`updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, " +
+      "PRIMARY KEY (`id`), UNIQUE KEY `planner_reconcile_user_unique` (`userId`), " +
+      "KEY `planner_reconcile_due_idx` (`status`, `nextRunAt`, `lockedUntil`), " +
+      "CONSTRAINT `planner_reconcile_jobs_user_fk` FOREIGN KEY (`userId`) REFERENCES `users` (`id`) ON DELETE CASCADE" +
+      ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
+    console.log("[planner-reconciliation] Created plannerReconciliationJobs.");
+  }
+  const [plannerColumns] = await connection.query(
+    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'plannerReconciliationJobs'"
+  );
+  const plannerColumnNames = new Set(plannerColumns.map(row => row.COLUMN_NAME));
+  const requiredPlannerColumns = ["id", "userId", "impact", "eventType", "status", "attempts", "revision", "nextRunAt", "lockedUntil", "lastError", "createdAt", "updatedAt"];
+  const missingPlannerColumns = requiredPlannerColumns.filter(column => !plannerColumnNames.has(column));
+  if (missingPlannerColumns.length) throw new Error("plannerReconciliationJobs is missing required columns: " + missingPlannerColumns.join(", ") + ".");
+
+  const [taskEstimateColumns] = await connection.query(
+    "SELECT IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tasks' AND COLUMN_NAME = 'estimatedMinutes'"
+  );
+  if (Array.isArray(taskEstimateColumns) && taskEstimateColumns[0]?.IS_NULLABLE === "NO") {
+    await connection.query("ALTER TABLE `tasks` MODIFY COLUMN `estimatedMinutes` int NULL DEFAULT NULL");
+    console.log("[task-estimates] Made tasks.estimatedMinutes nullable.");
+  }
+
+  await connection.query(
+    "CREATE TABLE IF NOT EXISTS `teacherCourseFacts` (" +
+    "`id` int NOT NULL AUTO_INCREMENT, `teacherId` varchar(80) NOT NULL, `teacherName` varchar(120) NOT NULL, " +
+    "`subjectId` varchar(80) NOT NULL, `educationSystem` varchar(40) NOT NULL, `gradeYear` varchar(60) NOT NULL, " +
+    "`availableModesJson` text NOT NULL, `homeworkPolicy` varchar(20) NOT NULL DEFAULT 'unknown', " +
+    "`homeworkRequiredBeforeNextLecture` varchar(20) NOT NULL DEFAULT 'unknown', " +
+    "`preLectureExamRequired` varchar(20) NOT NULL DEFAULT 'unknown', `evidenceJson` text NOT NULL, " +
+    "`confidence` varchar(20) NOT NULL DEFAULT 'low', `verificationStatus` varchar(30) NOT NULL DEFAULT 'insufficient_evidence', " +
+    "`checkedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP, `expiresAt` timestamp NOT NULL, " +
+    "`createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, " +
+    "PRIMARY KEY (`id`), UNIQUE KEY `teacher_course_facts_scope_unique` (`teacherId`, `subjectId`, `educationSystem`, `gradeYear`), " +
+    "KEY `teacher_course_facts_expiry_idx` (`expiresAt`, `verificationStatus`)" +
+    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+  );
+  const [teacherFactColumns] = await connection.query(
+    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'teacherCourseFacts'"
+  );
+  const teacherFactColumnNames = new Set(teacherFactColumns.map(row => row.COLUMN_NAME));
+  const requiredTeacherFactColumns = ["id", "teacherId", "teacherName", "subjectId", "educationSystem", "gradeYear", "availableModesJson", "homeworkPolicy", "homeworkRequiredBeforeNextLecture", "preLectureExamRequired", "evidenceJson", "confidence", "verificationStatus", "checkedAt", "expiresAt", "createdAt", "updatedAt"];
+  const missingTeacherFactColumns = requiredTeacherFactColumns.filter(column => !teacherFactColumnNames.has(column));
+  if (missingTeacherFactColumns.length) throw new Error("teacherCourseFacts is missing required columns: " + missingTeacherFactColumns.join(", ") + ".");
+  await connection.query("INSERT IGNORE INTO `studyflow_migrations` (id) VALUES (?)", ["2026-11-planner-reconciliation"]);
+  await connection.query("INSERT IGNORE INTO `studyflow_migrations` (id) VALUES (?)", ["2026-11-task-estimates-nullable"]);
+  await connection.query("INSERT IGNORE INTO `studyflow_migrations` (id) VALUES (?)", ["2026-11-teacher-course-facts"]);
+
+
   const [markers] = await connection.query(
     "SELECT id FROM `studyflow_migrations` WHERE id = ? LIMIT 1",
     [MIGRATION_ID]
