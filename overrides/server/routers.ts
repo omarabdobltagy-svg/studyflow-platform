@@ -1793,6 +1793,37 @@ export const appRouter = router({
           id,
           input.teacherSelections[id] ?? "__SKIP__",
         ]));
+        const previousLearningCourseProgress = (previousSelection.learningCourseProgress ?? {}) as Record<string, Record<string, any>>;
+        const learningCourseProgress = Object.fromEntries(input.subjectIds.map(subjectId => {
+          const previousSubject = previousLearningCourseProgress[subjectId] ?? {};
+          const previousBranches = (previousSubject.branches ?? {}) as Record<string, Record<string, any>>;
+          const report = input.teacherFrontierReports[subjectId]
+            ?? previousTeacherFrontiers[subjectId]
+            ?? "__UNKNOWN__";
+          const branchRecords = Object.fromEntries(getSIECheckpointProgressBranches(subjectId).map(branch => {
+            const existing = previousBranches[branch.branchId] ?? {};
+            if (Number(existing.lessonStateModelVersion ?? 0) >= 1) return [branch.branchId, existing];
+
+            const reportMatchesBranch = branch.choices.some(choice => choice.nodeId === report);
+            const existingFrontier = existing.lastCompletedLessonId;
+            const existingFrontierValid = existingFrontier === "__NOT_STARTED__"
+              || existingFrontier === "__UNKNOWN__"
+              || branch.choices.some(choice => choice.nodeId === existingFrontier);
+            const frontier = reportMatchesBranch
+              ? report
+              : report === "__NOT_STARTED__"
+                ? "__NOT_STARTED__"
+                : existingFrontierValid
+                  ? existingFrontier
+                  : "__UNKNOWN__";
+            return [branch.branchId, {
+              ...existing,
+              lastCompletedLessonId: frontier,
+              lessonStateModelVersion: 1,
+            }];
+          }));
+          return [subjectId, { ...previousSubject, branches: branchRecords }];
+        }));
         const savedProfile = await saveSIEOnboarding(ctx.user.id, {
           studentName: input.studentName,
           phone: input.phone,
@@ -1811,6 +1842,7 @@ export const appRouter = router({
             subjectIds: input.subjectIds,
             teacherChoices,
             courseModes: Object.fromEntries(input.subjectIds.map(subjectId => [subjectId, input.courseModes[subjectId] ?? "online"])),
+            learningCourseProgress,
             customTeacherNames: Object.fromEntries(Object.entries(input.customTeacherNames).filter(([subjectId, name]) => input.subjectIds.includes(subjectId) && name.trim())),
             teacherSchedules: Object.fromEntries(input.subjectIds.map(subjectId => [
               subjectId,
