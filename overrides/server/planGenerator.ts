@@ -1464,15 +1464,26 @@ function buildStudentExecutionStrategy(
       teacher_sync: ["نستخدم جدول الحصة المسجل للتحضير قبل الموعد", "بعد الحصة نحدّث موضع شرح المدرس من ردك"],
       steady: ["نستكمل الموضوعات التالية داخل كل فرع", "نعيد ترتيب الأولويات مع كل تقدم جديد"],
     };
-    const actions = generated?.actions?.length ? generated.actions : defaultActions[meta.id];
+    const actions = stepsByPhase[meta.id].length
+      ? (generated?.actions?.length ? generated.actions : defaultActions[meta.id])
+      : [];
     const hasSchedule = Object.entries(teacherSchedules).some(([subjectId, slots]) =>
       (profile.subjectIds ?? []).includes(subjectId)
       && Boolean(teacherChoices[subjectId] && teacherChoices[subjectId] !== "__SKIP__")
       && Array.isArray(slots) && slots.length > 0
     );
-    const purpose = meta.id === "teacher_sync" && !hasSchedule
-      ? "لم يتم تسجيل موعد حصة أسبوعي لمدرس من مدرسيك، لذلك لن نفترض موعدًا أو ندّعي وجود تحضير قبله. أضف الجدول من ملفك الدراسي لتفعيل المزامنة."
-      : generated?.purpose ?? meta.defaultPurpose;
+    const noPhaseTasks = stepsByPhase[meta.id].length === 0;
+    const purpose = noPhaseTasks && meta.id === "backlog"
+      ? "لم تظهر التزامات مفتوحة مؤكدة في بياناتك الحالية. لذلك لن نخترع متراكمًا؛ نبدأ بالخطوات المتاحة في المراحل التالية."
+      : noPhaseTasks && meta.id === "teacher_sync" && !hasSchedule
+        ? "جدول الحصص الأسبوعي غير مسجل لمدرس من مدرسيك. لن نفترض موعدًا؛ أضف الجدول من ملفك الدراسي لتفعيل المزامنة."
+        : noPhaseTasks && meta.id === "teacher_sync"
+          ? "يوجد جدول حصص مسجل، لكن لا توجد مهمة تحضير محددة لهذه المرحلة في هذه المسودة. سنحدّث الخطة عند ظهور فجوة أو موضوع تالٍ موثق."
+          : noPhaseTasks
+            ? "لا توجد خطوة إضافية موثقة لهذه المرحلة ضمن سعة الخطة الحالية."
+            : meta.id === "teacher_sync" && !hasSchedule
+              ? "جدول الحصص الأسبوعي غير مسجل لمدرس من مدرسيك. لن نفترض موعدًا؛ أضف الجدول من ملفك الدراسي لتفعيل المزامنة."
+              : generated?.purpose ?? meta.defaultPurpose;
     return {
       id: meta.id,
       title: meta.title,
