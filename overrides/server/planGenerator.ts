@@ -146,7 +146,7 @@ const planSchema = z.object({
   summary: z.string().trim().min(10).max(1_500),
   durationLabel: z.string().trim().min(2).max(100),
   steps: z.array(z.object({
-    day: z.string().trim().max(60).default(""),"day schema
+    day: z.string().trim().max(60).default(""),
     title: z.string().trim().min(2).max(180),
     detail: z.string().trim().min(5).max(1_200),
     minutes: z.number().int().min(0).max(480).default(0),
