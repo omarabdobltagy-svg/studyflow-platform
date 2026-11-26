@@ -180,7 +180,7 @@ describe("planner completed-curriculum guard", () => {
       ],
     };
 
-    const explicitlyStudied = withStudiedLessons(profile, ["ARB_U2_N1", "ARB_U2_N2", "ARB_U2_N3"]);
+    const explicitlyStudied = withStudiedLessons(profile, ["ARB_U2_N3"]);
     const guarded = applyPlannerProgressGuard(plan as any, explicitlyStudied);
 
     expect(guarded.steps.map(item => item.curriculumNodeIds)).toEqual([
@@ -298,7 +298,7 @@ describe("planner completed-curriculum guard", () => {
       ],
     };
 
-    const explicitlyStudied = withStudiedLessons(profile, ["ARB_U2_N1"]);
+    const explicitlyStudied = withStudiedLessons(profile, ["ARB_U2_N3"]);
     const guarded = applyPlannerProgressGuard(plan as any, explicitlyStudied);
 
     expect(guarded.steps).toHaveLength(1);
