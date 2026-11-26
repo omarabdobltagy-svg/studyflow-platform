@@ -84,25 +84,25 @@ describe("Arabic course taxonomy", () => {
       value: "ARB_U2_N3",
       label: "الممنوع من الصرف وعلل منعه",
     });
-    expect(options.find(option => option.value === "ARB_U3_N1_NAAT_BADAL")).toMatchObject({
-      value: "ARB_U3_N1_NAAT_BADAL",
-      label: "النعت والبدل",
+    expect(options.find(option => option.value === "ARB_U3_N1_NAAT")).toMatchObject({
+      value: "ARB_U3_N1_NAAT",
+      label: "النعت",
     });
-    expect(options.find(option => option.value === "ARB_U3_N1_TAMYIZ")).toMatchObject({
-      value: "ARB_U3_N1_TAMYIZ",
-      label: "التمييز",
+    expect(options.find(option => option.value === "ARB_U3_N1_BADAL")).toMatchObject({
+      value: "ARB_U3_N1_BADAL",
+      label: "البدل",
     });
-    expect(options.findIndex(option => option.value === "ARB_U3_N1_NAAT_BADAL"))
+    expect(options.findIndex(option => option.value === "ARB_U3_N1_NAAT"))
       .toBe(options.findIndex(option => option.value === "ARB_U2_N3") + 1);
-    expect(options.findIndex(option => option.value === "ARB_U3_N1_TAMYIZ"))
-      .toBe(options.findIndex(option => option.value === "ARB_U3_N1_NAAT_BADAL") + 1);
+    expect(options.findIndex(option => option.value === "ARB_U3_N1_BADAL"))
+      .toBe(options.findIndex(option => option.value === "ARB_U3_N1_NAAT") + 1);
 
     for (const id of ["ARB_U2_N1", "ARB_U2_N2", "ARB_U2_N3"]) {
       expect(normalizeSIECheckpointFrontier("ARB_G2_BAC", "ARB_NAHW", id)).toBe("ARB_U2_N3");
     }
     // Existing students who completed the former combined checkpoint keep both new topics completed.
     expect(normalizeSIECheckpointFrontier("ARB_G2_BAC", "ARB_NAHW", "ARB_U3_N1"))
-      .toBe("ARB_U3_N1_TAMYIZ");
+      .toBe("ARB_U3_N1_BADAL");
   });
 
   it("groups the official Arabic textbook into three units across its independent branches", () => {
@@ -118,11 +118,12 @@ describe("Arabic course taxonomy", () => {
       "الثقافة أسلوب حياة",
     ]);
     const unitThreeNahw = officialUnits[2].branches.find(branch => branch.branchId === "ARB_NAHW");
-    expect(unitThreeNahw?.choices.map(choice => choice.title)).toContain("النعت والبدل");
-    expect(unitThreeNahw?.choices.map(choice => choice.title)).toContain("التمييز");
+    expect(unitThreeNahw?.choices.map(choice => choice.title)).toContain("النعت");
+    expect(unitThreeNahw?.choices.map(choice => choice.title)).toContain("البدل");
     expect(unitThreeNahw?.choices.filter(choice =>
-      ["النعت والبدل", "التمييز"].includes(choice.title)
+      ["النعت", "البدل"].includes(choice.title)
     )).toHaveLength(2);
+    expect(unitThreeNahw?.choices.map(choice => choice.title)).not.toContain("التمييز");
     expect(getSIECheckpointChoices("ARB_G2_BAC").some(choice => choice.nodeId === "ARB_U3_N1")).toBe(false);
   });
 
@@ -245,18 +246,23 @@ describe("Arabic course taxonomy", () => {
       nodeId: "ARB_U2_N3",
       confidence: "strong",
     });
-    expect(matchSIECheckpointTask(["ARB_G2_BAC"], "شرح النعت والبدل")).toMatchObject({
-      nodeId: "ARB_U3_N1_NAAT_BADAL",
-      title: "النعت والبدل",
-    });
-    expect(matchSIECheckpointTask(["ARB_G2_BAC"], "التمييز")).toMatchObject({
-      nodeId: "ARB_U3_N1_TAMYIZ",
-      title: "التمييز",
+    expect(matchSIECheckpointTask(["ARB_G2_BAC"], "النعت")).toMatchObject({
+      nodeId: "ARB_U3_N1_NAAT",
+      title: "النعت",
       confidence: "exact",
     });
+    expect(matchSIECheckpointTask(["ARB_G2_BAC"], "البدل")).toMatchObject({
+      nodeId: "ARB_U3_N1_BADAL",
+      title: "البدل",
+      confidence: "exact",
+    });
+    expect(matchSIECheckpointTask(["ARB_G2_BAC"], "شرح النعت والبدل")).toMatchObject({
+      nodeId: "ARB_U3_N1_BADAL",
+      title: "البدل",
+    });
     expect(matchSIECheckpointTask(["ARB_G2_BAC"], "النعت والبدل والتمييز بينهما")).toMatchObject({
-      nodeId: "ARB_U3_N1_TAMYIZ",
-      title: "التمييز",
+      nodeId: "ARB_U3_N1_BADAL",
+      title: "البدل",
     });
   });
 
