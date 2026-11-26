@@ -40,11 +40,19 @@ describe("annual plan curriculum coverage and progress alignment", () => {
         },
         {
           day: "اليوم 1",
-          title: "النعت والبدل والتمييز بينهما",
+          title: "النعت والبدل",
           detail: "متابعة شرح المدرس للموضوع.",
           minutes: 45,
           category: "النحو",
-          curriculumNodeIds: ["ARB_U3_N1"],
+          curriculumNodeIds: ["ARB_U3_N1_NAAT_BADAL"],
+        },
+        {
+          day: "اليوم 1",
+          title: "التمييز",
+          detail: "متابعة شرح المدرس للموضوع.",
+          minutes: 45,
+          category: "النحو",
+          curriculumNodeIds: ["ARB_U3_N1_TAMYIZ"],
         },
       ],
       habits: [],
@@ -54,16 +62,16 @@ describe("annual plan curriculum coverage and progress alignment", () => {
     const covered = applyPlannerCurriculumCoverageGuard(progressGuarded, profile);
     const ranked = applyCurriculumPrioritySignals(covered, profile);
     const grammarIds = ranked.steps.flatMap(step => step.curriculumNodeIds)
-      .filter(id => /^ARB_U[123]_N[123]$/.test(id));
+      .filter(id => /^ARB_U[123]_N[123]$/.test(id) || id === "ARB_U3_N1_NAAT_BADAL" || id === "ARB_U3_N1_TAMYIZ");
 
-    expect(grammarIds).toEqual(["ARB_U3_N1", "ARB_U3_N2"]);
-    const nextGrammarStep = ranked.steps.find(step => step.curriculumNodeIds.includes("ARB_U3_N1"));
-    const nextStepIndex = ranked.steps.findIndex(step => step.curriculumNodeIds.includes("ARB_U3_N1"));
-    const followingGrammarIndex = ranked.steps.findIndex(step => step.curriculumNodeIds.includes("ARB_U3_N2"));
+    expect(grammarIds).toEqual(["ARB_U3_N1_NAAT_BADAL", "ARB_U3_N1_TAMYIZ", "ARB_U3_N2"]);
+    const nextGrammarStep = ranked.steps.find(step => step.curriculumNodeIds.includes("ARB_U3_N1_NAAT_BADAL"));
+    const nextStepIndex = ranked.steps.findIndex(step => step.curriculumNodeIds.includes("ARB_U3_N1_NAAT_BADAL"));
+    const followingGrammarIndex = ranked.steps.findIndex(step => step.curriculumNodeIds.includes("ARB_U3_N1_TAMYIZ"));
     expect(nextStepIndex).toBeGreaterThanOrEqual(0);
     expect(nextStepIndex).toBeLessThan(followingGrammarIndex);
     expect(nextGrammarStep?.priorityReason).toContain("الخطوة التالية مباشرة");
-    expect(nextGrammarStep?.priorityReason).toContain("الفجوة الحالية: 1");
+    expect(nextGrammarStep?.priorityReason).toContain("الفجوة الحالية: 2");
   });
 
   it("covers all remaining programming chapters, including chapters 5–7, once", () => {
