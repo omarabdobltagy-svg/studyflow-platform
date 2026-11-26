@@ -314,7 +314,7 @@ export default function PlannerOperationsScene() {
           {layer === "schedule" && (
             <div className="sf-ops-layer-body">
               <form className="sf-ops-capture" onSubmit={submitEvent}>
-                <div className="sf-ops-capture-title"><CalendarDays className="size-4" /><b>إضافة موعد</b><span>Schedule capture</span></div>
+                <div className="sf-ops-capture-title"><CalendarDays className="size-4" /><b>إضافة موعد</b><span>تفاصيل الموعد</span></div>
                 <div className="sf-ops-capture-fields sf-ops-create-single">
                   <input value={draftEventTitle} onChange={event => setDraftEventTitle(event.target.value)} maxLength={180} placeholder="عنوان الموعد أو جلسة المذاكرة" aria-label="عنوان الموعد الجديد" />
                   <input type="datetime-local" value={draftEventAt} onChange={event => setDraftEventAt(event.target.value)} aria-label="تاريخ ووقت الموعد" />
@@ -344,7 +344,7 @@ export default function PlannerOperationsScene() {
                   })}</div>
                   {learningChoices.length > 0 && (
                     <section className="sf-ops-learning-editor">
-                      <div className="sf-ops-capture-title"><GraduationCap className="size-4" /><b>تحديث تقدم درس</b><span>LESSON TRACKER</span></div>
+                      <div className="sf-ops-capture-title"><GraduationCap className="size-4" /><b>تحديث تقدم درس</b><span>متابعة الدرس</span></div>
                       <div className="sf-ops-learning-selects">
                         <select value={learningSubjectId} onChange={event => { setLearningSubject(event.target.value); setLearningLesson(""); setLearningDraft({ key: "", steps: [] }); }} aria-label="اختيار المادة">
                           {profileSubjectIds.map((subjectId: string) => <option key={subjectId} value={subjectId}>{getSIESubject(subjectId)?.nameAr || subjectId}</option>)}
