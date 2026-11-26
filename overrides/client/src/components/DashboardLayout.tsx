@@ -124,11 +124,9 @@ export default function DashboardLayout({ title, description, children, action }
 
     // Scroll reveals are triggered once per element when the element enters the viewport.
     const selector = [
-      ".sf-page > section",
+      ".sf-page > section:not(.sf-map-branches)",
       ".sf-page .app-card",
-      ".sf-page .sf-map-branch-card",
-      ".sf-page .sf-map-step",
-      ".sf-page .sf-main-tasks .group",
+      ".sf-page .sf-map-branches .sf-map-branch-card",
       ".sf-page [data-scroll-reveal]",
     ].join(", ");
     const candidates = Array.from(scope.querySelectorAll<HTMLElement>(selector));
@@ -167,7 +165,7 @@ export default function DashboardLayout({ title, description, children, action }
         .map(entry => entry.target as HTMLElement);
       entering.forEach(element => observer.unobserve(element));
       reveal(entering);
-    }, { threshold: 0.12, rootMargin: "0px 0px -7% 0px" });
+    }, { threshold: 0.01, rootMargin: "0px 0px -5% 0px" });
 
     targets.forEach(element => {
       const rect = element.getBoundingClientRect();
@@ -396,7 +394,7 @@ export default function DashboardLayout({ title, description, children, action }
             <div className="sf-header-start">
               <button onClick={() => navigate("/")} className="sf-brand" aria-label="العودة إلى لوحة اليوم">
                 <span className="sf-brand-mark"><BrandMark className="size-5" /></span>
-                <span className="sf-brand-copy"><b>StudyFlow</b><small>STUDENT WORKSPACE</small></span>
+                <span className="sf-brand-copy"><b>StudyFlow</b><small>مساحة الطالب</small></span>
               </button>
               <span className="sf-header-divider" />
               <div className="sf-heading-copy">
@@ -503,7 +501,7 @@ export default function DashboardLayout({ title, description, children, action }
 
       {showLogoutConfirm&&<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setShowLogoutConfirm(false);}}>
         <section role="alertdialog" aria-modal="true" aria-labelledby="sf-logout-title" className="w-full max-w-sm rounded-2xl border border-border bg-card p-5 shadow-2xl">
-          <div className="flex items-start justify-between gap-3"><div><p className="eyebrow">STUDYFLOW / ACCOUNT</p><h2 id="sf-logout-title" className="mt-1 text-lg font-bold">تسجيل الخروج</h2></div><Button type="button" variant="ghost" size="icon" onClick={()=>setShowLogoutConfirm(false)} aria-label="إغلاق"><XIcon className="size-4"/></Button></div>
+          <div className="flex items-start justify-between gap-3"><div><p className="eyebrow">الحساب</p><h2 id="sf-logout-title" className="mt-1 text-lg font-bold">تسجيل الخروج</h2></div><Button type="button" variant="ghost" size="icon" onClick={()=>setShowLogoutConfirm(false)} aria-label="إغلاق"><XIcon className="size-4"/></Button></div>
           <p className="mt-3 text-sm leading-7 text-muted-foreground">متأكد إنك عايز تسجل خروج؟ بياناتك وخطتك هتفضل محفوظة، وتقدر ترجع لها لما تسجل الدخول تاني.</p>
           <div className="mt-5 flex gap-2"><Button type="button" variant="outline" className="flex-1 rounded-xl" onClick={()=>setShowLogoutConfirm(false)}>إلغاء</Button><Button type="button" className="flex-1 rounded-xl" onClick={()=>{setShowLogoutConfirm(false);void logout();}}>تأكيد الخروج</Button></div>
         </section>
