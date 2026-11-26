@@ -39,12 +39,12 @@ export function buildLessonStudyMethod(policy: LessonTeacherPolicy = {}): StudyM
     {
       title: "ارجع اقرأ الدرس مرة تانية بعد المحاضرة",
       instruction: "افتح نفس الجزء في الكتاب أو المصدر واقرأه بهدوء من أوله لآخره. ركّز على المصطلحات والتفاصيل والأمثلة، وارجع للنقطة اللي شرحها المدرس لو احتجت.",
-      reason: "القراءة بعد الشرح مش تكرار بلا هدف؛ دلوقتي عندك معنى وسياق تربط بيهم المعلومات. الرجوع للمعلومة في مرور منفصل بيساعد على تثبيتها، خصوصًا لما تراجعها تاني بعد فترة.",
+      reason: "القراءة بعد الشرح مش تكرار بلا هدف؛ دلوقتي عندك معنى وسياق تربط بيهم المعلومات. المرور على المعلومة مرة واحدة غالبًا مش كفاية لتثبيتها، والرجوع لها في مرور منفصل ثم مراجعتها بعد فترة بيدعم تذكّرها.",
     },
     {
       title: "اشرح الدرس لنفسك بطريقتك",
       instruction: "اقفل الكتاب وحاول تحكي لنفسك الفكرة العامة وأهم النقاط كأنك بتشرحها لزميل. لو وقفت عند جزئية أو لقيت نفسك مش عارف توصلها، افتح المصدر وراجعها.",
-      reason: "الشرح بصوتك بيكشف لك الأجزاء اللي لسه مش مترابطة عندك، من غير ما نحول المذاكرة لاختبار أو نطلب منك أسئلة من عندنا.",
+      reason: "لما تحاول توصل الفكرة بكلامك، بتلاحظ بسرعة إيه اللي فهمته وإيه اللي لسه محتاج ترجع له؛ دي مراجعة ذاتية مش امتحان.",
     },
     {
       title: "خد راحة قصيرة قبل التطبيق",
@@ -58,7 +58,7 @@ export function buildLessonStudyMethod(policy: LessonTeacherPolicy = {}): StudyM
   const examRequired = policy.preLectureExamRequired ?? "unknown";
   const notes: string[] = [];
 
-  if (homework === "yes" || homework === "varies" || homework === "unknown") {
+  if (homework === "yes" || homework === "varies" || homework === "unknown" || homeworkRequired === "yes" || homeworkRequired === "varies" || homeworkRequired === "unknown") {
     stages.push({
       title: homeworkRequired === "yes" ? "حل واجب المدرس قبل المحاضرة القادمة" : "راجع واجب المدرس وحل المطلوب",
       instruction: homework === "yes"
@@ -94,7 +94,7 @@ export function buildLessonStudyMethod(policy: LessonTeacherPolicy = {}): StudyM
 
   return {
     stages,
-    completionCriteria: "اعتبر المهمة مكتملة لما تنفّذ مراحل المذاكرة المطلوبة، وتُنهي واجب أو امتحان المدرس لو كان محددًا عليك. بعد كده علّم المهمة «مكتملة» في StudyFlow.",
+    completionCriteria: "مش مطلوب تكون حافظ 100% أو متقن كل جزئية من أول مرة. المطلوب تفهم الفكرة الأساسية، وتحدد أي نقطة محتاجة مراجعة، وتنفّذ مراحل المذاكرة، وتُنهي واجب أو امتحان المدرس لو كان مطلوبًا منك. بعد كده علّم المهمة «مكتملة» في StudyFlow.",
     ...(notes.length ? { teacherPolicyNote: notes.join(" ") } : {}),
   };
 }
