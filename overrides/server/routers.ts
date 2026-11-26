@@ -1111,7 +1111,7 @@ export const appRouter = router({
         if (!teacher || !teacher.subjectIds.includes(input.subjectId)) {
           throw new TRPCError({ code: "NOT_FOUND", message: "المدرس غير مسجل لهذه المادة في دليل StudyFlow." });
         }
-        return getTeacherCourseFactsWithRefresh(input);
+        return getTeacherCourseFactsWithRefresh({ teacherId: input.teacherId, subjectId: input.subjectId, educationSystem: input.systemId, gradeYear: input.gradeYear });
       }),
   }),
 
@@ -1719,7 +1719,7 @@ export const appRouter = router({
               const facts = await getTeacherCourseFactsWithRefresh({
                 teacherId,
                 subjectId,
-                systemId,
+                educationSystem: systemId,
                 gradeYear: profile?.gradeYear ?? SIE_CATALOG_META.gradeYear,
               });
               const modes = facts.facts.availableModes.length
