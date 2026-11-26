@@ -42,9 +42,9 @@ function durationLabel(seconds: number) {
 }
 
 function dueLabel(value: Date | string | null | undefined) {
-  if (!value) return "بدون موعد محدد";
+  if (!value) return null;
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "بدون موعد محدد";
+  if (Number.isNaN(date.getTime())) return null;
   return new Intl.DateTimeFormat("ar-EG", { day: "numeric", month: "short", timeZone: "Africa/Cairo" }).format(date);
 }
 
@@ -610,7 +610,7 @@ export default function Home() {
               ) : tasks.length ? tasks.slice(0, 5).map(task => (
                 <div key={task.id} className="flex items-center gap-3 px-5 py-4">
                   <button type="button" onClick={() => toggleTask.mutate({ id: task.id, done: true })} disabled={toggleTask.isPending} aria-label={"إكمال " + task.title} className="flex size-6 shrink-0 items-center justify-center rounded-full border border-primary/40 text-primary transition hover:bg-primary hover:text-primary-foreground disabled:opacity-50"><Check className="size-3.5" /></button>
-                  <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{task.title}</p><p className="mt-1 text-xs text-muted-foreground">{task.category || "مهمة دراسية"} · {dueLabel(task.dueAt)}</p></div>
+                  <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{task.title}</p><p className="mt-1 text-xs text-muted-foreground"><span>{task.category || "مهمة دراسية"}</span>{task.dueAt && dueLabel(task.dueAt) && <span> · {dueLabel(task.dueAt)}</span>}</p></div>
                   <Badge variant={task.priority === "high" ? "destructive" : "secondary"} className="shrink-0">{task.priority === "high" ? "مهمة" : task.priority === "medium" ? "متوسطة" : "مرنة"}</Badge>
                 </div>
               )) : (
