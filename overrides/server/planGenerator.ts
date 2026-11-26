@@ -1291,7 +1291,7 @@ function applyDailyPlanDepth(
       getPlanningBranches(subjectId).some(branch => branch.choices.some(choice => nodeIds.has(choice.nodeId)))
     );
   };
-  const steps = plan.steps.map(step => {
+  const steps: GeneratedPlan["steps"] = plan.steps.map(step => {
     if (step.phaseId || step.existingTask) {
       return { ...step, phaseId: step.phaseId ?? "backlog" as const };
     }
@@ -1331,7 +1331,7 @@ function applyDailyPlanDepth(
     const dueAt = task.dueAt instanceof Date && !Number.isNaN(task.dueAt.getTime())
       ? task.dueAt.toISOString()
       : null;
-    steps.push({
+    steps.push(planSchema.shape.steps.element.parse({
       day: "",
       title: task.title,
       detail: task.notes?.trim()
@@ -1348,7 +1348,7 @@ function applyDailyPlanDepth(
       difficultyConfidence: "low",
       sourcePages: [],
       phaseId: "backlog",
-    } as GeneratedPlan["steps"][number]);
+    }));
     usedTaskIds.add(task.id);
     usedTitles.add(normalizedTitle);
     if (linkedNodeId) representedNodeIds.add(linkedNodeId);
@@ -1397,7 +1397,7 @@ function applyDailyPlanDepth(
     const subjectName = getSIESubject(item.subjectId)?.nameAr ?? item.subjectId;
     const hasTeacherSchedule = Array.isArray(teacherSchedules[item.subjectId]) && teacherSchedules[item.subjectId].length > 0;
     const phaseId = item.teacherSelected && hasTeacherSchedule ? "teacher_sync" as const : "steady" as const;
-    steps.push({
+    steps.push(planSchema.shape.steps.element.parse({
       day: "",
       title: subjectName + " — " + item.branchTitle + " — " + item.title,
       detail: item.teacherSelected && hasTeacherSchedule
@@ -1413,7 +1413,7 @@ function applyDailyPlanDepth(
       difficultyConfidence: "low",
       sourcePages: [],
       phaseId,
-    } as GeneratedPlan["steps"][number]);
+    }));
     representedNodeIds.add(item.nodeId);
   }
 
