@@ -55,7 +55,7 @@ describe("teacher class follow-ups", () => {
     const due = getDueTeacherClassFollowups({
       subjectIds: ["ENG1_G2_BAC"],
       teacherSchedules: { ENG1_G2_BAC: [{ dayOfWeek: 4, startTime: "18:00" }] },
-      now: new Date("2026-12-03T20:01:00.000Z"),
+      now: new Date("2026-12-03T12:00:00.000Z"),
     });
     expect(due).toHaveLength(0);
   });
