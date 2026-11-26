@@ -444,7 +444,7 @@ function buildPlannerProgressSnapshot(
           branchCompleted.push(item);
           completedChoices.push(item);
           completedNodeIds.add(choice.nodeId);
-        } else {
+        } else if (learningState !== "not_recorded") {
           branchEligible.push(item);
           eligibleNodeIds.add(choice.nodeId);
         }
@@ -980,14 +980,17 @@ export function applyPlannerCurriculumCoverageGuard(
         if (!snapshot.eligibleNodeIds.has(choice.nodeId) || seen.has(choice.nodeId)) continue;
         seen.add(choice.nodeId);
         const index = branch.choices.findIndex(item => item.nodeId === choice.nodeId);
+        const learningState = branchProgress?.eligibleChoices.find(item => item.nodeId === choice.nodeId)?.learningState ?? "not_recorded";
         missingSteps.push({
           day: "",
           title: [subject?.nameAr ?? subjectId, branch.branchTitle, choice.title].join(" — "),
-          detail: choice.learningState === "watched_only"
+          detail: learningState === "watched_only"
             ? "أنت شاهدت شرح هذا الدرس، لكن مشاهدة الفيديو وحدها لا تعني إنك ذاكرته. ارجع للمصدر، اقرأ الجزء المرتبط بالشرح، ثم اشرح فكرته لنفسك بطريقتك. لا يوجد واجب أو اختبار مضاف من النظام."
-            : choice.learningState === "needs_review"
+            : learningState === "needs_review"
               ? "أنت ذاكرت هذا الدرس من قبل لكن سجلت أنه يحتاج مراجعة. راجع المصدر والنقاط التي نسيتها قبل الانتقال إلى مهمة جديدة."
-              : "تابع شرح المدرس لهذا الموضوع أو راجع المصدر المرتبط به حسب موضعك. نفّذ فقط أي واجب كلّفك به المدرس بالفعل؛ لا يوجد اختبار أو تدريب مولّد من النظام.",
+              : learningState === "not_watched"
+                ? "هذا الدرس لم تشاهد شرحه بعد أو فاتتك محاضرته. تابع شرحه أو سجّل مع المدرس طريقة تعويضه، ثم حدّث حالة مذاكرتك."
+                : "تابع شرح المدرس لهذا الموضوع أو راجع المصدر المرتبط به حسب موضعك. نفّذ فقط أي واجب كلّفك به المدرس بالفعل؛ لا يوجد اختبار أو تدريب مولّد من النظام.",
           minutes: 45,
           category: [subject?.nameAr ?? subjectId, branch.branchTitle].join(" · "),
           curriculumNodeIds: [choice.nodeId],
