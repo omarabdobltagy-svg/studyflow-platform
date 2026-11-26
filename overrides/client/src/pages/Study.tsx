@@ -188,8 +188,9 @@ export default function Study() {
     ? []
     : branchChoices.slice(0, currentGap.referencePosition);
   const teacherCoveredStates = teacherCoveredChoices.map(choice => getLessonState(choice.nodeId));
-  const notStudiedAfterTeacher = teacherCoveredStates.filter(state => state === "not_watched" || state === "watched_only").length;
-  const needsReviewAfterTeacher = teacherCoveredStates.filter(state => state === "needs_review").length;
+  const teacherCoveredSummary = summarizeStudentLessonStates(teacherCoveredStates);
+  const notStudiedAfterTeacher = teacherCoveredSummary.notWatched + teacherCoveredSummary.watchedOnly;
+  const needsReviewAfterTeacher = teacherCoveredSummary.needsReview;
   const studentFrontierIndex = lastCompletedLessonId === "__NOT_STARTED__"
     ? -1
     : branchChoices.findIndex(choice => choice.nodeId === lastCompletedLessonId);
@@ -829,10 +830,18 @@ export default function Study() {
                         </div>
                         <p className="mt-2 text-xs leading-6 text-muted-foreground">علامة الصح تعني إنك وصلت للدرس في الشرح. اختار حالة كل درس بنفسك: شاهدته فقط، ذاكرته وفهمته، أو محتاج تراجعه. ولو فوت درسًا في المنتصف، علّمه «لم أشاهد» حتى لو كملت اللي بعده.</p>
                         {currentGap.referencePosition !== null && (
-                          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+                            <div className="rounded-xl border border-border/70 bg-card p-2.5">
+                              <p className="text-[10px] text-muted-foreground">لم يحدد الحالة</p>
+                              <p className="mt-1 text-sm font-bold tabular-nums">{teacherCoveredSummary.notRecorded.toLocaleString("ar-EG")}</p>
+                            </div>
+                            <div className="rounded-xl border border-border/70 bg-card p-2.5">
+                              <p className="text-[10px] text-muted-foreground">فاتته المحاضرة</p>
+                              <p className="mt-1 text-sm font-bold tabular-nums">{teacherCoveredSummary.notWatched.toLocaleString("ar-EG")}</p>
+                            </div>
                             <div className="rounded-xl border border-border/70 bg-card p-2.5">
                               <p className="text-[10px] text-muted-foreground">شاهد ولم يذاكر</p>
-                              <p className="mt-1 text-sm font-bold tabular-nums">{notStudiedAfterTeacher.toLocaleString("ar-EG")}</p>
+                              <p className="mt-1 text-sm font-bold tabular-nums">{teacherCoveredSummary.watchedOnly.toLocaleString("ar-EG")}</p>
                             </div>
                             <div className="rounded-xl border border-border/70 bg-card p-2.5">
                               <p className="text-[10px] text-muted-foreground">يحتاج مراجعة</p>
@@ -840,7 +849,7 @@ export default function Study() {
                             </div>
                             <div className="col-span-2 rounded-xl border border-border/70 bg-card p-2.5 sm:col-span-1">
                               <p className="text-[10px] text-muted-foreground">ذاكر وفهم</p>
-                              <p className="mt-1 text-sm font-bold tabular-nums">{teacherCoveredStates.filter(state => state === "studied").length.toLocaleString("ar-EG")}</p>
+                              <p className="mt-1 text-sm font-bold tabular-nums">{teacherCoveredSummary.studied.toLocaleString("ar-EG")}</p>
                             </div>
                           </div>
                         )}
@@ -849,14 +858,14 @@ export default function Study() {
                         {branchChoices.map((choice, index) => {
                           const state = getLessonState(choice.nodeId);
                           const isFrontier = choice.nodeId === lastCompletedLessonId;
-                          const reachedInLecture = index <= studentFrontierIndex && studentFrontierIndex >= 0 && state !== "not_watched";
+                          const reachedInLecture = index <= studentFrontierIndex && studentFrontierIndex >= 0 && state !== "not_watched" && state !== "not_recorded";
                           const pending = updateLessonLearningState.isPending
                             && updateLessonLearningState.variables?.nodeId === choice.nodeId;
                           return (
                             <article key={choice.nodeId} className={"sf-lesson-state-row flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:gap-4 sm:px-4 " + (isFrontier ? "is-frontier" : "") + (state === "not_watched" ? " is-missed" : "")}>
                               <div className="flex min-w-0 items-center gap-3 sm:flex-1">
-                                <span className={"sf-lesson-state-marker flex size-8 shrink-0 items-center justify-center rounded-xl border text-xs font-bold " + (state === "not_watched" ? "border-border bg-muted text-muted-foreground" : isFrontier ? "border-primary/40 bg-primary/15 text-primary" : "border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300")}>
-                                  {state === "not_watched" ? (index + 1).toLocaleString("ar-EG") : <Check className="size-4" />}
+                                <span className={"sf-lesson-state-marker flex size-8 shrink-0 items-center justify-center rounded-xl border text-xs font-bold " + (state === "not_recorded" || state === "not_watched" ? "border-border bg-muted text-muted-foreground" : isFrontier ? "border-primary/40 bg-primary/15 text-primary" : "border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300")}>
+                                  {state === "not_recorded" ? "؟" : state === "not_watched" ? <X className="size-3.5" /> : <Check className="size-4" />}
                                 </span>
                                 <div className="min-w-0 flex-1">
                                   <p className="break-words text-xs font-bold leading-6">{choice.title}</p>
@@ -880,6 +889,7 @@ export default function Study() {
                                   })}
                                   className="h-10 w-full rounded-xl border border-border bg-card px-3 text-xs font-semibold text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15 disabled:opacity-60"
                                 >
+                                  <option value="not_recorded">لم أحدد الحالة بعد</option>
                                   <option value="not_watched">لم أشاهد الشرح / فاتتني الحصة</option>
                                   <option value="watched_only">شاهدت المحاضرة فقط — لم أذاكرها</option>
                                   <option value="studied">ذاكرت الدرس وفهمته</option>
