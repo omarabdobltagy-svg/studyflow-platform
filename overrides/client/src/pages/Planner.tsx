@@ -69,7 +69,8 @@ type PlanView = {
   taskSync?: { parentGoalId: number; stageCount: number; taskCount: number; routineId?: number | null };
 };
 const DAILY_SNAPSHOT_PREFIX = "SIE_DAILY_PLAN_V4:";
-const ANNUAL_PLAN_PREFIX = "SIE_ANNUAL_PLAN_V1:";
+const DAILY_PLAN_DRAFT_PREFIX = "SIE_DAILY_PLAN_DRAFT_V1:";
+const ANNUAL_PLAN_PREFIX = "SIE_ANNUAL_PLAN_V1:"
 const STUDY_PLAN_PREFIX = "SIE_STUDY_PLAN_V2:";
 const todayCairo = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
 const initialPrompt = "كوّن لي خطة مذاكرة عملية للفترة القادمة. استخدم المهام الحالية وآخر موضع مكتمل وجدول حصص المدرسين، ووازن بين إنهاء المتراكم والاستعداد للمحاضرات الجديدة. لا تنشئ اختبارات أو أسئلة أو واجبات من عندك.";
@@ -181,7 +182,8 @@ export default function Planner() {
       const isActiveDailyPlan = prompt.startsWith(DAILY_SNAPSHOT_PREFIX)
         && /^[a-f0-9]{32}:$/.test(prompt.slice(DAILY_SNAPSHOT_PREFIX.length));
       const isOldDailySnapshot = prompt.startsWith(DAILY_SNAPSHOT_PREFIX) && !isActiveDailyPlan;
-      if (!saved || isLegacyAnnualPlan || isOldDailySnapshot) return [];
+      const isUncommittedAutoDraft = prompt.startsWith(DAILY_PLAN_DRAFT_PREFIX);
+      if (!saved || isLegacyAnnualPlan || isOldDailySnapshot || isUncommittedAutoDraft) return [];
       return [{ id: record.id, createdAt: record.createdAt, plan: saved, isActive: isActiveDailyPlan }];
     })
     .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()), [history.data]);

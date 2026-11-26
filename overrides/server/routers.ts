@@ -101,7 +101,8 @@ type DailyPlanResult = {
 // V6 scopes teacher signals to second-year Baccalaureate and retires stale AI-plan tasks.
 const DAILY_PLANNER_POLICY_VERSION = "smart-study-horizon-teacher-sync-v2";
 const DAILY_PLAN_PREFIX = "SIE_DAILY_PLAN_V4:";
-const ANNUAL_PLAN_PREFIX = "SIE_ANNUAL_PLAN_V1:";
+const DAILY_PLAN_DRAFT_PREFIX = "SIE_DAILY_PLAN_DRAFT_V1:";
+const ANNUAL_PLAN_PREFIX = "SIE_ANNUAL_PLAN_V1:"
 const STUDY_PLAN_PREFIX = "SIE_STUDY_PLAN_V2:";
 const dailyPlanLocks = new Map<number, Promise<DailyPlanResult>>();
 const dailyPlanDirtyUsers = new Set<number>();
@@ -502,7 +503,7 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): 
     }
 
     updateAIActivity(userId, activityId, "إعادة تحليل الخطة", "تم رصد تغيير يحتاج إلى مواءمة؛ يجمع الآن الأولويات والفجوات والوقت المتاح.");
-    const dailyPrompt = DAILY_PLAN_PREFIX + sourceFingerprint + ": حلّل ملفي الدراسي كاملًا وحدد أهم ما يجب أن أذاكره الآن. أنشئ خطة يومية واقعية تبدأ اليوم، وتعالج التراكم حسب أولوية المنهج وصعوبة كل درس وحجمه والوقت المتاح.";
+    const dailyPrompt = DAILY_PLAN_DRAFT_PREFIX + sourceFingerprint + ": حلّل ملفي الدراسي كاملًا وحدد أهم ما يجب أن أذاكره الآن. أنشئ خطة يومية واقعية تبدأ اليوم، وتعالج التراكم حسب أولوية المنهج وصعوبة كل درس وحجمه والوقت المتاح.";
     const plan = await generatePersonalPlan(
       userId,
       dailyPrompt,
@@ -525,10 +526,18 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): 
       goalCategory: "خطة مذاكرة",
       supersedeCategories: ["خطة مذاكرة", "خطة يومية", "خطة ذكية"],
     });
-    const latestGeneratedPlan = await getLatestAiPlanByPromptPrefix(userId, DAILY_PLAN_PREFIX);
+    const generatedDraft = await getLatestAiPlanByPromptPrefix(userId, DAILY_PLAN_DRAFT_PREFIX);
     const refreshedFingerprint = await getDailyPlanSourceFingerprint(userId, dailyMinutes, startDate);
-    if (latestGeneratedPlan) {
-      await updateAiPlanPrompt(userId, latestGeneratedPlan.id, DAILY_PLAN_PREFIX + refreshedFingerprint + ":");
+    if (generatedDraft) {
+      // Promote the generated draft only after task reconciliation succeeds.
+      await updateAiPlanPrompt(userId, generatedDraft.id, DAILY_PLAN_PREFIX + refreshedFingerprint + ":");
+    } else {
+      // Keep activation explicit even if the generator's internal draft persistence changes.
+      await saveAiPlan(userId, {
+        prompt: DAILY_PLAN_PREFIX + refreshedFingerprint + ":",
+        title: plan.title || "خطة المذاكرة",
+        planJson: JSON.stringify(plan),
+      });
     }
     completeAIActivity(userId, activityId, "اكتملت إعادة ترتيب الخطة ومزامنة المهام.");
     return {
