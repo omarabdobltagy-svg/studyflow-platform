@@ -19,6 +19,7 @@ import {
   studentProfiles,
   studySessions,
   taskChangeLogs,
+  teacherCourseFacts,
   tasks,
   users,
 } from "../drizzle/schema";
@@ -430,6 +431,77 @@ export async function saveSIEOnboarding(userId: number, data: SIEOnboardingInput
   };
   await db.insert(studentProfiles).values(values).onDuplicateKeyUpdate({ set: updateSet });
   return getStudentProfile(userId);
+}
+
+export type TeacherCourseFactsInput = {
+  teacherId: string;
+  teacherName: string;
+  subjectId: string;
+  educationSystem: string;
+  gradeYear: string;
+  availableModes: Array<"center" | "online">;
+  homeworkPolicy: "yes" | "no" | "varies" | "unknown";
+  homeworkRequiredBeforeNextLecture: "yes" | "no" | "varies" | "unknown";
+  preLectureExamRequired: "yes" | "no" | "varies" | "unknown";
+  evidence: Array<{ title: string; url: string; source: string; excerpt?: string; publishedAt?: string }>;
+  confidence: "low" | "medium" | "high";
+  verificationStatus: "verified" | "partial" | "insufficient_evidence" | "research_failed";
+  checkedAt: Date;
+  expiresAt: Date;
+};
+
+export async function getTeacherCourseFacts(input: Pick<TeacherCourseFactsInput, "teacherId" | "subjectId" | "educationSystem" | "gradeYear">) {
+  const database = await requireDb();
+  const rows = await database.select().from(teacherCourseFacts).where(and(
+    eq(teacherCourseFacts.teacherId, input.teacherId),
+    eq(teacherCourseFacts.subjectId, input.subjectId),
+    eq(teacherCourseFacts.educationSystem, input.educationSystem),
+    eq(teacherCourseFacts.gradeYear, input.gradeYear),
+  )).limit(1);
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    ...row,
+    availableModes: parseJson<Array<"center" | "online">>(row.availableModesJson, []),
+    evidence: parseJson<TeacherCourseFactsInput["evidence"]>(row.evidenceJson, []),
+    isStale: row.expiresAt.getTime() <= Date.now(),
+  };
+}
+
+export async function upsertTeacherCourseFacts(input: TeacherCourseFactsInput) {
+  const database = await requireDb();
+  const values = {
+    teacherId: input.teacherId,
+    teacherName: input.teacherName,
+    subjectId: input.subjectId,
+    educationSystem: input.educationSystem,
+    gradeYear: input.gradeYear,
+    availableModesJson: JSON.stringify(input.availableModes),
+    homeworkPolicy: input.homeworkPolicy,
+    homeworkRequiredBeforeNextLecture: input.homeworkRequiredBeforeNextLecture,
+    preLectureExamRequired: input.preLectureExamRequired,
+    evidenceJson: JSON.stringify(input.evidence),
+    confidence: input.confidence,
+    verificationStatus: input.verificationStatus,
+    checkedAt: input.checkedAt,
+    expiresAt: input.expiresAt,
+  };
+  await database.insert(teacherCourseFacts).values(values).onDuplicateKeyUpdate({
+    set: {
+      teacherName: values.teacherName,
+      availableModesJson: values.availableModesJson,
+      homeworkPolicy: values.homeworkPolicy,
+      homeworkRequiredBeforeNextLecture: values.homeworkRequiredBeforeNextLecture,
+      preLectureExamRequired: values.preLectureExamRequired,
+      evidenceJson: values.evidenceJson,
+      confidence: values.confidence,
+      verificationStatus: values.verificationStatus,
+      checkedAt: values.checkedAt,
+      expiresAt: values.expiresAt,
+      updatedAt: new Date(),
+    },
+  });
+  return getTeacherCourseFacts(input);
 }
 
 export async function listTasks(userId: number) {
