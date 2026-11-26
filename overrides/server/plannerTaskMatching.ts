@@ -51,17 +51,17 @@ export function matchCompletedPlanSteps(
 
   steps.forEach((step, index) => {
     const reference = step.existingTask;
-    if (reference?.status === "done") {
-      preservedCompletedTaskIds.add(reference.id);
-      return;
-    }
-
     if (reference?.id) {
       const exactTask = completedById.get(reference.id);
       if (exactTask) {
         preservedCompletedTaskIds.add(exactTask.id);
         return;
       }
+      // A task outside this goal tree may be completed, but task completion is
+      // not curriculum completion. Keep the study step pending; DB sync will
+      // reuse the linked task ID without duplicating it.
+      pendingIndexes.push(index);
+      return;
     }
 
     const normalized = normalizeTaskTitle(step.title);

@@ -40,10 +40,19 @@ describe("completed plan-step matching", () => {
     expect(result.ambiguousTitleCount).toBe(0);
   });
 
-  it("does not re-create an explicitly completed external task", () => {
+  it("does not treat an external completed task as proof that the curriculum step is complete", () => {
     const result = matchCompletedPlanSteps(
       [{ title: "محاضرة البرمجة", existingTask: { id: 99, status: "done" } }],
       [],
+    );
+    expect(result.pendingIndexes).toEqual([0]);
+    expect(result.preservedCompletedTaskIds).toEqual([]);
+  });
+
+  it("skips an explicitly linked completed task only when it belongs to this goal tree", () => {
+    const result = matchCompletedPlanSteps(
+      [{ title: "محاضرة البرمجة", existingTask: { id: 99, status: "done" } }],
+      [{ id: 99, title: "محاضرة البرمجة" }],
     );
     expect(result.pendingIndexes).toEqual([]);
     expect(result.preservedCompletedTaskIds).toEqual([99]);
