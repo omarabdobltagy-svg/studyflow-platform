@@ -13,12 +13,12 @@ type LayerId = "overview" | "tasks" | "goals" | "schedule" | "learning" | "insig
 type SceneNode = { id: LayerId; label: string; value: string; color: number };
 
 const layerMeta: Record<LayerId, { title: string; eyebrow: string; description: string; path?: string }> = {
-  overview: { title: "مركز القيادة", eyebrow: "COMMAND CENTER", description: "صورة واحدة لما يحتاج انتباهك الآن." },
-  tasks: { title: "إدارة المهام", eyebrow: "TASK DATABASE", description: "التقط المهمة، صنّفها، حدّد أولويتها، وأنهِها من نفس المساحة.", path: "/tasks" },
-  goals: { title: "الأهداف والمراحل", eyebrow: "GOAL SYSTEM", description: "تابع العلاقة بين الهدف ومراحله والمهام التي تحرّكه.", path: "/goals" },
-  schedule: { title: "الجدول الزمني", eyebrow: "TIME LAYER", description: "المواعيد القادمة والمهام ذات التاريخ في خط زمني واحد.", path: "/calendar" },
-  learning: { title: "خريطة التعلّم", eyebrow: "LEARNING GRAPH", description: "المواد والمدرسون ونقطة التقدم والتراكم المسجل.", path: "/study" },
-  insights: { title: "مؤشرات الأداء", eyebrow: "PROGRESS INTELLIGENCE", description: "قراءة تشغيلية من سجلاتك الفعلية، وليست حكمًا على مستوى إتقانك.", path: "/analytics" },
+  overview: { title: "مركز القيادة", eyebrow: "نظرة اليوم", description: "صورة واحدة لما يحتاج انتباهك الآن." },
+  tasks: { title: "إدارة المهام", eyebrow: "إدارة المهام", description: "التقط المهمة، صنّفها، حدّد أولويتها، وأنهِها من نفس المساحة.", path: "/tasks" },
+  goals: { title: "الأهداف والمراحل", eyebrow: "منظومة الأهداف", description: "تابع العلاقة بين الهدف ومراحله والمهام التي تحرّكه.", path: "/goals" },
+  schedule: { title: "الجدول الزمني", eyebrow: "المواعيد والجدول", description: "المواعيد القادمة والمهام ذات التاريخ في خط زمني واحد.", path: "/calendar" },
+  learning: { title: "خريطة التعلّم", eyebrow: "مسار التعلّم", description: "المواد والمدرسون ونقطة التقدم والتراكم المسجل.", path: "/study" },
+  insights: { title: "مؤشرات الأداء", eyebrow: "مؤشرات التقدم", description: "قراءة تشغيلية من سجلاتك الفعلية، وليست حكمًا على مستوى إتقانك.", path: "/analytics" },
 };
 
 const cairoDateKey = (value: Date | string) =>
@@ -200,7 +200,7 @@ export default function PlannerOperationsScene() {
     <section className="sf-ops-workspace mb-7" aria-label="مساحة التشغيل التفاعلية">
       <div className="sf-ops-heading">
         <div>
-          <p className="eyebrow">STUDYFLOW / INTERACTIVE WORKSPACE</p>
+          <p className="eyebrow">مساحة العمل التفاعلية</p>
           <h2>مساحة تشغيل خطتك</h2>
           <p>كل طبقة متصلة ببياناتها وإجراءاتها. اختر عقدة من المشهد أو افتح القسم مباشرة.</p>
         </div>
@@ -217,7 +217,7 @@ export default function PlannerOperationsScene() {
       <div className="sf-ops-grid">
         <section className="sf-ops-scene-card">
           <div className="sf-ops-card-heading">
-            <div><p>FUNCTION MAP</p><h3>خريطة الوظائف</h3></div>
+            <div><p>خريطة الوظائف</p><h3>خريطة الوظائف</h3></div>
             <span><Layers3 className="size-4" /> 6 طبقات مترابطة</span>
           </div>
           <FunctionScene nodes={nodes} selectedId={layer} onSelect={onSceneSelect} />
@@ -261,7 +261,7 @@ export default function PlannerOperationsScene() {
           {layer === "tasks" && (
             <div className="sf-ops-layer-body">
               <form className="sf-ops-capture" onSubmit={submitTask}>
-                <div className="sf-ops-capture-title"><Plus className="size-4" /><b>التقاط سريع لمهمة</b><span>Quick capture</span></div>
+                <div className="sf-ops-capture-title"><Plus className="size-4" /><b>التقاط سريع لمهمة</b><span>إضافة سريعة</span></div>
                 <input value={draftTitle} onChange={event => setDraftTitle(event.target.value)} maxLength={220} placeholder="اكتب المهمة… مثل: حل 20 سؤالًا على الدرس" aria-label="عنوان المهمة الجديدة" />
                 <div className="sf-ops-capture-fields">
                   <select value={draftCategory} onChange={event => setDraftCategory(event.target.value)} aria-label="تصنيف المهمة">
@@ -295,7 +295,7 @@ export default function PlannerOperationsScene() {
           {layer === "goals" && (
             <div className="sf-ops-layer-body">
               <form className="sf-ops-capture" onSubmit={submitGoal}>
-                <div className="sf-ops-capture-title"><Target className="size-4" /><b>إنشاء هدف سريع</b><span>Goal capture</span></div>
+                <div className="sf-ops-capture-title"><Target className="size-4" /><b>إنشاء هدف سريع</b><span>إنشاء هدف</span></div>
                 <div className="sf-ops-capture-fields sf-ops-create-single">
                   <input value={draftGoalTitle} onChange={event => setDraftGoalTitle(event.target.value)} maxLength={180} placeholder="ما النتيجة التي تريد الوصول إليها؟" aria-label="عنوان الهدف الجديد" />
                   <Button type="submit" disabled={!draftGoalTitle.trim() || createGoal.isPending} size="sm"><Plus className="size-4" />إنشاء هدف</Button>
