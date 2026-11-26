@@ -232,7 +232,8 @@ async function refreshTeacherCourseFacts(scope: ResearchScope) {
     // Evidence collection and classification failures are cached for a short retry window.
 
     const now = new Date();
-    const ttlHours = classified.verificationStatus === "research_failed" ? FAILURE_RETRY_HOURS : CACHE_DAYS * 24;
+    const ttlHours = classified.verificationStatus === "research_failed" ? FAILURE_RETRY_HOURS
+      : classified.verificationStatus === "insufficient_evidence" ? 72 : CACHE_DAYS * 24;
     await upsertTeacherCourseFacts({
       teacherId: teacher.teacherId,
       teacherName: teacher.nameAr,
