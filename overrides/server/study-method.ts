@@ -13,6 +13,15 @@ export type StudyMethod = {
   teacherPolicyNote?: string;
 };
 
+export function isFirstLearningTask(step: { title: string; category: string }): boolean {
+  const label = `${step.title} ${step.category}`
+    .normalize("NFKC")
+    .replace(/[\\u064B-\\u065F\\u0670]/g, "")
+    .toLocaleLowerCase("ar");
+  const nonLessonWork = /مراجعة|مراجعات|واجب|تدريبات|تدريب|حل\\s+(?:ال)?(?:أسئلة|اسئلة|تمارين|تدريبات|مسائل)|امتحان|اختبار|تقييم|تطبيق|بنك\\s+الأسئلة|بنك\\s+الاسئلة/;
+  return !nonLessonWork.test(label);
+}
+
 export type LessonTeacherPolicy = {
   homeworkPolicy?: TeacherRequirementState;
   homeworkRequiredBeforeNextLecture?: TeacherRequirementState;
