@@ -95,6 +95,16 @@ function getNextOccurrence(slot: TeacherScheduleSlot, after: Date): Date {
   throw new Error("Unable to resolve the next teacher session.");
 }
 
+function getNextSubjectOccurrence(slots: TeacherScheduleSlot[], after: Date): Date {
+  const validSlots = slots.filter(slot =>
+    Number.isInteger(slot.dayOfWeek) && slot.dayOfWeek >= 0 && slot.dayOfWeek <= 6
+    && /^([01]\\d|2[0-3]):[0-5]\\d$/.test(slot.startTime)
+  );
+  const candidates = validSlots.map(slot => getNextOccurrence(slot, after).getTime());
+  if (!candidates.length) throw new Error("No valid upcoming teacher sessions are configured.");
+  return new Date(Math.min(...candidates));
+}
+
 function getLatestScheduledOccurrence(slot: TeacherScheduleSlot, now: Date): Date | null {
   const localToday = getDateKeyInZone(now);
   const base = new Date(`${localToday}T12:00:00.000Z`);
@@ -147,7 +157,7 @@ export function getDueTeacherClassFollowups(input: {
         startTime: slot.startTime,
         classStartAt,
         dueAt,
-        nextSessionAt: getNextOccurrence(slot, classStartAt),
+        nextSessionAt: getNextSubjectOccurrence(slots, classStartAt),
         requiresTopicSelection,
       });
     }
