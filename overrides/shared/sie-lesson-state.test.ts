@@ -27,11 +27,11 @@ describe("student lesson learning states", () => {
     })).toBe("not_recorded");
   });
 
-  it("preserves old inclusive frontiers as completed for legacy profiles", () => {
+  it("does not infer study completion from a legacy inclusive watched frontier", () => {
     expect(getEffectiveStudentLessonState({
       choices, nodeId: "NAHW_2", studentFrontierId: "NAHW_3",
-    })).toBe("studied");
-    expect(isStudentLessonStudyComplete("studied")).toBe(true);
+    })).toBe("watched_only");
+    expect(isStudentLessonStudyComplete("watched_only")).toBe(false);
   });
 
   it("allows a missed lesson in the middle of an otherwise watched sequence", () => {
