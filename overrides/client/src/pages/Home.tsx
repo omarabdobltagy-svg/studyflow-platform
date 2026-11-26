@@ -153,7 +153,7 @@ export default function Home() {
         const gap = subjectGaps[branch.branchId];
         if (gap?.referencePosition === null || gap?.referencePosition === undefined) return [];
         const lessonState = lessonStateByBranch[subjectId]?.[branch.branchId];
-        const stateBacklog = lessonState
+        const stateBacklog = lessonState && Number(lessonState.lessonStateModelVersion ?? 0) >= 1
           ? Number(lessonState.teacherCoveredNotStudiedCount || 0) + Number(lessonState.teacherCoveredNeedsReviewCount || 0)
           : null;
         const backlogCount = stateBacklog !== null
