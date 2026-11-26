@@ -150,7 +150,7 @@ export const tasks = mysqlTable(
     priority: mysqlEnum("priority", ["low", "medium", "high"])
       .default("medium")
       .notNull(),
-    estimatedMinutes: int("estimatedMinutes").default(25).notNull(),
+    estimatedMinutes: int("estimatedMinutes").default(25),
     status: mysqlEnum("status", ["todo", "done"])
       .default("todo")
       .notNull(),
