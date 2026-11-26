@@ -259,7 +259,7 @@ export async function getTeacherCourseFactsWithRefresh(scope: ResearchScope): Pr
     };
   }
   return {
-    state: current.verificationStatus === "verified" ? "verified"
+    state: current.isStale ? "researching" : current.verificationStatus === "verified" ? "verified"
       : current.verificationStatus === "partial" ? "partial" : "insufficient_evidence",
     facts: {
       availableModes: current.availableModes,
