@@ -480,6 +480,182 @@ async function invokeWithProvider(
   return (await response.json()) as InvokeResult;
 }
 
+function extractTextContent(content: InvokeResult["choices"][number]["message"]["content"]): string {
+  if (typeof content === "string") return content;
+  return content.map(part => ("text" in part && typeof part.text === "string") ? part.text : "").join("");
+}
+
+function extractStreamDelta(payload: Record<string, any>): string {
+  const choice = Array.isArray(payload.choices) ? payload.choices[0] : undefined;
+  const value = choice?.delta?.content ?? choice?.message?.content ?? choice?.text ?? "";
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) {
+    return value.map(part => typeof part === "string" ? part : typeof part?.text === "string" ? part.text : "").join("");
+  }
+  return "";
+}
+
+async function streamWithProvider(
+  params: InvokeParams,
+  provider: ProviderRequestConfig,
+  onToken: (token: string) => void,
+): Promise<InvokeResult> {
+  assertApiKey(provider.apiKey, provider.apiKeyVariable);
+  const {
+    messages, tools, toolChoice, tool_choice, outputSchema, output_schema,
+    responseFormat, response_format, model, thinking, reasoning, maxTokens, max_tokens,
+  } = params;
+  const payload: Record<string, unknown> = { messages: messages.map(normalizeMessage) };
+  const resolvedModel = model || provider.defaultModel;
+  if (resolvedModel) payload.model = resolvedModel;
+  if (tools && tools.length > 0) payload.tools = tools;
+  const normalizedToolChoice = normalizeToolChoice(toolChoice || tool_choice, tools);
+  if (normalizedToolChoice) payload.tool_choice = normalizedToolChoice;
+  const resolvedMaxTokens = max_tokens ?? maxTokens;
+  if (typeof resolvedMaxTokens === "number") payload.max_tokens = resolvedMaxTokens;
+  if (thinking) payload.thinking = thinking;
+  if (reasoning) payload.reasoning = reasoning;
+  const normalizedResponseFormat = provider.omitResponseFormat
+    ? undefined
+    : normalizeResponseFormat({ responseFormat, response_format, outputSchema, output_schema });
+  if (normalizedResponseFormat) payload.response_format = normalizedResponseFormat;
+  if (provider.additionalBody) Object.assign(payload, provider.additionalBody);
+  // Set after provider defaults so this endpoint always requests a streamed response.
+  payload.stream = true;
+
+  const response = await fetchWithBackoff(
+    resolveApiUrl(provider.apiBaseUrl, provider.fallbackBaseUrl),
+    {
+      method: "POST",
+      headers: {
+        accept: "text/event-stream, application/json",
+        "content-type": "application/json",
+        authorization: "Bearer " + provider.apiKey,
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+
+  if (response.status === 202 && provider.pollPending) {
+    const completed = await pollNvidiaPendingResponse(response, provider);
+    const content = extractTextContent(completed.choices?.[0]?.message?.content ?? "");
+    if (content) onToken(content);
+    return completed;
+  }
+  if (!response.ok) {
+    const errorText = (await response.text()).slice(0, 1_600);
+    throw new Error(provider.errorPrefix + ": " + response.status + " " + response.statusText + " – " + errorText);
+  }
+
+  const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+  if (contentType.includes("application/json") || !response.body) {
+    const completed = await response.json() as InvokeResult;
+    const content = extractTextContent(completed.choices?.[0]?.message?.content ?? "");
+    if (content) onToken(content);
+    return completed;
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let fullText = "";
+  let finishReason: string | null = null;
+  let responseId = "";
+  let responseCreated = Math.floor(Date.now() / 1_000);
+  let responseModel = resolvedModel ?? "";
+
+  const consumeEvent = (eventBlock: string) => {
+    const data = eventBlock
+      .split(/\r?\n/)
+      .filter(line => line.startsWith("data:"))
+      .map(line => line.slice(5).trim())
+      .join("\n");
+    if (!data || data === "[DONE]") return;
+    let event: Record<string, any>;
+    try {
+      event = JSON.parse(data) as Record<string, any>;
+    } catch {
+      // Some proxies emit non-JSON heartbeat lines. They are not model tokens.
+      return;
+    }
+    if (typeof event.id === "string") responseId = event.id;
+    if (typeof event.created === "number") responseCreated = event.created;
+    if (typeof event.model === "string") responseModel = event.model;
+    const choice = Array.isArray(event.choices) ? event.choices[0] : undefined;
+    if (typeof choice?.finish_reason === "string") finishReason = choice.finish_reason;
+    const token = extractStreamDelta(event);
+    if (token) {
+      fullText += token;
+      onToken(token);
+    }
+  };
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const events = buffer.split(/\r?\n\r?\n/);
+      buffer = events.pop() ?? "";
+      for (const eventBlock of events) consumeEvent(eventBlock);
+    }
+    buffer += decoder.decode();
+    if (buffer.trim()) consumeEvent(buffer);
+  } finally {
+    reader.releaseLock();
+  }
+
+  if (!fullText.trim()) {
+    throw new Error(provider.errorPrefix + ": streaming response completed without any text content");
+  }
+  return {
+    id: responseId || "stream-" + responseCreated,
+    created: responseCreated,
+    model: responseModel,
+    choices: [{
+      index: 0,
+      message: { role: "assistant", content: fullText },
+      finish_reason: finishReason ?? "stop",
+    }],
+  };
+}
+
+/** Stream text deltas from the configured primary OpenAI-compatible provider. */
+export async function invokeLLMStream(
+  params: InvokeParams,
+  onToken: (token: string) => void,
+): Promise<InvokeResult> {
+  return streamWithProvider(params, {
+    apiBaseUrl: ENV.aiApiBaseUrl,
+    fallbackBaseUrl: "https://openrouter.ai/api/v1",
+    apiKey: ENV.aiApiKey,
+    apiKeyVariable: "AI_API_KEY",
+    defaultModel: ENV.aiModel,
+    errorPrefix: "LLM streaming invoke failed",
+  }, onToken);
+}
+
+/** Stream from NVIDIA NIM; 202/poll responses are delivered as a single final chunk. */
+export async function invokeNvidiaLLMStream(
+  params: InvokeParams,
+  onToken: (token: string) => void,
+): Promise<InvokeResult> {
+  return streamWithProvider(params, {
+    apiBaseUrl: ENV.nvidiaApiBaseUrl,
+    fallbackBaseUrl: "https://integrate.api.nvidia.com/v1",
+    apiKey: ENV.nvidiaApiKey,
+    apiKeyVariable: "NVIDIA_API_KEY",
+    defaultModel: ENV.nvidiaModel,
+    errorPrefix: "NVIDIA LLM streaming invoke failed",
+    pollPending: true,
+    additionalBody: {
+      reasoning_effort: "none",
+      chat_template_kwargs: { force_nonempty_content: true },
+      temperature: 0.2,
+    },
+  }, onToken);
+}
+
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   return invokeWithProvider(params, {
     apiBaseUrl: ENV.aiApiBaseUrl,
