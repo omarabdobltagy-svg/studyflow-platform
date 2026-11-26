@@ -87,8 +87,8 @@ export function displayCurriculumTitle(value: string | null | undefined): string
   const title = (value ?? "").trim();
   if (!title) return "عنوان غير متاح";
   return ENGLISH_CURRICULUM_LABELS[title]
-    ?? title.replace(/^Unit\\s+(\\d+)\\s*:/i, "الوحدة $1:")
-      .replace(/^Lesson\\s+(\\d+)\\s*$/i, "الدرس $1");
+    ?? title.replace(/^Unit\s+(\d+)\s*:/i, "الوحدة $1:")
+      .replace(/^Lesson\s+(\d+)\s*$/i, "الدرس $1");
 }
 
 export function displayBranchTitle(value: string): string {
