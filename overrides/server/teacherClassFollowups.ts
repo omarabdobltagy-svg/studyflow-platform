@@ -2,6 +2,7 @@ import { getSIECheckpointProgressBranches } from "@shared/sie-catalog";
 
 export const TEACHER_CLASS_FOLLOWUP_TIMEZONE = "Africa/Cairo";
 export const TEACHER_CLASS_FOLLOWUP_DELAY_MS = 2 * 60 * 60 * 1_000;
+export const TEACHER_CLASS_FOLLOWUP_MAX_AGE_MS = 24 * 60 * 60 * 1_000;
 
 export type TeacherScheduleSlot = { dayOfWeek: number; startTime: string };
 export type TeacherClassFollowupRecord = {
@@ -142,6 +143,8 @@ export function getDueTeacherClassFollowups(input: {
       if (!classStartAt) continue;
       const dueAt = new Date(classStartAt.getTime() + TEACHER_CLASS_FOLLOWUP_DELAY_MS);
       if (dueAt.getTime() > now.getTime()) continue;
+      // A missed check-in must not reopen last week's lesson when the next class arrives.
+      if (now.getTime() - dueAt.getTime() > TEACHER_CLASS_FOLLOWUP_MAX_AGE_MS) continue;
 
       const classDate = getDateKeyInZone(classStartAt);
       const key = buildTeacherClassFollowupKey(subjectId, classDate, slot.dayOfWeek, slot.startTime);
