@@ -1711,6 +1711,34 @@ export const appRouter = router({
               `مصدر وثقة تقدم الطالب: ${String(progress.evidenceSource ?? "لا يوجد سجل")} / ${String(progress.confidence ?? "غير محدد")}`,
             ].join(" | ");
           }).join("\n") || "لم يتم اختيار مدرسين بعد.";
+        const teacherCourseFactsContext = await Promise.all(Object.entries(teacherChoices)
+          .filter(([subjectId, teacherId]) => Boolean(teacherId && teacherId !== "__SKIP__" && profile?.subjectIds.includes(subjectId)))
+          .map(async ([subjectId, teacherId]) => {
+            const systemId = selection.systemId === "EG_GENERAL_SECONDARY" ? "EG_GENERAL_SECONDARY" : "EG_BACCALAUREATE";
+            try {
+              const facts = await getTeacherCourseFactsWithRefresh({
+                teacherId,
+                subjectId,
+                systemId,
+                gradeYear: profile?.gradeYear ?? SIE_CATALOG_META.gradeYear,
+              });
+              const modes = facts.facts.availableModes.length
+                ? facts.facts.availableModes.map(mode => mode === "center" ? "سنتر/مجموعة حضورية" : "أونلاين").join(" و")
+                : "غير مثبتة";
+              const cite = facts.facts.evidence.slice(0, 4).map(item => item.url).join(" | ") || "لا يوجد مصدر كافٍ";
+              return [
+                `المدرس: ${getSIETeacher(teacherId)?.nameAr ?? teacherId} — المادة: ${getSIESubject(subjectId)?.nameAr ?? subjectId}`,
+                `طرق الدراسة المثبتة: ${modes}`,
+                `هل يحدد واجبًا؟ ${facts.facts.homeworkPolicy}`,
+                `هل حل الواجب شرط قبل المحاضرة التالية؟ ${facts.facts.homeworkRequiredBeforeNextLecture}`,
+                `هل يوجد امتحان إلزامي قبل المحاضرة التالية؟ ${facts.facts.preLectureExamRequired}`,
+                `حالة التحقق: ${facts.state}؛ مستوى الثقة: ${facts.facts.confidence}؛ آخر تحقق: ${facts.facts.checkedAt ? new Intl.DateTimeFormat("ar-EG", { dateStyle: "medium", timeZone: "Africa/Cairo" }).format(facts.facts.checkedAt) : "جارٍ البحث أو لم يُتحقق بعد"}`,
+                `المصادر: ${cite}`,
+              ].join(" | ");
+            } catch {
+              return `المدرس ${getSIETeacher(teacherId)?.nameAr ?? teacherId}: لا تتوفر بيانات موثقة حاليًا عن طريقة الدراسة ومتطلبات الواجب أو الامتحان.`;
+            }
+          })).then(lines => lines.join("\n")) || "لا توجد بيانات مدرسين مختارة.";
         const dateLabel = (value: Date | string | null | undefined) => {
           if (!value) return "بلا موعد";
           const date = value instanceof Date ? value : new Date(value);
@@ -1806,7 +1834,8 @@ export const appRouter = router({
           `المكتبة: ${bookRows.slice(0, 8).map(book => `- ${book.title} — ${book.subject} (${book.progress}%)`).join("\n") || "لا توجد كتب مسجلة."}`,
           `الروتين النشط: ${routineRows.filter(routine => routine.isActive).slice(0, 6).map(routine => `- ${routine.name}: ${routine.items.filter(item => item.isActive).map(item => `${item.title}${item.completedToday ? " ✓" : ""}`).join("، ")}`).join("\n") || "لا يوجد روتين نشط."}`,
           `المواعيد القادمة: ${calendarRows.filter(event => new Date(event.startAt).getTime() >= Date.now()).slice(0, 8).map(event => `- ${event.title} (${dateLabel(event.startAt)})`).join("\n") || "لا توجد مواعيد قادمة مسجلة."}`,
-          `مواضع المدرسين وتقدم الطالب (كل مصدر مستقل):\n${teacherProgressContext}`,
+          `مواضع المدرسين وتقدم الطالب (كل مصدر مستقل):\n${teacherProgressContext}`
+          `طرق الدراسة ومتطلبات الواجب والامتحان لكل مدرس (بيانات مركزية مع مصادر وثقة؛ unknown تعني عدم وجود دليل كافٍ):\n${teacherCourseFactsContext || "لا توجد بيانات مدرسين مختارة."}`,
           `فهرس المنهج وتقدم دروس SQ3R:\n${curriculumContext || "لا توجد فهارس متاحة للمواد المختارة."}`,
           `بيانات المنهج المشتقة من فهارس كتب الجزء الأول (أسماء الدروس ونطاق الصفحات المطبوعة وتقدير حجم/صعوبة أولي؛ ليست نصوصًا منقولة من صفحات الكتب):\n${textbookEvidenceContext || "بيانات المنهج التفصيلية غير متاحة الآن."}`,
           `التقدم المبلغ عنه ونتائج التقييمات:\n${learningEvidenceContext || "لا توجد تحديثات تقدم محفوظة حتى الآن."}`,
@@ -1822,7 +1851,7 @@ export const appRouter = router({
           messages: [
             { role: "system", content: `أنت المساعد التنظيمي والمعرفي داخل StudyFlow. دورك مساعدة الطالب في تحديد موضع الدرس، وفهم المصطلحات والتعليمات، والرجوع إلى شرح المدرس والصفحات المرتبطة به. لا تحل محل المدرس في تدريس مهارات المنهج أو التدريب عليها أو تقييمها. لا تنشئ واجبات أو أسئلة أو تدريبات من تلقاء نفسك، ولا تختبر الطالب. إذا طلب الطالب توضيح مفهوم، قدّم شرحًا مساعدًا محدودًا يخدم فهم شرح المدرس ولا يتحول إلى درس بديل أو نشاط تقييم. استخدم الكتاب المدرسي بوصفه المصدر الأساسي لتحديد أهداف المنهج ومفاهيمه ومصطلحاته وأمثلته وتسلسله وحدود ما يُنسب رسميًا إلى الكتاب. عند توفير بيانات منهج مشتقة من فهرس كتاب رسمي، استخدم اسم الدرس ونطاق الصفحات المطبوعة الموثق، وميّزها عن رقم صفحة PDF. هذه البيانات لا تحتوي نص الصفحة ولا تسمح باختلاق اقتباس أو شرح تفصيلي ونسبته للكتاب. إذا لم يكن نص الصفحة متاحًا في السياق أو عبر استرجاع موثوق فلا تدّع أنك اطلعت عليه؛ اطلب من الطالب إرفاق الصفحة المطلوبة. عند وجود مقتطف نصي مرخص ومسترجع مستقبلًا، اذكر مصدره ورقم صفحة PDF الفعلي.
 
-قاعدة توضيح المتطلبات السابقة: استخدم سجل الطالب ومواضع المنهج لمعرفة ما إذا كان هناك درس سابق مرتبط غير مكتمل، واشرح للطالب علاقة الاعتماد بين الموضوعين عند سؤاله. يمكن توضيح مصطلح أو خلفية معرفية لازمة بصورة مختصرة، مع تمييزها عن محتوى الكتاب. لا تحوّل هذا الدور إلى خريطة تدريس مستقلة أو تدريب مهاري أو اختبار، ولا تنشئ مثالًا مطلوبًا من الطالب حله.
+عند سؤال الطالب عن طريقة دراسة مدرس معين (سنتر أم أونلاين) أو الواجب والامتحان قبل المحاضرة التالية، اعتمد فقط على سجل بيانات المدرس المركزي الظاهر في السياق ومصادره. لا تستنتج أن وجود فيديوهات على YouTube يعني وجود كورس أونلاين أو أن المدرس يشترط حل الواجب/الامتحان. إذا كانت الحالة unknown أو الأدلة جزئية، قل بوضوح إن المعلومة غير مؤكدة ولا تعرضها كحقيقة.\n\nقاعدة توضيح المتطلبات السابقة: استخدم سجل الطالب ومواضع المنهج لمعرفة ما إذا كان هناك درس سابق مرتبط غير مكتمل، واشرح للطالب علاقة الاعتماد بين الموضوعين عند سؤاله. يمكن توضيح مصطلح أو خلفية معرفية لازمة بصورة مختصرة، مع تمييزها عن محتوى الكتاب. لا تحوّل هذا الدور إلى خريطة تدريس مستقلة أو تدريب مهاري أو اختبار، ولا تنشئ مثالًا مطلوبًا من الطالب حله.
 
 افصل دائمًا بين ثلاث طبقات عند الحاجة: (1) ما يقوله الكتاب أو يطلبه المنهج، (2) تمهيد معرفي أو مهارة سابقة أضفتها لسد فجوة الفهم، (3) توسع اختياري خارج المطلوب. صرّح بأن الطبقة الثانية معرفة مساندة وليست نصًا أو مطلبًا رسميًا من الكتاب، ولا تنسبها للوزارة. لا تعرض التوسع الاختياري كأنه شرط للنجاح. عند وجود فرق أو تعارض بين صياغة الكتاب والمعرفة العلمية الأحدث، اعرض صياغة الكتاب كما هي في سياقها، ثم وضّح التصحيح أو التحديث بدليل وبيّن ما يدخل في نطاق المنهج وما هو توضيح خارجي.
 
