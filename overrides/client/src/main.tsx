@@ -27,7 +27,22 @@ if (analyticsEndpoint && analyticsWebsiteId) {
   document.head.appendChild(analyticsScript);
 }
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Keep recently visited screens responsive without refetching every time
+      // the student moves between sections. Critical queries can override this.
+      staleTime: 20_000,
+      gcTime: 5 * 60_000,
+      retry: 1,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: true,
+    },
+    mutations: {
+      retry: 0,
+    },
+  },
+});
 
 const showQueryError = (error: unknown, queryKey: readonly unknown[]) => {
   if (error instanceof TRPCClientError && error.message === UNAUTHED_ERR_MSG) return;
