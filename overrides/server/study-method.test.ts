@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { buildLessonStudyMethod, formatStudyMethodNotes } from "./study-method";
+import { buildLessonStudyMethod, formatStudyMethodNotes, isFirstLearningTask } from "./study-method";
+
+describe("first-learning task classification", () => {
+  it("includes new lesson tasks and excludes review, practice, homework, and assessments", () => {
+    expect(isFirstLearningTask({ title: "استكمال درس التوازي", category: "اللغة العربية" })).toBe(true);
+    expect(isFirstLearningTask({ title: "شرح الدرس الثالث", category: "النحو" })).toBe(true);
+    for (const title of ["مراجعة درس التوازي", "حل واجب المحاضرة", "تدريبات على التوازي", "امتحان على الوحدة"]) {
+      expect(isFirstLearningTask({ title, category: "اللغة العربية" })).toBe(false);
+    }
+    expect(isFirstLearningTask({ title: "الدرس الثالث", category: "مراجعة" })).toBe(false);
+  });
+});
 
 describe("student-facing lesson study method", () => {
   it("uses a clear first-learning sequence and explains the second reading", () => {
