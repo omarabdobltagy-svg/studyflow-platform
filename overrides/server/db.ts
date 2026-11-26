@@ -597,6 +597,10 @@ export type ApprovedPlanStep = {
   priority?: "critical" | "high" | "medium" | "low";
   existingTask?: { id: number; title: string; status: "todo" | "done"; confidence: "exact" | "strong" };
   resourceRecommendation?: { title: string; url: string; teacherName?: string; reason: string };
+  scheduleState?: "scheduled" | "deferred";
+  dayIndex?: number | null;
+  dateOffsetDays?: number | null;
+  scheduleNote?: string;
 };
 
 export function normalizeApprovedPlanSteps(steps: ApprovedPlanStep[]) {
@@ -614,11 +618,11 @@ export function normalizeApprovedPlanSteps(steps: ApprovedPlanStep[]) {
 
 export function schedulePlanStepDates(
   startDate: string,
-  steps: Array<{ minutes: number }>,
+  steps: Array<{ minutes: number; dayIndex?: number | null; dateOffsetDays?: number | null; scheduleState?: "scheduled" | "deferred" }>,
   dailyMinutes: number,
   daysPerWeek = 7,
 ) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) throw new Error("تاريخ بداية الخطة غير صالح.");
+  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(startDate)) throw new Error("تاريخ بداية الخطة غير صالح.");
   const parsedStart = new Date(`${startDate}T12:00:00.000Z`);
   if (Number.isNaN(parsedStart.getTime()) || parsedStart.toISOString().slice(0, 10) !== startDate) throw new Error("تاريخ بداية الخطة غير صالح.");
   const capacity = Math.min(600, Math.max(20, Math.round(dailyMinutes)));
@@ -626,13 +630,18 @@ export function schedulePlanStepDates(
   let studyDayIndex = 0;
   let usedMinutes = 0;
   return steps.map(step => {
+    if (step.scheduleState === "deferred") return null;
+    const dueAt = new Date(parsedStart);
+    if (Number.isInteger(step.dateOffsetDays) && (step.dateOffsetDays ?? -1) >= 0) {
+      dueAt.setUTCDate(dueAt.getUTCDate() + (step.dateOffsetDays as number));
+      return dueAt;
+    }
     const duration = Math.min(480, Math.max(5, Math.round(step.minutes || 25)));
     if (usedMinutes > 0 && usedMinutes + duration > capacity) {
       studyDayIndex += 1;
       usedMinutes = 0;
     }
     const calendarOffset = studyDayIndex + Math.floor(studyDayIndex / weeklyDays) * (7 - weeklyDays);
-    const dueAt = new Date(parsedStart);
     dueAt.setUTCDate(dueAt.getUTCDate() + calendarOffset);
     usedMinutes += duration;
     return dueAt;
@@ -756,6 +765,7 @@ export async function syncDailyPlanGoalTree(
   const dueDates = schedulePlanStepDates(schedule.startDate, steps, schedule.dailyMinutes, schedule.daysPerWeek ?? 7);
   const taskNotes = (step: typeof steps[number]) => [
     step.detail,
+    ...(step.scheduleNote ? [step.scheduleNote] : []),
     ...(step.resourceRecommendation ? [
       "مشاهدة إضافية موصى بها من " + (step.resourceRecommendation.teacherName || "المدرس") + ": " + step.resourceRecommendation.title,
       step.resourceRecommendation.url,
@@ -900,7 +910,7 @@ export async function syncDailyPlanGoalTree(
       if (stage) {
         await tx.update(goals).set({
           title: `جلسة: ${step.title}`,
-          description: step.detail,
+          description: [step.detail, step.scheduleNote].filter(Boolean).join("\n\n"),
           targetDate: dueAt,
           status: "active",
           sortOrder: 100 + index,

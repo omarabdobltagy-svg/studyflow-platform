@@ -8,6 +8,7 @@ import { getStudentProfile, saveAiPlan } from "./db";
 import { formatTextbookEvidence, getCurriculumBranchPriorityGuidance, orderPlanStepsByCurriculumDependencies, retrieveTextbookEvidence } from "./textbook-retrieval";
 import { buildExamBlueprintContext, SECOND_YEAR_BAC_EXAM_WINDOW_2026_2027 } from "./exam-blueprints";
 import { isHighConfidenceScheduleAnnouncement, isSecondYearBaccalaureateProfile, isSecondYearBaccalaureateUpdate, selectedTeacherIds } from "./teacher-content-monitor";
+import { evaluatePlanQuality, schedulePlanSteps } from "./plannerEngine";
 
 
 export type PlanGenerationStage = "profile" | "curriculum" | "model" | "validation" | "saving" | "complete";
@@ -174,7 +175,30 @@ const planSchema = z.object({
     }).optional(),
     printedPageRange: z.tuple([z.number().int().positive().max(5_000), z.number().int().positive().max(5_000)]).nullish().transform(range => range ?? undefined),
     sourcePages: z.array(z.number().int().positive().max(5_000)).max(20).default([]),
+    scheduleState: z.enum(["scheduled", "deferred"]).optional(),
+    dayIndex: z.number().int().positive().nullable().optional(),
+    dateOffsetDays: z.number().int().nonnegative().nullable().optional(),
+    scheduleNote: z.string().trim().max(500).optional(),
+    sourceTitle: z.string().trim().max(180).optional(),
+    sourceStepIndex: z.number().int().nonnegative().optional(),
+    segmentIndex: z.number().int().positive().optional(),
+    segmentCount: z.number().int().positive().optional(),
   })).min(1).max(240),
+  quality: z.object({
+    score: z.number().int().min(0).max(100),
+    status: z.enum(["ready", "partial", "blocked"]),
+    blockers: z.array(z.string().max(300)).max(30),
+    warnings: z.array(z.string().max(500)).max(30),
+    stats: z.object({
+      availableStudyDays: z.number().int().nonnegative(),
+      studyDaysUsed: z.number().int().nonnegative(),
+      scheduledMinutes: z.number().int().nonnegative(),
+      deferredMinutes: z.number().int().nonnegative(),
+      deferredSteps: z.number().int().nonnegative(),
+      maxDailyLoadMinutes: z.number().int().nonnegative(),
+      maxSessionMinutes: z.number().int().positive(),
+    }),
+  }).optional(),
   habits: z.array(z.object({ title: z.string().trim().min(2).max(160), cue: z.string().trim().min(2).max(240) })).max(5).default([]),
 });
 
@@ -1534,32 +1558,44 @@ export async function generatePersonalPlan(
     })),
   };
 
-  // Reassign sequential tasks to real daily capacity rather than rejecting an otherwise valid plan
-  // because the model grouped too many items under the same display-day label.
+  // The model proposes learning work; deterministic code owns the calendar.
+  // Daily plans are strictly scheduled and capacity conflicts remain visible as deferred work.
   let scheduleDay = 1;
-  let usedMinutes = 0;
-  plan = {
-    ...plan,
-    steps: plan.steps.map(step => {
-      if (usedMinutes > 0 && usedMinutes + step.minutes > dailyMinutes) {
-        scheduleDay += 1;
-        usedMinutes = 0;
-      }
-      usedMinutes += step.minutes;
-      const dayLabel = planScope === "annual"
-        ? "الأسبوع " + Math.ceil(scheduleDay / daysPerWeek)
-        : "اليوم " + scheduleDay;
-      return { ...step, day: dayLabel };
-    }),
-  };
-
   const totalPlannedMinutes = plan.steps.reduce((sum, step) => sum + step.minutes, 0);
-  plan = {
-    ...plan,
-    durationLabel: (planScope === "annual"
-      ? Math.ceil(scheduleDay / daysPerWeek) + " أسبوعًا دراسيًا تقريبًا"
-      : "فترة " + horizonDays + " أيام · " + scheduleDay + " أيام تنفيذ") + " · " + totalPlannedMinutes + " دقيقة",
-  };
+  if (planScope === "daily") {
+    const scheduleSettings = {
+      dailyMinutes,
+      daysPerWeek,
+      horizonDays,
+      maxSessionMinutes: Math.min(90, dailyMinutes),
+    };
+    const scheduling = schedulePlanSteps(plan.steps, scheduleSettings);
+    const quality = evaluatePlanQuality(scheduling.steps, scheduleSettings, scheduling.stats);
+    scheduleDay = scheduling.stats.studyDaysUsed;
+    plan = {
+      ...plan,
+      steps: scheduling.steps,
+      quality,
+      durationLabel: `${horizonDays} يومًا · ${scheduling.stats.studyDaysUsed} أيام دراسة · ${scheduling.stats.scheduledMinutes} دقيقة مجدولة`
+        + (scheduling.stats.deferredMinutes ? ` · ${scheduling.stats.deferredMinutes} دقيقة مؤجلة` : ""),
+    };
+  } else {
+    // Preserve the legacy annual sequence until annual planning has its own
+    // multi-month constraint model; never label it as a short-term schedule.
+    let usedMinutes = 0;
+    plan = {
+      ...plan,
+      steps: plan.steps.map(step => {
+        if (usedMinutes > 0 && usedMinutes + step.minutes > dailyMinutes) {
+          scheduleDay += 1;
+          usedMinutes = 0;
+        }
+        usedMinutes += step.minutes;
+        return { ...step, day: "الأسبوع " + Math.ceil(scheduleDay / daysPerWeek) };
+      }),
+      durationLabel: Math.ceil(scheduleDay / daysPerWeek) + " أسبوعًا دراسيًا تقريبًا · " + totalPlannedMinutes + " دقيقة",
+    };
+  }
 
   if (planScope === "annual") {
     const examDeadline = SECOND_YEAR_BAC_EXAM_WINDOW_2026_2027.planningReadyBy;
@@ -1582,10 +1618,11 @@ export async function generatePersonalPlan(
       horizonDays,
       dailyMinutes,
       daysPerWeek,
-      steps: plan.steps,
+      steps: plan.steps.filter(step => step.scheduleState !== "deferred"),
     });
     const adaptiveNote = "هذه خطة للفترة القادمة فقط. ستُعاد مواءمتها عند تغير المهام أو التقدم أو مواعيد الحصص.";
-    const combinedNotes = adaptiveNote + " " + feasibilityNote;
+    const qualityNote = plan.quality?.warnings.join(" ") ?? "";
+    const combinedNotes = [adaptiveNote, feasibilityNote, qualityNote].filter(Boolean).join(" ");
     const retainedSummary = plan.summary
       .slice(0, Math.max(0, 1_500 - combinedNotes.length - 2))
       .trim();

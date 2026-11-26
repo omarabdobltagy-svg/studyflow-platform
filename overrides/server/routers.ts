@@ -77,6 +77,7 @@ import { generatePersonalPlan, getPlanGenerationProgress, markPlanGenerationFail
 import { completeAIActivity, failAIActivity, getAIActivitySnapshot, startAIActivity, updateAIActivity } from "./aiActivity";
 import { classifyTeacherPublicUpdate, isHighConfidenceScheduleAnnouncement, isSecondYearBaccalaureateUpdate, parseYoutubeAtomFeed, scanSelectedTeacherSources, selectedTeacherIds } from "./teacher-content-monitor";
 import { isDailyPlanStale } from "./planLifecycle";
+import { evaluatePlanQuality, schedulePlanSteps } from "./plannerEngine";
 import { createDailyPlanSourceFingerprint } from "./dailyPlanFingerprint";
 import { storageDelete, storagePut } from "./storage";
 import { decodeAndValidateAttachment } from "./attachments";
@@ -2938,12 +2939,21 @@ export const appRouter = router({
             }).optional(),
             printedPageRange: z.tuple([z.number().int().positive().max(5_000), z.number().int().positive().max(5_000)]).optional(),
             sourcePages: z.array(z.number().int().positive().max(5_000)).max(20).optional(),
+            scheduleState: z.enum(["scheduled", "deferred"]).optional(),
+            dayIndex: z.number().int().positive().nullable().optional(),
+            dateOffsetDays: z.number().int().nonnegative().nullable().optional(),
+            scheduleNote: z.string().trim().max(500).optional(),
+            sourceTitle: z.string().trim().max(180).optional(),
+            sourceStepIndex: z.number().int().nonnegative().optional(),
+            segmentIndex: z.number().int().positive().optional(),
+            segmentCount: z.number().int().positive().optional(),
           })).min(1).max(240),
         }),
         schedule: z.object({
           startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
           dailyMinutes: z.number().int().min(20).max(600),
           daysPerWeek: z.union([z.literal(5), z.literal(6), z.literal(7)]).default(6),
+          horizonDays: z.union([z.literal(7), z.literal(14)]).default(7),
         }).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -2963,11 +2973,29 @@ export const appRouter = router({
           return legacyResult;
         }
         const schedule = input.schedule;
+        const scheduleSettings = {
+          dailyMinutes: schedule.dailyMinutes,
+          daysPerWeek: schedule.daysPerWeek,
+          horizonDays: schedule.horizonDays,
+          maxSessionMinutes: Math.min(90, schedule.dailyMinutes),
+        };
+        // Re-run the deterministic scheduler on the reviewed version. Editing a draft
+        // cannot bypass the capacity and session constraints enforced at generation time.
+        const rescheduled = schedulePlanSteps(input.plan.steps, scheduleSettings);
+        const quality = evaluatePlanQuality(rescheduled.steps, scheduleSettings, rescheduled.stats);
+        if (quality.status === "blocked") {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "الخطة تحتوي على تعارضات تمنع اعتمادها: " + quality.blockers.slice(0, 2).join("؛ "),
+          });
+        }
         const approvedPlan = {
           ...input.plan,
-          durationLabel: input.plan.durationLabel || "حتى امتحان نهاية السنة",
+          durationLabel: `${schedule.horizonDays} يومًا · ${rescheduled.stats.studyDaysUsed} أيام دراسة · ${rescheduled.stats.scheduledMinutes} دقيقة مجدولة`
+            + (rescheduled.stats.deferredMinutes ? ` · ${rescheduled.stats.deferredMinutes} دقيقة مؤجلة` : ""),
           habits: input.plan.habits,
-          steps: input.plan.steps.map((step, index) => ({
+          quality,
+          steps: rescheduled.steps.map((step, index) => ({
             ...step,
             day: step.day || `اليوم ${index + 1}`,
             curriculumNodeIds: step.curriculumNodeIds ?? [],
@@ -3011,6 +3039,9 @@ export const appRouter = router({
           title: "خطة المذاكرة",
           taskCount: synced.taskCount,
           planningHorizon: "short_term",
+          qualityScore: quality.score,
+          qualityStatus: quality.status,
+          deferredMinutes: quality.stats.deferredMinutes,
         });
         return {
           parentGoalId: synced.parentGoalId,
