@@ -409,3 +409,58 @@ input:focus-visible, textarea:focus-visible, select:focus-visible,
   .sf-progress-card { border-radius: 20px !important; }
   .sf-capacity-choice { min-height: 88px; }
 }
+
+
+/* Route-level loading is deliberate: it gives each screen a calm, legible entry
+   without making the student wait for every other route's JavaScript. */
+.sf-page-loading {
+  display: grid;
+  min-height: min(66svh, 620px);
+  place-content: center;
+  justify-items: center;
+  gap: 15px;
+  padding: 28px;
+  color: var(--muted-foreground);
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+}
+.sf-page-loading-mark {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--primary) 40%, var(--border));
+  border-radius: 19px;
+  background: color-mix(in srgb, var(--primary) 9%, var(--card));
+  box-shadow: 0 12px 32px -24px var(--primary);
+}
+.sf-page-loading-mark span {
+  width: 17px;
+  height: 17px;
+  border: 2px solid color-mix(in srgb, var(--primary) 28%, transparent);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: sf-route-spin .75s linear infinite;
+}
+.sf-page-loading-track {
+  width: min(190px, 55vw);
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--muted);
+}
+.sf-page-loading-track span {
+  display: block;
+  width: 40%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--primary);
+  animation: sf-route-loading 1.2s ease-in-out infinite alternate;
+}
+@keyframes sf-route-spin { to { transform: rotate(360deg); } }
+@keyframes sf-route-loading { from { transform: translateX(145%); } to { transform: translateX(-145%); } }
+@media (prefers-reduced-motion: reduce) {
+  .sf-page-loading-mark span,
+  .sf-page-loading-track span { animation: none; }
+}
