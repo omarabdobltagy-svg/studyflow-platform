@@ -414,7 +414,7 @@ export default function Study() {
     <DashboardLayout title="المذاكرة والتقدم" description="اختر المادة وحدّد موضعك وموضع شرح المدرس في المنهج.">
       {profile.isError && <div className="rounded-2xl border border-destructive/20 bg-destructive/5 p-4 text-sm">تعذّر تحميل ملفك الدراسي. <button className="font-bold underline" onClick={() => void profile.refetch()}>إعادة المحاولة</button></div>}
       <section className="grid gap-6">
-        <article className="app-card min-w-0 overflow-hidden rounded-2xl">
+        <article className="sf-study-subject-selector app-card min-w-0 overflow-hidden rounded-2xl">
           <header className="border-b border-border/70 bg-gradient-to-l from-secondary/65 to-card p-5">
             <p className="text-[10px] font-bold tracking-[0.12em] text-primary">المادة</p><h2 className="mt-1 text-xl font-bold">اختر المادة</h2>
             <p className="mt-1 text-sm leading-6 text-muted-foreground">كل مواد ملفك ظاهرة، والبحث يساعدك على الوصول للمادة فقط.</p>
@@ -508,7 +508,7 @@ export default function Study() {
               const complete = totalTopics > 0 && completedTopics === totalTopics;
               const percent = totalTopics ? Math.round(completedTopics / totalTopics * 100) : 0;
               return (
-                <article key={unit.unitId} className={"group relative overflow-hidden rounded-2xl border p-4 transition-all duration-300 " + (complete ? "border-primary/30 bg-primary/[0.045]" : "border-border/75 bg-card hover:-translate-y-1 hover:border-primary/35 hover:shadow-xl")}>
+                <article key={unit.unitId} className={"sf-study-unit-card group relative overflow-hidden rounded-2xl border p-4 transition-all duration-300 " + (complete ? "border-primary/30 bg-primary/[0.045]" : "border-border/75 bg-card hover:-translate-y-1 hover:border-primary/35 hover:shadow-xl")}>
                   <div className="pointer-events-none absolute -left-14 -top-14 size-36 rounded-full bg-primary/10 blur-3xl transition-opacity group-hover:opacity-100" />
                   <div className="relative">
                     <div className="flex items-start justify-between gap-2">
