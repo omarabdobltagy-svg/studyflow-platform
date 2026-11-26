@@ -354,6 +354,19 @@ export default function DashboardLayout({ title, description, children, action }
               <Button
                 type="button"
                 variant="outline"
+                size="sm"
+                className="sf-sections-trigger hidden md:inline-flex"
+                onClick={() => setMobileNavOpen(true)}
+                aria-haspopup="dialog"
+                aria-expanded={isMobileNavOpen}
+                aria-label="عرض كل أقسام StudyFlow"
+              >
+                <Menu className="size-4" />
+                <span>كل الأقسام</span>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
                 size="icon"
                 className="sf-theme-button pressable"
                 onClick={toggleTheme}
