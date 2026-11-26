@@ -40,19 +40,19 @@ describe("annual plan curriculum coverage and progress alignment", () => {
         },
         {
           day: "اليوم 1",
-          title: "النعت والبدل",
+          title: "النعت",
           detail: "متابعة شرح المدرس للموضوع.",
           minutes: 45,
           category: "النحو",
-          curriculumNodeIds: ["ARB_U3_N1_NAAT_BADAL"],
+          curriculumNodeIds: ["ARB_U3_N1_NAAT"],
         },
         {
           day: "اليوم 1",
-          title: "التمييز",
+          title: "البدل",
           detail: "متابعة شرح المدرس للموضوع.",
           minutes: 45,
           category: "النحو",
-          curriculumNodeIds: ["ARB_U3_N1_TAMYIZ"],
+          curriculumNodeIds: ["ARB_U3_N1_BADAL"],
         },
       ],
       habits: [],
@@ -62,12 +62,12 @@ describe("annual plan curriculum coverage and progress alignment", () => {
     const covered = applyPlannerCurriculumCoverageGuard(progressGuarded, profile);
     const ranked = applyCurriculumPrioritySignals(covered, profile);
     const grammarIds = ranked.steps.flatMap(step => step.curriculumNodeIds)
-      .filter(id => /^ARB_U[123]_N[123]$/.test(id) || id === "ARB_U3_N1_NAAT_BADAL" || id === "ARB_U3_N1_TAMYIZ");
+      .filter(id => /^ARB_U[123]_N[123]$/.test(id) || id === "ARB_U3_N1_NAAT" || id === "ARB_U3_N1_BADAL");
 
-    expect(grammarIds).toEqual(["ARB_U3_N1_NAAT_BADAL", "ARB_U3_N1_TAMYIZ", "ARB_U3_N2"]);
-    const nextGrammarStep = ranked.steps.find(step => step.curriculumNodeIds.includes("ARB_U3_N1_NAAT_BADAL"));
-    const nextStepIndex = ranked.steps.findIndex(step => step.curriculumNodeIds.includes("ARB_U3_N1_NAAT_BADAL"));
-    const followingGrammarIndex = ranked.steps.findIndex(step => step.curriculumNodeIds.includes("ARB_U3_N1_TAMYIZ"));
+    expect(grammarIds).toEqual(["ARB_U3_N1_NAAT", "ARB_U3_N1_BADAL", "ARB_U3_N2"]);
+    const nextGrammarStep = ranked.steps.find(step => step.curriculumNodeIds.includes("ARB_U3_N1_NAAT"));
+    const nextStepIndex = ranked.steps.findIndex(step => step.curriculumNodeIds.includes("ARB_U3_N1_NAAT"));
+    const followingGrammarIndex = ranked.steps.findIndex(step => step.curriculumNodeIds.includes("ARB_U3_N1_BADAL"));
     expect(nextStepIndex).toBeGreaterThanOrEqual(0);
     expect(nextStepIndex).toBeLessThan(followingGrammarIndex);
     expect(nextGrammarStep?.priorityReason).toContain("الخطوة التالية مباشرة");
