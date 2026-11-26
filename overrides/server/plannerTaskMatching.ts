@@ -18,7 +18,7 @@ export type CompletedPlanStepMatch = {
 };
 
 function normalizeTaskTitle(value: string): string {
-  return value.normalize("NFKC").toLocaleLowerCase("ar").replace(/\\s+/g, " ").trim();
+  return value.normalize("NFKC").toLocaleLowerCase("ar").replace(/\s+/g, " ").trim();
 }
 
 /**

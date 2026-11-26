@@ -120,6 +120,7 @@ export default function Planner() {
   const [approved, setApproved] = useState(false);
   const [loadedSavedDraft, setLoadedSavedDraft] = useState(false);
   const historyInitialized = useRef(false);
+  const plannerPreferencesInitialized = useRef(false);
 
   const history = trpc.plans.list.useQuery();
   const profile = trpc.studentProfile.get.useQuery(undefined, {
@@ -177,11 +178,28 @@ export default function Planner() {
       const isLegacyAnnualPlan = prompt.startsWith(ANNUAL_PLAN_PREFIX)
         || saved?.title.includes("الخطة السنوية")
         || saved?.title.includes("الخطة القديمة");
-      const isOldDailySnapshot = prompt.startsWith(DAILY_SNAPSHOT_PREFIX) && !prompt.startsWith(STUDY_PLAN_PREFIX);
+      const isActiveDailyPlan = prompt.startsWith(DAILY_SNAPSHOT_PREFIX)
+        && /^[a-f0-9]{32}:$/.test(prompt.slice(DAILY_SNAPSHOT_PREFIX.length));
+      const isOldDailySnapshot = prompt.startsWith(DAILY_SNAPSHOT_PREFIX) && !isActiveDailyPlan;
       if (!saved || isLegacyAnnualPlan || isOldDailySnapshot) return [];
-      return [{ id: record.id, createdAt: record.createdAt, plan: saved }];
+      return [{ id: record.id, createdAt: record.createdAt, plan: saved, isActive: isActiveDailyPlan }];
     })
     .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()), [history.data]);
+
+  useEffect(() => {
+    if (profile.isLoading || profile.isError || plannerPreferencesInitialized.current || !profile.data) return;
+    const selection = (profile.data.selection ?? {}) as Record<string, any>;
+    const conditions = (selection.studyConditions ?? {}) as Record<string, unknown>;
+    const configuredMinutes = Number(conditions.dailyMinutes);
+    const configuredDays = Number(conditions.daysPerWeek);
+    if (Number.isFinite(configuredMinutes) && configuredMinutes >= 20 && configuredMinutes <= 600) {
+      setDailyMinutes(Math.trunc(configuredMinutes));
+    }
+    if (configuredDays === 5 || configuredDays === 6 || configuredDays === 7) {
+      setDaysPerWeek(configuredDays);
+    }
+    plannerPreferencesInitialized.current = true;
+  }, [profile.data, profile.isLoading, profile.isError]);
 
   const generate = trpc.plans.generate.useMutation({
     onSuccess: result => {
@@ -276,8 +294,10 @@ export default function Planner() {
     // Open the most recent saved annual draft instead of silently generating
     // and storing another copy every time the student visits this page.
     if (savedPlans.length > 0) {
-      setPlan(savedPlans[0].plan);
-      setLoadedSavedDraft(true);
+      const latest = savedPlans[0];
+      setPlan(latest.plan);
+      setApproved(latest.isActive);
+      setLoadedSavedDraft(!latest.isActive);
     }
   }, [history.isLoading, history.isError, savedPlans]);
 
