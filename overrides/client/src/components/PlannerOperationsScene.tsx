@@ -1,3 +1,4 @@
+// @ts-nocheck -- Three.js has no declaration package in this repository; matches ThreeAmbientScene.tsx.
 import * as THREE from "three";
 import { FormEvent, useCallback, useMemo, useState } from "react";
 import { useLocation } from "wouter";
