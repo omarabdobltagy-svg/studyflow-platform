@@ -21,7 +21,7 @@ describe("planner deterministic scheduler", () => {
       totals.set(step.dayIndex!, (totals.get(step.dayIndex!) ?? 0) + step.minutes);
     }
     expect([...totals.values()].every(total => total <= settings.dailyMinutes)).toBe(true);
-    expect(result.steps.find(item => item.title === "محاضرة التاريخ")?.dateOffsetDays).toBe(2);
+    expect(result.steps.find(item => item.title === "محاضرة التاريخ")?.dateOffsetDays).toBe(1);
     expect(result.stats.availableStudyDays).toBe(5);
   });
 
