@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, like, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, like, lt, lte, or, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { storageDelete } from "./storage";
 import { drizzle } from "drizzle-orm/mysql2";
@@ -14,6 +14,7 @@ import {
   routineItems,
   routines,
   studentActivityEvents,
+  plannerReconciliationJobs,
   studentProfiles,
   studySessions,
   taskChangeLogs,
@@ -1604,6 +1605,105 @@ export async function updateAiPlanPrompt(userId: number, planId: number, prompt:
     .set({ prompt })
     .where(and(eq(aiPlans.id, planId), eq(aiPlans.userId, userId)));
   if (result[0].affectedRows === 0) throw new Error("خطة الدراسة المطلوب تحديثها غير موجودة.");
+}
+
+export async function enqueuePlannerReconciliationJob(input: {
+  userId: number;
+  impact: "local" | "structural";
+  eventType: string;
+}) {
+  const db = await requireDb();
+  const nextRunAt = new Date(Date.now() + 1_500);
+  await db.insert(plannerReconciliationJobs).values({
+    userId: input.userId,
+    impact: input.impact,
+    eventType: input.eventType.slice(0, 80),
+    status: "queued",
+    attempts: 0,
+    revision: 1,
+    nextRunAt,
+    lockedUntil: null,
+    lastError: null,
+  }).onDuplicateKeyUpdate({
+    set: {
+      impact: sql`IF(${plannerReconciliationJobs.impact} = 'structural' OR VALUES(impact) = 'structural', 'structural', 'local')`,
+      eventType: input.eventType.slice(0, 80),
+      status: "queued",
+      revision: sql`${plannerReconciliationJobs.revision} + 1`,
+      nextRunAt,
+      lockedUntil: null,
+      lastError: null,
+    },
+  });
+}
+
+/** Atomically lease due jobs so multiple application replicas cannot run the same event. */
+export async function claimPlannerReconciliationJobs(limit = 3, leaseMs = 8 * 60 * 1_000) {
+  const db = await requireDb();
+  const now = new Date();
+  return db.transaction(async tx => {
+    const due = await tx.select()
+      .from(plannerReconciliationJobs)
+      .where(and(
+        lte(plannerReconciliationJobs.nextRunAt, now),
+        or(
+          eq(plannerReconciliationJobs.status, "queued"),
+          and(
+            eq(plannerReconciliationJobs.status, "running"),
+            lt(plannerReconciliationJobs.lockedUntil, now),
+          ),
+        ),
+      ))
+      .orderBy(asc(plannerReconciliationJobs.nextRunAt), asc(plannerReconciliationJobs.id))
+      .limit(Math.max(1, Math.min(10, Math.trunc(limit))))
+      .for("update");
+
+    const lockedUntil = new Date(now.getTime() + leaseMs);
+    for (const job of due) {
+      await tx.update(plannerReconciliationJobs).set({
+        status: "running",
+        attempts: job.attempts + 1,
+        lockedUntil,
+      }).where(eq(plannerReconciliationJobs.id, job.id));
+    }
+    return due.map(job => ({ ...job, status: "running" as const, attempts: job.attempts + 1, lockedUntil }));
+  });
+}
+
+export async function completePlannerReconciliationJob(jobId: number, revision: number) {
+  const db = await requireDb();
+  const result = await db.update(plannerReconciliationJobs).set({
+    status: "completed",
+    lockedUntil: null,
+    lastError: null,
+  }).where(and(
+    eq(plannerReconciliationJobs.id, jobId),
+    eq(plannerReconciliationJobs.revision, revision),
+    eq(plannerReconciliationJobs.status, "running"),
+  ));
+  return Number(result[0]?.affectedRows ?? 0) > 0;
+}
+
+export async function failPlannerReconciliationJob(input: {
+  jobId: number;
+  revision: number;
+  attempts: number;
+  error: string;
+}) {
+  const db = await requireDb();
+  const delayMs = Math.min(5 * 60 * 1_000, 5_000 * (2 ** Math.max(0, input.attempts - 1)));
+  const terminal = input.attempts >= 5;
+  const result = await db.update(plannerReconciliationJobs).set({
+    status: terminal ? "failed" : "queued",
+    nextRunAt: new Date(Date.now() + delayMs),
+    lockedUntil: null,
+    lastError: input.error.slice(0, 500),
+  }).where(and(
+    eq(plannerReconciliationJobs.id, input.jobId),
+    eq(plannerReconciliationJobs.revision, input.revision),
+    eq(plannerReconciliationJobs.status, "running"),
+  ));
+  return Number(result[0]?.affectedRows ?? 0) > 0;
 }
 
 export async function recordStudentActivityEvent(input: {

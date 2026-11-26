@@ -4,7 +4,7 @@ import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerStorageProxy } from "./storageProxy";
-import { appRouter, ingestYoutubeWebSubFeed } from "../routers";
+import { appRouter, ingestYoutubeWebSubFeed, startPlannerReconciliationWorker } from "../routers";
 import { listStudentTeacherMonitoringProfiles } from "../db";
 import {
   resolveYoutubeWebhookTeacher,
@@ -116,6 +116,7 @@ async function startServer() {
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
   });
+  startPlannerReconciliationWorker();
 
   const syncYoutubeSubscriptions = async () => {
     const publicUrl = process.env.STUDYFLOW_PUBLIC_URL?.trim()

@@ -40,6 +40,10 @@ import {
   getLatestAiPlanByPromptPrefix,
   updateAiPlanPrompt,
   updateAiPlanContent,
+  enqueuePlannerReconciliationJob,
+  claimPlannerReconciliationJobs,
+  completePlannerReconciliationJob,
+  failPlannerReconciliationJob,
   listRecentStudentActivityEvents,
   listStudentTeacherMonitoringProfiles,
   recordStudentActivityEvent,
@@ -108,8 +112,6 @@ const ANNUAL_PLAN_PREFIX = "SIE_ANNUAL_PLAN_V1:"
 const STUDY_PLAN_PREFIX = "SIE_STUDY_PLAN_V2:";
 const dailyPlanLocks = new Map<number, Promise<DailyPlanResult>>();
 const dailyPlanDirtyUsers = new Set<number>();
-const dailyPlanReconcileTimers = new Map<number, ReturnType<typeof setTimeout>>();
-const dailyPlanPendingImpacts = new Map<number, "none" | "local" | "structural">();
 const teacherSourceScanLocks = new Map<number, Promise<boolean>>();
 const TEACHER_SOURCE_SCAN_TRIGGER_COOLDOWN_MS = 60_000;
 const teacherSourceScanLastQueuedAt = new Map<number, number>();
@@ -333,21 +335,9 @@ function queueTeacherSourceScan(userId: number) {
   }
   void scanTeacherSourcesForStudent(userId);
 }
-const dailyPlanAutomaticRetryAt = new Map<number, number>();
-
-function queueDailyPlanEnsure(userId: number, dailyMinutes: number) {
-  if (process.env.NODE_ENV === "test" || dailyPlanLocks.has(userId)) return;
-  const retryAfter = dailyPlanAutomaticRetryAt.get(userId) ?? 0;
-  if (Date.now() < retryAfter) return;
-  const timer = setTimeout(() => {
-    void ensureDailyPlanForStudent(userId, dailyMinutes)
-      .then(() => dailyPlanAutomaticRetryAt.delete(userId))
-      .catch(error => {
-        dailyPlanAutomaticRetryAt.set(userId, Date.now() + 60_000);
-        console.error("[StudyFlow daily plan] Background generation failed:", error instanceof Error ? error.message : String(error));
-      });
-  }, 0);
-  timer.unref?.();
+function queueDailyPlanEnsure(userId: number, _dailyMinutes: number) {
+  if (process.env.NODE_ENV === "test") return;
+  queueDailyPlanReconciliation(userId, "planner.fingerprint.stale", "planner");
 }
 
 async function buildDailyPlanOperationalContext(userId: number) {
@@ -736,22 +726,54 @@ function queueDailyPlanReconciliation(
 ) {
   const impact = classifyPlannerEventImpact(eventType, entityType);
   if (impact === "none" || process.env.NODE_ENV === "test") return;
-  // Coalesce bursts, but keep the strongest impact in the pending run.
-  const existingImpact = (dailyPlanPendingImpacts.get(userId) ?? "none") as ReturnType<typeof classifyPlannerEventImpact>;
-  const combinedImpact = combinePlannerEventImpacts([existingImpact, impact]);
-  dailyPlanPendingImpacts.set(userId, combinedImpact);
-  const existingTimer = dailyPlanReconcileTimers.get(userId);
-  if (existingTimer) clearTimeout(existingTimer);
-  const timer = setTimeout(() => {
-    dailyPlanReconcileTimers.delete(userId);
-    const finalImpact = dailyPlanPendingImpacts.get(userId) ?? combinedImpact;
-    dailyPlanPendingImpacts.delete(userId);
-    void reconcileDailyPlanAfterChange(userId, finalImpact).catch(error => {
-      console.error("[StudyFlow daily plan] Event reconciliation failed:", error instanceof Error ? error.message : String(error));
-    });
-  }, 1_500);
+  void enqueuePlannerReconciliationJob({ userId, impact, eventType }).catch(error => {
+    console.error("[StudyFlow planner queue] Could not persist reconciliation event:", error instanceof Error ? error.message : String(error));
+  });
+}
+
+let plannerReconciliationWorkerStarted = false;
+let plannerReconciliationWorkerRunning = false;
+
+/** Start the durable database-backed planner event worker once per app process. */
+export function startPlannerReconciliationWorker() {
+  if (plannerReconciliationWorkerStarted || process.env.NODE_ENV === "test") return;
+  plannerReconciliationWorkerStarted = true;
+
+  const tick = async () => {
+    if (plannerReconciliationWorkerRunning) return;
+    plannerReconciliationWorkerRunning = true;
+    try {
+      const jobs = await claimPlannerReconciliationJobs(3);
+      for (const job of jobs) {
+        try {
+          await reconcileDailyPlanAfterChange(job.userId, job.impact);
+          await completePlannerReconciliationJob(job.id, job.revision);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          await failPlannerReconciliationJob({
+            jobId: job.id,
+            revision: job.revision,
+            attempts: job.attempts,
+            error: message,
+          });
+          console.error("[StudyFlow planner queue] Reconciliation failed:", {
+            userId: job.userId,
+            eventType: job.eventType,
+            attempts: job.attempts,
+            error: message.slice(0, 300),
+          });
+        }
+      }
+    } catch (error) {
+      console.error("[StudyFlow planner queue] Worker poll failed:", error instanceof Error ? error.message : String(error));
+    } finally {
+      plannerReconciliationWorkerRunning = false;
+    }
+  };
+
+  void tick();
+  const timer = setInterval(() => void tick(), 3_000);
   timer.unref?.();
-  dailyPlanReconcileTimers.set(userId, timer);
 }
 
 const LOCAL_AUTH_OPEN_ID = "studyflow-local-owner";

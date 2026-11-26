@@ -362,6 +362,28 @@ export const studentActivityEvents = mysqlTable(
   ]
 );
 
+export const plannerReconciliationJobs = mysqlTable(
+  "plannerReconciliationJobs",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+    impact: mysqlEnum("impact", ["local", "structural"]).default("structural").notNull(),
+    eventType: varchar("eventType", { length: 80 }).notNull(),
+    status: mysqlEnum("status", ["queued", "running", "completed", "failed"]).default("queued").notNull(),
+    attempts: int("attempts").default(0).notNull(),
+    revision: int("revision").default(1).notNull(),
+    nextRunAt: timestamp("nextRunAt").defaultNow().notNull(),
+    lockedUntil: timestamp("lockedUntil"),
+    lastError: varchar("lastError", { length: 500 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [
+    uniqueIndex("planner_reconcile_user_unique").on(table.userId),
+    index("planner_reconcile_due_idx").on(table.status, table.nextRunAt, table.lockedUntil),
+  ],
+);
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type StudentProfile = typeof studentProfiles.$inferSelect;
