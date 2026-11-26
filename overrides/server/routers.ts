@@ -108,6 +108,8 @@ const dailyPlanLocks = new Map<number, Promise<DailyPlanResult>>();
 const dailyPlanDirtyUsers = new Set<number>();
 const dailyPlanReconcileTimers = new Map<number, ReturnType<typeof setTimeout>>();
 const teacherSourceScanLocks = new Map<number, Promise<boolean>>();
+const TEACHER_SOURCE_SCAN_TRIGGER_COOLDOWN_MS = 60_000;
+const teacherSourceScanLastQueuedAt = new Map<number, number>();
 
 async function getDailyPlanSourceFingerprint(userId: number, dailyMinutes: number, startDate: string) {
   const profile = await getStudentProfile(userId);
@@ -313,6 +315,19 @@ export async function ingestYoutubeWebSubFeed(teacherId: string, xml: string) {
 
 function queueTeacherSourceScan(userId: number) {
   if (process.env.NODE_ENV === "test") return;
+  const now = Date.now();
+  const lastQueuedAt = teacherSourceScanLastQueuedAt.get(userId) ?? 0;
+  if (teacherSourceScanLocks.has(userId)
+    || now - lastQueuedAt < TEACHER_SOURCE_SCAN_TRIGGER_COOLDOWN_MS) return;
+
+  teacherSourceScanLastQueuedAt.set(userId, now);
+  if (teacherSourceScanLastQueuedAt.size > 2_000) {
+    for (const [candidateId, timestamp] of teacherSourceScanLastQueuedAt) {
+      if (now - timestamp > TEACHER_SOURCE_SCAN_TRIGGER_COOLDOWN_MS * 20) {
+        teacherSourceScanLastQueuedAt.delete(candidateId);
+      }
+    }
+  }
   void scanTeacherSourcesForStudent(userId);
 }
 const dailyPlanAutomaticRetryAt = new Map<number, number>();
@@ -584,10 +599,9 @@ async function getCurrentDailyPlanForStudent(userId: number) {
   const conditions = (selection.studyConditions ?? {}) as Record<string, unknown>;
   const dailyMinutes = Math.max(20, Math.min(600, Math.trunc(Number(conditions.dailyMinutes) || 120)));
   const startDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
-  const sourceFingerprint = await getDailyPlanSourceFingerprint(userId, dailyMinutes, startDate);
 
-  // The active plan is the one the student explicitly approved. Older versions stored
-  // approved plans under STUDY_PLAN_PREFIX; only hash-suffixed records are eligible here.
+  // Resolve the active record before building a fingerprint. Students with no
+  // approved plan should not trigger five extra table reads on each Home poll.
   let saved: Awaited<ReturnType<typeof getLatestAiPlanByPromptPrefix>> | null =
     await getLatestAiPlanByPromptPrefix(userId, DAILY_PLAN_PREFIX);
   if (!saved) {
@@ -604,12 +618,13 @@ async function getCurrentDailyPlanForStudent(userId: number) {
       plan: null,
       generatedAt: null,
       needsRefresh: false,
-      sourceFingerprint,
+      sourceFingerprint: null,
       dailyMinutes,
       taskCount: 0,
     };
   }
 
+  const sourceFingerprint = await getDailyPlanSourceFingerprint(userId, dailyMinutes, startDate);
   const generatedAt = new Date(saved.createdAt);
   const hasValidTimestamp = Number.isFinite(generatedAt.getTime());
   let plan: Awaited<ReturnType<typeof generatePersonalPlan>> | null = null;
