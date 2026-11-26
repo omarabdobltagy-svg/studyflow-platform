@@ -40,6 +40,7 @@ import { toast } from "sonner";
 type TeacherChoiceMap = Record<string, string>;
 type TeacherScheduleSlot = { dayOfWeek: number; startTime: string };
 type TeacherScheduleMap = Record<string, TeacherScheduleSlot[]>;
+type TeacherRequirementState = "yes" | "no" | "varies" | "unknown";
 const WEEK_DAYS = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 type FormState = {
   studentName: string;
@@ -54,6 +55,9 @@ type FormState = {
   teacherSchedules: TeacherScheduleMap;
   teacherScheduleUnfixed: Record<string, boolean>;
   teacherAccessRequirements: Record<string, "homework_and_exam" | "homework_only" | "exam_only" | "none" | "unknown">;
+  teacherHomeworkPolicy: Record<string, TeacherRequirementState>;
+  teacherHomeworkRequiredBeforeNextLecture: Record<string, TeacherRequirementState>;
+  teacherPreLectureExamRequired: Record<string, TeacherRequirementState>;
 };
 
 const steps = ["بياناتك", "النظام الدراسي", "المسار", "المواد", "طريقة الدراسة لكل مادة"];
@@ -121,6 +125,9 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
     teacherSchedules: {},
     teacherScheduleUnfixed: {},
     teacherAccessRequirements: {},
+    teacherHomeworkPolicy: {},
+    teacherHomeworkRequiredBeforeNextLecture: {},
+    teacherPreLectureExamRequired: {},
   });
 
   useEffect(() => {
@@ -145,6 +152,9 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
         ? current.teacherScheduleUnfixed
         : Object.fromEntries((saved?.teacherScheduleUnfixedSubjectIds ?? []).map((subjectId: string) => [subjectId, true])),
       teacherAccessRequirements: Object.keys(current.teacherAccessRequirements).length ? current.teacherAccessRequirements : (saved?.teacherAccessRequirements ?? {}),
+      teacherHomeworkPolicy: Object.keys(current.teacherHomeworkPolicy).length ? current.teacherHomeworkPolicy : (saved?.teacherHomeworkPolicy ?? {}),
+      teacherHomeworkRequiredBeforeNextLecture: Object.keys(current.teacherHomeworkRequiredBeforeNextLecture).length ? current.teacherHomeworkRequiredBeforeNextLecture : (saved?.teacherHomeworkRequiredBeforeNextLecture ?? {}),
+      teacherPreLectureExamRequired: Object.keys(current.teacherPreLectureExamRequired).length ? current.teacherPreLectureExamRequired : (saved?.teacherPreLectureExamRequired ?? {}),
     }));
   }, [auth.data, profile.data]);
 
@@ -168,6 +178,36 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
   const currentSetupSubject = selectedSubjects[subjectSetupIndex] ?? selectedSubjects[0];
   const currentSetupSubjectId = currentSetupSubject?.subjectId ?? "";
   const setupTeacherOptions = currentSetupSubjectId && form.systemId ? getSIETeachersForSubject(currentSetupSubjectId, form.systemId) : [];
+  const selectedSetupTeacherId = form.teacherSelections[currentSetupSubjectId] && form.teacherSelections[currentSetupSubjectId] !== SKIP_TEACHER
+    ? form.teacherSelections[currentSetupSubjectId] : "";
+  const teacherFacts = trpc.teacherDirectory.facts.useQuery({
+    teacherId: selectedSetupTeacherId || "__none__",
+    subjectId: currentSetupSubjectId || "__none__",
+    systemId: (form.systemId || "EG_BACCALAUREATE") as "EG_BACCALAUREATE" | "EG_GENERAL_SECONDARY",
+    gradeYear: track?.gradeYear ?? SIE_CATALOG_META.gradeYear,
+  }, {
+    enabled: Boolean(selectedSetupTeacherId && currentSetupSubjectId && form.systemId),
+    refetchInterval: query => query.state.data?.state === "researching" ? 4_000 : false,
+    staleTime: 60_000,
+  });
+
+  useEffect(() => {
+    const result = teacherFacts.data;
+    if (!result || result.state === "insufficient_evidence" || !currentSetupSubjectId) return;
+    setForm(current => {
+      const subjectId = currentSetupSubjectId;
+      const next = { ...current };
+      if (result.state === "verified" && result.facts.availableModes.length === 1 && !current.courseModes[subjectId]) {
+        next.courseModes = { ...current.courseModes, [subjectId]: result.facts.availableModes[0] };
+      }
+      const updateWhenUnknown = (map: Record<string, TeacherRequirementState>, value: TeacherRequirementState) =>
+        (!map[subjectId] || map[subjectId] === "unknown") ? { ...map, [subjectId]: value } : map;
+      next.teacherHomeworkPolicy = updateWhenUnknown(current.teacherHomeworkPolicy, result.facts.homeworkPolicy);
+      next.teacherHomeworkRequiredBeforeNextLecture = updateWhenUnknown(current.teacherHomeworkRequiredBeforeNextLecture, result.facts.homeworkRequiredBeforeNextLecture);
+      next.teacherPreLectureExamRequired = updateWhenUnknown(current.teacherPreLectureExamRequired, result.facts.preLectureExamRequired);
+      return next;
+    });
+  }, [teacherFacts.data, currentSetupSubjectId]);
 
   useEffect(() => {
     if (step !== 3 || firstElectiveGroup.length !== 1) return;
@@ -192,7 +232,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
           : Boolean(currentSetupSubject && form.courseModes[currentSetupSubject.subjectId]
             && (form.teacherScheduleUnfixed[currentSetupSubject.subjectId]
               || (form.teacherSchedules[currentSetupSubject.subjectId] ?? []).length > 0)
-            && Boolean(form.teacherAccessRequirements[currentSetupSubject.subjectId]));
+            );
 
   const next = () => {
     if (!stepValid) {
@@ -220,7 +260,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
     setSubjectSetupIndex(0);
     setForm(current => ({
       ...current, systemId, trackId: "", electiveSubjectId: "", teacherSelections: {}, checkpointSelections: {}, courseModes: {}, customTeacherNames: {}, teacherSchedules: {}, teacherScheduleUnfixed: {},
-      teacherAccessRequirements: {},
+      teacherAccessRequirements: {}, teacherHomeworkPolicy: {}, teacherHomeworkRequiredBeforeNextLecture: {}, teacherPreLectureExamRequired: {},
     }));
   };
 
@@ -276,6 +316,9 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
         .filter(subject => form.teacherScheduleUnfixed[subject.subjectId])
         .map(subject => subject.subjectId),
       teacherAccessRequirements: Object.fromEntries(selectedSubjects.map(subject => [subject.subjectId, form.teacherAccessRequirements[subject.subjectId] ?? "unknown"])),
+      teacherHomeworkPolicy: Object.fromEntries(selectedSubjects.map(subject => [subject.subjectId, form.teacherHomeworkPolicy[subject.subjectId] ?? "unknown"])),
+      teacherHomeworkRequiredBeforeNextLecture: Object.fromEntries(selectedSubjects.map(subject => [subject.subjectId, form.teacherHomeworkRequiredBeforeNextLecture[subject.subjectId] ?? "unknown"])),
+      teacherPreLectureExamRequired: Object.fromEntries(selectedSubjects.map(subject => [subject.subjectId, form.teacherPreLectureExamRequired[subject.subjectId] ?? "unknown"])),
       teacherFrontierReports: {},
     });
   };
@@ -533,25 +576,40 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                   </div>
 
                   <div>
-                    <p className="mb-3 text-sm font-bold">بتدرس المادة دي فين؟</p>
+                    <p className="mb-3 text-sm font-bold">بتتابع المدرس ده إزاي؟</p>
+                    {teacherFacts.data?.state === "verified" && teacherFacts.data.facts.availableModes.length > 0 ? (
+                      <p className="mb-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs leading-6 text-muted-foreground">
+                        تم التحقق من طرق الدراسة المتاحة للمدرس من مصادر عامة. اختار الطريقة اللي أنت مشترك أو بتحضر من خلالها.
+                      </p>
+                    ) : (
+                      <p className="mb-3 rounded-xl border border-border bg-muted/20 p-3 text-xs leading-6 text-muted-foreground">
+                        {teacherFacts.isFetching || teacherFacts.data?.state === "researching"
+                          ? "بنراجع المصادر المتاحة للمدرس في الخلفية. مش محتاج تعمل بحث بنفسك."
+                          : "لسه مفيش دليل كافٍ يؤكد طرق الدراسة المتاحة. اختار الطريقة اللي بتتابع منها، والمعلومة هتفضل غير مؤكدة لحد ما يظهر مصدر موثوق."}
+                      </p>
+                    )}
                     <div className="grid gap-3 sm:grid-cols-2">
-                      <button type="button" aria-pressed={form.courseModes[currentSetupSubjectId] === "center"}
-                        onClick={() => setForm(current => ({ ...current, courseModes: { ...current.courseModes, [currentSetupSubjectId]: "center" } }))}
-                        className={"rounded-2xl border p-5 text-right transition " + (form.courseModes[currentSetupSubjectId] === "center" ? "border-primary bg-secondary/45 ring-1 ring-primary/20" : "border-border bg-card hover:border-primary/40")}>
-                        <span className="block text-lg font-bold">سنتر / مجموعة</span>
-                        <span className="mt-1 block text-xs leading-6 text-muted-foreground">بتحضر شرح المادة مع مدرس في مكان أو مجموعة.</span>
-                      </button>
-                      <button type="button" aria-pressed={form.courseModes[currentSetupSubjectId] === "online"}
-                        onClick={() => setForm(current => ({ ...current, courseModes: { ...current.courseModes, [currentSetupSubjectId]: "online" } }))}
-                        className={"rounded-2xl border p-5 text-right transition " + (form.courseModes[currentSetupSubjectId] === "online" ? "border-primary bg-secondary/45 ring-1 ring-primary/20" : "border-border bg-card hover:border-primary/40")}>
-                        <span className="block text-lg font-bold">أونلاين</span>
-                        <span className="mt-1 block text-xs leading-6 text-muted-foreground">بتتابع الشرح من منصة أو فيديوهات على الإنترنت.</span>
-                      </button>
+                      {(["center", "online"] as const)
+                        .filter(mode => teacherFacts.data?.state !== "verified" || teacherFacts.data.facts.availableModes.length === 0 || teacherFacts.data.facts.availableModes.includes(mode))
+                        .map(mode => (
+                          <button key={mode} type="button" aria-pressed={form.courseModes[currentSetupSubjectId] === mode}
+                            onClick={() => setForm(current => ({ ...current, courseModes: { ...current.courseModes, [currentSetupSubjectId]: mode } }))}
+                            className={"rounded-2xl border p-5 text-right transition " + (form.courseModes[currentSetupSubjectId] === mode ? "border-primary bg-secondary/45 ring-1 ring-primary/20" : "border-border bg-card hover:border-primary/40")}>
+                            <span className="block text-lg font-bold">{mode === "center" ? "سنتر / مجموعة حضورية" : "أونلاين"}</span>
+                            <span className="mt-1 block text-xs leading-6 text-muted-foreground">{mode === "center" ? "بتحضر شرح المادة مع المدرس في مكان أو مجموعة." : "بتتابع الكورس أو المحاضرات من منصة أو بث أونلاين."}</span>
+                          </button>
+                        ))}
                     </div>
+                    {!form.courseModes[currentSetupSubjectId] && (
+                      <p className="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/5 p-3 text-sm text-muted-foreground">حدد طريقة متابعتك للمادة لاستكمال الإعداد.</p>
+                    )}
+                    {teacherFacts.data?.facts.evidence?.length ? (
+                      <details className="mt-3 text-[11px] text-muted-foreground">
+                        <summary className="cursor-pointer">المصادر التي اعتمدنا عليها</summary>
+                        <ul className="mt-2 space-y-1">{teacherFacts.data.facts.evidence.slice(0, 4).map((source, index) => <li key={index}><a href={source.url} target="_blank" rel="noreferrer" className="text-primary underline">{source.title}</a></li>)}</ul>
+                      </details>
+                    ) : null}
                   </div>
-                  {!form.courseModes[currentSetupSubjectId] && (
-                    <p className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-3 text-sm text-muted-foreground">حدد طريقة دراسة المادة لاستكمال الإعداد.</p>
-                  )}
 
                   <section className="rounded-2xl border border-border/70 bg-muted/10 p-4 sm:p-5">
                     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -643,18 +701,46 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                     <p className="mt-3 text-[10px] leading-5 text-muted-foreground">المواعيد هنا أسبوعية ومتكررة. لو المحاضرة لها موعد استثنائي أو اتلغت، متابعة الإعلانات العامة ستتعامل معه بشكل منفصل.</p>
                   </section>
                   <section className="rounded-2xl border border-primary/20 bg-primary/[.035] p-4 sm:p-5">
-                    <p className="text-sm font-bold">إيه شرط المدرس قبل ما تدخل المحاضرة التالية؟</p>
-                    <p className="mt-1 text-xs leading-6 text-muted-foreground">اختار النظام اللي المدرس بيطبّقه في مادة {currentSetupSubject.nameAr}. هنستخدم المعلومة في ترتيب مهامك، ومش هنفترض إنك خلّصت واجب أو امتحان من غير تأكيد منك.</p>
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                      {([
-                        ["homework_and_exam", "واجب وامتحان"], ["homework_only", "واجب بس"], ["exam_only", "امتحان بس"], ["none", "مفيش شرط"], ["unknown", "مش عارف / مش ثابت"],
-                      ] as const).map(([value,label]) => {
-                        const selected=form.teacherAccessRequirements[currentSetupSubjectId]===value;
-                        return <button key={value} type="button" aria-pressed={selected}
-                          onClick={() => setForm(current=>({...current,teacherAccessRequirements:{...current.teacherAccessRequirements,[currentSetupSubjectId]:value}}))}
-                          className={"rounded-xl border px-4 py-3 text-right text-sm font-semibold transition "+(selected?"border-primary bg-primary/10 text-primary ring-1 ring-primary/20":"border-border bg-card hover:border-primary/35")}>{label}</button>;
-                      })}
-                    </div>
+                    <p className="text-sm font-bold">نظام الواجب والامتحان عند المدرس</p>
+                    <p className="mt-1 text-xs leading-6 text-muted-foreground">دي 3 معلومات منفصلة. هنستخدم بيانات المدرس الموثقة أولًا، وتقدر تصححها حسب اللي بيحصل معاكم في المادة.</p>
+                    {teacherFacts.data?.state === "verified" && (
+                      <p className="mt-2 text-[11px] text-emerald-700">تم جلب بيانات محفوظة للمدرس؛ أي معلومة غير مؤكدة ستظل ظاهرة كغير معروفة.</p>
+                    )}
+                    {([
+                      {
+                        key: "teacherHomeworkPolicy",
+                        title: "هل المدرس بيحدد واجب على المحاضرات؟",
+                        description: "المقصود وجود واجب من المدرس، مش هل حله إجباري.",
+                      },
+                      {
+                        key: "teacherHomeworkRequiredBeforeNextLecture",
+                        title: "هل حل الواجب شرط قبل المحاضرة التالية؟",
+                        description: "ممكن يكون فيه واجب، لكنه مش شرط لدخول المحاضرة اللي بعدها.",
+                      },
+                      {
+                        key: "teacherPreLectureExamRequired",
+                        title: "هل فيه امتحان إلزامي قبل المحاضرة التالية؟",
+                        description: "امتحان يحدده المدرس ويشترط أداءه قبل الحصة القادمة.",
+                      },
+                    ] as const).map(field => (
+                      <div key={field.key} className="mt-4 border-t border-border/60 pt-4">
+                        <p className="text-xs font-bold">{field.title}</p>
+                        <p className="mt-1 text-[11px] leading-5 text-muted-foreground">{field.description}</p>
+                        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                          {([
+                            ["yes", "نعم"],
+                            ["no", "لا"],
+                            ["varies", "حسب المحاضرة"],
+                            ["unknown", "مش متأكد"],
+                          ] as const).map(([value, label]) => {
+                            const selected = form[field.key][currentSetupSubjectId] === value;
+                            return <button key={value} type="button" aria-pressed={selected}
+                              onClick={() => setForm(current => ({ ...current, [field.key]: { ...current[field.key], [currentSetupSubjectId]: value } }))}
+                              className={"rounded-lg border px-2.5 py-2 text-xs font-semibold transition " + (selected ? "border-primary bg-primary/10 text-primary ring-1 ring-primary/20" : "border-border bg-card hover:border-primary/35")}>{label}</button>;
+                          })}
+                        </div>
+                      </div>
+                    ))}
                   </section>
 
                 </div>
