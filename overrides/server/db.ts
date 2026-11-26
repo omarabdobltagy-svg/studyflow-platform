@@ -771,11 +771,11 @@ export async function approvePlanAsGoalTree(
         userId,
         goalId: stageGoalId,
         title: step.title,
-        notes: step.detail || `مهمة من خطة «${plan.title.trim()}».`,
+        notes: [step.detail || `مهمة من خطة «${plan.title.trim()}».`, ...(step.studyMethod ? [formatStudyMethodNotes(step.studyMethod)] : [])].filter(Boolean).join("\n\n"),
         category: step.category,
         priority: step.priority === "critical" || step.priority === "high" ? "high" as const
           : step.priority === "low" ? "low" as const : "medium" as const,
-        estimatedMinutes: null,
+        estimatedMinutes: step.minutes,
         dueAt: dueDates[index] ?? null,
       });
     }
