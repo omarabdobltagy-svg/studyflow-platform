@@ -68,6 +68,7 @@ function withoutSubject<T>(map: Record<string, T>, subjectId: string): Record<st
 function resetTeacherSpecificChoices(current: FormState, subjectId: string): FormState {
   return {
     ...current,
+    checkpointSelections: withoutSubject(current.checkpointSelections, subjectId),
     courseModes: withoutSubject(current.courseModes, subjectId),
     teacherSchedules: withoutSubject(current.teacherSchedules, subjectId),
     teacherScheduleUnfixed: withoutSubject(current.teacherScheduleUnfixed, subjectId),
@@ -337,7 +338,11 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
       teacherHomeworkPolicy: Object.fromEntries(selectedSubjects.map(subject => [subject.subjectId, form.teacherHomeworkPolicy[subject.subjectId] ?? "unknown"])),
       teacherHomeworkRequiredBeforeNextLecture: Object.fromEntries(selectedSubjects.map(subject => [subject.subjectId, form.teacherHomeworkRequiredBeforeNextLecture[subject.subjectId] ?? "unknown"])),
       teacherPreLectureExamRequired: Object.fromEntries(selectedSubjects.map(subject => [subject.subjectId, form.teacherPreLectureExamRequired[subject.subjectId] ?? "unknown"])),
-      teacherFrontierReports: {},
+      teacherFrontierReports: Object.fromEntries(
+        selectedSubjects
+          .map(subject => [subject.subjectId, form.checkpointSelections[subject.subjectId] ?? ""] as const)
+          .filter(([, report]) => Boolean(report)),
+      ),
     });
   };
 
@@ -718,7 +723,34 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                     </div>
                     <p className="mt-3 text-[10px] leading-5 text-muted-foreground">المواعيد هنا أسبوعية ومتكررة. لو المحاضرة لها موعد استثنائي أو اتلغت، متابعة الإعلانات العامة ستتعامل معه بشكل منفصل.</p>
                   </section>
-                  <section className="rounded-2xl border border-primary/20 bg-primary/[.035] p-4 sm:p-5">
+                  <details className="rounded-2xl border border-border/70 bg-card p-4 sm:p-5">
+                     <summary className="cursor-pointer text-sm font-bold">حدد نقطة بدايتك في المادة (اختياري)</summary>
+                     <p className="mt-2 text-xs leading-6 text-muted-foreground">لو عارف آخر موضوع أنهيته بالفعل، سجّله هنا عشان الخطة تبدأ من مكانك بدل ما تفترض إنك بتبدأ من الصفر. مش مطلوب منك تخمّن؛ تقدر تأجل تحديده لصفحة المذاكرة.</p>
+                     {selectedSetupTeacherId ? (
+                       <label className="mt-3 block text-xs font-semibold">
+                         آخر موضوع أنهيته مع المدرس
+                         <select
+                           value={form.checkpointSelections[currentSetupSubjectId] ?? ""}
+                           onChange={event => setForm(current => ({
+                             ...current,
+                             checkpointSelections: { ...current.checkpointSelections, [currentSetupSubjectId]: event.target.value },
+                           }))}
+                           className="mt-2 h-11 w-full rounded-xl border border-border bg-background px-3 text-sm font-normal"
+                         >
+                           <option value="">هحدده بعد الإعداد</option>
+                           <option value="__NOT_STARTED__">لسه مبدأتش المادة مع المدرس</option>
+                           <option value="__UNKNOWN__">مش متأكد وصلت لفين</option>
+                           {getSIECheckpointChoices(currentSetupSubjectId).map(choice => (
+                             <option key={choice.nodeId} value={choice.nodeId}>{choice.title}</option>
+                           ))}
+                         </select>
+                       </label>
+                     ) : (
+                       <p className="mt-3 rounded-xl bg-muted/30 p-3 text-xs leading-6 text-muted-foreground">اختيار المدرس من القائمة مطلوب لتسجيل نقطة البداية هنا. تقدر تسجلها لاحقًا من صفحة المذاكرة حتى لو لسه ما اخترتش مدرسًا.</p>
+                     )}
+                   </details>
+
+                   <section className="rounded-2xl border border-primary/20 bg-primary/[.035] p-4 sm:p-5">
                     <p className="text-sm font-bold">نظام الواجب والامتحان عند المدرس</p>
                     <p className="mt-1 text-xs leading-6 text-muted-foreground">دي 3 معلومات منفصلة. هنستخدم بيانات المدرس الموثقة أولًا، وتقدر تصححها حسب اللي بيحصل معاكم في المادة.</p>
                     {teacherFacts.data?.state === "verified" && (
