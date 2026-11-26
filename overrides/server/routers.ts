@@ -82,6 +82,7 @@ import { generatePersonalPlan, getPlanGenerationProgress, markPlanGenerationFail
 import { completeAIActivity, failAIActivity, getAIActivitySnapshot, startAIActivity, updateAIActivity } from "./aiActivity";
 import { classifyTeacherPublicUpdate, isHighConfidenceScheduleAnnouncement, isSecondYearBaccalaureateUpdate, parseYoutubeAtomFeed, scanSelectedTeacherSources, selectedTeacherIds } from "./teacher-content-monitor";
 import { isDailyPlanStale } from "./planLifecycle";
+import { buildPlannerMemorySnapshot, formatPlannerMemorySnapshot } from "./plannerMemory";
 import { classifyPlannerEventImpact, combinePlannerEventImpacts, evaluatePlanQuality, schedulePlanSteps } from "./plannerEngine";
 import { createDailyPlanSourceFingerprint } from "./dailyPlanFingerprint";
 import { storageDelete, storagePut } from "./storage";
@@ -341,13 +342,15 @@ function queueDailyPlanEnsure(userId: number, _dailyMinutes: number) {
 }
 
 async function buildDailyPlanOperationalContext(userId: number) {
-  const [tasks, goals, calendar, books, profile] = await Promise.all([
+  const [tasks, goals, calendar, books, routines, profile] = await Promise.all([
     listTasks(userId),
     listGoals(userId),
     listCalendarEvents(userId, "Africa/Cairo"),
     listBooks(userId),
+    listRoutines(userId, "Africa/Cairo"),
     getStudentProfile(userId),
   ]);
+  const memorySnapshot = buildPlannerMemorySnapshot({ profile, tasks, goals, calendar, routines, books });
   const subjectIds = profile?.subjectIds ?? [];
   const now = new Date();
   const horizon = now.getTime() + 14 * 24 * 60 * 60 * 1_000;
@@ -426,7 +429,7 @@ async function buildDailyPlanOperationalContext(userId: number) {
   const availableBooks = books
     .slice(0, 12)
     .map(book => book.title);
-  return [
+  const readableContext = [
     "المهام المفتوحة ذات الأولوية والمواعيد (هذه التزامات وليست دليلًا على اكتمال الموضوع):",
     openTasks.length ? openTasks.join("\n") : "لا توجد مهام مفتوحة محفوظة.",
     "مهام منتهية حديثًا (لا تعتبرها وحدها دليلًا على إكمال الدرس في سجل تقدم المنهج):",
@@ -439,7 +442,11 @@ async function buildDailyPlanOperationalContext(userId: number) {
     activeGoals.length ? activeGoals.join("\n") : "لا توجد أهداف نشطة محفوظة.",
     "الكتب والموارد المتاحة:",
     availableBooks.length ? availableBooks.join("، ") : "لا توجد كتب محفوظة.",
-  ].join("\n").slice(0, 2_350);
+  ].join("\n").slice(0, 3_800);
+  return {
+    text: readableContext + "\n\nذاكرة الطالب المنظمة مع المصدر ودرجة الثقة لكل معلومة:\n" + formatPlannerMemorySnapshot(memorySnapshot),
+    memorySnapshot,
+  };
 }
 
 async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): Promise<DailyPlanResult> {
@@ -510,6 +517,7 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): 
       }
     }
 
+    const operationalContext = await buildDailyPlanOperationalContext(userId);
     updateAIActivity(userId, activityId, "إعادة تحليل الخطة", "تم رصد تغيير يحتاج إلى مواءمة؛ يجمع الآن الأولويات والفجوات والوقت المتاح.");
     const dailyPrompt = DAILY_PLAN_DRAFT_PREFIX + sourceFingerprint + ": حلّل ملفي الدراسي كاملًا وحدد أهم ما يجب أن أذاكره الآن. أنشئ خطة يومية واقعية تبدأ اليوم، وتعالج التراكم حسب أولوية المنهج وصعوبة كل درس وحجمه والوقت المتاح.";
     const plan = await generatePersonalPlan(
@@ -525,7 +533,8 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): 
         startDate,
         existingCurriculumTasks,
         activityId,
-        context: "هذه خطة المذاكرة الذكية الافتراضية للفترة القادمة. وازن بين المهام المتراكمة المفتوحة وبين التحضير للموضوع التالي قبل حصة المدرس. اقرأ مواعيد الحصص ومهام الطالب ومواضع التقدم. لا تطلب من الطالب إعادة إدخال معلومة موجودة. لا تغيّر موضع المنهج بسبب وجود مهمة. أعد ترتيب الخطة عند تغير المصادر، ولا تكرر مهمة موجودة لنفس الموضوع. اجعل أول خطوة واضحة وقابلة للبدء فورًا.\n\n" + await buildDailyPlanOperationalContext(userId),
+        memorySnapshot: operationalContext.memorySnapshot,
+        context: "هذه خطة المذاكرة الذكية الافتراضية للفترة القادمة. وازن بين المهام المتراكمة المفتوحة وبين التحضير للموضوع التالي قبل حصة المدرس. اقرأ مواعيد الحصص ومهام الطالب ومواضع التقدم. لا تطلب من الطالب إعادة إدخال معلومة موجودة. لا تغيّر موضع المنهج بسبب وجود مهمة. أعد ترتيب الخطة عند تغير المصادر، ولا تكرر مهمة موجودة لنفس الموضوع. اجعل أول خطوة واضحة وقابلة للبدء فورًا.\n\n" + operationalContext.text,
       },
     );
     updateAIActivity(userId, activityId, "مزامنة المهام", "يربط خطوات الخطة بالمهام الحالية ويحافظ على المهام المكتملة بدل تكرارها.");
@@ -2966,10 +2975,11 @@ export const appRouter = router({
               pace: input.pace,
               paceLevel: input.paceLevel as 1 | 2 | 3,
               deadline: input.deadline,
+              memorySnapshot: currentOperationalContext.memorySnapshot,
               context: "هذه خطة تشغيلية قصيرة المدى وليست الخطة السنوية أو مجرد متراكمات. نمط الطالب: "
                 + (input.planningMode === "backlog" ? "المتراكم أولًا" : input.planningMode === "teacher_sync" ? "مواكبة حصص المدرسين" : "ذكي متوازن")
                 + "، والأفق " + input.horizonDays + " يومًا. ادمج المهام الحالية، اقرأ مواعيد الحصص، ولا تعتبر المهمة دليلًا على اكتمال الدرس. لا تنشئ مهمة ثانية لنفس الموضوع إذا كانت له مهمة مطابقة.\n\n"
-                + currentOperationalContext,
+                + currentOperationalContext.text,
               existingCurriculumTasks,
               activityId,
             },

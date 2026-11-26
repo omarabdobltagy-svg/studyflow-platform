@@ -201,6 +201,7 @@ const planSchema = z.object({
       maxSessionMinutes: z.number().int().positive(),
     }),
   }).optional(),
+  memorySnapshot: z.any().optional(),
   habits: z.array(z.object({ title: z.string().trim().min(2).max(160), cue: z.string().trim().min(2).max(240) })).max(5).default([]),
 });
 
@@ -1260,6 +1261,7 @@ export async function generatePersonalPlan(
     paceLevel?: 1 | 2 | 3;
     deadline?: string | null;
     activityId?: string;
+    memorySnapshot?: Record<string, unknown>;
   } = {}
 ): Promise<GeneratedPlan> {
   const dailyMinutes = Math.max(20, Math.min(600, Math.trunc(constraints.dailyMinutes ?? 120)));
@@ -1295,7 +1297,7 @@ export async function generatePersonalPlan(
   const paceLevelLabel = paceLevelLabels[selectedPace][paceLevel - 1];
   const paceLevelInstruction = paceLevelGuidance[selectedPace][paceLevel - 1];
   updatePlanGenerationProgress(userId, "profile", undefined, undefined, constraints.activityId);
-  const additionalContext = String(constraints.context ?? "").trim().slice(0, 3_000);
+  const additionalContext = String(constraints.context ?? "").trim().slice(0, 10_000);
   const loadedProfile = includeStudentProfile ? await getStudentProfile(userId) : null;
   const partOneSubjectIds = new Set(["ARB_G2_BAC", "ENG1_G2_BAC", "HIS_G2_BAC", "PROG_AI_G2_BAC"]);
   const profile = loadedProfile
@@ -1633,6 +1635,7 @@ export async function generatePersonalPlan(
       summary: (retainedSummary + "\n\n" + combinedNotes).slice(0, 1_500),
     };
   }
+  if (constraints.memorySnapshot) plan = { ...plan, memorySnapshot: constraints.memorySnapshot };
   updatePlanGenerationProgress(userId, "saving", undefined, undefined, constraints.activityId);
   await saveAiPlan(userId, { prompt, title: plan.title, planJson: JSON.stringify(plan) });
   updatePlanGenerationProgress(userId, "complete", undefined, undefined, constraints.activityId);

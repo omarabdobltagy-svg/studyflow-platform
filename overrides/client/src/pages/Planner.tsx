@@ -90,6 +90,7 @@ type PlanView = {
   steps: PlanStep[];
   habits: { title: string; cue: string }[];
   quality?: PlanQuality;
+  memorySnapshot?: Record<string, any>;
   // Export component compatibility only; deliberately blank so no AI self-test is created.
   reviewQuestion: string;
   taskSync?: { parentGoalId: number; stageCount: number; taskCount: number; routineId?: number | null };
@@ -131,6 +132,7 @@ function parseSavedPlan(record: { planJson: string }): PlanView | null {
       })),
       habits: Array.isArray(saved.habits) ? saved.habits : [],
       quality: saved.quality,
+      memorySnapshot: saved.memorySnapshot,
       reviewQuestion: "",
     };
   } catch {
