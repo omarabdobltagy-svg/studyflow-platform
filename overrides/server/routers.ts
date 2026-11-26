@@ -74,6 +74,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { generatePersonalPlan, getPlanGenerationProgress, markPlanGenerationFailed } from "./planGenerator";
+import { completeAIActivity, failAIActivity, getAIActivitySnapshot, startAIActivity, updateAIActivity } from "./aiActivity";
 import { classifyTeacherPublicUpdate, isHighConfidenceScheduleAnnouncement, isSecondYearBaccalaureateUpdate, parseYoutubeAtomFeed, scanSelectedTeacherSources, selectedTeacherIds } from "./teacher-content-monitor";
 import { isDailyPlanStale } from "./planLifecycle";
 import { createDailyPlanSourceFingerprint } from "./dailyPlanFingerprint";
@@ -436,9 +437,17 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): 
   const running = dailyPlanLocks.get(userId);
   if (running) return running;
 
+  const activityId = startAIActivity(userId, {
+    kind: "daily_plan",
+    title: "إعادة ترتيب خطة المذاكرة",
+    stage: "فحص التغييرات",
+    detail: "يراجع تحديثات المدرسين وموضعك الدراسي قبل اتخاذ قرار بإعادة بناء الخطة.",
+  });
   const task = (async (): Promise<DailyPlanResult> => {
-    await scanTeacherSourcesForStudent(userId);
-    const profile = await getStudentProfile(userId);
+    try {
+      await scanTeacherSourcesForStudent(userId);
+      updateAIActivity(userId, activityId, "تجميع سياق الدراسة", "يجمع ملفك والمهام الحالية والتقدم المسجل.");
+      const profile = await getStudentProfile(userId);
     if (!profile || !Array.isArray(profile.subjectIds) || profile.subjectIds.length === 0) {
       throw new TRPCError({
         code: "PRECONDITION_FAILED",
@@ -464,11 +473,13 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): 
       ? new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date(latestDailyPlan.createdAt))
       : null;
 
+    updateAIActivity(userId, activityId, "مقارنة الخطة الحالية", "يقارن بصمة بياناتك بالخطة المحفوظة لتحديد هل يلزم إعادة بنائها.");
     if (latestDailyPlan && latestDailyPlan.prompt.startsWith(expectedPromptPrefix)
       && latestPlanDay === startDate && !isDailyPlanStale(latestDailyPlan.createdAt)) {
       try {
         const saved = JSON.parse(latestDailyPlan.planJson) as Awaited<ReturnType<typeof generatePersonalPlan>>;
         if (saved && typeof saved.title === "string" && Array.isArray(saved.steps) && saved.steps.length > 0) {
+          completeAIActivity(userId, activityId, "البيانات لم تتغير؛ الخطة الحالية ما زالت متوافقة ولا تحتاج إلى إعادة بناء.");
           return {
             plan: saved,
             generatedAt: new Date(latestDailyPlan.createdAt),
@@ -484,6 +495,7 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): 
       }
     }
 
+    updateAIActivity(userId, activityId, "إعادة تحليل الخطة", "تم رصد تغيير يحتاج إلى مواءمة؛ يجمع الآن الأولويات والفجوات والوقت المتاح.");
     const dailyPrompt = DAILY_PLAN_PREFIX + sourceFingerprint + ": حلّل ملفي الدراسي كاملًا وحدد أهم ما يجب أن أذاكره الآن. أنشئ خطة يومية واقعية تبدأ اليوم، وتعالج التراكم حسب أولوية المنهج وصعوبة كل درس وحجمه والوقت المتاح.";
     const plan = await generatePersonalPlan(
       userId,
@@ -497,9 +509,11 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): 
         daysPerWeek: 6,
         startDate,
         existingCurriculumTasks,
+        activityId,
         context: "هذه خطة المذاكرة الذكية الافتراضية للفترة القادمة. وازن بين المهام المتراكمة المفتوحة وبين التحضير للموضوع التالي قبل حصة المدرس. اقرأ مواعيد الحصص ومهام الطالب ومواضع التقدم. لا تطلب من الطالب إعادة إدخال معلومة موجودة. لا تغيّر موضع المنهج بسبب وجود مهمة. أعد ترتيب الخطة عند تغير المصادر، ولا تكرر مهمة موجودة لنفس الموضوع. اجعل أول خطوة واضحة وقابلة للبدء فورًا.\n\n" + await buildDailyPlanOperationalContext(userId),
       },
     );
+    updateAIActivity(userId, activityId, "مزامنة المهام", "يربط خطوات الخطة بالمهام الحالية ويحافظ على المهام المكتملة بدل تكرارها.");
     const taskSync = await syncDailyPlanGoalTree(userId, plan, { startDate, dailyMinutes }, {
       goalTitle: "خطة StudyFlow اليومية",
       goalCategory: "خطة يومية",
@@ -510,6 +524,7 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): 
     if (latestGeneratedPlan) {
       await updateAiPlanPrompt(userId, latestGeneratedPlan.id, DAILY_PLAN_PREFIX + refreshedFingerprint + ":");
     }
+    completeAIActivity(userId, activityId, "اكتملت إعادة ترتيب الخطة ومزامنة المهام.");
     return {
       plan,
       generatedAt: new Date(),
@@ -519,6 +534,10 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): 
       preservedCompletedTaskCount: taskSync.preservedCompletedTaskCount,
       taskCount: taskSync.taskCount,
     };
+    } catch (error) {
+      failAIActivity(userId, activityId, "تعذّر إكمال إعادة ترتيب خطة اليوم. لم يتم إعلان نتيجة غير مؤكدة.");
+      throw error;
+    }
   })();
 
   dailyPlanLocks.set(userId, task);
@@ -1386,6 +1405,7 @@ export const appRouter = router({
   }),
 
   ai: router({
+    activity: protectedProcedure.query(({ ctx }) => getAIActivitySnapshot(ctx.user.id)),
     chat: protectedProcedure
       .input(z.object({
         messages: z.array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().trim().min(1).max(6_000) })).min(1).max(20),
@@ -2744,8 +2764,15 @@ export const appRouter = router({
         if (input.deadline && input.deadline > "2027-06-11") {
           throw new TRPCError({ code: "BAD_REQUEST", message: "الموعد الشخصي يجب أن يكون في أو قبل هدف الجاهزية 11 يونيو 2027." });
         }
+        const activityId = startAIActivity(ctx.user.id, {
+          kind: "planner",
+          title: "إنشاء مسودة خطة مذاكرة",
+          stage: "فحص التحديثات",
+          detail: "يراجع آخر موضع للطالب والمدرس ومصادر المتابعة قبل بناء الخطة.",
+        });
         try {
           await scanTeacherSourcesForStudent(ctx.user.id);
+          updateAIActivity(ctx.user.id, activityId, "جمع البيانات التشغيلية", "يجمع المهام الحالية وظروف الدراسة والسياق اليومي.");
           const [currentTasks, currentOperationalContext] = await Promise.all([
             listTasks(ctx.user.id),
             buildDailyPlanOperationalContext(ctx.user.id),
@@ -2784,6 +2811,7 @@ export const appRouter = router({
                 + "، والأفق " + input.horizonDays + " يومًا. ادمج المهام الحالية، اقرأ مواعيد الحصص، ولا تعتبر المهمة دليلًا على اكتمال الدرس. لا تنشئ مهمة ثانية لنفس الموضوع إذا كانت له مهمة مطابقة.\n\n"
                 + currentOperationalContext,
               existingCurriculumTasks,
+              activityId,
             },
           );
           await logStudentActivity(ctx.user.id, "plan.draft_generated", "ai_plan", null, "أنشأ المخطط الذكي مسودة للمراجعة قبل الاعتماد", {
@@ -2795,9 +2823,11 @@ export const appRouter = router({
             daysPerWeek: input.daysPerWeek,
           });
           // A draft is stored as an AI plan, but does not change the task list.
+          completeAIActivity(ctx.user.id, activityId, "اكتملت المسودة وحُفظت للمراجعة؛ لم تُضف مهام إلى قائمتك بعد.");
           return result;
         } catch (error) {
           markPlanGenerationFailed(ctx.user.id);
+          failAIActivity(ctx.user.id, activityId, "تعذّر إنشاء مسودة الخطة. لم يتم اعتماد خطة ناقصة.");
           throw error;
         }
       }),
