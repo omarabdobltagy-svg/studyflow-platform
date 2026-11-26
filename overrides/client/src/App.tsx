@@ -1,5 +1,6 @@
 import { Toaster } from "@/components/ui/sonner";
 import WorkspaceInteractionHub from "@/components/WorkspaceInteractionHub";
+import AIActivityCenter from "@/components/AIActivityCenter";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Books from "@/pages/Books";
 import Calendar from "@/pages/Calendar";
@@ -57,6 +58,7 @@ function App() {
             <Router />
             {/* Keep the global tools layer above routed page surfaces. */}
             <WorkspaceInteractionHub />
+            <AIActivityCenter />
           </WouterRouter>
         </TooltipProvider>
       </ThemeProvider>
