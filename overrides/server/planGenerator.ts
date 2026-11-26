@@ -8,7 +8,6 @@ import { getStudentProfile, saveAiPlan } from "./db";
 import { formatTextbookEvidence, getCurriculumBranchPriorityGuidance, orderPlanStepsByCurriculumDependencies, retrieveTextbookEvidence } from "./textbook-retrieval";
 import { buildExamBlueprintContext, SECOND_YEAR_BAC_EXAM_WINDOW_2026_2027 } from "./exam-blueprints";
 import { isHighConfidenceScheduleAnnouncement, isSecondYearBaccalaureateProfile, isSecondYearBaccalaureateUpdate, selectedTeacherIds } from "./teacher-content-monitor";
-import { evaluatePlanQuality, schedulePlanSteps } from "./plannerEngine";
 
 
 export type PlanGenerationStage = "profile" | "curriculum" | "model" | "validation" | "saving" | "complete";
@@ -1376,6 +1375,7 @@ export async function generatePersonalPlan(
     planScope === "daily"
       ? "نطاق هذه الخطة تشغيل قصير الأمد لمدة " + horizonDays + " أيام. نمط التخطيط المختار: " + (planningMode === "backlog" ? "المتراكم أولًا فقط" : planningMode === "teacher_sync" ? "مواكبة حصص المدرسين" : "ذكي متوازن: إنهاء الالتزامات الحالية مع الاستعداد للحصة القادمة") + ". أخرج خطوات قليلة قابلة للتنفيذ، ولا تعرض اسمها كخطة سنوية."
       : "نطاق هذه الخطة سنوي قديم للتوافق مع المسودات السابقة فقط.",
+    "قاعدة نهائية: الخطة اليومية قائمة مهام وليست جدولًا زمنيًا. لا تضع ساعات أو دقائق أو مددًا للمحاضرات أو المهام، ولا تقسّم المهمة إلى جلسات أو أيام أو تواريخ. قيمة الوقت المتاح التي يختارها الطالب تعبّر عن انشغاله وسعته العامة فقط؛ ساعة واحدة تعني حملاً قليلاً جدًا ومهامًا أقل، وساعتان حملاً متوسطًا، وثلاث ساعات أو أكثر تسمح بعدد مهام أكبر عند الحاجة. لا تحوّلها إلى مدة لكل مهمة. اجعل كل خطوة مهمة واحدة واضحة قابلة للتنفيذ، من دون وقت أو موعد محدد؛ لا تضف موعدًا إلا إذا كان موجودًا فعلًا في التزام المدرس أو حدده الطالب بنفسه. إذا قال المدرس إن واجبًا أو امتحانًا شرط للمحاضرة التالية، فاجعل إكمال المتطلب المسجل أولوية قبل الدرس التالي. لا تختلق واجبًا أو امتحانًا أو أسئلة، ولا تعتبر المتطلب مكتملًا دون دليل من الطالب.",
   ].join("\n");
   const paceLabel = selectedPace === "intensive" ? "مكثفة"
     : selectedPace === "relaxed" ? "مرنة ومريحة" : "متوازنة";
@@ -1386,7 +1386,7 @@ export async function generatePersonalPlan(
     "تفضيلات الجدولة:",
     "إيقاع الخطة: " + paceLabel,
     "درجة الإيقاع: " + paceLevel + " من 3 — " + paceLevelLabel + ". " + paceLevelInstruction,
-    "متوسط الوقت المتاح يوميًا: " + dailyMinutes + " دقيقة",
+    "مستوى الوقت المتاح (إشارة انشغال وليست مدة مهام): " + (dailyMinutes <= 60 ? "منخفض جدًا — ساعة تقريبًا؛ قلّل عدد المهام بوضوح" : dailyMinutes <= 120 ? "متوسط — ساعتان تقريبًا" : "مرتفع نسبيًا — ثلاث ساعات أو أكثر"),
     "أيام الدراسة الأسبوعية: " + daysPerWeek + " أيام",
     "الموعد الشخصي الإضافي: " + (constraints.deadline || "لا يوجد"),
     "الحصص القادمة داخل أفق الخطة: " + formatUpcomingTeacherSessions(profile, constraints.startDate ?? new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date()), horizonDays),
@@ -1562,38 +1562,24 @@ export async function generatePersonalPlan(
     })),
   };
 
-  // The model proposes learning work; deterministic code owns the calendar.
-  // Daily plans are strictly scheduled and capacity conflicts remain visible as deferred work.
+  // Daily plans are flexible tasks, not a timetable. Availability is only a workload signal.
   let scheduleDay = 1;
   const totalPlannedMinutes = plan.steps.reduce((sum, step) => sum + step.minutes, 0);
   if (planScope === "daily") {
-    const scheduleSettings = {
-      dailyMinutes,
-      daysPerWeek,
-      horizonDays,
-      maxSessionMinutes: Math.min(90, dailyMinutes),
-    };
-    const scheduling = schedulePlanSteps(plan.steps, scheduleSettings);
-    const quality = evaluatePlanQuality(scheduling.steps, scheduleSettings, scheduling.stats);
-    scheduleDay = scheduling.stats.studyDaysUsed;
     plan = {
-      ...plan,
-      steps: scheduling.steps,
-      quality,
-      durationLabel: `${horizonDays} يومًا · ${scheduling.stats.studyDaysUsed} أيام دراسة · ${scheduling.stats.scheduledMinutes} دقيقة مجدولة`
-        + (scheduling.stats.deferredMinutes ? ` · ${scheduling.stats.deferredMinutes} دقيقة مؤجلة` : ""),
+      ...plan, durationLabel: "مهام مرنة", quality: undefined,
+      steps: plan.steps.map((step, index) => ({
+        ...step, day: "", minutes: 0, scheduleState: "scheduled" as const,
+        dayIndex: null, dateOffsetDays: null, scheduleNote: undefined,
+        sourceStepIndex: index, segmentIndex: undefined, segmentCount: undefined,
+      })),
     };
   } else {
-    // Preserve the legacy annual sequence until annual planning has its own
-    // multi-month constraint model; never label it as a short-term schedule.
     let usedMinutes = 0;
     plan = {
       ...plan,
       steps: plan.steps.map(step => {
-        if (usedMinutes > 0 && usedMinutes + step.minutes > dailyMinutes) {
-          scheduleDay += 1;
-          usedMinutes = 0;
-        }
+        if (usedMinutes > 0 && usedMinutes + step.minutes > dailyMinutes) { scheduleDay += 1; usedMinutes = 0; }
         usedMinutes += step.minutes;
         return { ...step, day: "الأسبوع " + Math.ceil(scheduleDay / daysPerWeek) };
       }),
@@ -1617,28 +1603,8 @@ export async function generatePersonalPlan(
       : "تقدير الجدوى: يمكن توزيع الخطوات على " + scheduleDay + " أيام دراسة حتى " + effectiveDeadline + ". نافذة الامتحانات التقريبية " + examWindowLabel + ".";
     plan = { ...plan, summary: (plan.summary + "\n\n" + feasibilityNote).slice(0, 1_500) };
   } else {
-    const deferredMinutes = plan.quality?.stats.deferredMinutes ?? 0;
-    const feasibilityNote = deferredMinutes > 0
-      ? "لم تتسع الفترة لكل العمل دون تجاوز وقتك اليومي: جُدولت "
-        + (plan.quality?.stats.scheduledMinutes ?? 0) + " دقيقة، وحُفظت "
-        + deferredMinutes + " دقيقة كمؤجلة خارج هذه الفترة."
-      : getDailyPlanFeasibilityNote({
-          requiredStudyDays: scheduleDay,
-          horizonDays,
-          dailyMinutes,
-          daysPerWeek,
-          steps: plan.steps.filter(step => step.scheduleState !== "deferred"),
-        });
-    const adaptiveNote = "هذه خطة للفترة القادمة فقط. ستُعاد مواءمتها عند تغير المهام أو التقدم أو مواعيد الحصص.";
-    const qualityWarnings = (plan.quality?.warnings ?? []).filter(warning => !warning.includes("تم الاحتفاظ"));
-    const combinedNotes = [adaptiveNote, feasibilityNote, ...qualityWarnings].filter(Boolean).join(" ");
-    const retainedSummary = plan.summary
-      .slice(0, Math.max(0, 1_500 - combinedNotes.length - 2))
-      .trim();
-    plan = {
-      ...plan,
-      summary: (retainedSummary + "\n\n" + combinedNotes).slice(0, 1_500),
-    };
+    const adaptiveNote = "هذه قائمة مهام مرنة وليست جدولًا زمنيًا. لا توجد مدة أو ساعة محددة لأي مهمة؛ اختر منها ما يناسب وقتك، وسيُعاد ترتيب الأولويات مع تقدمك.";
+    plan = { ...plan, summary: (plan.summary + "\n\n" + adaptiveNote).slice(0, 1_500) };
   }
   if (constraints.memorySnapshot) plan = { ...plan, memorySnapshot: constraints.memorySnapshot };
   updatePlanGenerationProgress(userId, "saving", undefined, undefined, constraints.activityId);
