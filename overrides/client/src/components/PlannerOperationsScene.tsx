@@ -40,6 +40,12 @@ export default function PlannerOperationsScene() {
   const [draftCategory, setDraftCategory] = useState("مذاكرة");
   const [draftPriority, setDraftPriority] = useState<"low" | "medium" | "high">("medium");
   const [draftDueDate, setDraftDueDate] = useState("");
+  const [draftGoalTitle, setDraftGoalTitle] = useState("");
+  const [draftEventTitle, setDraftEventTitle] = useState("");
+  const [draftEventAt, setDraftEventAt] = useState("");
+  const [learningSubject, setLearningSubject] = useState("");
+  const [learningLesson, setLearningLesson] = useState("");
+  const [learningDraft, setLearningDraft] = useState<{ key: string; steps: string[] }>({ key: "", steps: [] });
 
   const tasks = tasksQuery.data ?? [];
   const goals = goalsQuery.data ?? [];
@@ -76,6 +82,31 @@ export default function PlannerOperationsScene() {
       setDraftTitle("");
       setDraftDueDate("");
       toast.success("أُضيفت المهمة إلى مساحتك.");
+    },
+    onError: error => toast.error(error.message),
+  });
+
+  const createGoal = trpc.goals.create.useMutation({
+    onSuccess: async () => {
+      await Promise.all([utils.goals.list.invalidate(), utils.dashboard.summary.invalidate()]);
+      setDraftGoalTitle("");
+      toast.success("أُضيف الهدف إلى مساحتك.");
+    },
+    onError: error => toast.error(error.message),
+  });
+  const createEvent = trpc.calendar.create.useMutation({
+    onSuccess: async () => {
+      await Promise.all([utils.calendar.list.invalidate(), utils.dashboard.summary.invalidate()]);
+      setDraftEventTitle("");
+      setDraftEventAt("");
+      toast.success("تم حفظ الموعد في الجدول.");
+    },
+    onError: error => toast.error(error.message),
+  });
+  const saveLessonProgress = trpc.study.saveSubjectLessonProgress.useMutation({
+    onSuccess: async () => {
+      await utils.studentProfile.get.invalidate();
+      toast.success("تم حفظ تقدم الدرس.");
     },
     onError: error => toast.error(error.message),
   });
@@ -117,6 +148,49 @@ export default function PlannerOperationsScene() {
       dueAt,
     });
   };
+
+  const submitGoal = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const title = draftGoalTitle.trim();
+    if (!title) return;
+    createGoal.mutate({ title, category: "دراسة", kind: "short", color: "violet" });
+  };
+  const submitEvent = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!draftEventTitle.trim() || !draftEventAt) return;
+    const startAt = new Date(draftEventAt);
+    if (Number.isNaN(startAt.getTime())) {
+      toast.error("تاريخ الموعد غير صالح.");
+      return;
+    }
+    createEvent.mutate({
+      title: draftEventTitle.trim(),
+      type: "event",
+      startAt,
+      endAt: null,
+      allDay: false,
+      color: "violet",
+    });
+  };
+
+  const learningSubjectId = profile?.subjects?.includes(learningSubject)
+    ? learningSubject
+    : profile?.subjects?.[0] ?? "";
+  const learningChoices = learningSubjectId ? getSIECheckpointChoices(learningSubjectId) : [];
+  const selectedLesson = learningChoices.find(choice => choice.nodeId === learningLesson) ?? learningChoices[0];
+  const progressKey = selectedLesson ? learningSubjectId + "|" + selectedLesson.nodeId : "";
+  const profileSelection = (profile?.selection || {}) as Record<string, any>;
+  const savedLessonSteps = selectedLesson
+    ? (profileSelection.subjectLessonProgress?.[learningSubjectId]?.[selectedLesson.nodeId]?.completedSteps as string[] | undefined) ?? []
+    : [];
+  const currentLessonSteps = learningDraft.key === progressKey ? learningDraft.steps : savedLessonSteps;
+  const learningStepOptions = [
+    ["survey", "تصفّح الدرس"],
+    ["question", "تحديد الأسئلة"],
+    ["read", "القراءة والفهم"],
+    ["recite", "الاسترجاع من الذاكرة"],
+    ["review", "المراجعة والتثبيت"],
+  ] as const;
 
   const hasReadError = tasksQuery.isError || goalsQuery.isError || calendarQuery.isError || profileQuery.isError;
   const activeMeta = layerMeta[layer];
@@ -219,6 +293,13 @@ export default function PlannerOperationsScene() {
 
           {layer === "goals" && (
             <div className="sf-ops-layer-body">
+              <form className="sf-ops-capture" onSubmit={submitGoal}>
+                <div className="sf-ops-capture-title"><Target className="size-4" /><b>إنشاء هدف سريع</b><span>Goal capture</span></div>
+                <div className="sf-ops-capture-fields sf-ops-create-single">
+                  <input value={draftGoalTitle} onChange={event => setDraftGoalTitle(event.target.value)} maxLength={180} placeholder="ما النتيجة التي تريد الوصول إليها؟" aria-label="عنوان الهدف الجديد" />
+                  <Button type="submit" disabled={!draftGoalTitle.trim() || createGoal.isPending} size="sm"><Plus className="size-4" />إنشاء هدف</Button>
+                </div>
+              </form>
               {goalsQuery.isLoading ? <PanelMessage>تحميل الأهداف…</PanelMessage> : goalsQuery.isError ? <PanelMessage>تعذّر تحميل الأهداف.</PanelMessage> : activeGoals.length ? (
                 <div className="sf-ops-goal-list">{activeGoals.slice(0, 6).map(goal => {
                   const progress = Math.max(0, Math.min(100, Number(goal.progress) || 0));
@@ -231,6 +312,14 @@ export default function PlannerOperationsScene() {
 
           {layer === "schedule" && (
             <div className="sf-ops-layer-body">
+              <form className="sf-ops-capture" onSubmit={submitEvent}>
+                <div className="sf-ops-capture-title"><CalendarDays className="size-4" /><b>إضافة موعد</b><span>Schedule capture</span></div>
+                <div className="sf-ops-capture-fields sf-ops-create-single">
+                  <input value={draftEventTitle} onChange={event => setDraftEventTitle(event.target.value)} maxLength={180} placeholder="عنوان الموعد أو جلسة المذاكرة" aria-label="عنوان الموعد الجديد" />
+                  <input type="datetime-local" value={draftEventAt} onChange={event => setDraftEventAt(event.target.value)} aria-label="تاريخ ووقت الموعد" />
+                  <Button type="submit" disabled={!draftEventTitle.trim() || !draftEventAt || createEvent.isPending} size="sm"><Plus className="size-4" />حفظ</Button>
+                </div>
+              </form>
               {calendarQuery.isLoading ? <PanelMessage>تحميل المواعيد…</PanelMessage> : calendarQuery.isError ? <PanelMessage>تعذّر تحميل المواعيد.</PanelMessage> : upcomingEvents.length ? (
                 <div className="sf-ops-agenda">{upcomingEvents.map(event => <article key={event.id}><time>{formatDate(event.startAt)}</time><span className={"sf-ops-event-mark sf-ops-event-" + event.source} /><div><b>{event.title}</b><small>{event.source === "task" ? "مهمة مرتبطة بموعد" : event.type === "study" ? "جلسة مذاكرة" : "موعد مسجل"}</small></div></article>)}</div>
               ) : <PanelMessage>لا توجد مواعيد مستقبلية مسجلة. أضف موعدًا من التقويم أو حدّد موعدًا لمهمة.</PanelMessage>}
@@ -241,16 +330,49 @@ export default function PlannerOperationsScene() {
           {layer === "learning" && (
             <div className="sf-ops-layer-body">
               {profileQuery.isLoading ? <PanelMessage>تحميل الملف الدراسي…</PanelMessage> : profileQuery.isError ? <PanelMessage>تعذّر تحميل الملف الدراسي.</PanelMessage> : profile?.subjects?.length ? (
-                <div className="sf-ops-subject-list">{profile.subjects.map((subjectId: string) => {
-                  const selection = (profile.selection || {}) as Record<string, any>;
-                  const teacherId = selection.teacherChoices?.[subjectId] || profile.teacherSelections?.[subjectId];
-                  const teacher = teacherId ? getSIETeacher(teacherId) : undefined;
-                  const frontier = selection.teacherFrontiers?.[subjectId] || selection.teacherProgressState?.[subjectId]?.studentAttendedFrontier;
-                  const checkpoint = getSIECheckpointChoices(subjectId).find(item => item.nodeId === frontier);
-                  const subject = getSIESubject(subjectId);
-                  const backlog = profile.backlog?.[subjectId] || profile.backlog?.[subject?.nameAr || ""] || 0;
-                  return <article key={subjectId}><span className="sf-ops-subject-icon"><GraduationCap className="size-4" /></span><div><b>{subject?.nameAr || subjectId}</b><small>{teacher?.nameAr || "لم يحدد مدرس"} · {checkpoint?.title || "موضع التقدم غير محدد"}</small></div><strong>{backlog} تراكم</strong></article>;
-                })}</div>
+                <>
+                  <div className="sf-ops-subject-list">{profile.subjects.map((subjectId: string) => {
+                    const selection = (profile.selection || {}) as Record<string, any>;
+                    const teacherId = selection.teacherChoices?.[subjectId] || profile.teacherSelections?.[subjectId];
+                    const teacher = teacherId ? getSIETeacher(teacherId) : undefined;
+                    const frontier = selection.teacherFrontiers?.[subjectId] || selection.teacherProgressState?.[subjectId]?.studentAttendedFrontier;
+                    const checkpoint = getSIECheckpointChoices(subjectId).find(item => item.nodeId === frontier);
+                    const subject = getSIESubject(subjectId);
+                    const backlog = profile.backlog?.[subjectId] || profile.backlog?.[subject?.nameAr || ""] || 0;
+                    return <article key={subjectId}><span className="sf-ops-subject-icon"><GraduationCap className="size-4" /></span><div><b>{subject?.nameAr || subjectId}</b><small>{teacher?.nameAr || "لم يحدد مدرس"} · {checkpoint?.title || "موضع التقدم غير محدد"}</small></div><strong>{backlog} تراكم</strong></article>;
+                  })}</div>
+                  {learningChoices.length > 0 && (
+                    <section className="sf-ops-learning-editor">
+                      <div className="sf-ops-capture-title"><GraduationCap className="size-4" /><b>تحديث تقدم درس</b><span>LESSON TRACKER</span></div>
+                      <div className="sf-ops-learning-selects">
+                        <select value={learningSubjectId} onChange={event => { setLearningSubject(event.target.value); setLearningLesson(""); setLearningDraft({ key: "", steps: [] }); }} aria-label="اختيار المادة">
+                          {profile.subjects.map((subjectId: string) => <option key={subjectId} value={subjectId}>{getSIESubject(subjectId)?.nameAr || subjectId}</option>)}
+                        </select>
+                        <select value={selectedLesson?.nodeId || ""} onChange={event => { setLearningLesson(event.target.value); setLearningDraft({ key: "", steps: [] }); }} aria-label="اختيار الدرس">
+                          {learningChoices.map(choice => <option key={choice.nodeId} value={choice.nodeId}>{choice.title}</option>)}
+                        </select>
+                      </div>
+                      {selectedLesson && <div className="sf-ops-sqrr">
+                        {learningStepOptions.map(([step, label]) => <label key={step}>
+                          <input type="checkbox" checked={currentLessonSteps.includes(step)} onChange={event => {
+                            const next = event.target.checked
+                              ? [...currentLessonSteps, step]
+                              : currentLessonSteps.filter(item => item !== step);
+                            setLearningDraft({ key: progressKey, steps: next });
+                          }} />
+                          <span>{label}</span>
+                        </label>)}
+                        <Button type="button" size="sm" disabled={saveLessonProgress.isPending} onClick={() => saveLessonProgress.mutate({
+                          subjectId: learningSubjectId,
+                          lessonId: selectedLesson.nodeId,
+                          completedSteps: currentLessonSteps as ("survey" | "question" | "read" | "recite" | "review")[],
+                          difficulty: "unknown",
+                          notes: "",
+                        })}>حفظ تقدم الدرس</Button>
+                      </div>}
+                    </section>
+                  )}
+                </>
               ) : <PanelMessage>أكمل ملفك الدراسي لتظهر المواد ونقاط التقدم هنا.</PanelMessage>}
               <p className="sf-ops-hint">التراكم اليدوي مؤشر يحتاج تأكيدًا؛ لا نحوله تلقائيًا إلى دروس محددة ما لم تتوفر نقطة منهج موثوقة.</p>
               <button type="button" className="sf-ops-full-link" onClick={() => setLocation("/study")}>فتح مساحة التعلّم <ChevronLeft className="size-4" /></button>
