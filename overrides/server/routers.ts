@@ -2089,7 +2089,7 @@ export const appRouter = router({
             : "تم تسجيل مرور موعد الحصة وفق الجدول الأسبوعي",
           { subjectId: session.subjectId, outcome: input.outcome, coveredBranches, nextSessionAt: session.nextSessionAt.toISOString() },
         );
-        return { success: true, nextSessionAt: session.nextSessionAt.toISOString(), nextCalendarEventId };
+        return { success: true, key: input.key, nextSessionAt: session.nextSessionAt.toISOString(), nextCalendarEventId };
       }),
   }),
 
