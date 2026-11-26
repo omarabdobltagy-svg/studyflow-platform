@@ -127,6 +127,7 @@ async function classifyEvidence(
     preLectureExamRequired: "unknown" as const,
     confidence: "low" as const,
     verificationStatus: "insufficient_evidence" as const,
+    evidence: [] as TeacherCourseFactsInput["evidence"],
   };
   if (!evidence.length) return unavailable;
 
@@ -178,9 +179,13 @@ async function classifyEvidence(
     ? parsed.evidenceIndices.filter((index: unknown) => Number.isInteger(index) && Number(index) >= 0 && Number(index) < evidence.length).slice(0, 10)
     : [];
   const confidence = enumValue(parsed.confidence, ["low", "medium", "high"] as const, "low");
-  const verificationStatus: TeacherResearchClassification["verificationStatus"] = confidence === "high" && selectedIndices.length >= 1 ? "verified"
-    : confidence === "medium" && selectedIndices.length >= 1 ? "partial"
-      : "insufficient_evidence";
+  const hasKnownClaim = availableModes.length > 0 || parsed.homeworkPolicy === "yes" || parsed.homeworkPolicy === "no" || parsed.homeworkPolicy === "varies"
+    || parsed.homeworkRequiredBeforeNextLecture === "yes" || parsed.homeworkRequiredBeforeNextLecture === "no" || parsed.homeworkRequiredBeforeNextLecture === "varies"
+    || parsed.preLectureExamRequired === "yes" || parsed.preLectureExamRequired === "no" || parsed.preLectureExamRequired === "varies";
+  const verificationStatus: TeacherResearchClassification["verificationStatus"] = !hasKnownClaim ? "insufficient_evidence"
+    : confidence === "high" && selectedIndices.length >= 1 ? "verified"
+      : confidence === "medium" && selectedIndices.length >= 1 ? "partial"
+        : "insufficient_evidence";
 
   return {
     availableModes: Array.isArray(parsed.availableModes)
