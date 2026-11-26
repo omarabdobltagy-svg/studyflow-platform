@@ -1617,16 +1617,21 @@ export async function generatePersonalPlan(
       : "تقدير الجدوى: يمكن توزيع الخطوات على " + scheduleDay + " أيام دراسة حتى " + effectiveDeadline + ". نافذة الامتحانات التقريبية " + examWindowLabel + ".";
     plan = { ...plan, summary: (plan.summary + "\n\n" + feasibilityNote).slice(0, 1_500) };
   } else {
-    const feasibilityNote = getDailyPlanFeasibilityNote({
-      requiredStudyDays: scheduleDay,
-      horizonDays,
-      dailyMinutes,
-      daysPerWeek,
-      steps: plan.steps.filter(step => step.scheduleState !== "deferred"),
-    });
+    const deferredMinutes = plan.quality?.stats.deferredMinutes ?? 0;
+    const feasibilityNote = deferredMinutes > 0
+      ? "لم تتسع الفترة لكل العمل دون تجاوز وقتك اليومي: جُدولت "
+        + (plan.quality?.stats.scheduledMinutes ?? 0) + " دقيقة، وحُفظت "
+        + deferredMinutes + " دقيقة كمؤجلة خارج هذه الفترة."
+      : getDailyPlanFeasibilityNote({
+          requiredStudyDays: scheduleDay,
+          horizonDays,
+          dailyMinutes,
+          daysPerWeek,
+          steps: plan.steps.filter(step => step.scheduleState !== "deferred"),
+        });
     const adaptiveNote = "هذه خطة للفترة القادمة فقط. ستُعاد مواءمتها عند تغير المهام أو التقدم أو مواعيد الحصص.";
-    const qualityNote = plan.quality?.warnings.join(" ") ?? "";
-    const combinedNotes = [adaptiveNote, feasibilityNote, qualityNote].filter(Boolean).join(" ");
+    const qualityWarnings = (plan.quality?.warnings ?? []).filter(warning => !warning.includes("تم الاحتفاظ"));
+    const combinedNotes = [adaptiveNote, feasibilityNote, ...qualityWarnings].filter(Boolean).join(" ");
     const retainedSummary = plan.summary
       .slice(0, Math.max(0, 1_500 - combinedNotes.length - 2))
       .trim();

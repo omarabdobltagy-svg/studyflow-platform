@@ -106,7 +106,7 @@ type DailyPlanResult = {
 };
 
 // V6 scopes teacher signals to second-year Baccalaureate and retires stale AI-plan tasks.
-const DAILY_PLANNER_POLICY_VERSION = "smart-study-horizon-teacher-sync-v2";
+const DAILY_PLANNER_POLICY_VERSION = "smart-study-horizon-teacher-sync-v3";
 const DAILY_PLAN_PREFIX = "SIE_DAILY_PLAN_V4:";
 const DAILY_PLAN_DRAFT_PREFIX = "SIE_DAILY_PLAN_DRAFT_V1:";
 const ANNUAL_PLAN_PREFIX = "SIE_ANNUAL_PLAN_V1:"
