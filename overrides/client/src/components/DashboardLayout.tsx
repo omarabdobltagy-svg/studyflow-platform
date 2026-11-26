@@ -7,6 +7,7 @@ import QueryErrorNotice from "@/components/QueryErrorNotice";
 import BrandMark from "@/components/BrandMark";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
+import StudyOrbScene from "@/components/StudyOrbScene";
 import { gsap } from "gsap";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
