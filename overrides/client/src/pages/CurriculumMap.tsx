@@ -2,6 +2,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import CurriculumProgressScene, { type SceneBranch } from "@/components/CurriculumProgressScene";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
+import { displayBranchTitle, displayCurriculumTitle } from "@/lib/curriculum-display";
 import {
   getSIEStudentVisibleBranches,
   getSIECheckpointProgressOptions,
@@ -42,111 +43,6 @@ function gapLabel(gap: LearningGap | null, pointLabel: string) {
   if (gap.gapCount > 0) return `فجوة مرجعية: ${gap.gapCount} ${pointLabel}`;
   if ((gap.aheadCount ?? 0) > 0) return `متقدم بـ ${gap.aheadCount} ${pointLabel}`;
   return "متوافق مع المرجع";
-}
-
-const ENGLISH_CURRICULUM_LABELS: Record<string, string> = {
-  "Living Well in a Complex World": "الحياة الجيدة في عالم معقّد",
-  "Leisure Time": "وقت الفراغ",
-  "Echoes of the Past": "أصداء الماضي",
-  "The Power of Choice": "قوة الاختيار",
-  "The Greenhouse Effect": "ظاهرة الاحتباس الحراري",
-  "The Space We Share": "المساحة التي نتشاركها",
-  "Discovering Your Passion": "اكتشاف شغفك",
-  "Pathways to Progress": "مسارات التقدم",
-  "Circles of Belonging": "دوائر الانتماء",
-  "Behind the Buy": "ما وراء الشراء",
-  "The Lost World": "العالم المفقود",
-  "Vocabulary": "المفردات",
-  "Participial Phrases and Relative Clauses": "عبارات التصريف والجمل الموصولة",
-  "Conditional Structures": "التراكيب الشرطية",
-  "Gerunds and Infinitives": "المصدر بصيغتيه Gerund وInfinitive",
-  "Narrative Tenses": "أزمنة السرد",
-  "Prepositional Phrases of Place and Time": "عبارات حروف الجر للمكان والزمان",
-  "Concession Clauses": "جمل التنازل",
-  "Passive Voice for Formal Reporting": "المبني للمجهول في التقارير الرسمية",
-  "Present Perfect": "المضارع التام",
-  "Linking Words and Logical Connectors": "أدوات الربط المنطقي",
-  "Fronting for Emphasis": "التقديم للتوكيد",
-  "Modal Verbs": "الأفعال الناقصة",
-  "Cause-and-Effect Structures": "تراكيب السبب والنتيجة",
-  "Adverbials of Degree and Frequency": "ظروف الدرجة والتكرار",
-  "Reported Speech": "الكلام المنقول",
-  "Used to / Would (Past Habits)": "التعبير عن العادات الماضية",
-  "Present Continuous": "المضارع المستمر",
-  "Have / Get Something Done (Causative)": "صيغة السببية",
-  "So...that / Such...that": "تراكيب النتيجة",
-  "Stative Verbs vs. Action Verbs": "أفعال الحالة مقابل أفعال الحركة",
-  "Quantifiers": "المحددات الكمية",
-  "Social Media and Self-Image": "وسائل التواصل الاجتماعي وصورة الذات",
-  "Exploring Modern Lifestyles": "استكشاف أنماط الحياة الحديثة",
-  "Whose Responsibility Is It?": "على من تقع المسؤولية؟",
-  "Understanding Mental Health": "فهم الصحة النفسية",
-  "Screen Time and Young People": "وقت الشاشة والشباب",
-  "Creative Arts as Leisure Activities": "الفنون الإبداعية كأنشطة لوقت الفراغ",
-  "Sport and Physical Activity as Leisure": "الرياضة والنشاط البدني في وقت الفراغ",
-  "Not Exactly a Relaxing Day": "يوم ليس مريحًا تمامًا",
-  "Sites of Memory": "مواقع الذاكرة",
-  "The Museum as a Storyteller": "المتحف بوصفه راويًا",
-  "The Viral Past": "الماضي سريع الانتشار",
-  "Social Media and Historical Events": "وسائل التواصل والأحداث التاريخية",
-  "Food Waste": "هدر الطعام",
-  "Beyond the Brand": "ما وراء العلامة التجارية",
-  "Digital Consumption": "الاستهلاك الرقمي",
-  "Black Friday and Sales Culture": "الجمعة السوداء وثقافة التخفيضات",
-  "The Climate Crisis": "أزمة المناخ",
-  "Renewable Energy – Powering a Sustainable Future": "الطاقة المتجددة: طاقة لمستقبل مستدام",
-  "Greening Projects in Egypt": "مشروعات الاستدامة في مصر",
-  "Individual and Collective Actions": "جهود فردية وجماعية",
-  "A World We Borrow": "عالم نستعيره",
-  "When Needs Compete": "عندما تتنافس الاحتياجات",
-  "Voices for the Voiceless": "أصوات من لا صوت لهم",
-  "Global Citizens, Local Actions": "مواطنون عالميون وأفعال محلية",
-  "From Hobby to Opportunity": "من الهواية إلى الفرصة",
-  "Building a Community Around Your Passion": "بناء مجتمع حول شغفك",
-  "Leaving Your Mark": "اترك بصمتك",
-  "Time Well Spent: Balancing Passion and Priorities": "وقت مثمر: الموازنة بين الشغف والأولويات",
-  "Vocational Education in Egypt": "التعليم الفني في مصر",
-  "International Vocational Voices Online": "أصوات التعليم الفني عالميًا عبر الإنترنت",
-  "The Egyptian-Japanese Schools (EJS)": "المدارس المصرية اليابانية",
-  "The Skills Employers Really Want": "المهارات التي يبحث عنها أصحاب العمل",
-  "Finding My Place": "أجد مكاني",
-  "Relationships That Help Us Grow": "علاقات تساعدنا على النمو",
-  "No One Left Behind": "لا أحد يُترك خلف الركب",
-  "Community That Cares": "مجتمع يهتم بأفراده",
-  "Hidden Cost of a Click": "التكلفة الخفية لضغطة واحدة",
-  "Chasing Validation": "السعي وراء القبول",
-  "True Price of Fast Fashion": "التكلفة الحقيقية للأزياء السريعة",
-  "Rethinking What We Buy: A Community Response": "إعادة التفكير فيما نشتريه: استجابة مجتمعية",
-  "A Dream of Adventure": "حلم بالمغامرة",
-  "Professor Challenger’s Secret": "سر البروفيسور تشالنجر",
-  "The Expedition Is Chosen": "اختيار أفراد الرحلة الاستكشافية",
-  "Into the Unknown": "إلى المجهول",
-  "Trapped in the Lost World": "عالقون في العالم المفقود",
-  "Malone’s Night Adventure": "مغامرة مالون الليلية",
-  "Prisoners of the Ape-Men": "أسرى رجال القردة",
-  "The Battle for the Plateau": "المعركة من أجل الهضبة",
-  "The Hidden Way Home": "الطريق الخفي إلى الوطن",
-  "Proof Before the World": "إثبات الحقيقة أمام العالم",
-};
-
-function displayCurriculumTitle(value: string | null | undefined): string {
-  const title = (value ?? "").trim();
-  if (!title) return "عنوان غير متاح";
-  return ENGLISH_CURRICULUM_LABELS[title]
-    ?? title.replace(/^Unit\\s+(\\d+)\\s*:/i, "الوحدة $1:")
-      .replace(/^Lesson\\s+(\\d+)\\s*$/i, "الدرس $1");
-}
-
-function displayBranchTitle(value: string): string {
-  const labels: Record<string, string> = {
-    "الوحدات (Units)": "وحدات الكتاب",
-    "القصة - The Lost World": "القصة: العالم المفقود",
-    "GRE — مسار تكميلي": "مسار إثرائي لاختبار اللغة",
-    "دروس المفردات داخل الوحدات": "المفردات",
-    "دروس القواعد داخل الوحدات": "قواعد اللغة",
-    "المقرر بالكامل": "المقرر بالكامل",
-  };
-  return labels[value] ?? displayCurriculumTitle(value);
 }
 
 export default function CurriculumMap() {
