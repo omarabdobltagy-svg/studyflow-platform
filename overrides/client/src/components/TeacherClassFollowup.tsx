@@ -44,9 +44,10 @@ export default function TeacherClassFollowup() {
       setSelectedBranches([]);
       setBranchFrontiers({});
       setBusyKey(null);
-      if (!autoSubmitted.current.has(result.key)) toast.success("اتسجل شرح المدرس، واتضاف الموعد القادم للتقويم.");
+      if (result.requiresTopicSelection) toast.success("اتسجل شرح المدرس، واتضاف الموعد القادم للتقويم.");
     },
-    onError: error => {
+    onError: (error, variables) => {
+      if (autoSubmitted.current.has(variables.key)) autoSubmitted.current.delete(variables.key);
       setBusyKey(null);
       toast.error(error.message || "تعذّر تسجيل متابعة المحاضرة.");
     },
@@ -66,19 +67,22 @@ export default function TeacherClassFollowup() {
   });
 
   useEffect(() => {
-    if (!user || loading || !dueItems.length) return;
-    for (const item of dueItems) {
-      if (item.requiresTopicSelection || autoSubmitted.current.has(item.key)) continue;
-      autoSubmitted.current.add(item.key);
-      setBusyKey(item.key);
-      complete.mutate({
-        key: item.key,
-        outcome: "covered",
-        coveredBranches: [],
-        branchFrontiers: {},
-      });
-    }
-  }, [dueItems, user, loading]);
+    if (!user || loading || busyKey || !dueItems.length) return;
+    // Process one non-branch subject at a time because each completion persists
+    // the student's shared profile selection document.
+    const item = dueItems.find(candidate =>
+      !candidate.requiresTopicSelection && !autoSubmitted.current.has(candidate.key)
+    );
+    if (!item) return;
+    autoSubmitted.current.add(item.key);
+    setBusyKey(item.key);
+    complete.mutate({
+      key: item.key,
+      outcome: "covered",
+      coveredBranches: [],
+      branchFrontiers: {},
+    });
+  }, [dueItems, user, loading, busyKey]);
 
   const active = useMemo(
     () => dueItems.find(item => item.requiresTopicSelection) ?? null,
