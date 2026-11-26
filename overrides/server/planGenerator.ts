@@ -9,6 +9,7 @@ import { formatTextbookEvidence, getCurriculumBranchPriorityGuidance, orderPlanS
 import { buildExamBlueprintContext, SECOND_YEAR_BAC_EXAM_WINDOW_2026_2027 } from "./exam-blueprints";
 import { isHighConfidenceScheduleAnnouncement, isSecondYearBaccalaureateProfile, isSecondYearBaccalaureateUpdate, selectedTeacherIds } from "./teacher-content-monitor";
 import { buildLessonStudyMethod, type TeacherRequirementState } from "./study-method";
+import { getTeacherCourseFactsWithRefresh } from "./teacher-course-research";
 
 
 export type PlanGenerationStage = "profile" | "curriculum" | "model" | "validation" | "saving" | "complete";
@@ -1580,6 +1581,33 @@ export async function generatePersonalPlan(
     const homeworkRequiredBySubject = (selection.teacherHomeworkRequiredBeforeNextLecture ?? {}) as Record<string, TeacherRequirementState>;
     const examRequiredBySubject = (selection.teacherPreLectureExamRequired ?? {}) as Record<string, TeacherRequirementState>;
     const legacyRequirements = (selection.teacherAccessRequirements ?? {}) as Record<string, string>;
+    const teacherChoices = (selection.teacherChoices ?? {}) as Record<string, string>;
+    const teacherSystemId = selection.systemId === "EG_GENERAL_SECONDARY" ? "EG_GENERAL_SECONDARY" : "EG_BACCALAUREATE";
+    const cachedTeacherFacts = await Promise.all(Object.entries(teacherChoices)
+      .filter(([subjectId, teacherId]) => Boolean(teacherId && teacherId !== "__SKIP__" && (profile.subjectIds ?? []).includes(subjectId)))
+      .map(async ([subjectId, teacherId]) => {
+        try {
+          const facts = await getTeacherCourseFactsWithRefresh({
+            teacherId,
+            subjectId,
+            systemId: teacherSystemId,
+            gradeYear: profile.gradeYear,
+          });
+          if (facts.facts.isStale || facts.facts.confidence === "low") return null;
+          return [subjectId, facts.facts] as const;
+        } catch (error) {
+          console.warn("[Planner] Teacher course facts are unavailable; using saved student profile only.", {
+            subjectId,
+            message: error instanceof Error ? error.message.slice(0, 180) : "unknown error",
+          });
+          return null;
+        }
+      }));
+    const teacherFactsBySubject = Object.fromEntries(cachedTeacherFacts.filter(Boolean)) as Record<string, {
+      homeworkPolicy: TeacherRequirementState;
+      homeworkRequiredBeforeNextLecture: TeacherRequirementState;
+      preLectureExamRequired: TeacherRequirementState;
+    }>;
     plan = {
       ...plan,
       steps: plan.steps.map(step => {
@@ -1592,13 +1620,14 @@ export async function generatePersonalPlan(
         );
         if (!subjectId) return step;
         const legacy = legacyRequirements[subjectId];
-        const homeworkPolicy = homeworkPolicyBySubject[subjectId]
+        const cached = teacherFactsBySubject[subjectId];
+        const homeworkPolicy = homeworkPolicyBySubject[subjectId] ?? cached?.homeworkPolicy
           ?? (legacy === "homework_and_exam" || legacy === "homework_only" ? "yes"
             : legacy === "none" || legacy === "exam_only" ? "no" : "unknown");
-        const homeworkRequiredBeforeNextLecture = homeworkRequiredBySubject[subjectId]
+        const homeworkRequiredBeforeNextLecture = homeworkRequiredBySubject[subjectId] ?? cached?.homeworkRequiredBeforeNextLecture
           ?? (legacy === "homework_and_exam" || legacy === "homework_only" ? "yes"
             : legacy === "none" || legacy === "exam_only" ? "no" : "unknown");
-        const preLectureExamRequired = examRequiredBySubject[subjectId]
+        const preLectureExamRequired = examRequiredBySubject[subjectId] ?? cached?.preLectureExamRequired
           ?? (legacy === "homework_and_exam" || legacy === "exam_only" ? "yes"
             : legacy === "none" || legacy === "homework_only" ? "no" : "unknown");
         return {
