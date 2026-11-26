@@ -4,6 +4,17 @@ import { callDataApi } from "./_core/dataApi";
 import { invokeLLMWithNvidiaFallback } from "./_core/llmFallback";
 
 type ResearchScope = Pick<TeacherCourseFactsInput, "teacherId" | "subjectId" | "educationSystem" | "gradeYear">;
+type TeacherResearchClassification = {
+  availableModes: Array<"center" | "online">;
+  homeworkPolicy: TeacherCourseFactsInput["homeworkPolicy"];
+  homeworkRequiredBeforeNextLecture: TeacherCourseFactsInput["homeworkRequiredBeforeNextLecture"];
+  preLectureExamRequired: TeacherCourseFactsInput["preLectureExamRequired"];
+  confidence: TeacherCourseFactsInput["confidence"];
+  verificationStatus: TeacherCourseFactsInput["verificationStatus"];
+  evidence: TeacherCourseFactsInput["evidence"];
+  notes?: string;
+};
+
 type ResearchResult = {
   state: "verified" | "partial" | "insufficient_evidence" | "researching";
   facts: {
@@ -108,8 +119,8 @@ async function classifyEvidence(
   subjectName: string,
   scope: ResearchScope,
   evidence: TeacherCourseFactsInput["evidence"],
-) {
-  const unavailable = {
+): Promise<TeacherResearchClassification> {
+  const unavailable: TeacherResearchClassification = {
     availableModes: [] as Array<"center" | "online">,
     homeworkPolicy: "unknown" as const,
     homeworkRequiredBeforeNextLecture: "unknown" as const,
@@ -167,7 +178,7 @@ async function classifyEvidence(
     ? parsed.evidenceIndices.filter((index: unknown) => Number.isInteger(index) && Number(index) >= 0 && Number(index) < evidence.length).slice(0, 10)
     : [];
   const confidence = enumValue(parsed.confidence, ["low", "medium", "high"] as const, "low");
-  const verificationStatus = confidence === "high" && selectedIndices.length >= 1 ? "verified"
+  const verificationStatus: TeacherResearchClassification["verificationStatus"] = confidence === "high" && selectedIndices.length >= 1 ? "verified"
     : confidence === "medium" && selectedIndices.length >= 1 ? "partial"
       : "insufficient_evidence";
 
@@ -196,7 +207,7 @@ async function refreshTeacherCourseFacts(scope: ResearchScope) {
       throw new Error("Teacher and subject must exist in the shared catalog.");
     }
     let evidence: TeacherCourseFactsInput["evidence"] = [];
-    let classified;
+    let classified: TeacherResearchClassification;
     try {
       evidence = await collectYouTubeEvidence(teacher.nameAr, teacher.brandName, subject.nameAr);
       classified = await classifyEvidence(teacher.nameAr, subject.nameAr, scope, evidence);
