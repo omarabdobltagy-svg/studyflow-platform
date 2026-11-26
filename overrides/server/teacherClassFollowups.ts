@@ -67,6 +67,11 @@ export function zonedLocalTimeToUtc(
   return new Date(candidate);
 }
 
+/** Only language subjects use the post-class branch checklist requested by the student. */
+export function requiresBranchCheckinForSubject(subjectId: string, branchCount: number): boolean {
+  return branchCount > 1 && /^(?:ENG|ENGLISH|ARB|ARABIC)/i.test(subjectId.trim());
+}
+
 export function buildTeacherClassFollowupKey(
   subjectId: string,
   classDate: string,
@@ -117,7 +122,7 @@ export function getDueTeacherClassFollowups(input: {
     const slots = input.teacherSchedules[subjectId];
     if (!Array.isArray(slots)) continue;
     const branches = getSIECheckpointProgressBranches(subjectId);
-    const requiresTopicSelection = branches.length > 1;
+    const requiresTopicSelection = requiresBranchCheckinForSubject(subjectId, branches.length);
 
     for (const slot of slots) {
       if (!Number.isInteger(slot.dayOfWeek) || slot.dayOfWeek < 0 || slot.dayOfWeek > 6
