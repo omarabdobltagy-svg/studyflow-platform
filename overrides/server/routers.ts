@@ -99,7 +99,7 @@ type DailyPlanResult = {
 };
 
 // V6 scopes teacher signals to second-year Baccalaureate and retires stale AI-plan tasks.
-const DAILY_PLANNER_POLICY_VERSION = "smart-study-horizon-teacher-sync-v1";
+const DAILY_PLANNER_POLICY_VERSION = "smart-study-horizon-teacher-sync-v2";
 const DAILY_PLAN_PREFIX = "SIE_DAILY_PLAN_V4:";
 const ANNUAL_PLAN_PREFIX = "SIE_ANNUAL_PLAN_V1:";
 const STUDY_PLAN_PREFIX = "SIE_STUDY_PLAN_V2:";
@@ -455,6 +455,12 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): 
       });
     }
 
+    const selection = (profile.selection ?? {}) as Record<string, any>;
+    const studyConditions = (selection.studyConditions ?? {}) as Record<string, unknown>;
+    const configuredDays = Number(studyConditions.daysPerWeek);
+    const daysPerWeek: 5 | 6 | 7 = configuredDays === 5 || configuredDays === 6 || configuredDays === 7
+      ? configuredDays
+      : 6;
     const startDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
     const currentTasks = await listTasks(userId);
     const existingCurriculumTasks = currentTasks.flatMap(task => {
@@ -506,7 +512,7 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): 
         planningMode: "smart",
         horizonDays: 7,
         dailyMinutes,
-        daysPerWeek: 6,
+        daysPerWeek,
         startDate,
         existingCurriculumTasks,
         activityId,
@@ -514,10 +520,10 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): 
       },
     );
     updateAIActivity(userId, activityId, "مزامنة المهام", "يربط خطوات الخطة بالمهام الحالية ويحافظ على المهام المكتملة بدل تكرارها.");
-    const taskSync = await syncDailyPlanGoalTree(userId, plan, { startDate, dailyMinutes }, {
-      goalTitle: "خطة StudyFlow اليومية",
-      goalCategory: "خطة يومية",
-      supersedeCategories: ["خطة يومية", "خطة ذكية"],
+    const taskSync = await syncDailyPlanGoalTree(userId, plan, { startDate, dailyMinutes, daysPerWeek }, {
+      goalTitle: "خطة المذاكرة",
+      goalCategory: "خطة مذاكرة",
+      supersedeCategories: ["خطة مذاكرة", "خطة يومية", "خطة ذكية"],
     });
     const latestGeneratedPlan = await getLatestAiPlanByPromptPrefix(userId, DAILY_PLAN_PREFIX);
     const refreshedFingerprint = await getDailyPlanSourceFingerprint(userId, dailyMinutes, startDate);
@@ -553,13 +559,6 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): 
 
 
 async function getCurrentDailyPlanForStudent(userId: number) {
-  // Scan selected public teacher channels during normal workspace refresh.
-  // The scanner enforces its own 45-minute per-source throttle.
-  try {
-    await scanTeacherSourcesForStudent(userId);
-  } catch (error) {
-    console.warn("[StudyFlow teacher updates] Non-blocking public source scan failed:", error);
-  }
   const profile = await getStudentProfile(userId);
   if (!profile || !Array.isArray(profile.subjectIds) || profile.subjectIds.length === 0) {
     return {
@@ -571,54 +570,63 @@ async function getCurrentDailyPlanForStudent(userId: number) {
       taskCount: 0,
     };
   }
-  const conditions = (profile.selection as Record<string, any> | undefined)?.studyConditions;
-  const dailyMinutes = Math.max(20, Math.min(600, Math.trunc(Number(conditions?.dailyMinutes) || 120)));
+
+  const selection = (profile.selection ?? {}) as Record<string, any>;
+  const conditions = (selection.studyConditions ?? {}) as Record<string, unknown>;
+  const dailyMinutes = Math.max(20, Math.min(600, Math.trunc(Number(conditions.dailyMinutes) || 120)));
   const startDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
   const sourceFingerprint = await getDailyPlanSourceFingerprint(userId, dailyMinutes, startDate);
-  const saved = await getLatestAiPlanByPromptPrefix(userId, DAILY_PLAN_PREFIX);
-  let plan: Awaited<ReturnType<typeof generatePersonalPlan>> | null = null;
-  let generatedAt: Date | null = null;
-  if (saved) {
-    try {
-      const parsed = JSON.parse(saved.planJson) as Awaited<ReturnType<typeof generatePersonalPlan>>;
-      if (parsed && typeof parsed.title === "string" && Array.isArray(parsed.steps) && parsed.steps.length) {
-        plan = parsed;
-        generatedAt = new Date(saved.createdAt);
-      }
-    } catch {
-      // Treat invalid saved plans as missing and regenerate them on demand.
-    }
+
+  // The active plan is the one the student explicitly approved. Older versions stored
+  // approved plans under STUDY_PLAN_PREFIX; only hash-suffixed records are eligible here.
+  let saved = await getLatestAiPlanByPromptPrefix(userId, DAILY_PLAN_PREFIX);
+  if (!saved) {
+    const legacyApproved = (await listAiPlans(userId)).find(record => {
+      const prompt = String(record.prompt || "");
+      return prompt.startsWith(STUDY_PLAN_PREFIX)
+        && /^[a-f0-9]{32}:$/.test(prompt.slice(STUDY_PLAN_PREFIX.length));
+    });
+    saved = legacyApproved ?? null;
   }
-  const latestPlanDay = generatedAt
-    ? new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(generatedAt)
-    : null;
-  const isCurrent = !!saved
-    && saved.prompt.startsWith(DAILY_PLAN_PREFIX + sourceFingerprint + ":")
-    && latestPlanDay === startDate
-    && !!generatedAt
-    && !isDailyPlanStale(generatedAt);
-  if (isCurrent && plan) {
+
+  if (!saved) {
     return {
-      plan,
-      generatedAt,
+      plan: null,
+      generatedAt: null,
       needsRefresh: false,
       sourceFingerprint,
       dailyMinutes,
-      taskCount: plan.steps.length,
+      taskCount: 0,
     };
   }
 
-  // Generate or reconcile the study plan automatically when the workspace opens
-  // or when its tracked sources change. Per-user locks prevent duplicate generation.
-  const refreshed = await ensureDailyPlanForStudent(userId, dailyMinutes);
-  const latestFingerprint = await getDailyPlanSourceFingerprint(userId, dailyMinutes, startDate);
+  const generatedAt = new Date(saved.createdAt);
+  const hasValidTimestamp = Number.isFinite(generatedAt.getTime());
+  let plan: Awaited<ReturnType<typeof generatePersonalPlan>> | null = null;
+  try {
+    const parsed = JSON.parse(saved.planJson) as Awaited<ReturnType<typeof generatePersonalPlan>>;
+    if (parsed && typeof parsed.title === "string" && Array.isArray(parsed.steps) && parsed.steps.length > 0) {
+      plan = parsed;
+    }
+  } catch {
+    // A damaged saved record is kept for diagnosis, but never presented as a usable plan.
+  }
+
+  const latestPlanDay = hasValidTimestamp
+    ? new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(generatedAt)
+    : null;
+  const isCurrent = saved.prompt.startsWith(DAILY_PLAN_PREFIX + sourceFingerprint + ":")
+    && latestPlanDay === startDate
+    && hasValidTimestamp
+    && !isDailyPlanStale(generatedAt);
+
   return {
-    plan: refreshed.plan,
-    generatedAt: refreshed.generatedAt,
-    needsRefresh: false,
-    sourceFingerprint: latestFingerprint,
+    plan,
+    generatedAt: hasValidTimestamp ? generatedAt : null,
+    needsRefresh: !isCurrent,
+    sourceFingerprint,
     dailyMinutes,
-    taskCount: refreshed.plan.steps.length,
+    taskCount: plan?.steps.length ?? 0,
   };
 }
 
@@ -2712,8 +2720,8 @@ export const appRouter = router({
     currentDaily: protectedProcedure.query(async ({ ctx }) => {
       const snapshot = await getCurrentDailyPlanForStudent(ctx.user.id);
       queueTeacherSourceScan(ctx.user.id);
-      // Do not publish an initial AI plan as tasks before the student reviews it.
-      // Refresh only a previously generated/approved daily plan.
+      // Initial plans are created and approved in Planner. This query only reads the
+      // active snapshot; stale approved plans are reconciled in the background.
       if (snapshot.needsRefresh && snapshot.dailyMinutes && snapshot.generatedAt) {
         queueDailyPlanEnsure(ctx.user.id, snapshot.dailyMinutes);
       }
@@ -2724,6 +2732,7 @@ export const appRouter = router({
         energyLevel: z.enum(["low", "normal", "high"]),
         moraleLevel: z.enum(["low", "neutral", "good"]),
         dailyMinutes: z.number().int().min(20).max(600),
+        daysPerWeek: z.union([z.literal(5), z.literal(6), z.literal(7)]).optional(),
         resourceConstraints: z.string().trim().max(500).default(""),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -2736,6 +2745,8 @@ export const appRouter = router({
           energyLevel: input.energyLevel,
           moraleLevel: input.moraleLevel,
           dailyMinutes: input.dailyMinutes,
+          daysPerWeek: input.daysPerWeek
+            ?? (previous.daysPerWeek === 5 || previous.daysPerWeek === 6 || previous.daysPerWeek === 7 ? previous.daysPerWeek : 6),
           resourceConstraints: input.resourceConstraints,
         };
         if (JSON.stringify(previous) !== JSON.stringify(next)) {
@@ -2745,7 +2756,7 @@ export const appRouter = router({
             eventType: "planner.conditions_updated",
             entityType: "study_conditions",
             summary: "تم تحديث ظروف الدراسة اليومية",
-            metadata: { energyLevel: input.energyLevel, moraleLevel: input.moraleLevel, dailyMinutes: input.dailyMinutes },
+            metadata: { energyLevel: input.energyLevel, moraleLevel: input.moraleLevel, dailyMinutes: input.dailyMinutes, daysPerWeek: next.daysPerWeek },
           });
           queueDailyPlanReconciliation(ctx.user.id);
         }
@@ -2753,10 +2764,17 @@ export const appRouter = router({
       }),
     ensureDaily: protectedProcedure
       .input(z.object({
-        dailyMinutes: z.number().int().min(20).max(600).default(120),
+        dailyMinutes: z.number().int().min(20).max(600).optional(),
       }).optional())
       .mutation(async ({ ctx, input }) => {
-        const result = await ensureDailyPlanForStudent(ctx.user.id, input?.dailyMinutes ?? 120);
+        const profile = await getStudentProfile(ctx.user.id);
+        const configuredMinutes = Number((profile?.selection as Record<string, any> | undefined)?.studyConditions?.dailyMinutes);
+        const dailyMinutes = input?.dailyMinutes ?? (
+          Number.isFinite(configuredMinutes) && configuredMinutes >= 20 && configuredMinutes <= 600
+            ? Math.trunc(configuredMinutes)
+            : 120
+        );
+        const result = await ensureDailyPlanForStudent(ctx.user.id, dailyMinutes);
         if (result.generated) {
           await logStudentActivity(ctx.user.id, "plan.daily_generated", "ai_plan", null, "أنشأ المخطط الذكي خطة اليوم تلقائيًا", {
             title: result.plan.title,
@@ -2938,16 +2956,29 @@ export const appRouter = router({
           {
             goalTitle: "خطة المذاكرة",
             goalCategory: "خطة مذاكرة",
-            supersedeCategories: ["خطة مذاكرة"],
+            supersedeCategories: ["خطة مذاكرة", "خطة يومية", "خطة ذكية"],
           },
         );
+        const profile = await getStudentProfile(ctx.user.id);
+        if (profile) {
+          const selection = (profile.selection ?? {}) as Record<string, any>;
+          const previousConditions = (selection.studyConditions ?? {}) as Record<string, unknown>;
+          await updateStudentProfileSelection(ctx.user.id, {
+            ...selection,
+            studyConditions: {
+              ...previousConditions,
+              dailyMinutes: schedule.dailyMinutes,
+              daysPerWeek: schedule.daysPerWeek,
+            },
+          });
+        }
         const fingerprint = await getDailyPlanSourceFingerprint(
           ctx.user.id,
           schedule.dailyMinutes,
           schedule.startDate,
         );
         await saveAiPlan(ctx.user.id, {
-          prompt: STUDY_PLAN_PREFIX + fingerprint + ":",
+          prompt: DAILY_PLAN_PREFIX + fingerprint + ":",
           title: "خطة المذاكرة",
           planJson: JSON.stringify(approvedPlan),
         });

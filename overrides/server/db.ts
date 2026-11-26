@@ -22,6 +22,7 @@ import {
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { resolveStudentSubjectIds } from "./student-subjects";
+import { matchCompletedPlanSteps } from "./plannerTaskMatching";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 let testDbOverride: ReturnType<typeof drizzle> | null | undefined;
@@ -858,17 +859,12 @@ export async function syncDailyPlanGoalTree(
     }
 
     const completedTasks = taskRows.filter(task => task.status === "done");
-    const consumedCompletedIds = new Set<number>();
-    const pendingSteps = steps.map((step, index) => ({ step, index }))
-      .filter(({ step }) => {
-        const match = completedTasks.find(task =>
-          !consumedCompletedIds.has(task.id)
-          && task.title.trim().toLocaleLowerCase() === step.title.trim().toLocaleLowerCase()
-        );
-        if (!match) return true;
-        consumedCompletedIds.add(match.id);
-        return false;
-      });
+    const completedMatches = matchCompletedPlanSteps(steps, completedTasks);
+    const consumedCompletedIds = new Set(completedMatches.preservedCompletedTaskIds);
+    const pendingStepIndexes = new Set(completedMatches.pendingIndexes);
+    const pendingSteps = steps
+      .map((step, index) => ({ step, index }))
+      .filter(({ index }) => pendingStepIndexes.has(index));
 
     const completedStageIds = new Set(stageRows.filter(stage =>
       (tasksByStage.get(stage.id) ?? []).some(task => task.status === "done")

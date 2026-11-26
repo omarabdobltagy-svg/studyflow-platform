@@ -556,7 +556,7 @@ export default function Home() {
               {dailyPlan.data?.needsRefresh && (
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/20 bg-amber-500/[0.04] px-3 py-2.5">
                   <p className="text-xs leading-5 text-muted-foreground">تغير تقدمك أو مهامك منذ آخر إنشاء للخطة؛ الأولوية القديمة لن تُعرض باعتبارها الحالية.</p>
-                  <Button size="sm" variant="outline" className="rounded-lg" onClick={() => ensurePlan.mutate({ dailyMinutes: 120 })} disabled={ensurePlan.isPending}>
+                  <Button size="sm" variant="outline" className="rounded-lg" onClick={() => ensurePlan.mutate()} disabled={ensurePlan.isPending}>
                     {ensurePlan.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
                     تحديث خطة اليوم
                   </Button>
@@ -567,10 +567,14 @@ export default function Home() {
             <div className="flex flex-col items-start gap-3 p-5 sm:p-6">
               <p className="max-w-2xl text-sm leading-7 text-muted-foreground">
                 {profile.data?.subjectIds?.length
-                  ? "المنصة بتقرأ مهامك وتقدمك ومواعيد المدرسين وبتجهّز توزيع الفترة القادمة تلقائيًا."
+                  ? "لا توجد خطة معتمدة حاليًا. افتح خطة المذاكرة لتكوين المقترح ومراجعته؛ بعد اعتماده ستظهر خطواته ومهامه هنا."
                   : "أكمل المواد ومواعيد المحاضرات في ملفك الدراسي؛ بعدها ستتكوّن خطة المذاكرة تلقائيًا عند دخولك."}
               </p>
-              {!profile.data?.subjectIds?.length && (
+              {profile.data?.subjectIds?.length ? (
+                <Button onClick={() => setLocation("/planner")} variant="outline" className="rounded-xl">
+                  إنشاء خطة المذاكرة <ArrowLeft className="size-4" />
+                </Button>
+              ) : (
                 <Button onClick={() => setLocation("/settings/academic")} variant="outline" className="rounded-xl">
                   إكمال الملف الدراسي <ArrowLeft className="size-4" />
                 </Button>
