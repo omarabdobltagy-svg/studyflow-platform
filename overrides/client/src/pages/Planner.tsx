@@ -88,7 +88,7 @@ type ExecutionStrategyPhase = { id: "backlog" | "teacher_sync" | "steady"; title
 type PlanView = {
   title: string;
   summary: string;
-  executionStrategy?: { objective: string; rationale: string; phases: ExecutionStrategyPhase[] };
+  executionStrategy?: { objective: string; rationale: string; phases?: ExecutionStrategyPhase[] };
   durationLabel: string;
   steps: PlanStep[];
   habits: { title: string; cue: string }[];
