@@ -8,6 +8,7 @@ import { getStudentProfile, saveAiPlan } from "./db";
 import { formatTextbookEvidence, getCurriculumBranchPriorityGuidance, orderPlanStepsByCurriculumDependencies, retrieveTextbookEvidence } from "./textbook-retrieval";
 import { buildExamBlueprintContext, SECOND_YEAR_BAC_EXAM_WINDOW_2026_2027 } from "./exam-blueprints";
 import { isHighConfidenceScheduleAnnouncement, isSecondYearBaccalaureateProfile, isSecondYearBaccalaureateUpdate, selectedTeacherIds } from "./teacher-content-monitor";
+import { buildLessonStudyMethod, type TeacherRequirementState } from "./study-method";
 
 
 export type PlanGenerationStage = "profile" | "curriculum" | "model" | "validation" | "saving" | "complete";
@@ -149,6 +150,16 @@ const planSchema = z.object({
     day: z.string().trim().max(60).default(""),
     title: z.string().trim().min(2).max(180),
     detail: z.string().trim().min(5).max(1_200),
+    studyMethod: z.object({
+      stages: z.array(z.object({
+        title: z.string().trim().min(2).max(120),
+        instruction: z.string().trim().min(5).max(700),
+        reason: z.string().trim().min(5).max(500),
+        optional: z.boolean().optional(),
+      })).max(10),
+      completionCriteria: z.string().trim().min(5).max(500),
+      teacherPolicyNote: z.string().trim().max(500).optional(),
+    }).optional(),
     minutes: z.number().int().min(0).max(480).default(0),
     category: z.string().trim().min(2).max(80),
     curriculumNodeIds: z.array(z.string().trim().min(1).max(120)).max(8).default([]),
@@ -1560,6 +1571,47 @@ export async function generatePersonalPlan(
       sourcePages: step.sourcePages.filter(page => verifiedSourcePages.has(page)),
     })),
   };
+
+  // Attach a deterministic, student-facing study method to every new curriculum lesson.
+  // It is generated from curriculum linkage and teacher policy, not from model guesswork.
+  if (profile) {
+    const selection = (profile.selection ?? {}) as Record<string, any>;
+    const homeworkPolicyBySubject = (selection.teacherHomeworkPolicy ?? {}) as Record<string, TeacherRequirementState>;
+    const homeworkRequiredBySubject = (selection.teacherHomeworkRequiredBeforeNextLecture ?? {}) as Record<string, TeacherRequirementState>;
+    const examRequiredBySubject = (selection.teacherPreLectureExamRequired ?? {}) as Record<string, TeacherRequirementState>;
+    const legacyRequirements = (selection.teacherAccessRequirements ?? {}) as Record<string, string>;
+    plan = {
+      ...plan,
+      steps: plan.steps.map(step => {
+        if (!step.curriculumNodeIds?.length) return step;
+        const nodeIds = new Set(step.curriculumNodeIds);
+        const subjectId = (profile.subjectIds ?? []).find(candidate =>
+          getSIECheckpointProgressBranches(candidate).some(branch =>
+            branch.choices.some(choice => nodeIds.has(choice.nodeId))
+          )
+        );
+        if (!subjectId) return step;
+        const legacy = legacyRequirements[subjectId];
+        const homeworkPolicy = homeworkPolicyBySubject[subjectId]
+          ?? (legacy === "homework_and_exam" || legacy === "homework_only" ? "yes"
+            : legacy === "none" || legacy === "exam_only" ? "no" : "unknown");
+        const homeworkRequiredBeforeNextLecture = homeworkRequiredBySubject[subjectId]
+          ?? (legacy === "homework_and_exam" || legacy === "homework_only" ? "yes"
+            : legacy === "none" || legacy === "exam_only" ? "no" : "unknown");
+        const preLectureExamRequired = examRequiredBySubject[subjectId]
+          ?? (legacy === "homework_and_exam" || legacy === "exam_only" ? "yes"
+            : legacy === "none" || legacy === "homework_only" ? "no" : "unknown");
+        return {
+          ...step,
+          studyMethod: step.studyMethod ?? buildLessonStudyMethod({
+            homeworkPolicy,
+            homeworkRequiredBeforeNextLecture,
+            preLectureExamRequired,
+          }),
+        };
+      }),
+    };
+  }
 
   // Daily plans are flexible tasks, not a timetable. Availability is only a workload signal.
   let scheduleDay = 1;
