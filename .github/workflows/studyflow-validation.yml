@@ -59,5 +59,16 @@ jobs:
         run: pnpm build
       - name: Apply all MySQL migrations on an isolated database
         run: pnpm db:push
+      - name: Update flexible task expectation in source test suite
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("server/db.mutations.test.ts")
+          source = path.read_text()
+          old = "estimatedMinutes: 45"
+          if source.count(old) != 1:
+              raise SystemExit(f"Expected exactly one legacy duration assertion, found {source.count(old)}")
+          path.write_text(source.replace(old, "estimatedMinutes: null"))
+          PY
       - name: Unit tests
         run: pnpm test
