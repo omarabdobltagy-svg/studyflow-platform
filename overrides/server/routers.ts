@@ -110,8 +110,8 @@ type DailyPlanResult = {
 
 // V6 scopes teacher signals to second-year Baccalaureate and retires stale AI-plan tasks.
 const DAILY_PLANNER_POLICY_VERSION = "smart-study-task-list-no-timing-v4";
-const DAILY_PLAN_PREFIX = "SIE_DAILY_PLAN_V4:";
-const DAILY_PLAN_DRAFT_PREFIX = "SIE_DAILY_PLAN_DRAFT_V1:";
+const DAILY_PLAN_PREFIX = "SIE_DAILY_PLAN_V5:";
+const DAILY_PLAN_DRAFT_PREFIX = "SIE_DAILY_PLAN_DRAFT_V2:";
 const ANNUAL_PLAN_PREFIX = "SIE_ANNUAL_PLAN_V1:"
 const STUDY_PLAN_PREFIX = "SIE_STUDY_PLAN_V2:";
 const dailyPlanLocks = new Map<number, Promise<DailyPlanResult>>();
