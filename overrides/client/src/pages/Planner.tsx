@@ -492,7 +492,7 @@ export default function Planner() {
               <label className="block">
                 <span className="mb-1.5 block text-[11px] font-semibold text-muted-foreground">وقت الدراسة يوميًا</span>
                 <select value={dailyMinutes} onChange={event => setDailyMinutes(Number(event.target.value))} className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none focus:border-primary/60">
-                  {[30,45,60,75,90,105,120,135,150,180,210,240,300,360,420,480].map(value => <option key={value} value={value}>{formatStudyDuration(value)}</option>)}
+                  {Array.from(new Set([dailyMinutes,20,30,45,60,75,90,105,120,135,150,180,210,240,270,300,330,360,390,420,450,480,510,540,570,600])).sort((a, b) => a - b).map(value => <option key={value} value={value}>{formatStudyDuration(value)}</option>)}
                 </select>
               </label>
               <label className="block">
