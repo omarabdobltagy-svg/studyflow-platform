@@ -21,6 +21,12 @@ describe("student lesson learning states", () => {
     expect(isStudentLessonStudyComplete("watched_only")).toBe(false);
   });
 
+  it("does not assume a student has or has not watched anything before a position is recorded", () => {
+    expect(getEffectiveStudentLessonState({
+      choices, nodeId: "NAHW_2", studentFrontierId: "__UNKNOWN__", lessonStateModelVersion: 1,
+    })).toBe("not_recorded");
+  });
+
   it("preserves old inclusive frontiers as completed for legacy profiles", () => {
     expect(getEffectiveStudentLessonState({
       choices, nodeId: "NAHW_2", studentFrontierId: "NAHW_3",
@@ -57,7 +63,7 @@ describe("student lesson learning states", () => {
 
   it("returns an actionable summary across watched, missed, studied and review states", () => {
     expect(summarizeStudentLessonStates(["not_watched", "watched_only", "studied", "needs_review"])).toEqual({
-      total: 4, notWatched: 1, watchedOnly: 1, studied: 1, needsReview: 1,
+      total: 4, notRecorded: 0, notWatched: 1, watchedOnly: 1, studied: 1, needsReview: 1,
     });
     expect(getStudentLessonStateLabel("watched_only")).toBe("شاهد الشرح فقط");
   });
