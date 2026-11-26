@@ -8,6 +8,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 // Keep the initial application shell small. Heavy route modules (curriculum,
 // analytics, books) are requested only when the student opens those screens.
 const WorkspaceInteractionHub = lazy(() => import("@/components/WorkspaceInteractionHub"));
+const TeacherClassFollowup = lazy(() => import("@/components/TeacherClassFollowup"));
 const AIActivityCenter = lazy(() => import("@/components/AIActivityCenter"));
 const Books = lazy(() => import("@/pages/Books"));
 const Calendar = lazy(() => import("@/pages/Calendar"));
@@ -76,6 +77,7 @@ function App() {
             <Suspense fallback={null}>
               <WorkspaceInteractionHub />
               <AIActivityCenter />
+              <TeacherClassFollowup />
             </Suspense>
           </WouterRouter>
         </TooltipProvider>
