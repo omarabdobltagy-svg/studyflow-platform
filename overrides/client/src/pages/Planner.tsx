@@ -40,6 +40,7 @@ type PlanStep = {
   day: string;
   title: string;
   detail: string;
+  studyMethod?: { stages: Array<{ title: string; instruction: string; reason: string; optional?: boolean }>; completionCriteria: string; teacherPolicyNote?: string };
   minutes: number;
   category: string;
   priority?: "critical" | "high" | "medium" | "low";
@@ -607,7 +608,7 @@ function PlanCard({ plan, title, studentName, editable, onChange, onApprove, onA
       <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3">
         <div className="rounded-xl border border-border/70 bg-muted/15 p-3"><p className="text-[10px] text-muted-foreground">إجمالي المهام</p><p className="mt-1 text-base font-bold tabular-nums">{plan.steps.length.toLocaleString("ar-EG")}</p></div>
         <div className="rounded-xl border border-border/70 bg-muted/15 p-3"><p className="text-[10px] text-muted-foreground">المهام المكتملة</p><p className="mt-1 text-base font-bold tabular-nums">{completedCount.toLocaleString("ar-EG")}</p></div>
-        <div className="col-span-2 rounded-xl border border-border/70 bg-muted/15 p-3 sm:col-span-1"><p className="text-[10px] text-muted-foreground">طريقة التنفيذ</p><p className="mt-1 text-sm font-bold">مرنة — بدون توقيت إلزامي</p></div>
+        <div className="col-span-2 rounded-xl border border-border/70 bg-muted/15 p-3 sm:col-span-1"><p className="text-[10px] text-muted-foreground">أسلوب المذاكرة</p><p className="mt-1 text-sm font-bold">مراحل واضحة حسب طبيعة الدرس</p></div>
       </div>
     </header>
     <div className="space-y-4 p-4 sm:p-6">
@@ -622,6 +623,7 @@ function PlanCard({ plan, title, studentName, editable, onChange, onApprove, onA
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2"><span className="rounded-md bg-muted/60 px-2 py-1 text-[10px] font-semibold text-muted-foreground">{step.category}</span>{step.priority==="critical"&&<span className="text-[10px] font-semibold text-destructive">عاجل</span>}{step.priority==="high"&&<span className="text-[10px] font-semibold text-amber-600">أولوية عالية</span>}{(step.plannerTaskStatus==="done"||step.existingTask?.status==="done")&&<span className="text-[10px] text-primary">مكتملة</span>}{step.resourceRecommendation&&<span className="text-[10px] font-semibold text-primary">مصدر مدرس متاح</span>}</div>
             <h5 className="mt-2 text-sm font-bold leading-6">{step.title}</h5><p className="mt-1 whitespace-pre-line text-xs leading-6 text-muted-foreground">{step.detail}</p>
+            {step.studyMethod&&<details open className="mt-3 rounded-xl border border-border/70 bg-muted/15 p-3"><summary className="cursor-pointer text-xs font-bold">طريقة المذاكرة والسبب وراء كل مرحلة</summary><ol className="mt-3 space-y-3">{step.studyMethod.stages.map((stage,stageIndex)=><li key={stageIndex} className="border-r-2 border-primary/35 pr-3"><p className="text-xs font-bold">{stageIndex+1}. {stage.title}{stage.optional&&<span className="mr-2 text-[10px] font-normal text-muted-foreground">(حسب المطلوب من المدرس)</span>}</p><p className="mt-1 text-xs leading-6 text-foreground/90">{stage.instruction}</p><p className="mt-1 text-[11px] leading-5 text-muted-foreground">ليه؟ {stage.reason}</p></li>)}</ol>{step.studyMethod.teacherPolicyNote&&<p className="mt-3 rounded-lg bg-amber-500/5 p-2 text-[11px] leading-5 text-muted-foreground">{step.studyMethod.teacherPolicyNote}</p>}<p className="mt-3 border-t border-border/60 pt-3 text-xs font-semibold leading-6">متى تعتبر المهمة مكتملة؟ {step.studyMethod.completionCriteria}</p></details>}
             {step.priorityReason&&<details className="mt-2 text-[11px] text-muted-foreground"><summary className="cursor-pointer">لماذا هذه المهمة؟</summary><p className="mt-2 max-w-xl leading-6">{step.priorityReason}</p></details>}
             {step.resourceRecommendation&&<a href={step.resourceRecommendation.url} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-[11px] font-semibold text-primary">افتح شرح المدرس المقترح</a>}
             {editable&&<div className="mt-3 flex flex-wrap items-center gap-1 border-t border-border/50 pt-2"><Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={()=>setEditing({index,title:step.title,detail:step.detail})}>تعديل</Button><Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" disabled={index===0} onClick={()=>onMoveStep(index,-1)}><ArrowUp className="size-3.5"/> لأعلى</Button><Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" disabled={index===plan.steps.length-1} onClick={()=>onMoveStep(index,1)}><ArrowDown className="size-3.5"/> لأسفل</Button><Button type="button" variant="ghost" size="sm" className="mr-auto h-8 px-2 text-xs text-destructive" disabled={plan.steps.length<=1} onClick={()=>onRemoveStep(index)}><X className="size-3.5"/> حذف</Button></div>}
