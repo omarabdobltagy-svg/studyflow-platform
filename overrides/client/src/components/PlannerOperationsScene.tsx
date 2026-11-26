@@ -1,6 +1,7 @@
 // @ts-nocheck -- Three.js has no declaration package in this repository; matches ThreeAmbientScene.tsx.
 import * as THREE from "three";
-import { FormEvent, useCallback, useMemo, useState } from "react";
+import { gsap } from "gsap";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { getSIECheckpointChoices, getSIESubject, getSIETeacher } from "@shared/sie-catalog";
@@ -282,46 +283,39 @@ function PanelMessage({ children }: { children: ReactHooks.ReactNode }) {
 }
 
 function FunctionScene({ nodes, selectedId, onSelect }: { nodes: SceneNode[]; selectedId: LayerId; onSelect: (id: LayerId) => void }) {
-  const hostRef = useMemo(() => ({ current: null as HTMLDivElement | null }), []);
-  const callbackRef = useMemo(() => ({ current: onSelect }), []);
-  const selectedRef = useMemo(() => ({ current: selectedId }), []);
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const callbackRef = useRef(onSelect);
+  const selectedRef = useRef(selectedId);
+  const groupsRef = useRef<Map<LayerId, THREE.Group>>(new Map());
+  const reducedMotionRef = useRef(false);
+
   callbackRef.current = onSelect;
   selectedRef.current = selectedId;
 
-  useReactSceneEffect(hostRef, nodes, selectedId, callbackRef, selectedRef);
-
-  return <div className="sf-ops-scene-viewport">
-    <div ref={element => { hostRef.current = element; }} className="sf-ops-scene-canvas" aria-label="مشهد ثلاثي الأبعاد تفاعلي لوظائف StudyFlow" role="img" />
-    <div className="sf-ops-scene-hint"><span />اضغط على عقدة لاختيار مساحة العمل</div>
-  </div>;
-}
-
-function useReactSceneEffect(
-  hostRef: { current: HTMLDivElement | null },
-  nodes: SceneNode[],
-  selectedId: LayerId,
-  callbackRef: { current: (id: LayerId) => void },
-  selectedRef: { current: LayerId },
-) {
-  // The renderer is intentionally kept in a small isolated hook-like helper below.
-  useThreeScene(hostRef, nodes, selectedId, callbackRef, selectedRef);
-}
-
-// @ts-ignore - Three.js is intentionally isolated from the app's DOM component typings.
-function useThreeScene(hostRef: any, nodes: SceneNode[], selectedId: LayerId, callbackRef: any, selectedRef: any) {
-  const { useEffect } = requireReactHooks();
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
+
     let renderer: THREE.WebGLRenderer | null = null;
     let frame = 0;
     let observer: ResizeObserver | null = null;
     let disposed = false;
+    let ambientTimeline: gsap.core.Timeline | null = null;
+    const nodeGroups = new Map<LayerId, THREE.Group>();
+    const ownedGeometries: THREE.BufferGeometry[] = [];
+    const ownedMaterials: THREE.Material[] = [];
+
     try {
       const scene = new THREE.Scene();
       const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 30);
       camera.position.set(0, 0, 6.4);
-      renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, powerPreference: "low-power" });
+
+      renderer = new THREE.WebGLRenderer({
+        alpha: true,
+        antialias: true,
+        powerPreference: "low-power",
+        precision: "mediump",
+      });
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
       renderer.setClearColor(0x000000, 0);
       renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -341,62 +335,104 @@ function useThreeScene(hostRef: any, nodes: SceneNode[], selectedId: LayerId, ca
 
       const center = new THREE.Group();
       scene.add(center);
-      const core = new THREE.Mesh(
-        new THREE.IcosahedronGeometry(0.53, 2),
-        new THREE.MeshPhysicalMaterial({ color: 0x6f45a0, metalness: 0.25, roughness: 0.18, clearcoat: 1, emissive: 0x26123e, emissiveIntensity: 0.55 }),
-      );
-      center.add(core);
-      const centerRing = new THREE.Mesh(
-        new THREE.TorusGeometry(0.9, 0.012, 8, 100),
-        new THREE.MeshBasicMaterial({ color: 0xd8b5ff, transparent: true, opacity: 0.7 }),
-      );
+      const coreGeometry = new THREE.IcosahedronGeometry(0.53, 2);
+      const coreMaterial = new THREE.MeshPhysicalMaterial({
+        color: 0x6f45a0,
+        metalness: 0.25,
+        roughness: 0.18,
+        clearcoat: 1,
+        emissive: 0x26123e,
+        emissiveIntensity: 0.55,
+      });
+      ownedGeometries.push(coreGeometry);
+      ownedMaterials.push(coreMaterial);
+      center.add(new THREE.Mesh(coreGeometry, coreMaterial));
+
+      const ringGeometry = new THREE.TorusGeometry(0.9, 0.012, 8, 100);
+      const ringMaterial = new THREE.MeshBasicMaterial({
+        color: 0xd8b5ff,
+        transparent: true,
+        opacity: 0.7,
+      });
+      ownedGeometries.push(ringGeometry);
+      ownedMaterials.push(ringMaterial);
+      const centerRing = new THREE.Mesh(ringGeometry, ringMaterial);
       centerRing.rotation.x = 1.05;
       center.add(centerRing);
 
-      const groups: THREE.Group[] = [];
       const hitTargets: THREE.Mesh[] = [];
       const linkPositions: number[] = [];
-      const colors = nodes.map(node => new THREE.Color(node.color));
       nodes.forEach((node, index) => {
         const angle = (index / nodes.length) * Math.PI * 2 - Math.PI / 2;
         const group = new THREE.Group();
-        group.position.set(Math.cos(angle) * 2.05, Math.sin(angle) * 1.35, index % 2 ? -0.12 : 0.12);
+        group.position.set(
+          Math.cos(angle) * 2.05,
+          Math.sin(angle) * 1.35,
+          index % 2 ? -0.12 : 0.12,
+        );
         group.userData.layerId = node.id;
-        const material = new THREE.MeshPhysicalMaterial({ color: colors[index], emissive: colors[index], emissiveIntensity: node.id === selectedId ? 0.3 : 0.1, metalness: 0.3, roughness: 0.2, clearcoat: 1 });
-        const mesh = new THREE.Mesh(new THREE.DodecahedronGeometry(0.28 + Math.min(0.12, Number(node.value.replace("%", "")) / 500), 1), material);
+
+        const color = new THREE.Color(node.color);
+        const geometry = new THREE.DodecahedronGeometry(0.32, 1);
+        const material = new THREE.MeshPhysicalMaterial({
+          color,
+          emissive: color,
+          emissiveIntensity: node.id === selectedRef.current ? 0.3 : 0.1,
+          metalness: 0.3,
+          roughness: 0.2,
+          clearcoat: 1,
+        });
+        ownedGeometries.push(geometry);
+        ownedMaterials.push(material);
+        const mesh = new THREE.Mesh(geometry, material);
         mesh.userData.layerId = node.id;
         group.add(mesh);
-        const halo = new THREE.Mesh(
-          new THREE.TorusGeometry(0.42, 0.009, 7, 70),
-          new THREE.MeshBasicMaterial({ color: colors[index], transparent: true, opacity: node.id === selectedId ? 0.95 : 0.45 }),
-        );
+
+        const haloGeometry = new THREE.TorusGeometry(0.42, 0.009, 7, 70);
+        const haloMaterial = new THREE.MeshBasicMaterial({
+          color,
+          transparent: true,
+          opacity: node.id === selectedRef.current ? 0.95 : 0.45,
+        });
+        ownedGeometries.push(haloGeometry);
+        ownedMaterials.push(haloMaterial);
+        const halo = new THREE.Mesh(haloGeometry, haloMaterial);
         halo.rotation.x = Math.PI / 2.4;
         group.add(halo);
+
         scene.add(group);
-        groups.push(group);
+        nodeGroups.set(node.id, group);
         hitTargets.push(mesh);
         linkPositions.push(0, 0, 0, group.position.x, group.position.y, group.position.z);
       });
+
+      groupsRef.current = nodeGroups;
       const linkGeometry = new THREE.BufferGeometry();
       linkGeometry.setAttribute("position", new THREE.Float32BufferAttribute(linkPositions, 3));
-      const links = new THREE.LineSegments(linkGeometry, new THREE.LineBasicMaterial({ color: 0xd8c6e8, transparent: true, opacity: 0.28 }));
-      scene.add(links);
+      const linksMaterial = new THREE.LineBasicMaterial({
+        color: 0xd8c6e8,
+        transparent: true,
+        opacity: 0.28,
+      });
+      ownedGeometries.push(linkGeometry);
+      ownedMaterials.push(linksMaterial);
+      scene.add(new THREE.LineSegments(linkGeometry, linksMaterial));
 
       const raycaster = new THREE.Raycaster();
       const pointer = new THREE.Vector2();
-      const onPointerMove = (event: PointerEvent) => {
+      const updatePointer = (event: PointerEvent | MouseEvent) => {
         const bounds = renderer!.domElement.getBoundingClientRect();
         pointer.x = ((event.clientX - bounds.left) / Math.max(bounds.width, 1)) * 2 - 1;
         pointer.y = -(((event.clientY - bounds.top) / Math.max(bounds.height, 1)) * 2 - 1);
         raycaster.setFromCamera(pointer, camera);
+      };
+      const onPointerMove = (event: PointerEvent) => {
+        updatePointer(event);
         const hit = raycaster.intersectObjects(hitTargets, false)[0];
         renderer!.domElement.style.cursor = hit ? "pointer" : "grab";
       };
       const onClick = (event: MouseEvent) => {
-        const bounds = renderer!.domElement.getBoundingClientRect();
-        pointer.x = ((event.clientX - bounds.left) / Math.max(bounds.width, 1)) * 2 - 1;
-        pointer.y = -(((event.clientY - bounds.top) / Math.max(bounds.height, 1)) * 2 - 1);
-        raycaster.setFromCamera(pointer, camera);
+        updatePointer(event);
         const hit = raycaster.intersectObjects(hitTargets, false)[0];
         const layerId = hit?.object.userData.layerId as LayerId | undefined;
         if (layerId) callbackRef.current(layerId);
@@ -405,6 +441,8 @@ function useThreeScene(hostRef: any, nodes: SceneNode[], selectedId: LayerId, ca
       renderer.domElement.addEventListener("click", onClick);
 
       const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      reducedMotionRef.current = reduceMotion;
+
       const resize = () => {
         if (!renderer || disposed) return;
         const width = Math.max(1, host.clientWidth);
@@ -418,26 +456,26 @@ function useThreeScene(hostRef: any, nodes: SceneNode[], selectedId: LayerId, ca
       observer = new ResizeObserver(resize);
       observer.observe(host);
 
+      if (!reduceMotion) {
+        ambientTimeline = gsap.timeline({ repeat: -1, yoyo: true });
+        ambientTimeline
+          .to(center.rotation, { y: 0.3, duration: 5.8, ease: "sine.inOut" })
+          .to(center.rotation, { x: -0.12, duration: 4.2, ease: "sine.inOut" }, 0);
+
+        nodeGroups.forEach((group, index) => {
+          gsap.to(group.position, {
+            y: group.position.y + (index % 2 === 0 ? 0.09 : -0.09),
+            duration: 2.4 + index * 0.17,
+            delay: index * 0.13,
+            repeat: -1,
+            yoyo: true,
+            ease: "sine.inOut",
+          });
+        });
+      }
+
       const render = () => {
         if (disposed || !renderer) return;
-        const time = performance.now() * 0.001;
-        if (!reduceMotion) {
-          center.rotation.y = time * 0.12;
-          center.rotation.x = Math.sin(time * 0.2) * 0.08;
-          centerRing.rotation.z = time * 0.12;
-          groups.forEach((group, index) => {
-            const selected = group.userData.layerId === selectedRef.current;
-            const target = selected ? 1.19 : 1;
-            group.scale.setScalar(group.scale.x + (target - group.scale.x) * 0.08);
-            group.rotation.y = time * (0.14 + index * 0.018);
-            group.position.z = Math.sin(time * 0.7 + index) * 0.08;
-          });
-        } else {
-          groups.forEach(group => {
-            const selected = group.userData.layerId === selectedRef.current;
-            group.scale.setScalar(selected ? 1.14 : 1);
-          });
-        }
         renderer.render(scene, camera);
         if (!reduceMotion) frame = window.requestAnimationFrame(render);
       };
@@ -447,31 +485,56 @@ function useThreeScene(hostRef: any, nodes: SceneNode[], selectedId: LayerId, ca
         disposed = true;
         window.cancelAnimationFrame(frame);
         observer?.disconnect();
+        ambientTimeline?.kill();
         renderer?.domElement.removeEventListener("pointermove", onPointerMove);
         renderer?.domElement.removeEventListener("click", onClick);
-        scene.traverse(object => {
-          if (object instanceof THREE.Mesh || object instanceof THREE.LineSegments) {
-            object.geometry.dispose();
-            const materials = Array.isArray(object.material) ? object.material : [object.material];
-            materials.forEach(material => material.dispose());
-          }
+        nodeGroups.forEach(group => {
+          gsap.killTweensOf(group.position);
+          gsap.killTweensOf(group.scale);
         });
+        gsap.killTweensOf(center.rotation);
+        groupsRef.current.clear();
+        ownedGeometries.forEach(geometry => geometry.dispose());
+        ownedMaterials.forEach(material => material.dispose());
         renderer?.dispose();
         renderer?.domElement.remove();
       };
     } catch (error) {
       console.error("StudyFlow functional scene unavailable:", error);
+      disposed = true;
+      window.cancelAnimationFrame(frame);
+      observer?.disconnect();
+      ambientTimeline?.kill();
       renderer?.dispose();
       renderer?.domElement.remove();
       host.replaceChildren();
       return;
     }
-  }, [nodes, selectedId]);
-}
+  }, [nodes]);
 
-function requireReactHooks() {
-  // Import-free indirection keeps the Three.js helper isolated from the main JSX block.
-  return ReactHooks;
-}
+  useEffect(() => {
+    groupsRef.current.forEach((group, id) => {
+      const scale = selectedId === id ? 1.2 : 1;
+      gsap.to(group.scale, {
+        x: scale,
+        y: scale,
+        z: scale,
+        duration: reducedMotionRef.current ? 0 : 0.34,
+        ease: "power3.out",
+        overwrite: "auto",
+      });
+    });
+  }, [selectedId]);
 
-import * as ReactHooks from "react";
+  return (
+    <div className="sf-ops-scene-viewport">
+      <div
+        ref={hostRef}
+        className="sf-ops-scene-canvas"
+        aria-label="مشهد ثلاثي الأبعاد تفاعلي لوظائف StudyFlow"
+        role="img"
+      />
+      <div className="sf-ops-scene-hint"><span />اضغط على عقدة لاختيار مساحة العمل</div>
+    </div>
+  );
+}
