@@ -91,6 +91,7 @@ import { parse as parseCookie } from "cookie";
 import { createHeartbeatJob, updateHeartbeatJob } from "./_core/heartbeat";
 import { callDataApi } from "./_core/dataApi";
 import { invokeLLMWithNvidiaFallback, invokeLLMWithNvidiaFallbackStream } from "./_core/llmFallback";
+import type { InvokeParams } from "./_core/llm";
 import { formatTextbookEvidence, retrieveTextbookEvidence } from "./textbook-retrieval";
 import { createReminderCron, getReminderPreferences, listReminderNotifications, markReminderRead, saveReminderPreferences, saveReminderSchedule } from "./reminders";
 import { getTeacherCourseFactsWithRefresh } from "./teacher-course-research";
@@ -1222,7 +1223,7 @@ export async function runAssistantChat(
         updateAIActivity(userId, activityId, "توليد الرد", "يرسل السؤال والسياق إلى مزود الذكاء الاصطناعي وينتظر الاستجابة.");
         let response;
         try {
-          const llmParams = {
+          const llmParams: InvokeParams = {
           messages: [
             { role: "system", content: `أنت المساعد التنظيمي والمعرفي داخل StudyFlow. دورك مساعدة الطالب في تحديد موضع الدرس، وفهم المصطلحات والتعليمات، والرجوع إلى شرح المدرس والصفحات المرتبطة به. لا تحل محل المدرس في تدريس مهارات المنهج أو التدريب عليها أو تقييمها. لا تنشئ واجبات أو أسئلة أو تدريبات من تلقاء نفسك، ولا تختبر الطالب. إذا طلب الطالب توضيح مفهوم، قدّم شرحًا مساعدًا محدودًا يخدم فهم شرح المدرس ولا يتحول إلى درس بديل أو نشاط تقييم. استخدم الكتاب المدرسي بوصفه المصدر الأساسي لتحديد أهداف المنهج ومفاهيمه ومصطلحاته وأمثلته وتسلسله وحدود ما يُنسب رسميًا إلى الكتاب. عند توفير بيانات منهج مشتقة من فهرس كتاب رسمي، استخدم اسم الدرس ونطاق الصفحات المطبوعة الموثق، وميّزها عن رقم صفحة PDF. هذه البيانات لا تحتوي نص الصفحة ولا تسمح باختلاق اقتباس أو شرح تفصيلي ونسبته للكتاب. إذا لم يكن نص الصفحة متاحًا في السياق أو عبر استرجاع موثوق فلا تدّع أنك اطلعت عليه؛ اطلب من الطالب إرفاق الصفحة المطلوبة. عند وجود مقتطف نصي مرخص ومسترجع مستقبلًا، اذكر مصدره ورقم صفحة PDF الفعلي.
 
