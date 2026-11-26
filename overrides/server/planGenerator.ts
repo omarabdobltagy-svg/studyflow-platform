@@ -1603,7 +1603,8 @@ export async function generatePersonalPlan(
           return null;
         }
       }));
-    const teacherFactsBySubject = Object.fromEntries(cachedTeacherFacts.filter(Boolean)) as Record<string, {
+    const availableTeacherFacts = cachedTeacherFacts.filter((item): item is NonNullable<typeof item> => item !== null);
+    const teacherFactsBySubject = Object.fromEntries(availableTeacherFacts) as Record<string, {
       homeworkPolicy: TeacherRequirementState;
       homeworkRequiredBeforeNextLecture: TeacherRequirementState;
       preLectureExamRequired: TeacherRequirementState;
