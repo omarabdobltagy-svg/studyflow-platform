@@ -796,3 +796,14 @@ body[data-studyflow-sections-open="true"] .sf-hub-root {
   .sf-task-overview-progress { grid-template-columns:1fr; }
   .sf-task-overview-stats article { min-height:58px; }
 }
+
+/* Reference progress is intentionally behind the student's own completion rail. */
+.sf-map-progress-rail { position:relative; }
+.sf-map-progress-rail > b {
+  position:absolute; inset-block:0; inset-inline-start:0; display:block;
+  border-radius:inherit; background:rgba(209,184,159,.52);
+}
+.sf-map-progress-rail > i { position:relative; z-index:1; }
+.sf-map-step-gap { border-color:rgba(190,136,92,.5); background:color-mix(in srgb,#bd895e 10%,var(--card)); }
+.sf-map-step-gap > em { background:rgba(190,136,92,.18); color:var(--foreground); }
+.sf-map-step-gap:hover { border-color:#bd895e; }
