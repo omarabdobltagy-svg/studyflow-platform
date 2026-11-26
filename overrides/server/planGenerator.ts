@@ -1285,10 +1285,24 @@ function applyDailyPlanDepth(
   const selection = (profile.selection ?? {}) as Record<string, any>;
   const teacherChoices = (selection.teacherChoices ?? {}) as Record<string, string>;
   const teacherSchedules = (selection.teacherSchedules ?? {}) as Record<string, Array<{ dayOfWeek: number; startTime: string }>>;
-  const steps = plan.steps.map(step => ({
-    ...step,
-    phaseId: step.phaseId ?? (step.existingTask ? "backlog" as const : "steady" as const),
-  }));
+  const subjectForStep = (step: GeneratedPlan["steps"][number]) => {
+    const nodeIds = new Set(step.curriculumNodeIds ?? []);
+    return (profile.subjectIds ?? []).find(subjectId =>
+      getPlanningBranches(subjectId).some(branch => branch.choices.some(choice => nodeIds.has(choice.nodeId)))
+    );
+  };
+  const steps = plan.steps.map(step => {
+    if (step.phaseId || step.existingTask) {
+      return { ...step, phaseId: step.phaseId ?? "backlog" as const };
+    }
+    const subjectId = subjectForStep(step);
+    const isTeacherSync = Boolean(subjectId
+      && teacherChoices[subjectId]
+      && teacherChoices[subjectId] !== "__SKIP__"
+      && Array.isArray(teacherSchedules[subjectId])
+      && teacherSchedules[subjectId].length > 0);
+    return { ...step, phaseId: isTeacherSync ? "teacher_sync" as const : "steady" as const };
+  });
   const usedTaskIds = new Set(steps.map(step => step.existingTask?.id).filter((id): id is number => typeof id === "number"));
   const representedNodeIds = new Set(steps.flatMap(step => step.curriculumNodeIds ?? []));
   const usedTitles = new Set(steps.map(step => normalizePlannerLessonText(step.title)));
@@ -1778,6 +1792,7 @@ export async function generatePersonalPlan(
             title: existing.taskTitle,
             status: existing.status,
             confidence: existing.confidence,
+            dueAt: existing.dueAt instanceof Date ? existing.dueAt.toISOString() : existing.dueAt ?? null,
           },
         };
       }),
