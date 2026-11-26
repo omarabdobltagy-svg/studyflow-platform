@@ -131,10 +131,10 @@ function parseTaskNotes(notes: string | null | undefined) {
   let currentTitle = "ملاحظات إضافية";
   let currentLines: string[] = [];
   const flush = () => {
-    const value = currentLines.join("\\n").trim();
+    const value = currentLines.join("\n").trim();
     if (value) sections.push({ title: currentTitle, content: value });
   };
-  for (const line of notes.split("\\n")) {
+  for (const line of notes.split("\n")) {
     const heading = labels.find(label => line.trim() === label + ":");
     if (heading) { flush(); currentTitle = heading; currentLines = []; }
     else currentLines.push(line);
