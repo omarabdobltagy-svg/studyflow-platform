@@ -95,7 +95,7 @@ import type { InvokeParams } from "./_core/llm";
 import { formatTextbookEvidence, retrieveTextbookEvidence } from "./textbook-retrieval";
 import { createReminderCron, getReminderPreferences, listReminderNotifications, markReminderRead, saveReminderPreferences, saveReminderSchedule } from "./reminders";
 import { getTeacherCourseFactsWithRefresh } from "./teacher-course-research";
-import { getEffectiveStudentLessonState, summarizeStudentLessonStates, STUDENT_LESSON_STATES, isStudentLessonState } from "@shared/sie-lesson-state";
+import { getEffectiveStudentLessonState, summarizeStudentLessonStates, STUDENT_LESSON_STATES, isStudentLessonState, type StudentLessonState } from "@shared/sie-lesson-state";
 import { getDueTeacherClassFollowups, buildTeacherClassFollowupKey, type TeacherClassFollowupRecord } from "./teacherClassFollowups";
 
 
@@ -2553,13 +2553,13 @@ export const appRouter = router({
           const saved = branchRecords[branch.branchId] ?? {};
           const gap = gapByBranch[subjectId]?.[branch.branchId];
           const frontier = gap?.studentFrontierId ?? "__UNKNOWN__";
-          const lessonStates = (saved.lessonStates ?? {}) as Record<string, { state?: unknown }>;
+          const lessonStates = (saved.lessonStates ?? {}) as Record<string, { state?: StudentLessonState }>;
           const states = branch.choices.map(choice => getEffectiveStudentLessonState({
             choices: branch.choices,
             nodeId: choice.nodeId,
             studentFrontierId: frontier,
             lessonStateModelVersion: Number(saved.lessonStateModelVersion ?? 0),
-            saved: lessonStates[choice.nodeId] as { state?: unknown } | undefined,
+            saved: lessonStates[choice.nodeId],
           }));
           const referencePosition = typeof gap?.referencePosition === "number" ? gap.referencePosition : null;
           const teacherCoveredStates = referencePosition === null ? [] : states.slice(0, referencePosition);
