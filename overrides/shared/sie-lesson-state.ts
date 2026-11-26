@@ -1,4 +1,4 @@
-export const STUDENT_LESSON_STATES = ["not_watched", "watched_only", "studied", "needs_review"] as const;
+export const STUDENT_LESSON_STATES = ["not_recorded", "not_watched", "watched_only", "studied", "needs_review"] as const;
 export type StudentLessonState = typeof STUDENT_LESSON_STATES[number];
 
 export type SavedStudentLessonState = {
@@ -26,13 +26,15 @@ export function getEffectiveStudentLessonState(input: {
 }): StudentLessonState {
   if (isStudentLessonState(input.saved?.state)) return input.saved.state;
   const index = input.choices.findIndex(choice => choice.nodeId === input.nodeId);
-  if (index < 0) return "not_watched";
+  if (index < 0) return "not_recorded";
   const frontier = input.studentFrontierId;
+  if (!frontier || frontier === "__UNKNOWN__" || frontier === "__DEFERRED__" || frontier === "__NONE__") {
+    return "not_recorded";
+  }
   const frontierIndex = frontier === "__NOT_STARTED__"
     ? -1
-    : typeof frontier === "string"
-      ? input.choices.findIndex(choice => choice.nodeId === frontier)
-      : -1;
+    : input.choices.findIndex(choice => choice.nodeId === frontier);
+  if (frontierIndex < 0 && frontier !== "__NOT_STARTED__") return "not_recorded";
   if (frontierIndex < index) return "not_watched";
   return input.lessonStateModelVersion && input.lessonStateModelVersion >= 1
     ? "watched_only"
@@ -45,6 +47,7 @@ export function isStudentLessonStudyComplete(state: StudentLessonState): boolean
 
 export function getStudentLessonStateLabel(state: StudentLessonState): string {
   switch (state) {
+    case "not_recorded": return "لم يحدد حالته بعد";
     case "not_watched": return "لم يشاهد الشرح";
     case "watched_only": return "شاهد الشرح فقط";
     case "studied": return "ذاكر وفهم";
@@ -55,6 +58,7 @@ export function getStudentLessonStateLabel(state: StudentLessonState): string {
 export function summarizeStudentLessonStates(states: StudentLessonState[]) {
   return {
     total: states.length,
+    notRecorded: states.filter(state => state === "not_recorded").length,
     notWatched: states.filter(state => state === "not_watched").length,
     watchedOnly: states.filter(state => state === "watched_only").length,
     studied: states.filter(state => state === "studied").length,
