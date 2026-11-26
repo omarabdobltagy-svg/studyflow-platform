@@ -98,7 +98,7 @@ function getNextOccurrence(slot: TeacherScheduleSlot, after: Date): Date {
 function getNextSubjectOccurrence(slots: TeacherScheduleSlot[], after: Date): Date {
   const validSlots = slots.filter(slot =>
     Number.isInteger(slot.dayOfWeek) && slot.dayOfWeek >= 0 && slot.dayOfWeek <= 6
-    && /^([01]\\d|2[0-3]):[0-5]\\d$/.test(slot.startTime)
+    && /^([01]\d|2[0-3]):[0-5]\d$/.test(slot.startTime)
   );
   const candidates = validSlots.map(slot => getNextOccurrence(slot, after).getTime());
   if (!candidates.length) throw new Error("No valid upcoming teacher sessions are configured.");
