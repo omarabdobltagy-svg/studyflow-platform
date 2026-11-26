@@ -685,7 +685,7 @@ export async function approvePlanAsGoalTree(
         userId,
         parentGoalId,
         title: `المرحلة ${index + 1}: ${step.title}`,
-        description: step.detail || `جلسة اليوم ${step.day} من الخطة المعتمدة.`,
+        description: step.detail || "مهمة من الخطة المعتمدة.",
         kind: "short",
         category: "مرحلة تدريبية",
         color: "indigo",
@@ -697,7 +697,7 @@ export async function approvePlanAsGoalTree(
         userId,
         goalId: stageGoalId,
         title: step.title,
-        notes: step.detail || `جلسة اليوم ${step.day} من خطة «${plan.title.trim()}».`,
+        notes: step.detail || `مهمة من خطة «${plan.title.trim()}».`,
         category: step.category,
         priority: step.priority === "critical" || step.priority === "high" ? "high" as const
           : step.priority === "low" ? "low" as const : "medium" as const,
@@ -916,7 +916,7 @@ export async function syncDailyPlanGoalTree(
 
       if (stage) {
         await tx.update(goals).set({
-          title: `جلسة: ${step.title}`,
+          title: `مهمة: ${step.title}`,
           description: [step.detail, step.scheduleNote].filter(Boolean).join("\n\n"),
           targetDate: dueAt,
           status: "active",
@@ -964,10 +964,10 @@ export async function syncDailyPlanGoalTree(
       const stageInsert = await tx.insert(goals).values({
         userId,
         parentGoalId,
-        title: `جلسة: ${step.title}`,
+        title: `مهمة: ${step.title}`,
         description: step.detail,
         kind: "short",
-        category: "جلسة يومية",
+        category: "مهمة دراسية",
         color: "gold",
         targetDate: dueAt,
         status: "active",
