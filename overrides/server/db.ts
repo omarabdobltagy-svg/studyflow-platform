@@ -634,6 +634,12 @@ export type ApprovedPlanStep = {
   day: number;
   title: string;
   detail: string;
+  whyThisTask?: string;
+  priorityReason?: string;
+  rules?: string[];
+  prerequisites?: string[];
+  executionSteps?: string[];
+  completionCriteria?: string[];
   minutes: number;
   category: string;
   priority?: "critical" | "high" | "medium" | "low";
