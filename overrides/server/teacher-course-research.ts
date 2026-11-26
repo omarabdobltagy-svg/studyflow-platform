@@ -195,12 +195,13 @@ async function refreshTeacherCourseFacts(scope: ResearchScope) {
     if (!teacher || !subject || !teacher.subjectIds.includes(scope.subjectId)) {
       throw new Error("Teacher and subject must exist in the shared catalog.");
     }
-    const evidence = await collectYouTubeEvidence(teacher.nameAr, teacher.brandName, subject.nameAr);
+    let evidence: TeacherCourseFactsInput["evidence"] = [];
     let classified;
     try {
+      evidence = await collectYouTubeEvidence(teacher.nameAr, teacher.brandName, subject.nameAr);
       classified = await classifyEvidence(teacher.nameAr, subject.nameAr, scope, evidence);
     } catch (error) {
-      console.warn("[Teacher directory] AI evidence classification failed:", error instanceof Error ? error.message.slice(0, 250) : "unknown error");
+      console.warn("[Teacher directory] Research pipeline failed:", error instanceof Error ? error.message.slice(0, 250) : "unknown error");
       classified = {
         availableModes: [] as Array<"center" | "online">,
         homeworkPolicy: "unknown" as const,
@@ -211,6 +212,8 @@ async function refreshTeacherCourseFacts(scope: ResearchScope) {
         evidence: [] as TeacherCourseFactsInput["evidence"],
       };
     }
+    // Evidence collection and classification failures are cached for a short retry window.
+
     const now = new Date();
     const ttlHours = classified.verificationStatus === "research_failed" ? FAILURE_RETRY_HOURS : CACHE_DAYS * 24;
     await upsertTeacherCourseFacts({
