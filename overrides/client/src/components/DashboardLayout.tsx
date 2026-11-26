@@ -11,7 +11,7 @@ import StudyOrbScene from "@/components/StudyOrbScene";
 import { gsap } from "gsap";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
-  BarChart3, BookOpenCheck, BookOpenText, BrainCircuit, CalendarDays, CalendarRange, MessageCircle, Network,
+  BarChart3, BookOpenCheck, BookOpenText, BrainCircuit, CalendarDays, CalendarRange, MessageCircle, Network, X as XIcon,
   CheckSquare2, ChevronLeft, Goal, LayoutDashboard, LibraryBig, LogOut,
   Menu, Moon, Settings2, Sparkles, Sun,
 } from "lucide-react";
@@ -79,6 +79,7 @@ export default function DashboardLayout({ title, description, children, action }
   });
   const [location, setLocation] = useLocation();
   const [isMobileNavOpen, setMobileNavOpen] = useState(false);
+  const [showLogoutConfirm,setShowLogoutConfirm]=useState(false);
   const pageContentRef = useRef<HTMLDivElement>(null);
   // Keep the top dock focused on the few destinations students use every day.
   // The full navigation remains available in the sidebar and the mobile "sections" sheet.
@@ -295,7 +296,7 @@ export default function DashboardLayout({ title, description, children, action }
         <b>{user.name || "مستخدم التطبيق"}</b>
         <span>مساحتك الشخصية</span>
       </div>
-      <Button variant="ghost" size="icon" onClick={() => void logout()} className="sf-account-logout" aria-label="تسجيل الخروج" title="تسجيل الخروج">
+      <Button variant="ghost" size="icon" onClick={() => setShowLogoutConfirm(true)} className="sf-account-logout" aria-label="تسجيل الخروج" title="تسجيل الخروج">
         <LogOut className="size-4" />
       </Button>
     </div>
@@ -407,7 +408,14 @@ export default function DashboardLayout({ title, description, children, action }
         </button>
       </nav>
 
-      <Sheet open={isMobileNavOpen} onOpenChange={setMobileNavOpen}>
+      {showLogoutConfirm&&<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setShowLogoutConfirm(false);}}>
+        <section role="alertdialog" aria-modal="true" aria-labelledby="sf-logout-title" className="w-full max-w-sm rounded-2xl border border-border bg-card p-5 shadow-2xl">
+          <div className="flex items-start justify-between gap-3"><div><p className="eyebrow">STUDYFLOW / ACCOUNT</p><h2 id="sf-logout-title" className="mt-1 text-lg font-bold">تسجيل الخروج</h2></div><Button type="button" variant="ghost" size="icon" onClick={()=>setShowLogoutConfirm(false)} aria-label="إغلاق"><XIcon className="size-4"/></Button></div>
+          <p className="mt-3 text-sm leading-7 text-muted-foreground">متأكد إنك عايز تسجل خروج؟ بياناتك وخطتك هتفضل محفوظة، وتقدر ترجع لها لما تسجل الدخول تاني.</p>
+          <div className="mt-5 flex gap-2"><Button type="button" variant="outline" className="flex-1 rounded-xl" onClick={()=>setShowLogoutConfirm(false)}>إلغاء</Button><Button type="button" className="flex-1 rounded-xl" onClick={()=>{setShowLogoutConfirm(false);void logout();}}>تأكيد الخروج</Button></div>
+        </section>
+      </div>}
+            <Sheet open={isMobileNavOpen} onOpenChange={setMobileNavOpen}>
         <SheetContent side="bottom" className="sf-mobile-sheet rounded-t-3xl border-x-0 border-b-0 p-0 text-sidebar-foreground">
           <SheetHeader className="sf-mobile-sheet-header">
             <SheetTitle>كل أقسام StudyFlow</SheetTitle>
