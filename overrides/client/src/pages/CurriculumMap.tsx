@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import {
   getSIEStudentVisibleBranches,
-  getSIECheckpointChoiceDisplayLabel,
   getSIECheckpointProgressOptions,
   getSIESubject,
   getSIETeacher,
@@ -43,6 +42,111 @@ function gapLabel(gap: LearningGap | null, pointLabel: string) {
   if (gap.gapCount > 0) return `فجوة مرجعية: ${gap.gapCount} ${pointLabel}`;
   if ((gap.aheadCount ?? 0) > 0) return `متقدم بـ ${gap.aheadCount} ${pointLabel}`;
   return "متوافق مع المرجع";
+}
+
+const ENGLISH_CURRICULUM_LABELS: Record<string, string> = {
+  "Living Well in a Complex World": "الحياة الجيدة في عالم معقّد",
+  "Leisure Time": "وقت الفراغ",
+  "Echoes of the Past": "أصداء الماضي",
+  "The Power of Choice": "قوة الاختيار",
+  "The Greenhouse Effect": "ظاهرة الاحتباس الحراري",
+  "The Space We Share": "المساحة التي نتشاركها",
+  "Discovering Your Passion": "اكتشاف شغفك",
+  "Pathways to Progress": "مسارات التقدم",
+  "Circles of Belonging": "دوائر الانتماء",
+  "Behind the Buy": "ما وراء الشراء",
+  "The Lost World": "العالم المفقود",
+  "Vocabulary": "المفردات",
+  "Participial Phrases and Relative Clauses": "عبارات التصريف والجمل الموصولة",
+  "Conditional Structures": "التراكيب الشرطية",
+  "Gerunds and Infinitives": "المصدر بصيغتيه Gerund وInfinitive",
+  "Narrative Tenses": "أزمنة السرد",
+  "Prepositional Phrases of Place and Time": "عبارات حروف الجر للمكان والزمان",
+  "Concession Clauses": "جمل التنازل",
+  "Passive Voice for Formal Reporting": "المبني للمجهول في التقارير الرسمية",
+  "Present Perfect": "المضارع التام",
+  "Linking Words and Logical Connectors": "أدوات الربط المنطقي",
+  "Fronting for Emphasis": "التقديم للتوكيد",
+  "Modal Verbs": "الأفعال الناقصة",
+  "Cause-and-Effect Structures": "تراكيب السبب والنتيجة",
+  "Adverbials of Degree and Frequency": "ظروف الدرجة والتكرار",
+  "Reported Speech": "الكلام المنقول",
+  "Used to / Would (Past Habits)": "التعبير عن العادات الماضية",
+  "Present Continuous": "المضارع المستمر",
+  "Have / Get Something Done (Causative)": "صيغة السببية",
+  "So...that / Such...that": "تراكيب النتيجة",
+  "Stative Verbs vs. Action Verbs": "أفعال الحالة مقابل أفعال الحركة",
+  "Quantifiers": "المحددات الكمية",
+  "Social Media and Self-Image": "وسائل التواصل الاجتماعي وصورة الذات",
+  "Exploring Modern Lifestyles": "استكشاف أنماط الحياة الحديثة",
+  "Whose Responsibility Is It?": "على من تقع المسؤولية؟",
+  "Understanding Mental Health": "فهم الصحة النفسية",
+  "Screen Time and Young People": "وقت الشاشة والشباب",
+  "Creative Arts as Leisure Activities": "الفنون الإبداعية كأنشطة لوقت الفراغ",
+  "Sport and Physical Activity as Leisure": "الرياضة والنشاط البدني في وقت الفراغ",
+  "Not Exactly a Relaxing Day": "يوم ليس مريحًا تمامًا",
+  "Sites of Memory": "مواقع الذاكرة",
+  "The Museum as a Storyteller": "المتحف بوصفه راويًا",
+  "The Viral Past": "الماضي سريع الانتشار",
+  "Social Media and Historical Events": "وسائل التواصل والأحداث التاريخية",
+  "Food Waste": "هدر الطعام",
+  "Beyond the Brand": "ما وراء العلامة التجارية",
+  "Digital Consumption": "الاستهلاك الرقمي",
+  "Black Friday and Sales Culture": "الجمعة السوداء وثقافة التخفيضات",
+  "The Climate Crisis": "أزمة المناخ",
+  "Renewable Energy – Powering a Sustainable Future": "الطاقة المتجددة: طاقة لمستقبل مستدام",
+  "Greening Projects in Egypt": "مشروعات الاستدامة في مصر",
+  "Individual and Collective Actions": "جهود فردية وجماعية",
+  "A World We Borrow": "عالم نستعيره",
+  "When Needs Compete": "عندما تتنافس الاحتياجات",
+  "Voices for the Voiceless": "أصوات من لا صوت لهم",
+  "Global Citizens, Local Actions": "مواطنون عالميون وأفعال محلية",
+  "From Hobby to Opportunity": "من الهواية إلى الفرصة",
+  "Building a Community Around Your Passion": "بناء مجتمع حول شغفك",
+  "Leaving Your Mark": "اترك بصمتك",
+  "Time Well Spent: Balancing Passion and Priorities": "وقت مثمر: الموازنة بين الشغف والأولويات",
+  "Vocational Education in Egypt": "التعليم الفني في مصر",
+  "International Vocational Voices Online": "أصوات التعليم الفني عالميًا عبر الإنترنت",
+  "The Egyptian-Japanese Schools (EJS)": "المدارس المصرية اليابانية",
+  "The Skills Employers Really Want": "المهارات التي يبحث عنها أصحاب العمل",
+  "Finding My Place": "أجد مكاني",
+  "Relationships That Help Us Grow": "علاقات تساعدنا على النمو",
+  "No One Left Behind": "لا أحد يُترك خلف الركب",
+  "Community That Cares": "مجتمع يهتم بأفراده",
+  "Hidden Cost of a Click": "التكلفة الخفية لضغطة واحدة",
+  "Chasing Validation": "السعي وراء القبول",
+  "True Price of Fast Fashion": "التكلفة الحقيقية للأزياء السريعة",
+  "Rethinking What We Buy: A Community Response": "إعادة التفكير فيما نشتريه: استجابة مجتمعية",
+  "A Dream of Adventure": "حلم بالمغامرة",
+  "Professor Challenger’s Secret": "سر البروفيسور تشالنجر",
+  "The Expedition Is Chosen": "اختيار أفراد الرحلة الاستكشافية",
+  "Into the Unknown": "إلى المجهول",
+  "Trapped in the Lost World": "عالقون في العالم المفقود",
+  "Malone’s Night Adventure": "مغامرة مالون الليلية",
+  "Prisoners of the Ape-Men": "أسرى رجال القردة",
+  "The Battle for the Plateau": "المعركة من أجل الهضبة",
+  "The Hidden Way Home": "الطريق الخفي إلى الوطن",
+  "Proof Before the World": "إثبات الحقيقة أمام العالم",
+};
+
+function displayCurriculumTitle(value: string | null | undefined): string {
+  const title = (value ?? "").trim();
+  if (!title) return "عنوان غير متاح";
+  return ENGLISH_CURRICULUM_LABELS[title]
+    ?? title.replace(/^Unit\\s+(\\d+)\\s*:/i, "الوحدة $1:")
+      .replace(/^Lesson\\s+(\\d+)\\s*$/i, "الدرس $1");
+}
+
+function displayBranchTitle(value: string): string {
+  const labels: Record<string, string> = {
+    "الوحدات (Units)": "وحدات الكتاب",
+    "القصة - The Lost World": "القصة: العالم المفقود",
+    "GRE — مسار تكميلي": "مسار إثرائي لاختبار اللغة",
+    "دروس المفردات داخل الوحدات": "المفردات",
+    "دروس القواعد داخل الوحدات": "قواعد اللغة",
+    "المقرر بالكامل": "المقرر بالكامل",
+  };
+  return labels[value] ?? displayCurriculumTitle(value);
 }
 
 export default function CurriculumMap() {
@@ -99,7 +203,7 @@ export default function CurriculumMap() {
 
   const sceneBranches: SceneBranch[] = useMemo(() => branchViews.map(branch => ({
     branchId: branch.branchId,
-    title: branch.branchTitle,
+    title: displayBranchTitle(branch.branchTitle),
     nodes: branch.choices.map((choice, index) => {
       const gap = branch.gap;
       const studentPosition = gap?.studentPosition ?? null;
@@ -115,7 +219,7 @@ export default function CurriculumMap() {
       } else {
         state = "future";
       }
-      return { nodeId: choice.nodeId, title: choice.title, state };
+      return { nodeId: choice.nodeId, title: displayCurriculumTitle(choice.title), state };
     }),
   })), [branchViews]);
 
@@ -157,14 +261,14 @@ export default function CurriculumMap() {
     <DashboardLayout
       title="خريطة المنهج"
       description="تابع تقدمك وآخر موضع للمدرس داخل كل فرع من فروع المنهج."
-      action={<span className="sf-page-action-label"><Network className="size-4" />SIE / CURRICULUM MAP</span>}
+      action={<span className="sf-page-action-label"><Network className="size-4" />بيانات المنهج</span>}
     >
       {profile.isError && <div className="app-card p-4 text-sm text-destructive">تعذّر تحميل ملفك الدراسي. أعد المحاولة بعد التحقق من الاتصال.</div>}
       {learning.isError && <div className="app-card p-4 text-sm text-destructive">تعذّر تحميل بيانات التقدم. لم يتم استبدال البيانات المفقودة بأرقام صفرية.</div>}
 
       <section className="sf-map-hero mb-5">
         <div className="sf-map-hero-copy">
-          <p className="sf-map-eyebrow">CURRICULUM INTELLIGENCE</p>
+          <p className="sf-map-eyebrow">متابعة المنهج والتقدم</p>
           <h2>اعرف مكانك في المنهج،<br />وما الذي يستحق تركيزك الآن.</h2>
           <p>الخريطة تجمع تقدمك مع مرجع المدرس أو الفصل، وتحسب الفجوة داخل كل وحدة على حدة. الفروع غير الموثقة تظل ظاهرة كبيانات غير مكتملة.</p>
         </div>
@@ -203,7 +307,7 @@ export default function CurriculumMap() {
       {viewMode === "3d" && branches.length > 0 && (
         <section className="sf-map-scene-card mb-5">
           <div className="sf-map-scene-heading">
-            <div><p className="sf-map-eyebrow">INTERACTIVE LEARNING GRAPH</p><h3>خريطة الوحدات والدروس</h3><p>استعرض الوحدات والدروس، ثم افتح الدرس لتحديث تقدمك وموضع المدرس.</p></div>
+            <div><p className="sf-map-eyebrow">الخريطة التفاعلية</p><h3>خريطة الوحدات والدروس</h3><p>استعرض الوحدات والدروس، ثم افتح الدرس لتحديث تقدمك وموضع المدرس.</p></div>
             <span className="sf-map-scene-count">{branches.length} وحدات</span>
           </div>
           <CurriculumProgressScene branches={sceneBranches} onSelectBranch={selectBranch} />
@@ -225,10 +329,10 @@ export default function CurriculumMap() {
       {priorityBranch && (
         <section className="sf-map-priority mb-5">
           <div className="sf-map-priority-copy">
-            <p className="sf-map-eyebrow">PRIORITY BRANCH</p>
+            <p className="sf-map-eyebrow">أولوية المذاكرة</p>
             <h3>أعلى فجوة نسبية معروفة</h3>
-            <p>{priorityBranch.branchTitle} · {gapLabel(priorityBranch.gap, priorityBranch.pointLabel)}</p>
-            {priorityBranch.nextLesson && <small>الخطوة التالية حسب تقدمك المسجل: {getSIECheckpointChoiceDisplayLabel(priorityBranch.nextLesson)}</small>}
+            <p>{displayBranchTitle(priorityBranch.branchTitle)} · {gapLabel(priorityBranch.gap, priorityBranch.pointLabel)}</p>
+            {priorityBranch.nextLesson && <small>الخطوة التالية: {displayCurriculumTitle(priorityBranch.nextLesson.title)}</small>}
           </div>
           <Button type="button" onClick={() => goToStudy(priorityBranch.branchId, priorityBranch.nextLesson?.nodeId)} className="sf-map-priority-button">
             افتح نقطة البداية <ArrowLeft className="size-4" />
@@ -237,7 +341,7 @@ export default function CurriculumMap() {
       )}
 
       <section className="sf-map-branches">
-        <div className="sf-map-section-heading"><div><p className="sf-map-eyebrow">BRANCH STATUS</p><h3>تفاصيل فروع المنهج</h3></div><span>{branches.length} فروع مستقلة</span></div>
+        <div className="sf-map-section-heading"><div><p className="sf-map-eyebrow">حالة فروع المنهج</p><h3>تفاصيل فروع المنهج</h3></div><span>{branches.length} فروع مستقلة</span></div>
         {profile.isLoading || learning.isLoading ? (
           <div className="app-card p-5 text-sm text-muted-foreground">جارٍ تجميع مواضعك من الملف الدراسي...</div>
         ) : branches.length === 0 ? (
@@ -246,8 +350,11 @@ export default function CurriculumMap() {
           <div className="grid gap-3 xl:grid-cols-2">
             {branchViews.map(branch => {
               const gap = branch.gap;
-              const progress = gap?.studentPosition !== null && gap?.studentPosition !== undefined
-                ? Math.round(Math.max(0, Math.min(100, (gap.studentPosition / Math.max(1, branch.choices.length)) * 100)))
+              const completedCount = gap?.studentPosition !== null && gap?.studentPosition !== undefined
+                ? Math.max(0, Math.min(branch.choices.length, gap.studentPosition))
+                : null;
+              const progress = completedCount !== null
+                ? Math.round((completedCount / Math.max(1, branch.choices.length)) * 100)
                 : null;
               const isSelected = branch.branchId === selectedBranchId;
               return (
@@ -258,15 +365,38 @@ export default function CurriculumMap() {
                 >
                   <button type="button" className="sf-map-branch-select" onClick={() => scrollToBranch(branch.branchId)}>
                     <span className="sf-map-branch-mark"><Network className="size-4" /></span>
-                    <span className="sf-map-branch-titles"><b>{branch.branchTitle}</b><small>{branch.choices.length} {branch.pointLabel === "درس" ? "دروس" : "موضوعات"}</small></span>
+                    <span className="sf-map-branch-titles"><b>{displayBranchTitle(branch.branchTitle)}</b><small>{branch.choices.length} {branch.pointLabel === "درس" ? "دروس" : "موضوعات"}</small></span>
                     <span className="sf-map-gap-status">{gapLabel(gap, branch.pointLabel)}</span>
                   </button>
                   <div className="sf-map-branch-progress">
                     <div className="sf-map-progress-rail"><i style={{ width: progress === null ? "0%" : progress + "%" }} /></div>
-                    <span>{progress === null ? "موضع غير محدد" : progress + "% من نقاط الفرع"}</span>
+                    <span>{progress === null ? "لم يُسجل التقدم بعد" : completedCount + " من " + branch.choices.length + " نقاط مكتملة · " + progress + "%"}</span>
                   </div>
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {branch.choices.map(choice => <span key={choice.nodeId} className="rounded-lg border border-border/70 bg-background px-2 py-1 text-[10px] leading-5 text-muted-foreground">{getSIECheckpointChoiceDisplayLabel(choice)}</span>)}
+                  <div className="sf-map-branch-steps" role="list" aria-label="التسلسل التفصيلي للدروس">
+                    {branch.choices.map((choice, index) => {
+                      const isCompleted = completedCount !== null && index < completedCount;
+                      const isNext = completedCount !== null && index === completedCount;
+                      const state = isCompleted ? "completed" : isNext ? "next" : completedCount === null ? "untracked" : "future";
+                      const stepLabel = branch.pointLabel === "موضوع" ? "الموضوع" : "الدرس";
+                      const localizedTitle = displayCurriculumTitle(choice.title);
+                      const localizedUnit = displayCurriculumTitle(choice.unitTitle);
+                      return (
+                        <button
+                          key={choice.nodeId}
+                          type="button"
+                          role="listitem"
+                          onClick={() => goToStudy(branch.branchId, choice.nodeId)}
+                          className={"sf-map-step sf-map-step-" + state}
+                          aria-label={stepLabel + " " + (choice.lessonNumber ?? index + 1) + ": " + localizedTitle}
+                        >
+                          <span className="sf-map-step-number">{stepLabel} {choice.lessonNumber ?? index + 1}</span>
+                          <b>{localizedTitle}</b>
+                          {localizedTitle !== choice.title && <small className="sf-map-step-original" dir="ltr">{choice.title}</small>}
+                          {choice.unitTitle && <small className="sf-map-step-unit">{choice.unitNumber ? "الوحدة " + choice.unitNumber + " · " : ""}{localizedUnit}</small>}
+                          <em>{isCompleted ? "مكتمل" : isNext ? "التالي" : completedCount === null ? "لم يُسجل التقدم" : "لاحقًا"}</em>
+                        </button>
+                      );
+                    })}
                   </div>
                   <div className="sf-map-branch-details">
                     <p>آخر نقطة لك: <b>{gap?.studentFrontierTitle || (gap?.studentPosition === 0 ? "لم تبدأ بعد" : "غير محدد")}</b></p>
@@ -275,7 +405,7 @@ export default function CurriculumMap() {
                   </div>
                   <div className="sf-map-branch-actions">
                     <Button type="button" variant="outline" onClick={() => goToStudy(branch.branchId)} className="sf-map-update-button">تحديث تقدم الوحدة</Button>
-                    {branch.nextLesson && <Button type="button" onClick={() => goToStudy(branch.branchId, branch.nextLesson?.nodeId)} className="sf-map-next-button">ابدأ: {branch.nextLesson.lessonType === "topic" ? `Lesson ${branch.nextLesson.lessonNumber}` : `الدرس ${branch.nextLesson.lessonNumber ?? ""}`}</Button>}
+                    {branch.nextLesson && <Button type="button" onClick={() => goToStudy(branch.branchId, branch.nextLesson?.nodeId)} className="sf-map-next-button">ابدأ: {`الدرس ${branch.nextLesson.lessonNumber ?? ""}`}</Button>}
                   </div>
                 </article>
               );
