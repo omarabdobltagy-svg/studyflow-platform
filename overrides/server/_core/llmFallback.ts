@@ -54,9 +54,17 @@ export async function invokeLLMWithNvidiaFallbackStream(
   params: InvokeParams,
   onToken: (token: string) => void,
 ): Promise<InvokeResult> {
+  let primaryEmittedText = false;
+  const trackPrimaryToken = (token: string) => {
+    if (token) primaryEmittedText = true;
+    onToken(token);
+  };
   try {
-    return await invokeLLMStream(params, onToken);
+    return await invokeLLMStream(params, trackPrimaryToken);
   } catch (error) {
+    // Do not append a complete fallback answer after a partial primary answer.
+    // Once text has reached the student, a retry must be explicit instead.
+    if (primaryEmittedText) throw error;
     const message = error instanceof Error ? error.message : String(error);
     const streamingUnsupported = /(?:stream|streaming).{0,50}(?:not supported|unsupported|disabled)|(?:not supported|unsupported).{0,50}(?:stream|streaming)/i.test(message);
     if (!isPrimaryProviderFallbackEligible(error) && !streamingUnsupported) throw error;
