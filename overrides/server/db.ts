@@ -929,9 +929,6 @@ export async function syncDailyPlanGoalTree(
         if (task && linkedExistingTask && task.id !== linkedExistingTask.id) {
           await tx.delete(tasks).where(and(eq(tasks.id, task.id), eq(tasks.userId, userId)));
         }
-        if (task && linkedExistingTask && task.id === linkedExistingTask.id) {
-          taskLinks.push({ planStepIndex: sourceIndex, taskId: task.id, status: task.status });
-        }
         if (task && !linkedExistingTask) {
           await tx.update(tasks).set({
             title: step.title,

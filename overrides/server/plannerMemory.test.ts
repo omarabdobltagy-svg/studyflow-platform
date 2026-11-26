@@ -56,6 +56,21 @@ describe("structured planner memory", () => {
     expect(snapshot.curriculumEvidence).toHaveLength(0);
   });
 
+  it("uses a valid legacy subject frontier when a branch-specific frontier is absent", () => {
+    const snapshot = buildPlannerMemorySnapshot({
+      profile: {
+        subjectIds: ["ARB_G2_BAC"],
+        selection: {
+          teacherFrontiers: { ARB_G2_BAC: "ARB_U2_N1" },
+          learningCourseProgress: { ARB_G2_BAC: { branches: { ARB_NAHW: {} } } },
+        },
+      },
+    });
+    expect(snapshot.curriculumEvidence).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "student_frontier", value: "ARB_U2_N1" }),
+    ]));
+  });
+
   it("does not create curriculum evidence for an unknown frontier", () => {
     const snapshot = buildPlannerMemorySnapshot({
       profile: {

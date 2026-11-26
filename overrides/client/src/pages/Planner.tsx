@@ -163,7 +163,7 @@ export default function Planner() {
     enabled: !profile.isLoading && !profile.isError && Boolean(profile.data?.subjectIds?.length),
     staleTime: 15_000,
     refetchOnWindowFocus: false,
-    refetchInterval: query => query.state.data?.needsRefresh ? 30_000 : false,
+    refetchInterval: query => query.state.data?.plan ? 15_000 : query.state.data?.needsRefresh ? 30_000 : false,
   });
 
   const progressPreview = useMemo(() => {

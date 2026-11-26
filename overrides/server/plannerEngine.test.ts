@@ -72,6 +72,16 @@ describe("planner deterministic scheduler", () => {
     expect(quality.blockers).toHaveLength(0);
   });
 
+  it("blocks a schedule when a day exceeds the daily minute ceiling", () => {
+    const overloaded = [
+      { title: "جلسة العربي", category: "عربي", minutes: 80, scheduleState: "scheduled" as const, dayIndex: 1, sourceStepIndex: 0 },
+      { title: "جلسة التاريخ", category: "تاريخ", minutes: 80, scheduleState: "scheduled" as const, dayIndex: 1, sourceStepIndex: 1 },
+    ];
+    const quality = evaluatePlanQuality(overloaded, settings);
+    expect(quality.status).toBe("blocked");
+    expect(quality.blockers).toContain("اليوم 1 يتجاوز الوقت اليومي (160/120 دقيقة).");
+  });
+
   it("classifies small completions separately from structural changes", () => {
     expect(classifyPlannerEventImpact("task.completed", "task")).toBe("local");
     expect(classifyPlannerEventImpact("task.reopened", "task")).toBe("local");
