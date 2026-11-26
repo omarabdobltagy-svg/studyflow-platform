@@ -1965,7 +1965,7 @@ export const appRouter = router({
     complete: protectedProcedure
       .input(z.object({
         key: z.string().trim().min(3).max(240),
-        outcome: z.enum(["covered", "no_new_topics", "cancelled"]),
+        outcome: z.enum(["covered", "no_new_topics", "cancelled", "scheduled_only"]),
         coveredBranches: z.array(z.string().trim().min(1).max(120)).max(12).default([]),
         branchFrontiers: z.record(z.string(), z.string().trim().min(1).max(120)).default({}),
       }))
@@ -1983,6 +1983,12 @@ export const appRouter = router({
         const coveredBranches = [...new Set(input.coveredBranches)];
         if (input.outcome !== "covered" && (coveredBranches.length || Object.keys(input.branchFrontiers).length)) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "اختيارات الفروع لا تتوافق مع حالة الحصة." });
+        }
+        if (session.requiresTopicSelection && input.outcome === "scheduled_only") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "يجب تسجيل فروع الشرح في هذه المادة." });
+        }
+        if (!session.requiresTopicSelection && input.outcome !== "scheduled_only") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "هذه المادة تسجل مرور الموعد تلقائيًا دون افتراض ما تم شرحه." });
         }
         if (input.outcome === "covered" && session.requiresTopicSelection && coveredBranches.length === 0) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "حدد فرعًا واحدًا على الأقل إذا شرح المدرس موضوعًا جديدًا." });
@@ -2119,7 +2125,7 @@ export const appRouter = router({
           input.key,
           session.requiresTopicSelection
             ? "تم تسجيل ما غطاه المدرس بعد المحاضرة"
-            : "تم تسجيل مرور موعد الحصة وفق الجدول الأسبوعي",
+            : "تم تسجيل مرور موعد الحصة وفق الجدول الأسبوعي دون افتراض محتوى الشرح",
           { subjectId: session.subjectId, outcome: input.outcome, coveredBranches, nextSessionAt: session.nextSessionAt.toISOString() },
         );
         return { success: true, key: input.key, requiresTopicSelection: session.requiresTopicSelection, nextSessionAt: session.nextSessionAt.toISOString(), nextCalendarEventId };
