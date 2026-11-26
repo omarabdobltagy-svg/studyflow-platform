@@ -128,6 +128,7 @@ function parseSavedPlan(record: { planJson: string }): PlanView | null {
     return {
       title: saved.title,
       summary: typeof saved.summary === "string" ? saved.summary : "خطة دراسية مبنية على ملفك وتقدمك.",
+      executionStrategy: saved.executionStrategy as PlanView["executionStrategy"],
       durationLabel: "مهام مرنة",
       steps: saved.steps.map((raw: any, index) => ({
         day: "",
