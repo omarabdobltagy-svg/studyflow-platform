@@ -93,6 +93,54 @@ export function markPlanGenerationFailed(userId: number): void {
   });
 }
 
+export type DailyPlanFeasibilityInput = {
+  requiredStudyDays: number;
+  horizonDays: 7 | 14;
+  dailyMinutes: number;
+  daysPerWeek: 5 | 6 | 7;
+  steps: readonly { title: string; minutes: number }[];
+};
+
+/**
+ * Explain hard capacity conflicts without silently truncating tasks or changing
+ * the model's time estimates. The UI must disclose when the work does not fit.
+ */
+export function getDailyPlanFeasibilityNote(input: DailyPlanFeasibilityInput): string {
+  const horizonWeeks = Math.floor(input.horizonDays / 7);
+  const remainingCalendarDays = input.horizonDays % 7;
+  const availableStudyDays = horizonWeeks * input.daysPerWeek
+    + Math.min(input.daysPerWeek, remainingCalendarDays);
+  const notes: string[] = [];
+
+  if (input.requiredStudyDays > availableStudyDays) {
+    notes.push(
+      "التوزيع يحتاج " + input.requiredStudyDays + " أيام دراسة، بينما تتيح نافذة "
+      + input.horizonDays + " أيام " + availableStudyDays
+      + " أيام دراسة فقط. لم نحذف مهامًا لإخفاء العجز؛ بعض الخطوات ستمتد بعد الفترة المحددة."
+    );
+  }
+
+  const oversized = input.steps.filter(step => step.minutes > input.dailyMinutes);
+  if (oversized.length > 0) {
+    const examples = oversized.slice(0, 2).map(step =>
+      "«" + step.title + "» (" + step.minutes + " دقيقة)"
+    );
+    const remaining = oversized.length > examples.length
+      ? " و" + (oversized.length - examples.length) + " جلسات أخرى"
+      : "";
+    notes.push(
+      oversized.length + " جلسة تتجاوز حد اليوم البالغ " + input.dailyMinutes
+      + " دقيقة: " + examples.join("، ") + remaining
+      + ". لم نقلّص تقدير الوقت؛ يلزم تقسيم هذه الجلسات قبل تنفيذ الجدول."
+    );
+  }
+
+  return notes.length > 0
+    ? "تنبيه الجدوى: " + notes.join(" ")
+    : "تقدير الجدوى: الخطة تتسع داخل نافذة " + input.horizonDays
+      + " أيام وبحد " + input.dailyMinutes + " دقيقة يوميًا.";
+}
+
 const planSchema = z.object({
   title: z.string().trim().min(3).max(160),
   summary: z.string().trim().min(10).max(1_500),
@@ -1529,9 +1577,19 @@ export async function generatePersonalPlan(
       : "تقدير الجدوى: يمكن توزيع الخطوات على " + scheduleDay + " أيام دراسة حتى " + effectiveDeadline + ". نافذة الامتحانات التقريبية " + examWindowLabel + ".";
     plan = { ...plan, summary: (plan.summary + "\n\n" + feasibilityNote).slice(0, 1_500) };
   } else {
+    const feasibilityNote = getDailyPlanFeasibilityNote({
+      requiredStudyDays: scheduleDay,
+      horizonDays,
+      dailyMinutes,
+      daysPerWeek,
+      steps: plan.steps,
+    });
+    const retainedSummary = plan.summary
+      .slice(0, Math.max(0, 1_500 - feasibilityNote.length - 2))
+      .trim();
     plan = {
       ...plan,
-      summary: (plan.summary + "\n\n" + "هذه خطة للفترة القادمة فقط. ستُعاد مواءمتها عند تغير المهام أو التقدم أو مواعيد الحصص.") .slice(0, 1_500),
+      summary: (retainedSummary + "\n\n" + feasibilityNote).slice(0, 1_500),
     };
   }
   updatePlanGenerationProgress(userId, "saving", undefined, undefined, constraints.activityId);

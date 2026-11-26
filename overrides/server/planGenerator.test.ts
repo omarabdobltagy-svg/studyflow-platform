@@ -4,6 +4,7 @@ import {
   applyPlannerCurriculumCoverageGuard,
   applyPlannerProgressGuard,
   applyTeacherLedPlanningGuard,
+  getDailyPlanFeasibilityNote,
   parseGeneratedPlan,
 } from "./planGenerator";
 import { getSIECheckpointBranches } from "@shared/sie-catalog";
@@ -104,6 +105,50 @@ describe("annual plan curriculum coverage and progress alignment", () => {
     expect(new Set(ids)).toEqual(new Set(officialIds));
     expect(laterChapters.length).toBeGreaterThan(0);
     for (const id of laterChapters) expect(ids).toContain(id);
+  });
+});
+
+describe("daily plan feasibility disclosure", () => {
+  it("reports when the generated work extends beyond the selected horizon", () => {
+    const note = getDailyPlanFeasibilityNote({
+      requiredStudyDays: 6,
+      horizonDays: 7,
+      dailyMinutes: 120,
+      daysPerWeek: 5,
+      steps: [{ title: "مراجعة التاريخ", minutes: 50 }],
+    });
+    expect(note).toContain("التوزيع يحتاج 6 أيام دراسة");
+    expect(note).toContain("تتيح نافذة 7 أيام");
+    expect(note).toContain("لم نحذف مهامًا");
+  });
+
+  it("flags sessions that exceed daily capacity without changing their estimates", () => {
+    const steps = [
+      { title: "محاضرة طويلة", minutes: 150 },
+      { title: "حل تدريبات", minutes: 45 },
+    ];
+    const note = getDailyPlanFeasibilityNote({
+      requiredStudyDays: 2,
+      horizonDays: 7,
+      dailyMinutes: 90,
+      daysPerWeek: 6,
+      steps,
+    });
+    expect(note).toContain("«محاضرة طويلة» (150 دقيقة)");
+    expect(note).toContain("يلزم تقسيم هذه الجلسات");
+    expect(steps[0].minutes).toBe(150);
+  });
+
+  it("does not raise a capacity warning when all work fits", () => {
+    const note = getDailyPlanFeasibilityNote({
+      requiredStudyDays: 4,
+      horizonDays: 7,
+      dailyMinutes: 120,
+      daysPerWeek: 5,
+      steps: [{ title: "قراءة", minutes: 60 }, { title: "حل", minutes: 45 }],
+    });
+    expect(note).toContain("تقدير الجدوى");
+    expect(note).not.toContain("تنبيه الجدوى");
   });
 });
 
