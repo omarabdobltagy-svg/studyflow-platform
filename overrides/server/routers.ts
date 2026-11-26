@@ -3197,10 +3197,11 @@ export const appRouter = router({
           }));
         } else {
           const rescheduled = schedulePlanSteps(input.plan.steps, scheduleSettings);
-          quality = evaluatePlanQuality(rescheduled.steps, scheduleSettings, rescheduled.stats);
-          if (quality.status === "blocked") throw new TRPCError({
+          const evaluatedQuality = evaluatePlanQuality(rescheduled.steps, scheduleSettings, rescheduled.stats);
+          quality = evaluatedQuality;
+          if (evaluatedQuality.status === "blocked") throw new TRPCError({
             code: "BAD_REQUEST",
-            message: "الخطة تحتوي على تعارضات تمنع اعتمادها: " + quality.blockers.slice(0, 2).join("؛ "),
+            message: "الخطة تحتوي على تعارضات تمنع اعتمادها: " + evaluatedQuality.blockers.slice(0, 2).join("؛ "),
           });
           approvedSteps = rescheduled.steps;
           durationLabel = `${schedule.horizonDays} يومًا · ${rescheduled.stats.studyDaysUsed} أيام دراسة · ${rescheduled.stats.scheduledMinutes} دقيقة مجدولة`
