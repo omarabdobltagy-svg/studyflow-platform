@@ -7,13 +7,13 @@ import {
   getDailyPlanFeasibilityNote,
   parseGeneratedPlan,
 } from "./planGenerator";
-import { getSIECheckpointBranches } from "@shared/sie-catalog";
+import { getSIECheckpointBranches, getSIECheckpointProgressBranches } from "@shared/sie-catalog";
 
 describe("annual plan curriculum coverage and progress alignment", () => {
   it("uses explicit study confirmations before treating earlier Arabic grammar lessons as completed", () => {
-    const nahwChoices = getSIECheckpointBranches("ARB_G2_BAC")
+    const nahwChoices = getSIECheckpointProgressBranches("ARB_G2_BAC")
       .find(branch => branch.branchId === "ARB_NAHW")!.choices;
-    const selectedIndex = nahwChoices.findIndex(choice => choice.nodeId === "ARB_U2_N1");
+    const selectedIndex = nahwChoices.findIndex(choice => choice.nodeId === "ARB_U2_N3");
     const lessonStates = Object.fromEntries(nahwChoices.slice(0, selectedIndex + 1).map(choice => [
       choice.nodeId,
       { state: "studied", source: "student_self_report" },
