@@ -95,7 +95,11 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
         teacherTeachingFrontierId: teacherFrontier,
         schoolClassFrontierId: schoolFrontier,
       });
-      const missingCheckpoints = getMissingLessonCheckpoints(branch.choices, gap.studentPosition, gap.referencePosition);
+      const missingCheckpoints = getMissingLessonCheckpoints(branch.choices, gap.studentPosition, gap.referencePosition)
+        .filter(checkpoint => {
+          const progressRecord = subjectLessonRecords[checkpoint.nodeId];
+          return !(Array.isArray(progressRecord?.completedSteps) && progressRecord.completedSteps.length === 5);
+        });
       requiredLessons.push(...missingCheckpoints.map(checkpoint => ({
         subjectId,
         subjectName: subject?.nameAr || subjectId,
