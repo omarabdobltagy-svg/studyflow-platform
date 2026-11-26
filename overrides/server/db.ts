@@ -751,6 +751,8 @@ export async function syncDailyPlanGoalTree(
       dayIndex?: number | null;
       dateOffsetDays?: number | null;
       scheduleNote?: string;
+      plannerTaskId?: number;
+      plannerTaskStatus?: "todo" | "done";
     }>;
   },
   schedule: { startDate: string; dailyMinutes: number; daysPerWeek?: number },
@@ -897,6 +899,7 @@ export async function syncDailyPlanGoalTree(
 
     let refreshedTaskCount = 0;
     let createdTaskCount = 0;
+    const taskLinks: Array<{ planStepIndex: number; taskId: number; status: "todo" | "done" }> = [];
     for (let index = 0; index < pendingSteps.length; index += 1) {
       const { step, index: sourceIndex } = pendingSteps[index];
       const dueAt = dueDates[sourceIndex] ?? null;
@@ -925,6 +928,9 @@ export async function syncDailyPlanGoalTree(
         if (task && linkedExistingTask && task.id !== linkedExistingTask.id) {
           await tx.delete(tasks).where(and(eq(tasks.id, task.id), eq(tasks.userId, userId)));
         }
+        if (task && linkedExistingTask && task.id === linkedExistingTask.id) {
+          taskLinks.push({ planStepIndex: sourceIndex, taskId: task.id, status: task.status });
+        }
         if (task && !linkedExistingTask) {
           await tx.update(tasks).set({
             title: step.title,
@@ -935,11 +941,12 @@ export async function syncDailyPlanGoalTree(
             dueAt,
           }).where(and(eq(tasks.id, task.id), eq(tasks.userId, userId)));
           refreshedTaskCount += 1;
+          taskLinks.push({ planStepIndex: sourceIndex, taskId: task.id, status: "todo" });
           continue;
         }
 
         if (!linkedExistingTask) {
-          await tx.insert(tasks).values({
+          const taskInsert = await tx.insert(tasks).values({
             userId,
             goalId: stage.id,
             title: step.title,
@@ -950,6 +957,9 @@ export async function syncDailyPlanGoalTree(
             dueAt,
           });
           createdTaskCount += 1;
+          taskLinks.push({ planStepIndex: sourceIndex, taskId: Number(taskInsert[0].insertId), status: "todo" });
+        } else {
+          taskLinks.push({ planStepIndex: sourceIndex, taskId: linkedExistingTask.id, status: linkedExistingTask.status });
         }
         continue;
       }
@@ -968,7 +978,7 @@ export async function syncDailyPlanGoalTree(
       });
       const stageGoalId = Number(stageInsert[0].insertId);
       if (!linkedExistingTask) {
-        await tx.insert(tasks).values({
+        const taskInsert = await tx.insert(tasks).values({
           userId,
           goalId: stageGoalId,
           title: step.title,
@@ -979,6 +989,9 @@ export async function syncDailyPlanGoalTree(
           dueAt,
         });
         createdTaskCount += 1;
+        taskLinks.push({ planStepIndex: sourceIndex, taskId: Number(taskInsert[0].insertId), status: "todo" });
+      } else {
+        taskLinks.push({ planStepIndex: sourceIndex, taskId: linkedExistingTask.id, status: linkedExistingTask.status });
       }
     }
 
@@ -995,6 +1008,7 @@ export async function syncDailyPlanGoalTree(
       createdTaskCount,
       refreshedTaskCount,
       preservedCompletedTaskCount: consumedCompletedIds.size,
+      taskLinks,
     };
   });
 }
@@ -1574,6 +1588,14 @@ export async function getLatestAiPlanByPromptPrefix(userId: number, prefix: stri
     .orderBy(desc(aiPlans.createdAt), desc(aiPlans.id))
     .limit(1);
   return rows[0] ?? null;
+}
+
+export async function updateAiPlanContent(userId: number, planId: number, planJson: string) {
+  const db = await requireDb();
+  const result = await db.update(aiPlans)
+    .set({ planJson })
+    .where(and(eq(aiPlans.id, planId), eq(aiPlans.userId, userId)));
+  if (result[0].affectedRows === 0) throw new Error("خطة الدراسة المطلوب تحديثها غير موجودة.");
 }
 
 export async function updateAiPlanPrompt(userId: number, planId: number, prompt: string) {

@@ -183,6 +183,8 @@ const planSchema = z.object({
     sourceStepIndex: z.number().int().nonnegative().optional(),
     segmentIndex: z.number().int().positive().optional(),
     segmentCount: z.number().int().positive().optional(),
+    plannerTaskId: z.number().int().positive().optional(),
+    plannerTaskStatus: z.enum(["todo", "done"]).optional(),
   })).min(1).max(240),
   quality: z.object({
     score: z.number().int().min(0).max(100),

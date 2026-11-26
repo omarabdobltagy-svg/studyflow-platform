@@ -39,6 +39,7 @@ import {
   getStudentProfile,
   getLatestAiPlanByPromptPrefix,
   updateAiPlanPrompt,
+  updateAiPlanContent,
   listRecentStudentActivityEvents,
   listStudentTeacherMonitoringProfiles,
   recordStudentActivityEvent,
@@ -108,6 +109,7 @@ const STUDY_PLAN_PREFIX = "SIE_STUDY_PLAN_V2:";
 const dailyPlanLocks = new Map<number, Promise<DailyPlanResult>>();
 const dailyPlanDirtyUsers = new Set<number>();
 const dailyPlanReconcileTimers = new Map<number, ReturnType<typeof setTimeout>>();
+const dailyPlanPendingImpacts = new Map<number, "none" | "local" | "structural">();
 const teacherSourceScanLocks = new Map<number, Promise<boolean>>();
 const TEACHER_SOURCE_SCAN_TRIGGER_COOLDOWN_MS = 60_000;
 const teacherSourceScanLastQueuedAt = new Map<number, number>();
@@ -656,7 +658,50 @@ async function getCurrentDailyPlanForStudent(userId: number) {
   };
 }
 
-async function reconcileDailyPlanAfterChange(userId: number) {
+async function reconcileDailyPlanTaskState(userId: number) {
+  const activePlan = await getLatestAiPlanByPromptPrefix(userId, DAILY_PLAN_PREFIX);
+  if (!activePlan) return;
+  let plan: any;
+  try {
+    plan = JSON.parse(activePlan.planJson);
+  } catch {
+    return;
+  }
+  if (!plan || !Array.isArray(plan.steps)) return;
+  const tasks = await listTasks(userId);
+  const taskById = new Map(tasks.map(task => [task.id, task]));
+  let changed = false;
+  const nextSteps = plan.steps.map((step: Record<string, unknown>) => {
+    const taskId = Number(step.plannerTaskId);
+    if (!Number.isInteger(taskId) || taskId <= 0) return step;
+    const task = taskById.get(taskId);
+    if (!task) return step;
+    const nextStatus = task.status === "done" ? "done" : "todo";
+    if (step.plannerTaskStatus === nextStatus) return step;
+    changed = true;
+    return { ...step, plannerTaskStatus: nextStatus };
+  });
+  if (changed) {
+    await updateAiPlanContent(userId, activePlan.id, JSON.stringify({ ...plan, steps: nextSteps }));
+  }
+  const profile = await getStudentProfile(userId);
+  const conditions = (profile?.selection as Record<string, any> | undefined)?.studyConditions;
+  const dailyMinutes = Math.max(20, Math.min(600, Math.trunc(Number(conditions?.dailyMinutes) || 120)));
+  const startDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
+  const fingerprint = await getDailyPlanSourceFingerprint(userId, dailyMinutes, startDate);
+  await updateAiPlanPrompt(userId, activePlan.id, DAILY_PLAN_PREFIX + fingerprint + ":");
+  await logStudentActivity(userId, "planner.local_sync", "daily_plan", activePlan.id, "تم تحديث حالة مهام الخطة دون إعادة توليدها أو تغيير تقدم المنهج");
+}
+
+async function reconcileDailyPlanAfterChange(
+  userId: number,
+  impact: ReturnType<typeof classifyPlannerEventImpact> = "structural",
+) {
+  if (impact === "none") return;
+  if (impact === "local") {
+    await reconcileDailyPlanTaskState(userId);
+    return;
+  }
   if (dailyPlanLocks.has(userId)) {
     dailyPlanDirtyUsers.add(userId);
     return;
@@ -669,16 +714,25 @@ async function reconcileDailyPlanAfterChange(userId: number) {
   await ensureDailyPlanForStudent(userId, dailyMinutes);
 }
 
-function queueDailyPlanReconciliation(userId: number) {
-  // Coalesce rapid task/profile changes into one reconciliation instead of
-  // firing multiple expensive plan generations for the same student.
-  if (process.env.NODE_ENV === "test") return;
+function queueDailyPlanReconciliation(
+  userId: number,
+  eventType = "planner.context.changed",
+  entityType = "planner",
+) {
+  const impact = classifyPlannerEventImpact(eventType, entityType);
+  if (impact === "none" || process.env.NODE_ENV === "test") return;
+  // Coalesce bursts, but keep the strongest impact in the pending run.
+  const existingImpact = (dailyPlanPendingImpacts.get(userId) ?? "none") as ReturnType<typeof classifyPlannerEventImpact>;
+  const combinedImpact = combinePlannerEventImpacts([existingImpact, impact]);
+  dailyPlanPendingImpacts.set(userId, combinedImpact);
   const existingTimer = dailyPlanReconcileTimers.get(userId);
   if (existingTimer) clearTimeout(existingTimer);
   const timer = setTimeout(() => {
     dailyPlanReconcileTimers.delete(userId);
-    void reconcileDailyPlanAfterChange(userId).catch(error => {
-      console.error("[StudyFlow daily plan] Automatic reconciliation failed:", error instanceof Error ? error.message : String(error));
+    const finalImpact = dailyPlanPendingImpacts.get(userId) ?? combinedImpact;
+    dailyPlanPendingImpacts.delete(userId);
+    void reconcileDailyPlanAfterChange(userId, finalImpact).catch(error => {
+      console.error("[StudyFlow daily plan] Event reconciliation failed:", error instanceof Error ? error.message : String(error));
     });
   }, 1_500);
   timer.unref?.();
@@ -1685,7 +1739,7 @@ export const appRouter = router({
         const result = await toggleTask(ctx.user.id, input.id, input.done);
         if (result) {
           await logStudentActivity(ctx.user.id, input.done ? "task.completed" : "task.reopened", "task", input.id, input.done ? "اكتملت مهمة" : "أُعيد فتح مهمة");
-          queueDailyPlanReconciliation(ctx.user.id);
+          queueDailyPlanReconciliation(ctx.user.id, input.done ? "task.completed" : "task.reopened", "task");
         }
         return result;
       }),
@@ -2947,7 +3001,9 @@ export const appRouter = router({
             sourceStepIndex: z.number().int().nonnegative().optional(),
             segmentIndex: z.number().int().positive().optional(),
             segmentCount: z.number().int().positive().optional(),
-          })).min(1).max(240),
+            plannerTaskId: z.number().int().positive().optional(),
+            plannerTaskStatus: z.enum(["todo", "done"]).optional(),
+          })).min(1).max(1000),
         }),
         schedule: z.object({
           startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -3030,10 +3086,20 @@ export const appRouter = router({
           schedule.dailyMinutes,
           schedule.startDate,
         );
+        const taskIdsByStep = new Map(synced.taskLinks.map(link => [link.planStepIndex, link]));
+        const approvedPlanWithTaskLinks = {
+          ...approvedPlan,
+          steps: approvedPlan.steps.map((step, index) => {
+            const taskLink = taskIdsByStep.get(index);
+            return taskLink
+              ? { ...step, plannerTaskId: taskLink.taskId, plannerTaskStatus: taskLink.status }
+              : step;
+          }),
+        };
         await saveAiPlan(ctx.user.id, {
           prompt: DAILY_PLAN_PREFIX + fingerprint + ":",
           title: "خطة المذاكرة",
-          planJson: JSON.stringify(approvedPlan),
+          planJson: JSON.stringify(approvedPlanWithTaskLinks),
         });
         await logStudentActivity(ctx.user.id, "plan.approved", "ai_plan", null, "اعتمد الطالب خطة المذاكرة وأنشئت المهام بعد مراجعته", {
           title: "خطة المذاكرة",

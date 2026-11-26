@@ -65,6 +65,8 @@ type PlanStep = {
   sourceStepIndex?: number;
   segmentIndex?: number;
   segmentCount?: number;
+  plannerTaskId?: number;
+  plannerTaskStatus?: "todo" | "done";
 };
 type PlanQuality = {
   score: number;
@@ -866,7 +868,8 @@ function PlanCard({
                           <span className="rounded-md bg-muted/60 px-2 py-1 text-[10px] font-semibold text-muted-foreground">{step.category}</span>
                           {step.priority === "critical" && <span className="text-[10px] font-semibold text-destructive">عاجل</span>}
                           {(step.priority === "high") && <span className="text-[10px] font-semibold text-amber-600">أولوية عالية</span>}
-                          {step.existingTask?.status === "done" && <span className="text-[10px] text-primary">مكتملة كمهمة</span>}
+                          {step.plannerTaskStatus === "done" && <span className="text-[10px] text-primary">أُنجزت جلسة الخطة</span>}
+                          {step.existingTask?.status === "done" && <span className="text-[10px] text-primary">المهمة المرتبطة مكتملة</span>}
                         </div>
                         <h5 className="mt-2 text-sm font-bold leading-6">{step.title}</h5>
                         <p className="mt-1 whitespace-pre-line text-xs leading-6 text-muted-foreground">{step.detail}</p>
