@@ -725,10 +725,10 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                   </section>
                   <details className="rounded-2xl border border-border/70 bg-card p-4 sm:p-5">
                      <summary className="cursor-pointer text-sm font-bold">حدد نقطة بدايتك في المادة (اختياري)</summary>
-                     <p className="mt-2 text-xs leading-6 text-muted-foreground">لو عارف آخر موضوع أنهيته بالفعل، سجّله هنا عشان الخطة تبدأ من مكانك بدل ما تفترض إنك بتبدأ من الصفر. مش مطلوب منك تخمّن؛ تقدر تأجل تحديده لصفحة المذاكرة.</p>
+                     <p className="mt-2 text-xs leading-6 text-muted-foreground">لو تعرف آخر موضوع وصل له شرح المدرس، سجّله هنا. ده بيساعدنا نقارن موضعه بموضعك لاحقًا. مشاهدة المحاضرة وحدها مش معناها إنك ذاكرت الدرس أو فهمته؛ هتسجل الحالة دي بشكل مستقل في صفحة المذاكرة.</p>
                      {selectedSetupTeacherId ? (
                        <label className="mt-3 block text-xs font-semibold">
-                         آخر موضوع أنهيته مع المدرس
+                         آخر موضوع شرحه المدرس
                          <select
                            value={form.checkpointSelections[currentSetupSubjectId] ?? ""}
                            onChange={event => setForm(current => ({
@@ -738,7 +738,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                            className="mt-2 h-11 w-full rounded-xl border border-border bg-background px-3 text-sm font-normal"
                          >
                            <option value="">هحدده بعد الإعداد</option>
-                           <option value="__NOT_STARTED__">لسه مبدأتش المادة مع المدرس</option>
+                           <option value="__NOT_STARTED__">المدرس لسه ما بدأش هذا الفرع</option>
                            <option value="__UNKNOWN__">مش متأكد وصلت لفين</option>
                            {getSIECheckpointChoices(currentSetupSubjectId).map(choice => (
                              <option key={choice.nodeId} value={choice.nodeId}>{choice.title}</option>
