@@ -579,7 +579,8 @@ async function getCurrentDailyPlanForStudent(userId: number) {
 
   // The active plan is the one the student explicitly approved. Older versions stored
   // approved plans under STUDY_PLAN_PREFIX; only hash-suffixed records are eligible here.
-  let saved = await getLatestAiPlanByPromptPrefix(userId, DAILY_PLAN_PREFIX);
+  let saved: Awaited<ReturnType<typeof getLatestAiPlanByPromptPrefix>> | null =
+    await getLatestAiPlanByPromptPrefix(userId, DAILY_PLAN_PREFIX);
   if (!saved) {
     const legacyApproved = (await listAiPlans(userId)).find(record => {
       const prompt = String(record.prompt || "");
