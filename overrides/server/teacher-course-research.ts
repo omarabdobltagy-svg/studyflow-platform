@@ -179,6 +179,9 @@ async function classifyEvidence(
     ? parsed.evidenceIndices.filter((index: unknown) => Number.isInteger(index) && Number(index) >= 0 && Number(index) < evidence.length).slice(0, 10)
     : [];
   const confidence = enumValue(parsed.confidence, ["low", "medium", "high"] as const, "low");
+  const availableModes: Array<"center" | "online"> = Array.isArray(parsed.availableModes)
+    ? [...new Set(parsed.availableModes.filter((mode: unknown): mode is "center" | "online" => mode === "center" || mode === "online"))]
+    : [];
   const hasKnownClaim = availableModes.length > 0 || parsed.homeworkPolicy === "yes" || parsed.homeworkPolicy === "no" || parsed.homeworkPolicy === "varies"
     || parsed.homeworkRequiredBeforeNextLecture === "yes" || parsed.homeworkRequiredBeforeNextLecture === "no" || parsed.homeworkRequiredBeforeNextLecture === "varies"
     || parsed.preLectureExamRequired === "yes" || parsed.preLectureExamRequired === "no" || parsed.preLectureExamRequired === "varies";
@@ -188,9 +191,7 @@ async function classifyEvidence(
         : "insufficient_evidence";
 
   return {
-    availableModes: Array.isArray(parsed.availableModes)
-      ? [...new Set(parsed.availableModes.filter((mode: unknown): mode is "center" | "online" => mode === "center" || mode === "online"))]
-      : [],
+    availableModes,
     homeworkPolicy: enumValue(parsed.homeworkPolicy, ["yes", "no", "varies", "unknown"] as const, "unknown"),
     homeworkRequiredBeforeNextLecture: enumValue(parsed.homeworkRequiredBeforeNextLecture, ["yes", "no", "varies", "unknown"] as const, "unknown"),
     preLectureExamRequired: enumValue(parsed.preLectureExamRequired, ["yes", "no", "varies", "unknown"] as const, "unknown"),
