@@ -1,12 +1,21 @@
 import { describe, expect, it } from "vitest";
 import {
   buildTeacherClassFollowupKey,
+  requiresBranchCheckinForSubject,
   getDateKeyInZone,
   getDueTeacherClassFollowups,
   zonedLocalTimeToUtc,
 } from "./teacherClassFollowups";
 
 describe("teacher class follow-ups", () => {
+  it("asks for branch details only for Arabic and English", () => {
+    expect(requiresBranchCheckinForSubject("ARB_G2_BAC", 3)).toBe(true);
+    expect(requiresBranchCheckinForSubject("ENG1_G2_BAC", 2)).toBe(true);
+    expect(requiresBranchCheckinForSubject("HIS_G2_BAC", 4)).toBe(false);
+    expect(requiresBranchCheckinForSubject("PROG_AI_G2_BAC", 7)).toBe(false);
+    expect(requiresBranchCheckinForSubject("HIS_G2_BAC", 1)).toBe(false);
+  });
+
   it("converts a Cairo wall-clock session to the matching UTC instant", () => {
     const local = zonedLocalTimeToUtc("2026-11-26", "18:00");
     expect(local.toISOString()).toBe("2026-11-26T16:00:00.000Z");
