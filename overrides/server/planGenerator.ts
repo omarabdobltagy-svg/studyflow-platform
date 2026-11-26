@@ -8,7 +8,7 @@ import { getStudentProfile, saveAiPlan } from "./db";
 import { formatTextbookEvidence, getCurriculumBranchPriorityGuidance, orderPlanStepsByCurriculumDependencies, retrieveTextbookEvidence } from "./textbook-retrieval";
 import { buildExamBlueprintContext, SECOND_YEAR_BAC_EXAM_WINDOW_2026_2027 } from "./exam-blueprints";
 import { isHighConfidenceScheduleAnnouncement, isSecondYearBaccalaureateProfile, isSecondYearBaccalaureateUpdate, selectedTeacherIds } from "./teacher-content-monitor";
-import { buildLessonStudyMethod, type TeacherRequirementState } from "./study-method";
+import { buildLessonStudyMethod, isFirstLearningTask, type TeacherRequirementState } from "./study-method";
 import { getTeacherCourseFactsWithRefresh } from "./teacher-course-research";
 
 
@@ -1612,7 +1612,7 @@ export async function generatePersonalPlan(
     plan = {
       ...plan,
       steps: plan.steps.map(step => {
-        if (!step.curriculumNodeIds?.length) return step;
+        if (!step.curriculumNodeIds?.length || !isFirstLearningTask(step)) return step;
         const nodeIds = new Set(step.curriculumNodeIds);
         const subjectId = (profile.subjectIds ?? []).find(candidate =>
           getSIECheckpointProgressBranches(candidate).some(branch =>
