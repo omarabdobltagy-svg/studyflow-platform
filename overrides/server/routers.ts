@@ -3119,6 +3119,16 @@ export const appRouter = router({
             day: z.string().trim().max(60).default(""),
             title: z.string().trim().min(2).max(180),
             detail: z.string().trim().min(1).max(1_200),
+            studyMethod: z.object({
+              stages: z.array(z.object({
+                title: z.string().trim().min(2).max(120),
+                instruction: z.string().trim().min(5).max(700),
+                reason: z.string().trim().min(5).max(500),
+                optional: z.boolean().optional(),
+              })).max(10),
+              completionCriteria: z.string().trim().min(5).max(500),
+              teacherPolicyNote: z.string().trim().max(500).optional(),
+            }).optional(),
             minutes: z.number().int().min(0).max(480),
             category: z.string().trim().min(2).max(80),
             curriculumNodeIds: z.array(z.string().trim().min(1).max(120)).max(8).optional(),
