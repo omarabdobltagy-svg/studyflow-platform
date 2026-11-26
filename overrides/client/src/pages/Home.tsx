@@ -10,7 +10,7 @@ import { trpc } from "@/lib/trpc";
 import { getSIEStudentVisibleBranches, getSIECheckpointProgressBranches, getSIESubject, matchSIECheckpointTask, normalizeSIECheckpointFrontier } from "@shared/sie-catalog";
 import {
   ArrowLeft, BarChart3, BookOpenText, CalendarDays, Check, CheckCircle2,
-  Clock3, Compass, GraduationCap, ListChecks, Loader2, MessageCircle,
+  Compass, GraduationCap, ListChecks, Loader2, MessageCircle,
   Play, RefreshCw, Sparkles, Target, Timer,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -547,7 +547,7 @@ export default function Home() {
               <div className="mt-5 grid gap-3 md:grid-cols-3">
                 {plan.steps.slice(0, 3).map((step: any, index: number) => (
                   <article key={index} className="rounded-2xl border border-border/75 bg-background p-4">
-                    <div className="flex items-center justify-between gap-2"><Badge variant="secondary" className="max-w-[70%] truncate">{step.category}</Badge><span className="flex items-center gap-1 text-xs text-muted-foreground"><Clock3 className="size-3.5" />{step.minutes} د</span></div>
+                    <div className="flex items-center justify-between gap-2"><Badge variant="secondary" className="max-w-[70%] truncate">{step.category}</Badge></div>
                     <h4 className="mt-3 font-semibold leading-6">{step.title}</h4>
                     <p className="mt-1 line-clamp-2 text-xs leading-6 text-muted-foreground">{step.detail}</p>
                   </article>
