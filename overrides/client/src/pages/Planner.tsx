@@ -612,11 +612,11 @@ function PlanCard({ plan, title, studentName, editable, onChange, onApprove, onA
       </div>
     </header>
     <div className="space-y-4 p-4 sm:p-6">
-      <div className="flex flex-wrap items-end justify-between gap-2"><div><h3 className="font-bold">قائمة التنفيذ</h3><p className="mt-1 text-xs text-muted-foreground">ابدأ بالمهمة المناسبة لظروفك. لا يوجد يوم أو ساعة محددة لها.</p></div>{editable&&<Button type="button" size="sm" variant="outline" className="h-9 rounded-lg" onClick={onAddStep}><Plus className="size-3.5"/> إضافة مهمة</Button>}</div>
+      <div className="flex flex-wrap items-end justify-between gap-2"><div><h3 className="font-bold">قائمة المذاكرة</h3><p className="mt-1 text-xs text-muted-foreground">ابدأ بالمهمة المناسبة لظروفك. لا يوجد يوم أو ساعة محددة لها.</p></div>{editable&&<Button type="button" size="sm" variant="outline" className="h-9 rounded-lg" onClick={onAddStep}><Plus className="size-3.5"/> إضافة مهمة</Button>}</div>
       <div className="divide-y divide-border/60 rounded-2xl border border-border/80 bg-background">{plan.steps.map((step,index)=><article key={step.plannerTaskId??step.sourceStepIndex??index} className="p-4 sm:p-5">
         {editing?.index===index?<div className="space-y-3">
           <label className="block"><span className="mb-1 block text-[11px] font-semibold text-muted-foreground">عنوان المهمة</span><input value={editing.title} onChange={e=>setEditing(v=>v?{...v,title:e.target.value}:v)} className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"/></label>
-          <label className="block"><span className="mb-1 block text-[11px] font-semibold text-muted-foreground">تفاصيل التنفيذ</span><textarea rows={3} value={editing.detail} onChange={e=>setEditing(v=>v?{...v,detail:e.target.value}:v)} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm leading-6"/></label>
+          <label className="block"><span className="mb-1 block text-[11px] font-semibold text-muted-foreground">تفاصيل المهمة</span><textarea rows={3} value={editing.detail} onChange={e=>setEditing(v=>v?{...v,detail:e.target.value}:v)} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm leading-6"/></label>
           <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="ghost" size="sm" onClick={()=>setEditing(null)}>إلغاء</Button><Button type="button" size="sm" onClick={saveEdit}>حفظ التعديل</Button></div>
         </div>:<div className="flex items-start gap-3">
           <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-[11px] font-semibold text-muted-foreground">{index+1}</span>
