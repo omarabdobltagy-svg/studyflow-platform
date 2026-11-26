@@ -371,7 +371,9 @@ export default function Planner() {
   }, [activeDailyPlan.data?.plan, approved, loadedSavedDraft]);
 
   const updatePlan = (next: PlanView) => {
-    setPlan(next);
+    // Any manual edit invalidates the previous quality report. The server will
+    // recalculate the schedule and quality before creating tasks.
+    setPlan({ ...next, quality: undefined });
     setApproved(false);
   };
 
@@ -731,7 +733,8 @@ function PlanCard({
     ?? plan.steps.filter(step => step.scheduleState === "deferred").reduce((sum, step) => sum + step.minutes, 0);
   const scheduledSteps = plan.steps.filter(step => step.scheduleState !== "deferred");
   const statusLabel = plan.quality?.status === "blocked" ? "يحتاج مراجعة"
-    : plan.quality?.status === "partial" ? "جدول جزئي" : "جاهزة للمراجعة";
+    : plan.quality?.status === "partial" ? "جدول جزئي"
+      : plan.quality?.status === "ready" ? "جاهزة للمراجعة" : "لم يُفحص بعد";
   const statusStyle = plan.quality?.status === "blocked"
     ? "border-destructive/25 bg-destructive/[0.04] text-destructive"
     : plan.quality?.status === "partial"
@@ -789,7 +792,7 @@ function PlanCard({
           </div>
         </div>
 
-        {plan.quality && (
+        {plan.quality && !editing && (
           <div className="mt-4 rounded-xl border border-border/70 bg-background/70 p-3.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
