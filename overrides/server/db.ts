@@ -1630,6 +1630,7 @@ export async function enqueuePlannerReconciliationJob(input: {
       eventType: input.eventType.slice(0, 80),
       status: "queued",
       revision: sql`${plannerReconciliationJobs.revision} + 1`,
+      attempts: 0,
       nextRunAt,
       lockedUntil: null,
       lastError: null,

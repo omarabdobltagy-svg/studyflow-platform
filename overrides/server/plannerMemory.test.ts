@@ -65,4 +65,32 @@ describe("structured planner memory", () => {
     });
     expect(snapshot.curriculumEvidence).toHaveLength(0);
   });
+
+  it("keeps active recurring study routines and today's completion state as separate evidence", () => {
+    const snapshot = buildPlannerMemorySnapshot({
+      profile: { subjectIds: [], selection: {} },
+      routines: [{
+        id: 8,
+        name: "جلسة الصباح",
+        period: "morning",
+        isActive: true,
+        updatedAt: "2026-11-25T08:00:00.000Z",
+        items: [
+          { id: 1, title: "مراجعة الملاحظات", durationMinutes: 15, isActive: true, completedToday: true },
+          { id: 2, title: "قراءة الدرس", durationMinutes: 30, isActive: false, completedToday: false },
+        ],
+      }],
+    });
+    expect(snapshot.routines).toHaveLength(1);
+    expect(snapshot.routines[0]).toMatchObject({
+      kind: "study_routine",
+      entityId: "8",
+      value: {
+        name: "جلسة الصباح",
+        items: [{ title: "مراجعة الملاحظات", completedToday: true }],
+      },
+      provenance: { source: "routines", confidence: "high" },
+    });
+    expect(snapshot.sourceCoverage.routineRecords).toBe(1);
+  });
 });

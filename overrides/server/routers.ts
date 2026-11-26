@@ -83,7 +83,7 @@ import { completeAIActivity, failAIActivity, getAIActivitySnapshot, startAIActiv
 import { classifyTeacherPublicUpdate, isHighConfidenceScheduleAnnouncement, isSecondYearBaccalaureateUpdate, parseYoutubeAtomFeed, scanSelectedTeacherSources, selectedTeacherIds } from "./teacher-content-monitor";
 import { isDailyPlanStale } from "./planLifecycle";
 import { buildPlannerMemorySnapshot, formatPlannerMemorySnapshot } from "./plannerMemory";
-import { classifyPlannerEventImpact, combinePlannerEventImpacts, evaluatePlanQuality, schedulePlanSteps } from "./plannerEngine";
+import { classifyPlannerEventImpact, evaluatePlanQuality, schedulePlanSteps } from "./plannerEngine";
 import { createDailyPlanSourceFingerprint } from "./dailyPlanFingerprint";
 import { storageDelete, storagePut } from "./storage";
 import { decodeAndValidateAttachment } from "./attachments";
@@ -112,10 +112,15 @@ const DAILY_PLAN_DRAFT_PREFIX = "SIE_DAILY_PLAN_DRAFT_V1:";
 const ANNUAL_PLAN_PREFIX = "SIE_ANNUAL_PLAN_V1:"
 const STUDY_PLAN_PREFIX = "SIE_STUDY_PLAN_V2:";
 const dailyPlanLocks = new Map<number, Promise<DailyPlanResult>>();
-const dailyPlanDirtyUsers = new Set<number>();
+const dailyPlanDirtyUsers = new Map<number, "local" | "structural">();
 const teacherSourceScanLocks = new Map<number, Promise<boolean>>();
 const TEACHER_SOURCE_SCAN_TRIGGER_COOLDOWN_MS = 60_000;
 const teacherSourceScanLastQueuedAt = new Map<number, number>();
+
+function markDailyPlanDirty(userId: number, impact: "local" | "structural") {
+  const previous = dailyPlanDirtyUsers.get(userId);
+  dailyPlanDirtyUsers.set(userId, previous === "structural" || impact === "structural" ? "structural" : "local");
+}
 
 async function getDailyPlanSourceFingerprint(userId: number, dailyMinutes: number, startDate: string) {
   const profile = await getStudentProfile(userId);
@@ -590,7 +595,10 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): 
   } finally {
     if (dailyPlanLocks.get(userId) === task) dailyPlanLocks.delete(userId);
   }
-  if (dailyPlanDirtyUsers.delete(userId)) return ensureDailyPlanForStudent(userId, dailyMinutes);
+  const dirtyImpact = dailyPlanDirtyUsers.get(userId);
+  dailyPlanDirtyUsers.delete(userId);
+  if (dirtyImpact === "structural") return ensureDailyPlanForStudent(userId, dailyMinutes);
+  if (dirtyImpact === "local") await reconcileDailyPlanTaskState(userId);
   return result;
 }
 
@@ -710,14 +718,14 @@ async function reconcileDailyPlanAfterChange(
   if (impact === "none") return;
   if (impact === "local") {
     if (dailyPlanLocks.has(userId)) {
-      dailyPlanDirtyUsers.add(userId);
+      markDailyPlanDirty(userId, "local");
       return;
     }
     await reconcileDailyPlanTaskState(userId);
     return;
   }
   if (dailyPlanLocks.has(userId)) {
-    dailyPlanDirtyUsers.add(userId);
+    markDailyPlanDirty(userId, "structural");
     return;
   }
   const existingDailyPlan = await getLatestAiPlanByPromptPrefix(userId, DAILY_PLAN_PREFIX);

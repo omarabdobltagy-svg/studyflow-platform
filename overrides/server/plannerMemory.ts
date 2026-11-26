@@ -32,12 +32,14 @@ export type PlannerMemorySnapshot = {
   calendar: PlannerEvidence[];
   activeGoals: PlannerEvidence[];
   availableBooks: PlannerEvidence[];
+  routines: PlannerEvidence[];
   sourceCoverage: {
     profileAvailable: boolean;
     taskRecords: number;
     calendarRecords: number;
     teacherScheduleRecords: number;
     curriculumFrontierRecords: number;
+    routineRecords: number;
   };
 };
 
@@ -239,6 +241,29 @@ export function buildPlannerMemorySnapshot(input: PlannerMemoryInput): PlannerMe
     { entityId: String(task.id ?? "") },
   );
 
+  const routineEvidence = (input.routines ?? [])
+    .filter(routine => Boolean(routine.isActive))
+    .slice(0, 20)
+    .map(routine => {
+      const items = Array.isArray(routine.items) ? routine.items : [];
+      return evidence(
+        "study_routine",
+        {
+          name: String(routine.name ?? "").slice(0, 120),
+          period: routine.period ?? "custom",
+          items: items.filter((item: Record<string, any>) => Boolean(item.isActive)).slice(0, 24).map((item: Record<string, any>) => ({
+            title: String(item.title ?? "").slice(0, 160),
+            durationMinutes: Math.max(1, Math.min(240, Number(item.durationMinutes) || 10)),
+            completedToday: Boolean(item.completedToday),
+          })),
+        },
+        "routines",
+        "high",
+        routine.updatedAt ?? routine.createdAt,
+        { entityId: String(routine.id ?? "") },
+      );
+    });
+
   const calendarEvidence = (input.calendar ?? [])
     .filter(event => {
       const start = safeTimestamp(event.startAt);
@@ -291,6 +316,7 @@ export function buildPlannerMemorySnapshot(input: PlannerMemoryInput): PlannerMe
       goal.updatedAt ?? goal.createdAt,
       { entityId: String(goal.id ?? "") },
     )),
+    routines: routineEvidence,
     availableBooks: (input.books ?? []).slice(0, 20).map(book => evidence(
       "study_resource",
       { title: String(book.title ?? "").slice(0, 160), subject: book.subject ?? "دراسة", status: book.status ?? "planned" },
@@ -305,6 +331,7 @@ export function buildPlannerMemorySnapshot(input: PlannerMemoryInput): PlannerMe
       calendarRecords: calendarEvidence.length,
       teacherScheduleRecords: teacherSchedule.length,
       curriculumFrontierRecords: curriculumEvidence.length,
+      routineRecords: routineEvidence.length,
     },
   };
 }
