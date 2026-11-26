@@ -426,13 +426,18 @@ function buildPlannerProgressSnapshot(
         const record = subjectLessonRecords[choice.nodeId];
         const completedBySq3r = Array.isArray(record?.completedSteps)
           && new Set(record.completedSteps).size === 5;
-        const learningState = getEffectiveStudentLessonState({
+        const reportedLearningState = getEffectiveStudentLessonState({
           choices: branch.choices,
           nodeId: choice.nodeId,
           studentFrontierId: studentFrontier,
           lessonStateModelVersion,
           saved: lessonStates[choice.nodeId],
         });
+        // Existing profiles predate the explicit watched/studied model. Keep their
+        // former frontier semantics until a student updates a branch in the new model.
+        const learningState = reportedLearningState === "not_recorded" && lessonStateModelVersion < 1
+          ? "not_watched" as const
+          : reportedLearningState;
         const item = {
           subjectId,
           branchId: branch.branchId,
