@@ -514,6 +514,7 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): 
         taskId: task.id,
         taskTitle: task.title,
         status: task.status,
+        dueAt: task.dueAt,
       }] : [];
     });
     const sourceFingerprint = await getDailyPlanSourceFingerprint(userId, dailyMinutes, startDate);
@@ -560,6 +561,15 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): 
         daysPerWeek,
         startDate,
         existingCurriculumTasks,
+        existingTasks: currentTasks.map(task => ({
+          id: task.id,
+          title: task.title,
+          notes: task.notes ?? null,
+          category: task.category ?? "دراسة",
+          priority: task.priority,
+          status: task.status,
+          dueAt: task.dueAt ?? null,
+        })),
         activityId,
         memorySnapshot: operationalContext.memorySnapshot,
         context: "هذه خطة المذاكرة الذكية الافتراضية للفترة القادمة. وازن بين المهام المتراكمة المفتوحة وبين التحضير للموضوع التالي قبل حصة المدرس. اقرأ مواعيد الحصص ومهام الطالب ومواضع التقدم. لا تطلب من الطالب إعادة إدخال معلومة موجودة. لا تغيّر موضع المنهج بسبب وجود مهمة. أعد ترتيب الخطة عند تغير المصادر، ولا تكرر مهمة موجودة لنفس الموضوع. اجعل أول خطوة واضحة وقابلة للبدء فورًا.\n\n" + operationalContext.text,
@@ -3372,6 +3382,7 @@ export const appRouter = router({
                   taskId: task.id,
                   taskTitle: task.title,
                   status: task.status,
+                  dueAt: task.dueAt,
                 }] : [];
               })
             : [];
@@ -3398,6 +3409,15 @@ export const appRouter = router({
                 + "، والأفق " + input.horizonDays + " يومًا. ادمج المهام الحالية، اقرأ مواعيد الحصص، ولا تعتبر المهمة دليلًا على اكتمال الدرس. لا تنشئ مهمة ثانية لنفس الموضوع إذا كانت له مهمة مطابقة.\n\n"
                 + currentOperationalContext.text,
               existingCurriculumTasks,
+              existingTasks: currentTasks.map(task => ({
+                id: task.id,
+                title: task.title,
+                notes: task.notes ?? null,
+                category: task.category ?? "دراسة",
+                priority: task.priority,
+                status: task.status,
+                dueAt: task.dueAt ?? null,
+              })),
               activityId,
             },
           );
