@@ -1,5 +1,6 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import ThreeAmbientScene from "@/components/ThreeAmbientScene";
+import PlannerOperationsScene from "@/components/PlannerOperationsScene";
 import { motion } from "framer-motion";
 import PlanExportActions from "@/components/PlanExportActions";
 import QueryErrorNotice from "@/components/QueryErrorNotice";
@@ -58,6 +59,7 @@ export default function Planner() {
       </div>
       <div className="sf-planner-hero-footer"><span><span className="sf-planner-live-dot" />محرك التخطيط نشط</span><span>الموافقة تسبق إنشاء المهام</span></div>
     </motion.section>
+    <PlannerOperationsScene />
     {profile.data && <section className="app-card mb-6 p-5 sm:p-6">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><p className="eyebrow">قراءة الملف تلقائيًا</p><h2 className="mt-1 font-bold">المواد والمدرسون ونقطة التقدم</h2><p className="mt-1 text-xs text-muted-foreground">يستخدم المخطط ما هو مسجل بالفعل بدل مطالبتك بإدخاله مرة أخرى.</p></div><span className="rounded-xl bg-secondary px-3 py-2 text-xs font-semibold text-primary">{profile.data.subjects.length} مواد</span></div>
       <div className="grid gap-3 md:grid-cols-2">
