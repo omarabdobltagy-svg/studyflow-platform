@@ -263,15 +263,21 @@ export default function Planner() {
   const approvePlan = trpc.plans.approve.useMutation({
     onSuccess: async result => {
       setApproved(true);
-      setPlan(current => current ? {
-        ...current,
-        taskSync: {
-          parentGoalId: result.parentGoalId,
-          stageCount: result.taskCount,
-          taskCount: result.taskCount,
-          routineId: result.routineId ?? null,
-        },
-      } : current);
+      setPlan(current => {
+        if (!current) return current;
+        const authoritative = result.plan
+          ? { ...(result.plan as unknown as PlanView), reviewQuestion: "" }
+          : current;
+        return {
+          ...authoritative,
+          taskSync: {
+            parentGoalId: result.parentGoalId,
+            stageCount: result.taskCount,
+            taskCount: result.taskCount,
+            routineId: result.routineId ?? null,
+          },
+        };
+      });
       await Promise.all([
         utils.plans.currentDaily.invalidate(),
         utils.tasks.list.invalidate(),

@@ -3059,6 +3059,7 @@ export const appRouter = router({
         plan: z.object({
           title: z.string().trim().min(3).max(160),
           summary: z.string().trim().max(1_500),
+          memorySnapshot: z.any().optional(),
           durationLabel: z.string().trim().min(1).max(100).optional(),
           habits: z.array(z.object({
             title: z.string().trim().min(1).max(160),
@@ -3126,7 +3127,7 @@ export const appRouter = router({
             title: input.plan.title,
             taskCount: legacyResult.taskCount,
           });
-          return legacyResult;
+          return { ...legacyResult, plan: input.plan };
         }
         const schedule = input.schedule;
         const scheduleSettings = {
@@ -3214,6 +3215,7 @@ export const appRouter = router({
           stageCount: synced.taskCount,
           taskCount: synced.taskCount,
           routineId: null,
+          plan: approvedPlanWithTaskLinks,
         };
       }),
 
