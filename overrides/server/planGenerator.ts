@@ -1283,7 +1283,7 @@ function applyDailyPlanDepth(
   const targetCount = dailyMinutes <= 60 ? 3 : dailyMinutes <= 150 ? 4 : 5;
   const snapshot = buildPlannerProgressSnapshot(profile);
   const selection = (profile.selection ?? {}) as Record<string, any>;
-  const teacherChoices = (selection.teacherChoices ?? {}) as Record<string, string>;
+  const teacherChoices = (selection.teacherChoices ?? profile.teacherSelections ?? {}) as Record<string, string>;
   const teacherSchedules = (selection.teacherSchedules ?? {}) as Record<string, Array<{ dayOfWeek: number; startTime: string }>>;
   const subjectForStep = (step: GeneratedPlan["steps"][number]) => {
     const nodeIds = new Set(step.curriculumNodeIds ?? []);
@@ -1459,7 +1459,12 @@ function buildStudentExecutionStrategy(
   ];
   const phases = phaseMeta.map(meta => {
     const generated = suppliedPhases.get(meta.id);
-    const actions = stepsByPhase[meta.id].map(step => step.title).slice(0, 8);
+    const defaultActions: Record<typeof meta.id, string[]> = {
+      backlog: ["نراجع الالتزامات المفتوحة المسجلة", "نبدأ بالأقرب استحقاقًا والأعلى أولوية"],
+      teacher_sync: ["نستخدم جدول الحصة المسجل للتحضير قبل الموعد", "بعد الحصة نحدّث موضع شرح المدرس من ردك"],
+      steady: ["نستكمل الموضوعات التالية داخل كل فرع", "نعيد ترتيب الأولويات مع كل تقدم جديد"],
+    };
+    const actions = generated?.actions?.length ? generated.actions : defaultActions[meta.id];
     const hasSchedule = Object.entries(teacherSchedules).some(([subjectId, slots]) =>
       (profile.subjectIds ?? []).includes(subjectId)
       && Boolean(teacherChoices[subjectId] && teacherChoices[subjectId] !== "__SKIP__")
