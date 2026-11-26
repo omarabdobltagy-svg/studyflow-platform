@@ -1348,7 +1348,7 @@ function applyDailyPlanDepth(
       difficultyConfidence: "low",
       sourcePages: [],
       phaseId: "backlog",
-    });
+    } as GeneratedPlan["steps"][number]);
     usedTaskIds.add(task.id);
     usedTitles.add(normalizedTitle);
     if (linkedNodeId) representedNodeIds.add(linkedNodeId);
@@ -1413,7 +1413,7 @@ function applyDailyPlanDepth(
       difficultyConfidence: "low",
       sourcePages: [],
       phaseId,
-    });
+    } as GeneratedPlan["steps"][number]);
     representedNodeIds.add(item.nodeId);
   }
 
