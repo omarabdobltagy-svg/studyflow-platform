@@ -10,7 +10,14 @@ import {
 import { getSIECheckpointBranches } from "@shared/sie-catalog";
 
 describe("annual plan curriculum coverage and progress alignment", () => {
-  it("treats the selected Arabic grammar topic as fully completed and puts the teacher's next topic first", () => {
+  it("uses explicit study confirmations before treating earlier Arabic grammar lessons as completed", () => {
+    const nahwChoices = getSIECheckpointBranches("ARB_G2_BAC")
+      .find(branch => branch.branchId === "ARB_NAHW")!.choices;
+    const selectedIndex = nahwChoices.findIndex(choice => choice.nodeId === "ARB_U2_N1");
+    const lessonStates = Object.fromEntries(nahwChoices.slice(0, selectedIndex + 1).map(choice => [
+      choice.nodeId,
+      { state: "studied", source: "student_self_report" },
+    ]));
     const profile = {
       subjectIds: ["ARB_G2_BAC"],
       selection: {
@@ -20,6 +27,8 @@ describe("annual plan curriculum coverage and progress alignment", () => {
               ARB_NAHW: {
                 lastCompletedLessonId: "ARB_U2_N1",
                 teacherTeachingFrontierId: "ARB_U3_N1",
+                lessonStateModelVersion: 1,
+                lessonStates,
               },
             },
           },
