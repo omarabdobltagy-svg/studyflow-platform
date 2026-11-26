@@ -1901,7 +1901,7 @@ export const appRouter = router({
     create: protectedProcedure
       .input(z.object({
         title: z.string().trim().min(1, "اكتب عنوان المهمة.").max(220),
-        notes: z.string().trim().max(2_000).nullable().optional(),
+        notes: z.string().trim().max(8_000).nullable().optional(),
         category: z.string().trim().min(1).max(80).optional(),
         priority: z.enum(["low", "medium", "high"]).optional(),
         dueAt: dateInput,
@@ -1962,7 +1962,7 @@ export const appRouter = router({
       .input(z.object({
         id: z.number().int().positive(),
         title: z.string().trim().min(1).max(220),
-        notes: z.string().trim().max(2_000).nullable().optional(),
+        notes: z.string().trim().max(8_000).nullable().optional(),
         category: z.string().trim().min(1).max(80),
         priority: z.enum(["low", "medium", "high"]),
         dueAt: dateInput,
