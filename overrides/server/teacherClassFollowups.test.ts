@@ -36,6 +36,21 @@ describe("teacher class follow-ups", () => {
     expect(due[0].nextSessionAt.toISOString()).toBe("2026-12-03T16:00:00.000Z");
   });
 
+  it("schedules the next class across all configured weekly slots", () => {
+    const due = getDueTeacherClassFollowups({
+      subjectIds: ["ENG1_G2_BAC"],
+      teacherSchedules: {
+        ENG1_G2_BAC: [
+          { dayOfWeek: 4, startTime: "18:00" },
+          { dayOfWeek: 6, startTime: "15:00" },
+        ],
+      },
+      now: new Date("2026-11-26T20:01:00.000Z"),
+    });
+    expect(due).toHaveLength(1);
+    expect(due[0].nextSessionAt.toISOString()).toBe("2026-11-28T13:00:00.000Z");
+  });
+
   it("does not ask before the two-hour point", () => {
     const due = getDueTeacherClassFollowups({
       subjectIds: ["ENG1_G2_BAC"],
