@@ -1976,7 +1976,7 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false,
-          "default": 25
+          "default": null
         },
         "status": {
           "name": "status",
