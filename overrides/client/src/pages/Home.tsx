@@ -371,7 +371,7 @@ export default function Home() {
       action={<Button onClick={() => setLocation("/planner")} className="gap-2 rounded-xl"><Sparkles className="size-4" />خطة المذاكرة</Button>}
     >
       <div className="space-y-6 pb-6">
-        <header className="flex flex-wrap items-end justify-between gap-3">
+        <header className="sf-home-greeting flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="text-sm font-medium text-muted-foreground">{cairoDate()}</p>
             <h2 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">أهلًا {firstName}، نبدأ بإيه النهارده؟</h2>
@@ -464,7 +464,7 @@ export default function Home() {
         )}
 
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(300px,.75fr)]">
-          <section className="relative overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
+          <section className="sf-next-action-card relative overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
             <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-l from-primary via-primary/50 to-transparent" />
             <div className="p-5 sm:p-7">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -519,7 +519,7 @@ export default function Home() {
             </div>
           </section>
 
-          <section className="rounded-3xl border border-border bg-card p-5 shadow-sm sm:p-6">
+          <section className="sf-progress-card rounded-3xl border border-border bg-card p-5 shadow-sm sm:p-6">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2 text-sm font-semibold"><ListChecks className="size-4 text-primary" />إنجازك</div>
               <span className="text-xs text-muted-foreground">{completion}%</span>
@@ -534,7 +534,7 @@ export default function Home() {
           </section>
         </div>
 
-        <section className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
+        <section className="sf-daily-plan-card overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4 sm:px-6">
             <div><p className="text-xs font-semibold text-muted-foreground">تخطيط تلقائي</p><h3 className="mt-1 text-lg font-bold">{plan?.title ?? "خطة المذاكرة"}</h3></div>
             <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setLocation("/planner")}>تفاصيل الخطة <ArrowLeft className="size-4" /></Button>
