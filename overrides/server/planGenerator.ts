@@ -10,6 +10,7 @@ import { buildExamBlueprintContext, SECOND_YEAR_BAC_EXAM_WINDOW_2026_2027 } from
 import { isHighConfidenceScheduleAnnouncement, isSecondYearBaccalaureateProfile, isSecondYearBaccalaureateUpdate, selectedTeacherIds } from "./teacher-content-monitor";
 import { buildLessonStudyMethod, isFirstLearningTask, type TeacherRequirementState } from "./study-method";
 import { getTeacherCourseFactsWithRefresh } from "./teacher-course-research";
+import { getEffectiveStudentLessonState, isStudentLessonStudyComplete, type StudentLessonState } from "@shared/sie-lesson-state";
 
 
 export type PlanGenerationStage = "profile" | "curriculum" | "model" | "validation" | "saving" | "complete";
@@ -302,6 +303,7 @@ type PlannerCurriculumChoice = {
   branchId: string;
   nodeId: string;
   title: string;
+  learningState?: StudentLessonState;
 };
 
 type PlannerBranchProgress = {
@@ -415,9 +417,8 @@ function buildPlannerProgressSnapshot(
         teacherTeachingFrontierId: teacherFrontier,
         schoolClassFrontierId: schoolFrontier,
       });
-      const completedByFrontier = new Set(
-        gap.studentPosition === null ? [] : branch.choices.slice(0, gap.studentPosition).map(choice => choice.nodeId)
-      );
+      const lessonStates = (saved.lessonStates ?? {}) as Record<string, { state?: unknown }>;
+      const lessonStateModelVersion = Number(saved.lessonStateModelVersion ?? 0);
       const branchCompleted: PlannerCurriculumChoice[] = [];
       const branchEligible: PlannerCurriculumChoice[] = [];
 
@@ -425,13 +426,21 @@ function buildPlannerProgressSnapshot(
         const record = subjectLessonRecords[choice.nodeId];
         const completedBySq3r = Array.isArray(record?.completedSteps)
           && new Set(record.completedSteps).size === 5;
+        const learningState = getEffectiveStudentLessonState({
+          choices: branch.choices,
+          nodeId: choice.nodeId,
+          studentFrontierId: studentFrontier,
+          lessonStateModelVersion,
+          saved: lessonStates[choice.nodeId],
+        });
         const item = {
           subjectId,
           branchId: branch.branchId,
           nodeId: choice.nodeId,
           title: choice.title,
+          learningState,
         };
-        if (completedByFrontier.has(choice.nodeId) || completedBySq3r) {
+        if (isStudentLessonStudyComplete(learningState) || completedBySq3r) {
           branchCompleted.push(item);
           completedChoices.push(item);
           completedNodeIds.add(choice.nodeId);
@@ -974,7 +983,11 @@ export function applyPlannerCurriculumCoverageGuard(
         missingSteps.push({
           day: "",
           title: [subject?.nameAr ?? subjectId, branch.branchTitle, choice.title].join(" — "),
-          detail: "تابع شرح المدرس لهذا الموضوع، ثم راجع الجزء المرتبط به من الكتاب الرسمي أو ملاحظاتك. نفّذ فقط أي واجب كلّفك به المدرس بالفعل؛ لا يوجد اختبار أو تدريب مولّد من النظام.",
+          detail: choice.learningState === "watched_only"
+            ? "أنت شاهدت شرح هذا الدرس، لكن مشاهدة الفيديو وحدها لا تعني إنك ذاكرته. ارجع للمصدر، اقرأ الجزء المرتبط بالشرح، ثم اشرح فكرته لنفسك بطريقتك. لا يوجد واجب أو اختبار مضاف من النظام."
+            : choice.learningState === "needs_review"
+              ? "أنت ذاكرت هذا الدرس من قبل لكن سجلت أنه يحتاج مراجعة. راجع المصدر والنقاط التي نسيتها قبل الانتقال إلى مهمة جديدة."
+              : "تابع شرح المدرس لهذا الموضوع أو راجع المصدر المرتبط به حسب موضعك. نفّذ فقط أي واجب كلّفك به المدرس بالفعل؛ لا يوجد اختبار أو تدريب مولّد من النظام.",
           minutes: 45,
           category: [subject?.nameAr ?? subjectId, branch.branchTitle].join(" · "),
           curriculumNodeIds: [choice.nodeId],
@@ -1365,6 +1378,7 @@ function applyDailyPlanDepth(
     title: string;
     isNext: boolean;
     teacherSelected: boolean;
+    learningState: StudentLessonState;
   }> = [];
   for (const subjectId of profile.subjectIds ?? []) {
     for (const branch of getPlanningBranches(subjectId)) {
@@ -1381,6 +1395,7 @@ function applyDailyPlanDepth(
         title: nextNode.title,
         isNext: progress?.nextEligiblePosition === index,
         teacherSelected: Boolean(teacherChoices[subjectId] && teacherChoices[subjectId] !== "__SKIP__"),
+        learningState: nextNode.learningState ?? "not_watched",
       });
     }
   }
@@ -1396,13 +1411,21 @@ function applyDailyPlanDepth(
     if (representedNodeIds.has(item.nodeId)) continue;
     const subjectName = getSIESubject(item.subjectId)?.nameAr ?? item.subjectId;
     const hasTeacherSchedule = Array.isArray(teacherSchedules[item.subjectId]) && teacherSchedules[item.subjectId].length > 0;
-    const phaseId = item.teacherSelected && hasTeacherSchedule ? "teacher_sync" as const : "steady" as const;
+    const phaseId = item.learningState === "watched_only" || item.learningState === "needs_review"
+      ? "backlog" as const
+      : item.teacherSelected && hasTeacherSchedule ? "teacher_sync" as const : "steady" as const;
     steps.push(planSchema.shape.steps.element.parse({
       day: "",
       title: subjectName + " — " + item.branchTitle + " — " + item.title,
-      detail: item.teacherSelected && hasTeacherSchedule
-        ? "تابع شرح المدرس للموضوع التالي في هذا الفرع. قبل الحصة راجع عنوان الدرس ونقاطه الرئيسية، وبعد الشرح ارجع للمصدر وسجّل تقدمك. لا يوجد واجب مضاف هنا ما لم يكن مسجلًا من المدرس."
-        : "الموضوع التالي غير المكتمل في هذا الفرع. ابدأ بتمهيد سريع، ثم تابع شرح المدرس عند توفره، وسجّل تقدمك بعد الانتهاء. لا توجد أسئلة أو واجبات مولّدة من النظام.",
+      detail: item.learningState === "watched_only"
+        ? "أنت شاهدت شرح هذا الدرس بالفعل، لكن لم تسجّل أنك ذاكرته. ابدأ الآن بمراجعته من المصدر، ثم اربط التفاصيل بشرح المدرس واشرح الفكرة لنفسك. لن نطلب منك مشاهدة المحاضرة مرة ثانية أو حل واجب غير مسجل."
+        : item.learningState === "needs_review"
+          ? "سبق أن ذاكرت هذا الدرس لكنك تحتاج إلى مراجعته. ارجع للمصدر وحدد الجزء الذي نسيته، ثم حدّث الحالة بعد المراجعة."
+          : item.learningState === "not_watched"
+            ? "هذا الدرس لم تسجل أنك شاهدت شرحه بعد. تابع شرح المدرس أولًا، ثم ارجع للمصدر وسجّل حالة مذاكرتك بشكل منفصل."
+            : item.teacherSelected && hasTeacherSchedule
+              ? "تابع شرح المدرس للموضوع التالي في هذا الفرع. قبل الحصة راجع عنوان الدرس ونقاطه الرئيسية، وبعد الشرح ارجع للمصدر وسجّل تقدمك. لا يوجد واجب مضاف هنا ما لم يكن مسجلًا من المدرس."
+              : "الموضوع التالي غير المكتمل في هذا الفرع. ابدأ بتمهيد سريع، ثم تابع شرح المدرس عند توفره، وسجّل تقدمك بعد الانتهاء. لا توجد أسئلة أو واجبات مولّدة من النظام.",
       minutes: 0,
       category: subjectName + " · " + item.branchTitle,
       curriculumNodeIds: [item.nodeId],
@@ -1591,6 +1614,8 @@ export async function generatePersonalPlan(
     "جودة الخطة لا تعتمد على قوة صياغة الطالب أو طول طلبه. استخرج النية حتى لو كان الطلب قصيرًا أو عاميًا أو غير مرتب، ثم استعن تلقائيًا ببيانات الملف والمنهج والتراكم والتقدم وسجل تنفيذ المهام والصعوبة التي صرّح بها الطالب والسياق المتاح.",
     "لا تطلب من الطالب إعادة كتابة بيانات موجودة في ملفه، ولا تنتظر منه هندسة برومبت احترافي. افترض أقل قدر ممكن، واذكر الافتراضات المؤثرة فقط داخل الملخص، ولا تخترع بيانات ناقصة.",
     "حلّل فجوة المنهج لكل فرع مستقل، وموضع الطالب مقابل موضع المدرس في الفرع نفسه، وما أكمله الطالب وما أجّله فعليًا، والصعوبة المسجلة من الطالب. لا تجمع فجوات الفروع المستقلة ولا تستنتج سلوكًا من غياب البيانات.",
+    "افصل بين مشاهدة المحاضرة وبين مذاكرة الدرس وفهمه. آخر نقطة وصل إليها الطالب في الشرح تعني أنه حضر/شاهد حتى هذه النقطة فقط إذا كان سجل الفرع على lessonStateModelVersion=1. الحالة watched_only ليست إتمامًا للمذاكرة؛ أنشئ لها مهمة مراجعة المصدر وشرح الفكرة للنفس، ولا تطلب مشاهدة المحاضرة مرة أخرى. الحالة needs_review تعني أن الطالب ذاكر سابقًا لكنه يحتاج مراجعة، والحالة studied وحدها تعني أن أول دورة مذاكرة اكتملت بحسب تقريره الذاتي.",
+    "احترم الاستثناءات لكل درس على حدة: إذا كان lesson state=not_watched فلا تعتبره مكتملًا حتى لو كان بعده دروس أخرى في موضع الطالب. لا تعِد فتح الدروس التي حالتها studied، ولا تحوّل مجرد مشاهدة المحاضرة إلى إنجاز مذاكرة. الدروس القديمة التي لم تدخل نموذج الحالة الجديد قد تظل متوافقة مع سجلها السابق.",
     "حدود مسؤولية أساسية: StudyFlow مخطط ومتابع للتقدم، وليس مدرسًا أو منصة امتحانات. المهارات والأهداف التعليمية الواردة في الكتب تُستخدم لفهم طبيعة الدرس وترابطه فقط؛ المدرس هو من يشرح هذه المهارات ويدرّب الطالب عليها ويقيّمها.",
     "ممنوع أن تنشئ للطالب اختبارًا أو كويزًا أو أسئلة مراجعة أو سؤال استرجاع أو اختبارًا تشخيصيًا أو مهمة لقياس إتقان مهارة. لا تطلب من الطالب الإجابة عن أسئلة من المنهج، ولا تمنحه درجة أو حكم إتقان من خلال أسئلة يولدها النظام.",
     "المهام التي يجوز أن تقترحها: متابعة محاضرة مدرس معروفة، مراجعة الصفحات أو الملاحظات المرتبطة بشرح المدرس، أو تنفيذ واجب/تدريب عيّنه المدرس بالفعل وكان الطالب أو سجله قد أشار إليه. لا تخترع واجبًا أو مجموعة أسئلة أو تدريبًا من عندك. عند غياب واجب موثق لا تعوّضه باختبار من إنشاء النظام.",
