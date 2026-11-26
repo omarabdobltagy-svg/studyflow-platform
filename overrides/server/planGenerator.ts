@@ -1,10 +1,10 @@
 import { z } from "zod";
-import { getSIECheckpointProgressBranches, getSIESubject, getSIETeacher, normalizeSIECheckpointFrontier, type SIECheckpointTaskMatch } from "@shared/sie-catalog";
+import { getSIECheckpointProgressBranches, getSIESubject, getSIETeacher, matchSIECheckpointTask, normalizeSIECheckpointFrontier, type SIECheckpointTaskMatch } from "@shared/sie-catalog";
 import { calculateLearningGap } from "@shared/sie-learning-progress";
 import { invokeLLM, invokeNvidiaLLM } from "./_core/llm";
 import { isPrimaryProviderFallbackEligible } from "./_core/llmFallback";
 import { updateAIActivity } from "./aiActivity";
-import { getStudentProfile, saveAiPlan } from "./db";
+import { getStudentProfile, listTasks, saveAiPlan } from "./db";
 import { formatTextbookEvidence, getCurriculumBranchPriorityGuidance, orderPlanStepsByCurriculumDependencies, retrieveTextbookEvidence } from "./textbook-retrieval";
 import { buildExamBlueprintContext, SECOND_YEAR_BAC_EXAM_WINDOW_2026_2027 } from "./exam-blueprints";
 import { isHighConfidenceScheduleAnnouncement, isSecondYearBaccalaureateProfile, isSecondYearBaccalaureateUpdate, selectedTeacherIds } from "./teacher-content-monitor";
@@ -146,11 +146,23 @@ export function getDailyPlanFeasibilityNote(input: DailyPlanFeasibilityInput): s
 const planSchema = z.object({
   title: z.string().trim().min(3).max(160),
   summary: z.string().trim().min(10).max(1_500),
+  executionStrategy: z.object({
+    objective: z.string().trim().min(10).max(900),
+    rationale: z.string().trim().min(10).max(900),
+    phases: z.array(z.object({
+      id: z.enum(["backlog", "teacher_sync", "steady"]),
+      title: z.string().trim().min(3).max(140),
+      purpose: z.string().trim().min(8).max(500),
+      actions: z.array(z.string().trim().min(3).max(300)).max(8).default([]),
+      completionCriteria: z.string().trim().min(5).max(400),
+    })).max(3).optional(),
+  }).optional(),
   durationLabel: z.string().trim().min(2).max(100),
   steps: z.array(z.object({
     day: z.string().trim().max(60).default(""),
     title: z.string().trim().min(2).max(180),
     detail: z.string().trim().min(5).max(1_200),
+    phaseId: z.enum(["backlog", "teacher_sync", "steady"]).optional(),
     studyMethod: z.object({
       stages: z.array(z.object({
         title: z.string().trim().min(2).max(120),
@@ -169,6 +181,7 @@ const planSchema = z.object({
       title: z.string().trim().min(1).max(220),
       status: z.enum(["todo", "done"]),
       confidence: z.enum(["exact", "strong"]),
+      dueAt: z.string().datetime().nullable().optional(),
     }).optional(),
     priority: z.enum(["critical", "high", "medium", "low"]).default("medium"),
     difficulty: z.enum(["easy", "medium", "hard", "unknown"]).default("unknown"),
@@ -1251,6 +1264,213 @@ function formatUpcomingTeacherSessions(
     : "لا توجد حصة مسجلة قادمة داخل أفق هذه الخطة.";
 }
 
+type ExistingPlannerTask = {
+  id: number;
+  title: string;
+  notes: string | null;
+  category: string;
+  priority: "low" | "medium" | "high";
+  status: "todo" | "done";
+  dueAt: Date | null;
+};
+
+function applyDailyPlanDepth(
+  plan: GeneratedPlan,
+  profile: NonNullable<Awaited<ReturnType<typeof getStudentProfile>>>,
+  existingTasks: ExistingPlannerTask[],
+  dailyMinutes: number,
+): GeneratedPlan {
+  const targetCount = dailyMinutes <= 60 ? 3 : dailyMinutes <= 150 ? 4 : 5;
+  const snapshot = buildPlannerProgressSnapshot(profile);
+  const selection = (profile.selection ?? {}) as Record<string, any>;
+  const teacherChoices = (selection.teacherChoices ?? {}) as Record<string, string>;
+  const teacherSchedules = (selection.teacherSchedules ?? {}) as Record<string, Array<{ dayOfWeek: number; startTime: string }>>;
+  const steps = plan.steps.map(step => ({
+    ...step,
+    phaseId: step.phaseId ?? (step.existingTask ? "backlog" as const : "steady" as const),
+  }));
+  const usedTaskIds = new Set(steps.map(step => step.existingTask?.id).filter((id): id is number => typeof id === "number"));
+  const representedNodeIds = new Set(steps.flatMap(step => step.curriculumNodeIds ?? []));
+  const usedTitles = new Set(steps.map(step => normalizePlannerLessonText(step.title)));
+
+  // Attach already-existing open obligations first. These are student-entered records,
+  // never generated homework or exams.
+  const sortedOpenTasks = existingTasks
+    .filter(task => task.status !== "done" && !usedTaskIds.has(task.id))
+    .slice()
+    .sort((left, right) => {
+      const leftDue = left.dueAt?.getTime() ?? Number.POSITIVE_INFINITY;
+      const rightDue = right.dueAt?.getTime() ?? Number.POSITIVE_INFINITY;
+      if (leftDue !== rightDue) return leftDue - rightDue;
+      const rank = (value: string) => value === "high" ? 3 : value === "medium" ? 2 : 1;
+      return rank(right.priority) - rank(left.priority);
+    });
+
+  for (const task of sortedOpenTasks) {
+    if (steps.length >= targetCount) break;
+    const normalizedTitle = normalizePlannerLessonText(task.title);
+    if (usedTitles.has(normalizedTitle)) continue;
+    const match = matchSIECheckpointTask(profile.subjectIds, [task.title, task.notes ?? ""].join(" "));
+    const linkedNodeId = match && snapshot.eligibleNodeIds.has(match.nodeId) && !representedNodeIds.has(match.nodeId)
+      ? match.nodeId
+      : undefined;
+    const dueAt = task.dueAt instanceof Date && !Number.isNaN(task.dueAt.getTime())
+      ? task.dueAt.toISOString()
+      : null;
+    steps.push({
+      day: "",
+      title: task.title,
+      detail: task.notes?.trim()
+        ? task.notes.trim().slice(0, 1_200)
+        : "دي مهمة مسجلة بالفعل في قائمتك. نفّذ فقط ما هو مكتوب في التكليف الأصلي؛ النظام لن يخترع واجبًا أو أسئلة أو تفاصيل غير مسجلة.",
+      minutes: 0,
+      category: task.category || "التزامات قائمة",
+      curriculumNodeIds: linkedNodeId ? [linkedNodeId] : [],
+      existingTask: { id: task.id, title: task.title, status: task.status, confidence: "exact", dueAt },
+      priority: task.priority,
+      difficulty: "unknown",
+      lessonSize: "unknown",
+      difficultyBasis: "unknown",
+      difficultyConfidence: "low",
+      sourcePages: [],
+      phaseId: "backlog",
+    });
+    usedTaskIds.add(task.id);
+    usedTitles.add(normalizedTitle);
+    if (linkedNodeId) representedNodeIds.add(linkedNodeId);
+  }
+
+  // If the student has fewer open obligations than the chosen workload allows,
+  // add only the next eligible official checkpoint in each branch. Never invent
+  // teacher homework; a lesson-follow-up task is not a homework assignment.
+  const nextChoices: Array<{
+    subjectId: string;
+    branchId: string;
+    branchTitle: string;
+    nodeId: string;
+    title: string;
+    isNext: boolean;
+    teacherSelected: boolean;
+  }> = [];
+  for (const subjectId of profile.subjectIds ?? []) {
+    for (const branch of getPlanningBranches(subjectId)) {
+      const progress = snapshot.branches.get(plannerBranchKey(subjectId, branch.branchId));
+      const eligible = progress?.eligibleChoices ?? [];
+      const nextNode = eligible.find(choice => !representedNodeIds.has(choice.nodeId));
+      if (!nextNode) continue;
+      const index = branch.choices.findIndex(choice => choice.nodeId === nextNode.nodeId);
+      nextChoices.push({
+        subjectId,
+        branchId: branch.branchId,
+        branchTitle: branch.branchTitle,
+        nodeId: nextNode.nodeId,
+        title: nextNode.title,
+        isNext: progress?.nextEligiblePosition === index,
+        teacherSelected: Boolean(teacherChoices[subjectId] && teacherChoices[subjectId] !== "__SKIP__"),
+      });
+    }
+  }
+  nextChoices.sort((left, right) =>
+    Number(right.isNext) - Number(left.isNext)
+    || Number(right.teacherSelected) - Number(left.teacherSelected)
+    || left.subjectId.localeCompare(right.subjectId)
+    || left.branchId.localeCompare(right.branchId)
+  );
+
+  for (const item of nextChoices) {
+    if (steps.length >= targetCount) break;
+    if (representedNodeIds.has(item.nodeId)) continue;
+    const subjectName = getSIESubject(item.subjectId)?.nameAr ?? item.subjectId;
+    const hasTeacherSchedule = Array.isArray(teacherSchedules[item.subjectId]) && teacherSchedules[item.subjectId].length > 0;
+    const phaseId = item.teacherSelected && hasTeacherSchedule ? "teacher_sync" as const : "steady" as const;
+    steps.push({
+      day: "",
+      title: subjectName + " — " + item.branchTitle + " — " + item.title,
+      detail: item.teacherSelected && hasTeacherSchedule
+        ? "تابع شرح المدرس للموضوع التالي في هذا الفرع. قبل الحصة راجع عنوان الدرس ونقاطه الرئيسية، وبعد الشرح ارجع للمصدر وسجّل تقدمك. لا يوجد واجب مضاف هنا ما لم يكن مسجلًا من المدرس."
+        : "الموضوع التالي غير المكتمل في هذا الفرع. ابدأ بتمهيد سريع، ثم تابع شرح المدرس عند توفره، وسجّل تقدمك بعد الانتهاء. لا توجد أسئلة أو واجبات مولّدة من النظام.",
+      minutes: 0,
+      category: subjectName + " · " + item.branchTitle,
+      curriculumNodeIds: [item.nodeId],
+      priority: item.isNext ? "high" : "medium",
+      difficulty: "unknown",
+      lessonSize: "unknown",
+      difficultyBasis: "unknown",
+      difficultyConfidence: "low",
+      sourcePages: [],
+      phaseId,
+    });
+    representedNodeIds.add(item.nodeId);
+  }
+
+  return { ...plan, steps };
+}
+
+function buildStudentExecutionStrategy(
+  plan: GeneratedPlan,
+  profile: NonNullable<Awaited<ReturnType<typeof getStudentProfile>>>,
+): NonNullable<GeneratedPlan["executionStrategy"]> {
+  const selection = (profile.selection ?? {}) as Record<string, any>;
+  const teacherChoices = (selection.teacherChoices ?? {}) as Record<string, string>;
+  const teacherSchedules = (selection.teacherSchedules ?? {}) as Record<string, Array<{ dayOfWeek: number; startTime: string }>>;
+  const supplied = plan.executionStrategy;
+  const suppliedPhases = new Map((supplied?.phases ?? []).map(phase => [phase.id, phase]));
+  const stepsByPhase = {
+    backlog: plan.steps.filter(step => step.phaseId === "backlog"),
+    teacher_sync: plan.steps.filter(step => step.phaseId === "teacher_sync"),
+    steady: plan.steps.filter(step => step.phaseId === "steady" || !step.phaseId),
+  };
+  const phaseMeta = [
+    {
+      id: "backlog" as const,
+      title: "1. نقفل المتراكم المؤكد",
+      defaultPurpose: "نبدأ بالالتزامات المفتوحة المسجلة فعلًا والفجوات التي يؤكدها تقدمك. لن نعتبر درسًا مكتملًا لمجرد وجود مهمة له.",
+      completionCriteria: "تحديث حالة الالتزام بعد تنفيذه، وعدم اعتبار أي درس مكتملًا دون تسجيل تقدمك.",
+      empty: "لم تُسجّل مهام مفتوحة مؤكدة لهذه المرحلة؛ لن نضيف متراكمًا بالتخمين.",
+    },
+    {
+      id: "teacher_sync" as const,
+      title: "2. نواكب المدرس",
+      defaultPurpose: "نربط الدروس القادمة بموعد حصتك المسجل، ونجهّز الموضوع التالي قبل الشرح عندما تسمح الأولوية بذلك.",
+      completionCriteria: "تسجيل الفروع التي شرحها المدرس بعد الحصة، ثم تحديث مرجع المدرس من تقريرك فقط.",
+      empty: "لا توجد مهمة محددة مرتبطة بحصة قادمة في هذه المسودة. لو جدول الحصص غير مسجل، أضفه من ملفك الدراسي.",
+    },
+    {
+      id: "steady" as const,
+      title: "3. نثبت التقدم ونستكمل الفجوات",
+      defaultPurpose: "نستكمل الدروس المتبقية داخل فروعها، ونحدّث ترتيب الأولويات عند ظهور تقدم أو التزام جديد.",
+      completionCriteria: "تسجيل الدرس الذي أنهيته فعلًا، ثم إعادة حساب الخطوة التالية داخل الفرع نفسه.",
+      empty: "لا توجد خطوة إضافية في هذه المرحلة ضمن سعة الخطة الحالية.",
+    },
+  ];
+  const phases = phaseMeta.map(meta => {
+    const generated = suppliedPhases.get(meta.id);
+    const actions = stepsByPhase[meta.id].map(step => step.title).slice(0, 8);
+    const hasSchedule = Object.entries(teacherSchedules).some(([subjectId, slots]) =>
+      (profile.subjectIds ?? []).includes(subjectId)
+      && Boolean(teacherChoices[subjectId] && teacherChoices[subjectId] !== "__SKIP__")
+      && Array.isArray(slots) && slots.length > 0
+    );
+    const purpose = meta.id === "teacher_sync" && !hasSchedule
+      ? "لم يتم تسجيل موعد حصة أسبوعي لمدرس من مدرسيك، لذلك لن نفترض موعدًا أو ندّعي وجود تحضير قبله. أضف الجدول من ملفك الدراسي لتفعيل المزامنة."
+      : generated?.purpose ?? meta.defaultPurpose;
+    return {
+      id: meta.id,
+      title: meta.title,
+      purpose,
+      actions: actions.length ? actions : [meta.empty],
+      completionCriteria: generated?.completionCriteria ?? meta.completionCriteria,
+    };
+  });
+  return {
+    objective: supplied?.objective
+      ?? "نغلق الالتزامات المؤكدة أولًا، ثم نربط متابعة المنهج بجدول المدرس، ونكمل الفجوات دون اختلاق واجبات أو افتراض إتقان.",
+    rationale: supplied?.rationale
+      ?? "ترتيب الخطة مبني على المهام المفتوحة ومواضع التقدم داخل كل فرع والجدول الأسبوعي الذي سجلته. التحضير للحصة القريبة لا يسقط التزامًا متأخرًا عاجلًا، وغياب البيانات لا يتحول إلى تخمين.",
+    phases,
+  };
+}
+
 export async function generatePersonalPlan(
   userId: number,
   prompt: string,
@@ -1265,7 +1485,9 @@ export async function generatePersonalPlan(
       taskId: number;
       taskTitle: string;
       status: "todo" | "done";
+      dueAt?: Date | null;
     }>;
+    existingTasks?: ExistingPlannerTask[];
     startDate?: string;
     context?: string;
     pace?: "intensive" | "balanced" | "relaxed";
@@ -1281,6 +1503,7 @@ export async function generatePersonalPlan(
   const planningMode = constraints.planningMode ?? "smart";
   const horizonDays = constraints.horizonDays ?? 7;
   const existingCurriculumTasks = constraints.existingCurriculumTasks ?? [];
+  const existingTasks = constraints.existingTasks ?? [];
   const selectedPace = constraints.pace ?? "balanced";
   const paceLevel = Math.max(1, Math.min(3, Math.trunc(constraints.paceLevel ?? 2))) as 1 | 2 | 3;
   const paceLevelLabels: Record<typeof selectedPace, [string, string, string]> = {
@@ -1346,6 +1569,9 @@ export async function generatePersonalPlan(
     "افصل بين تقدم المنهج وقائمة المهام: موضع الطالب هو حقيقة ما أكمله بالفعل؛ المهمة المفتوحة في قائمة المهام تعني التزامًا قائمًا فقط ولا تعني أن الدرس اكتمل. لا تغيّر موضع الطالب بسبب وجود مهمة مفتوحة أو منتهية. قبل إنشاء خطوة جديدة، طابق المهام الحالية مع الموضوعات المتاحة؛ إذا وُجدت مهمة مطابقة للموضوع نفسه فأشر إلى المهمة الموجودة ولا تنشئ نسخة ثانية. إذا كانت المهمة منتهية والموضوع ما زال غير مكتمل في موضع التقدم، أظهر التعارض للمراجعة ولا تعتبر الدرس مكتملًا تلقائيًا.",
     "هذه خطة تشغيلية للفترة القادمة فقط، وليست خطة سنوية ولا قائمة متراكمات منفصلة. التزم بأفق " + horizonDays + " أيام من تاريخ اليوم، ووزع الحمل على الأيام المتاحة. لا تحاول تغطية المنهج كله في كل توليد؛ اختر الخطوات التي يمكن تنفيذها داخل هذه الفترة ثم جدّد الخطة عند تغيّر المهام والتقدم ومواعيد الحصص.",
     "في النمط الذكي الافتراضي: ابدأ بالمهام المفتوحة والمتأخرة التي تخص المنهج، ثم أضف الموضوع التالي الذي يشرحه المدرس قريبًا بما يسمح للطالب بالاستعداد قبل الحصة. لا تسمح للمتراكم أن يمحو مواكبة المدرس، ولا تسمح للجديد أن يزيح التزامًا متأخرًا عاجلًا.",
+    "اجعل الخطة مفهومة للطالب قبل تنفيذها: اكتب executionStrategy.objective وexecutionStrategy.rationale بالعربية الواضحة، وحدد مراحلها بترتيب واضح: backlog لإغلاق الالتزامات المفتوحة المؤكدة، teacher_sync لمواكبة شرح المدرس، steady لاستكمال التقدم. اربط كل مهمة بمرحلتها عبر phaseId. لا تكتب استراتيجية عامة لا تطابق المهام الفعلية؛ كل مرحلة تذكر ما سنفعله ولماذا ومتى نعتبرها قد تقدمت.",
+    "إذا كانت هناك مهام مفتوحة مسجلة في البيانات، فلا تتجاهلها ولا تنشئ نسخة ثانية منها. ابدأ بالأقرب استحقاقًا والأعلى أولوية، ثم أضف الدرس التالي المتاح في الفروع المسجلة. لا تقل إننا سننهي كل المتراكم إذا كان حجمه أكبر من قدرة الأفق؛ اشرح ما الذي سنبدأ به وما الذي سيبقى للدورة التالية.",
+    "عند تكوين قائمة الخطة اليومية، استهدف عددًا عمليًا من المهام يتناسب مع انشغال الطالب: نحو 3 عند ساعة متاحة، و4 عند ساعتين، و5 عند ثلاث ساعات أو أكثر. هذا هدف أدنى مرن وليس إلزامًا لاختلاق مهام؛ إذا لم توجد التزامات أو نقاط منهج متاحة، أظهر أن البيانات لا تتيح مهامًا إضافية بدل اختراعها.",
     "في نمط المتراكم فقط: ركّز على المهام القديمة المفتوحة والفجوة الحالية التي يؤكدها سجل الطالب والمدرس، ولا تضف دروسًا جديدة لمجرد أنها لاحقة في الفهرس إلا إذا كانت لازمة لإكمال التزام متراكم.",
     "في نمط مواكبة المدرس: احجز وقتًا قبل أقرب حصة مسجلة لمراجعة ما سيشرحه المدرس أو استكمال متطلباته، ووزّع موضوعات ما بعد الحصة بعد موعدها المتوقع. لا تعتبر الحصة قد حدثت أو اتلغت إلا بإعلان موثوق أو تحديث مؤكد.",
     "اقرأ teacherSchedules لكل مادة كموعد أسبوعي محلي متكرر يتضمن اليوم ووقت البداية فقط، وليس فترة زمنية. لا تفترض مدة الحصة أو وقت انتهائها، ولا تحجز فترة بعدها دون معلومة موثقة. استخدم قائمة المواعيد التالية المحسوبة بالتاريخ والساعة: " + formatUpcomingTeacherSessions(profile, constraints.startDate ?? new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date()), horizonDays) + ". قدّم التحضير للموضوع القادم قبل موعده متى أمكن، ولا تضع بداية مهمة عند الساعة المسجلة نفسها.",
@@ -1382,7 +1608,7 @@ export async function generatePersonalPlan(
     "كيّف قائمة المهام مع ظروف الطالب المعلنة: الطاقة المنخفضة أو الانشغال الشديد يعني عدد مهام أقل وبداية أسهل، والحالة المعنوية المنخفضة تعني اختيار مهمة أولى سهلة، وقيود الموارد تعني عدم تكليف الطالب بأداة أو كتاب أو اتصال غير متاح. لا تقدم تشخيصًا طبيًا أو نفسيًا.",
     "لا تعتبر غياب السجل دليلًا على الإنجاز، ولا توبّخ الطالب.",
     "لا تحوّل منظومة الأداءات الأسبوعية والشهرية إلى دروس منهجية؛ تعامل معها كالتزامات منفصلة يجب تتبع إنجازها لأن لها شرط أهلية مستقلًا، ولا تخلط نسبها مع توزيع درجات ورقة الامتحان.",
-    "أخرج JSON صحيحًا فقط بالعربية: title, summary, durationLabel, steps (1-240 عنصرًا، وكل عنصر فيه title,detail,category,curriculumNodeIds,priority,difficulty,lessonSize,difficultyBasis,difficultyConfidence,resourceRecommendation?,printedPageRange,sourcePages)، habits (0-5 فيها title,cue). resourceRecommendation اختياري ولا يُضاف إلا لمصدر مدرس موثق ومطابق حرفيًا لأحد تحديثات الصف الثاني بكالوريا ومفيد لدرس غير مكتمل؛ شكله {title,url,teacherName,reason}. يجب أن يحتوي curriculumNodeIds على معرف واحد أو أكثر من الدروس المتاحة التي ترتبط بها الخطوة. printedPageRange نطاق صفحات الكتاب المطبوع [البداية، النهاية] عند توافره فقط؛ sourcePages مراجع PDF المسترجعة فعليًا فقط وتكون [] في غير ذلك. اجعل الملخص واضحًا والتفاصيل مركزة.",
+    "أخرج JSON صحيحًا فقط بالعربية: title, summary, durationLabel, steps (1-240 عنصرًا، وكل عنصر فيه title,detail,category,curriculumNodeIds,phaseId: backlog|teacher_sync|steady,priority,difficulty,lessonSize,difficultyBasis,difficultyConfidence,resourceRecommendation?,printedPageRange,sourcePages)، executionStrategy ({objective,rationale,phases:[{id,title,purpose,actions,completionCriteria}]}), habits (0-5 فيها title,cue). resourceRecommendation اختياري ولا يُضاف إلا لمصدر مدرس موثق ومطابق حرفيًا لأحد تحديثات الصف الثاني بكالوريا ومفيد لدرس غير مكتمل؛ شكله {title,url,teacherName,reason}. يجب أن يحتوي curriculumNodeIds على معرف واحد أو أكثر من الدروس المتاحة التي ترتبط بها الخطوة. printedPageRange نطاق صفحات الكتاب المطبوع [البداية، النهاية] عند توافره فقط؛ sourcePages مراجع PDF المسترجعة فعليًا فقط وتكون [] في غير ذلك. اجعل الملخص واضحًا والتفاصيل مركزة.",
     "كل خطوة يجب أن تحدد المادة والوحدة/الفرع والدرس وطريقة مذاكرته، لا عنوانًا عامًا.",
     planScope === "daily"
       ? "هذه قائمة مهام تشغيلية حالية. نمط الأولوية المختار: " + (planningMode === "backlog" ? "المتراكم أولًا فقط" : planningMode === "teacher_sync" ? "مواكبة متطلبات المدرس" : "ذكي متوازن: إنهاء الالتزامات الحالية والاستعداد للموضوع التالي") + ". أخرج مهامًا قليلة أو أكثر حسب مستوى الانشغال، دون أي أيام أو مواعيد أو مدد."
@@ -1686,6 +1912,17 @@ export async function generatePersonalPlan(
   } else {
     const adaptiveNote = "هذه قائمة مهام مرنة وليست جدولًا زمنيًا. لا توجد مدة أو ساعة محددة لأي مهمة؛ اختر منها ما يناسب وقتك، وسيُعاد ترتيب الأولويات مع تقدمك.";
     plan = { ...plan, summary: (plan.summary + "\n\n" + adaptiveNote).slice(0, 1_500) };
+  }
+  if (planScope === "daily" && profile) {
+    plan = applyDailyPlanDepth(plan, profile, existingTasks, dailyMinutes);
+    plan = {
+      ...plan,
+      steps: plan.steps.map(step => ({
+        ...step,
+        phaseId: step.phaseId ?? (step.existingTask ? "backlog" : "steady"),
+      })),
+      executionStrategy: buildStudentExecutionStrategy(plan, profile),
+    };
   }
   if (constraints.memorySnapshot) plan = { ...plan, memorySnapshot: constraints.memorySnapshot };
   updatePlanGenerationProgress(userId, "saving", undefined, undefined, constraints.activityId);
