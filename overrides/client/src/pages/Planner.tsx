@@ -265,7 +265,7 @@ export default function Planner() {
       setApproved(true);
       setPlan(current => {
         if (!current) return current;
-        const authoritative = result.plan
+        const authoritative = "plan" in result && result.plan
           ? { ...(result.plan as unknown as PlanView), reviewQuestion: "" }
           : current;
         return {

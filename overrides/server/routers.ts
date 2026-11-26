@@ -3127,7 +3127,7 @@ export const appRouter = router({
             title: input.plan.title,
             taskCount: legacyResult.taskCount,
           });
-          return { ...legacyResult, plan: input.plan };
+          return legacyResult;
         }
         const schedule = input.schedule;
         const scheduleSettings = {
