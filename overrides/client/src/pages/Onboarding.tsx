@@ -60,6 +60,24 @@ type FormState = {
   teacherPreLectureExamRequired: Record<string, TeacherRequirementState>;
 };
 
+function withoutSubject<T>(map: Record<string, T>, subjectId: string): Record<string, T> {
+  const { [subjectId]: _removed, ...remaining } = map;
+  return remaining;
+}
+
+function resetTeacherSpecificChoices(current: FormState, subjectId: string): FormState {
+  return {
+    ...current,
+    courseModes: withoutSubject(current.courseModes, subjectId),
+    teacherSchedules: withoutSubject(current.teacherSchedules, subjectId),
+    teacherScheduleUnfixed: withoutSubject(current.teacherScheduleUnfixed, subjectId),
+    teacherAccessRequirements: withoutSubject(current.teacherAccessRequirements, subjectId),
+    teacherHomeworkPolicy: withoutSubject(current.teacherHomeworkPolicy, subjectId),
+    teacherHomeworkRequiredBeforeNextLecture: withoutSubject(current.teacherHomeworkRequiredBeforeNextLecture, subjectId),
+    teacherPreLectureExamRequired: withoutSubject(current.teacherPreLectureExamRequired, subjectId),
+  };
+}
+
 const steps = ["بياناتك", "النظام الدراسي", "المسار", "المواد", "طريقة الدراسة لكل مادة"];
 const SKIP_TEACHER = "__SKIP__";
 const CHECKPOINT_NOT_STARTED = "__NOT_STARTED__";
@@ -533,7 +551,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                             return (
                               <button key={teacher.teacherId} type="button" aria-pressed={selected}
                                 onClick={() => setForm(current => ({
-                                  ...current,
+                                  ...resetTeacherSpecificChoices(current, currentSetupSubjectId),
                                   teacherSelections: { ...current.teacherSelections, [currentSetupSubjectId]: teacher.teacherId },
                                   customTeacherNames: { ...current.customTeacherNames, [currentSetupSubjectId]: "" },
                                 }))}
@@ -553,7 +571,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                       <Input
                         value={form.customTeacherNames[currentSetupSubjectId] ?? ""}
                         onChange={event => setForm(current => ({
-                          ...current,
+                          ...resetTeacherSpecificChoices(current, currentSetupSubjectId),
                           customTeacherNames: { ...current.customTeacherNames, [currentSetupSubjectId]: event.target.value },
                           teacherSelections: { ...current.teacherSelections, [currentSetupSubjectId]: event.target.value.trim() ? SKIP_TEACHER : (current.teacherSelections[currentSetupSubjectId] ?? "") },
                         }))}
@@ -566,7 +584,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                     <button type="button"
                       aria-pressed={form.teacherSelections[currentSetupSubjectId] === SKIP_TEACHER && !form.customTeacherNames[currentSetupSubjectId]?.trim()}
                       onClick={() => setForm(current => ({
-                        ...current,
+                        ...resetTeacherSpecificChoices(current, currentSetupSubjectId),
                         teacherSelections: { ...current.teacherSelections, [currentSetupSubjectId]: SKIP_TEACHER },
                         customTeacherNames: { ...current.customTeacherNames, [currentSetupSubjectId]: "" },
                       }))}
