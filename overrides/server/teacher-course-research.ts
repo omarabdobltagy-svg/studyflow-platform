@@ -69,20 +69,39 @@ function parseJsonObject(value: string): Record<string, any> | null {
   }
 }
 
-function teacherSourceMatches(teacherName: string, brandName: string, channelTitle: string, title: string) {
-  const channel = normalized(channelTitle, 180).toLocaleLowerCase("ar");
-  const titleText = normalized(title, 240).toLocaleLowerCase("ar");
-  const candidates = [teacherName, brandName].map(value => value.trim().toLocaleLowerCase("ar")).filter(value => value.length >= 4);
+export function normalizeTeacherSearchText(value: string): string {
+  return value.normalize("NFKC")
+    .toLocaleLowerCase("ar")
+    .replace(/[أإآٱ]/g, "ا")
+    .replace(/ؤ/g, "و")
+    .replace(/ئ/g, "ي")
+    .replace(/ى/g, "ي")
+    .replace(/ة/g, "ه")
+    .replace(/[ً-ٰٟـ]/g, "")
+    .replace(/[^\\p{L}\\p{N}\\s]/gu, " ")
+    .replace(/\\s+/g, " ")
+    .trim();
+}
+
+export function teacherSourceMatches(teacherName: string, brandName: string, channelTitle: string, title: string) {
+  const channel = normalizeTeacherSearchText(normalized(channelTitle, 180));
+  const titleText = normalizeTeacherSearchText(normalized(title, 240));
+  const candidates = [teacherName, brandName]
+    .map(value => normalizeTeacherSearchText(value))
+    .filter(value => value.length >= 4);
+  // Keep full-name/brand matching strict, but normalize common Arabic spelling variants.
+  // This avoids dropping the teacher's own channel because one source omitted hamza or tashkeel.
   return candidates.some(value => channel.includes(value) || titleText.includes(value));
 }
 
 async function collectYouTubeEvidence(teacherName: string, brandName: string, subjectName: string) {
-  const queries = [
+  const queries = [...new Set([
     `${teacherName} ${subjectName} سنتر أونلاين`,
-    `${teacherName} ${subjectName} نظام الحضور والمجموعات والكورس`,
+    `${brandName} ${subjectName} كورس محاضرات اشتراك`,
+    `${teacherName} ${subjectName} نظام الحضور والمجموعات`,
     `${teacherName} ${subjectName} الواجب قبل المحاضرة القادمة`,
     `${teacherName} ${subjectName} امتحان قبل كل محاضرة`,
-  ];
+  ].map(value => normalized(value, 300)).filter(value => value.length > 0))];
   const responses = await Promise.allSettled(queries.map(query =>
     callDataApi("Youtube/search", { query: { gl: "EG", hl: "ar", q: query } }) as Promise<{
       items?: Array<Record<string, unknown>>;
