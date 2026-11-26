@@ -611,46 +611,190 @@ function PlanCard({ plan, title, studentName, editable, onChange, onApprove, onA
   onRemoveStep: (index: number) => void; onMoveStep: (index: number, direction: -1 | 1) => void;
   approving: boolean; approved: boolean;
 }) {
-  const [editing,setEditing]=useState<{index:number;title:string;detail:string}|null>(null);
-  const completedCount=plan.steps.filter(step=>step.plannerTaskStatus==="done"||step.existingTask?.status==="done").length;
-  const saveEdit=()=>{if(!editing)return;onChange({...plan,steps:plan.steps.map((step,index)=>index===editing.index?{...step,title:editing.title.trim()||step.title,detail:editing.detail.trim()||step.detail}:step)});setEditing(null);};
-  return <section className="overflow-hidden rounded-[1.65rem] border border-border bg-card shadow-sm">
-    <header className="border-b border-border/70 p-4 sm:p-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="text-[10px] font-semibold tracking-[.16em] text-primary">STUDYFLOW / TASK LIST</span><span className="rounded-full border border-border px-2.5 py-1 text-[10px] text-muted-foreground">{title}</span></div>
-          <h2 className="mt-2 text-xl font-bold sm:text-2xl">المهام المقترحة ليك</h2><p className="mt-2 max-w-2xl whitespace-pre-line text-sm leading-7 text-muted-foreground">{plan.summary.split("\n\n")[0]}</p>{studentName&&<p className="mt-2 text-xs text-muted-foreground">مبنية على ملف {studentName}</p>}</div>
-        <div className="flex flex-wrap items-center gap-2"><span className={"rounded-full border px-3 py-1.5 text-xs font-semibold "+(approved?"border-primary/20 bg-primary/[0.05] text-primary":"border-border bg-muted/30 text-muted-foreground")}>{approved?"قائمة مهام معتمدة":"مسودة للمراجعة"}</span><PlanExportActions plan={plan} studentName={studentName}/></div>
-      </div>
-      <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3">
-        <div className="rounded-xl border border-border/70 bg-muted/15 p-3"><p className="text-[10px] text-muted-foreground">إجمالي المهام</p><p className="mt-1 text-base font-bold tabular-nums">{plan.steps.length.toLocaleString("ar-EG")}</p></div>
-        <div className="rounded-xl border border-border/70 bg-muted/15 p-3"><p className="text-[10px] text-muted-foreground">المهام المكتملة</p><p className="mt-1 text-base font-bold tabular-nums">{completedCount.toLocaleString("ar-EG")}</p></div>
-        <div className="col-span-2 rounded-xl border border-border/70 bg-muted/15 p-3 sm:col-span-1"><p className="text-[10px] text-muted-foreground">أسلوب المذاكرة</p><p className="mt-1 text-sm font-bold">مراحل واضحة حسب طبيعة الدرس</p></div>
-      </div>
-    </header>
-    <div className="space-y-4 p-4 sm:p-6">
-      <div className="flex flex-wrap items-end justify-between gap-2"><div><h3 className="font-bold">قائمة المذاكرة</h3><p className="mt-1 text-xs text-muted-foreground">ابدأ بالمهمة المناسبة لظروفك. لا يوجد يوم أو ساعة محددة لها.</p></div>{editable&&<Button type="button" size="sm" variant="outline" className="h-9 rounded-lg" onClick={onAddStep}><Plus className="size-3.5"/> إضافة مهمة</Button>}</div>
-      <div className="divide-y divide-border/60 rounded-2xl border border-border/80 bg-background">{plan.steps.map((step,index)=><article key={step.plannerTaskId??step.sourceStepIndex??index} className="p-4 sm:p-5">
-        {editing?.index===index?<div className="space-y-3">
-          <label className="block"><span className="mb-1 block text-[11px] font-semibold text-muted-foreground">عنوان المهمة</span><input value={editing.title} onChange={e=>setEditing(v=>v?{...v,title:e.target.value}:v)} className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"/></label>
-          <label className="block"><span className="mb-1 block text-[11px] font-semibold text-muted-foreground">تفاصيل المهمة</span><textarea rows={3} value={editing.detail} onChange={e=>setEditing(v=>v?{...v,detail:e.target.value}:v)} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm leading-6"/></label>
-          <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="ghost" size="sm" onClick={()=>setEditing(null)}>إلغاء</Button><Button type="button" size="sm" onClick={saveEdit}>حفظ التعديل</Button></div>
-        </div>:<div className="flex items-start gap-3">
-          <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-[11px] font-semibold text-muted-foreground">{index+1}</span>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2"><span className="rounded-md bg-muted/60 px-2 py-1 text-[10px] font-semibold text-muted-foreground">{step.category}</span>{step.priority==="critical"&&<span className="text-[10px] font-semibold text-destructive">عاجل</span>}{step.priority==="high"&&<span className="text-[10px] font-semibold text-amber-600">أولوية عالية</span>}{(step.plannerTaskStatus==="done"||step.existingTask?.status==="done")&&<span className="text-[10px] text-primary">مكتملة</span>}{step.resourceRecommendation&&<span className="text-[10px] font-semibold text-primary">مصدر مدرس متاح</span>}</div>
-            <h5 className="mt-2 text-sm font-bold leading-6">{step.title}</h5><p className="mt-1 whitespace-pre-line text-xs leading-6 text-muted-foreground">{step.detail}</p>
-            {step.studyMethod&&<details open className="mt-3 rounded-xl border border-border/70 bg-muted/15 p-3"><summary className="cursor-pointer text-xs font-bold">طريقة المذاكرة والسبب وراء كل مرحلة</summary><ol className="mt-3 space-y-3">{step.studyMethod.stages.map((stage,stageIndex)=><li key={stageIndex} className="border-r-2 border-primary/35 pr-3"><p className="text-xs font-bold">{stageIndex+1}. {stage.title}{stage.optional&&<span className="mr-2 text-[10px] font-normal text-muted-foreground">(حسب المطلوب من المدرس)</span>}</p><p className="mt-1 text-xs leading-6 text-foreground/90">{stage.instruction}</p><p className="mt-1 text-[11px] leading-5 text-muted-foreground">ليه؟ {stage.reason}</p></li>)}</ol>{step.studyMethod.teacherPolicyNote&&<p className="mt-3 rounded-lg bg-amber-500/5 p-2 text-[11px] leading-5 text-muted-foreground">{step.studyMethod.teacherPolicyNote}</p>}<p className="mt-3 border-t border-border/60 pt-3 text-xs font-semibold leading-6">متى تعتبر المهمة مكتملة؟ {step.studyMethod.completionCriteria}</p></details>}
-            {step.priorityReason&&<details className="mt-2 text-[11px] text-muted-foreground"><summary className="cursor-pointer">لماذا هذه المهمة؟</summary><p className="mt-2 max-w-xl leading-6">{step.priorityReason}</p></details>}
-            {step.resourceRecommendation&&<a href={step.resourceRecommendation.url} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-[11px] font-semibold text-primary">افتح شرح المدرس المقترح</a>}
-            {editable&&<div className="mt-3 flex flex-wrap items-center gap-1 border-t border-border/50 pt-2"><Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={()=>setEditing({index,title:step.title,detail:step.detail})}>تعديل</Button><Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" disabled={index===0} onClick={()=>onMoveStep(index,-1)}><ArrowUp className="size-3.5"/> لأعلى</Button><Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" disabled={index===plan.steps.length-1} onClick={()=>onMoveStep(index,1)}><ArrowDown className="size-3.5"/> لأسفل</Button><Button type="button" variant="ghost" size="sm" className="mr-auto h-8 px-2 text-xs text-destructive" disabled={plan.steps.length<=1} onClick={()=>onRemoveStep(index)}><X className="size-3.5"/> حذف</Button></div>}
+  const [editing, setEditing] = useState<{ index: number; title: string; detail: string } | null>(null);
+  const completedCount = plan.steps.filter(step => step.plannerTaskStatus === "done" || step.existingTask?.status === "done").length;
+  const fallbackPhases: ExecutionStrategyPhase[] = [
+    { id: "backlog", title: "1. نقفل المتراكم المؤكد", purpose: "نبدأ بالالتزامات المفتوحة المسجلة فعلًا، ولا نعتبر وجود مهمة دليلًا على اكتمال درس.", actions: ["نرتب الالتزامات حسب الاستحقاق والأولوية", "نحافظ على تفاصيل التكليف الأصلي كما سجلها الطالب أو المدرس"], completionCriteria: "تحديث حالة الالتزام بعد تنفيذه، مع إبقاء تقدم المنهج مستقلًا." },
+    { id: "teacher_sync", title: "2. نواكب المدرس", purpose: "نربط الدروس القادمة بجدول الحصة المسجل، ونستعد للموضوع التالي من غير افتراض محتوى لم يذكره المدرس.", actions: ["نجهز للدرس التالي قبل الحصة إذا سمح الوقت", "بعد الحصة نسجل الفروع التي شرحها المدرس من تقرير الطالب"], completionCriteria: "تحديث موضع شرح المدرس فقط من تقرير واضح، من دون اعتبار الطالب متقنًا للدرس تلقائيًا." },
+    { id: "steady", title: "3. نثبت التقدم ونستكمل الفجوات", purpose: "نستكمل الخطوات المنهجية التالية بعد معالجة الأولويات الأقرب.", actions: ["نحافظ على ترتيب الدروس داخل كل فرع", "نعيد الحساب عند تسجيل تقدم أو التزام جديد"], completionCriteria: "تسجيل ما أنجزه الطالب فعلًا ثم إعادة ترتيب الخطوة التالية." },
+  ];
+  const phases = plan.executionStrategy?.phases?.length ? plan.executionStrategy.phases : fallbackPhases;
+  const stepPhaseId = (step: PlanStep, index: number) => step.phaseId ?? (step.existingTask ? "backlog" : index === 0 ? "teacher_sync" : "steady");
+  const saveEdit = () => {
+    if (!editing) return;
+    onChange({
+      ...plan,
+      steps: plan.steps.map((step, index) => index === editing.index
+        ? { ...step, title: editing.title.trim() || step.title, detail: editing.detail.trim() || step.detail }
+        : step),
+    });
+    setEditing(null);
+  };
+  const formatTaskDueDate = (value?: string | null) => {
+    if (!value) return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    return new Intl.DateTimeFormat("ar-EG", { timeZone: "Africa/Cairo", day: "numeric", month: "short" }).format(date);
+  };
+
+  return (
+    <section className="sf-execution-plan overflow-hidden rounded-[1.65rem] border border-border bg-card shadow-sm">
+      <header className="border-b border-border/70 p-4 sm:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[10px] font-semibold tracking-[.16em] text-primary">STUDYFLOW / EXECUTION PLAN</span>
+              <span className="rounded-full border border-border px-2.5 py-1 text-[10px] text-muted-foreground">{title}</span>
+            </div>
+            <h2 className="mt-2 text-xl font-bold sm:text-2xl">خطة التنفيذ — هنعمل إيه وبأي ترتيب؟</h2>
+            <p className="mt-2 max-w-2xl whitespace-pre-line text-sm leading-7 text-muted-foreground">{plan.summary.split("\n\n")[0]}</p>
+            {studentName && <p className="mt-2 text-xs text-muted-foreground">مبنية على ملف {studentName}</p>}
           </div>
-        </div>}
-      </article>)}</div>
-      {editable&&<div className="flex flex-col gap-3 border-t border-border/70 pt-4 sm:flex-row sm:items-center sm:justify-between"><p className="text-xs leading-5 text-muted-foreground">اعتماد القائمة ينشئ مهامًا بدون وقت أو موعد إلزامي. يمكنك تحديد موعد لمهمة منفردة لاحقًا عند الحاجة.</p><Button type="button" className="h-11 rounded-xl px-6" onClick={onApprove} disabled={approving||plan.steps.length===0||!plan.title.trim()}>{approving?<Loader2 className="size-4 animate-spin"/>:<CheckCircle2 className="size-4"/>} اعتماد المهام وإضافتها</Button></div>}
-      <details className="rounded-xl border border-border/70 bg-muted/10 p-3"><summary className="cursor-pointer text-xs font-semibold">تفاصيل إضافية</summary><div className="mt-3 whitespace-pre-line text-xs leading-6 text-muted-foreground">{plan.summary}</div>{plan.habits.length>0&&<div className="mt-3 grid gap-2 sm:grid-cols-2">{plan.habits.map((habit,index)=><div key={habit.title+":"+index} className="rounded-lg bg-background p-3"><p className="text-xs font-semibold text-foreground">{habit.title}</p><p className="mt-1 text-xs leading-5">{habit.cue}</p></div>)}</div>}</details>
-      <details className="rounded-xl border border-border/70"><summary className="cursor-pointer px-4 py-3 text-xs font-semibold text-muted-foreground">اسأل مساعد الخطة</summary><div className="p-3"><PlanAssistantChat plan={plan}/></div></details>
-    </div>
-  </section>;
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={"rounded-full border px-3 py-1.5 text-xs font-semibold " + (approved ? "border-primary/20 bg-primary/[0.05] text-primary" : "border-border bg-muted/30 text-muted-foreground")}>{approved ? "خطة معتمدة" : "مقترح للمراجعة"}</span>
+            <PlanExportActions plan={plan} studentName={studentName} />
+          </div>
+        </div>
+        <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <div className="rounded-xl border border-border/70 bg-muted/15 p-3"><p className="text-[10px] text-muted-foreground">المهام الفعلية في الخطة</p><p className="mt-1 text-base font-bold tabular-nums">{plan.steps.length.toLocaleString("ar-EG")}</p></div>
+          <div className="rounded-xl border border-border/70 bg-muted/15 p-3"><p className="text-[10px] text-muted-foreground">المهام المكتملة</p><p className="mt-1 text-base font-bold tabular-nums">{completedCount.toLocaleString("ar-EG")}</p></div>
+          <div className="col-span-2 rounded-xl border border-border/70 bg-muted/15 p-3 sm:col-span-1"><p className="text-[10px] text-muted-foreground">ترتيب العمل</p><p className="mt-1 text-sm font-bold">متراكم ← المدرس ← التثبيت</p></div>
+        </div>
+      </header>
+
+      <div className="space-y-5 p-4 sm:p-6">
+        <section className="sf-execution-overview grid gap-4 overflow-hidden rounded-2xl border border-primary/15 bg-background/75 p-4 sm:p-5 lg:grid-cols-[minmax(0,1fr)_minmax(250px,.78fr)]">
+          <div className="relative z-10">
+            <p className="eyebrow">المنطق وراء الخطة</p>
+            <h3 className="mt-2 text-lg font-bold leading-8">{plan.executionStrategy?.objective ?? "نقفل الالتزامات المؤكدة أولًا، ثم نواكب شرح المدرس ونكمل الفجوات."}</h3>
+            <p className="mt-2 whitespace-pre-line text-xs leading-7 text-muted-foreground">{plan.executionStrategy?.rationale ?? "الترتيب يعتمد على المهام المفتوحة وموضع تقدمك في كل فرع وجدول الحصص المسجل. لن نخترع واجبًا أو نفترض موعدًا غير موجود."}</p>
+            <p className="mt-3 rounded-xl border border-border/70 bg-card/70 p-3 text-[11px] leading-6 text-muted-foreground">
+              مهم: واجب المدرس لا يظهر كتكليف جديد إلا إذا كان مسجلًا فعلًا في بياناتك أو أكدت أنت أنه مطلوب. متابعة شرح المدرس لا تعني أن الدرس اكتمل عندك.
+            </p>
+          </div>
+          <div className="sf-planner-flow-visual relative flex min-h-[190px] flex-col justify-end overflow-hidden rounded-xl border border-border/70 bg-card/65 p-3">
+            <DeferredPlannerFlowScene />
+            <div className="relative z-10 grid grid-cols-3 gap-1 text-center text-[10px] font-semibold">
+              <span className="rounded-lg border border-border/70 bg-background/85 px-2 py-2 text-foreground">المتراكم</span>
+              <span className="rounded-lg border border-border/70 bg-background/85 px-2 py-2 text-foreground">المدرس</span>
+              <span className="rounded-lg border border-border/70 bg-background/85 px-2 py-2 text-foreground">التثبيت</span>
+            </div>
+          </div>
+        </section>
+
+        <div className="space-y-4">
+          {phases.map((phase, phaseIndex) => {
+            const phaseSteps = plan.steps
+              .map((step, index) => ({ step, index }))
+              .filter(item => stepPhaseId(item.step, item.index) === phase.id);
+            return (
+              <section key={phase.id} className={"sf-execution-phase sf-execution-phase-" + phase.id + " overflow-hidden rounded-2xl border border-border/80 bg-background"}>
+                <header className="border-b border-border/70 bg-muted/15 p-4 sm:p-5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="flex size-7 items-center justify-center rounded-lg border border-primary/25 bg-primary/[.07] text-xs font-bold text-primary">{phaseIndex + 1}</span>
+                    <h3 className="text-sm font-bold">{phase.title}</h3>
+                    <span className="mr-auto rounded-full border border-border bg-card px-2.5 py-1 text-[10px] text-muted-foreground">{phaseSteps.length.toLocaleString("ar-EG")} مهمة</span>
+                  </div>
+                  <p className="mt-3 max-w-3xl text-xs leading-6 text-muted-foreground">{phase.purpose}</p>
+                  {phase.actions.length > 0 && (
+                    <ul className="mt-2 grid gap-1 sm:grid-cols-2">
+                      {phase.actions.slice(0, 4).map((action, index) => <li key={index} className="flex items-start gap-2 text-[11px] leading-5 text-foreground/80"><span className="mt-2 size-1 shrink-0 rounded-full bg-primary/70" />{action}</li>)}
+                    </ul>
+                  )}
+                </header>
+
+                <div className="divide-y divide-border/60">
+                  {phaseSteps.length ? phaseSteps.map(({ step, index }) => {
+                    const dueLabel = step.existingTask ? formatTaskDueDate(step.existingTask.dueAt) : null;
+                    const isDone = step.plannerTaskStatus === "done" || step.existingTask?.status === "done";
+                    return (
+                      <article key={step.plannerTaskId ?? step.existingTask?.id ?? step.sourceStepIndex ?? index} className="sf-execution-task p-4 sm:p-5">
+                        {editing?.index === index ? (
+                          <div className="space-y-3">
+                            <label className="block"><span className="mb-1 block text-[11px] font-semibold text-muted-foreground">عنوان المهمة</span><input value={editing.title} onChange={event => setEditing(current => current ? { ...current, title: event.target.value } : current)} className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm" /></label>
+                            <label className="block"><span className="mb-1 block text-[11px] font-semibold text-muted-foreground">تفاصيل المهمة</span><textarea rows={3} value={editing.detail} onChange={event => setEditing(current => current ? { ...current, detail: event.target.value } : current)} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm leading-6" /></label>
+                            <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="ghost" size="sm" onClick={() => setEditing(null)}>إلغاء</Button><Button type="button" size="sm" onClick={saveEdit}>حفظ التعديل</Button></div>
+                          </div>
+                        ) : (
+                          <div className="flex items-start gap-3">
+                            <span className={"mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl border text-[11px] font-semibold " + (isDone ? "border-primary/25 bg-primary/[.08] text-primary" : "border-border bg-muted/35 text-muted-foreground")}>{isDone ? <CheckCircle2 className="size-4" /> : (index + 1).toLocaleString("ar-EG")}</span>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="rounded-md bg-muted/60 px-2 py-1 text-[10px] font-semibold text-muted-foreground">{step.category}</span>
+                                {step.existingTask && <span className="text-[10px] text-muted-foreground">التزام مسجل مسبقًا</span>}
+                                {step.priority === "critical" && <span className="text-[10px] font-semibold text-destructive">عاجل</span>}
+                                {step.priority === "high" && <span className="text-[10px] font-semibold text-amber-600">أولوية عالية</span>}
+                                {isDone && <span className="text-[10px] font-semibold text-primary">مكتملة</span>}
+                                {dueLabel && <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground"><CalendarClock className="size-3" />{dueLabel}</span>}
+                              </div>
+                              <h4 className="mt-2 text-sm font-bold leading-6">{step.title}</h4>
+                              <p className="mt-1 whitespace-pre-line text-xs leading-6 text-muted-foreground">{step.detail}</p>
+                              {step.studyMethod && (
+                                <details className="mt-3 rounded-xl border border-border/70 bg-muted/15 p-3">
+                                  <summary className="cursor-pointer text-xs font-bold">طريقة المذاكرة والسبب وراء كل مرحلة</summary>
+                                  <ol className="mt-3 space-y-3">
+                                    {step.studyMethod.stages.map((stage, stageIndex) => (
+                                      <li key={stageIndex} className="border-r-2 border-primary/35 pr-3">
+                                        <p className="text-xs font-bold">{stageIndex + 1}. {stage.title}{stage.optional && <span className="mr-2 text-[10px] font-normal text-muted-foreground">(حسب المطلوب من المدرس)</span>}</p>
+                                        <p className="mt-1 text-xs leading-6 text-foreground/90">{stage.instruction}</p>
+                                        <p className="mt-1 text-[11px] leading-5 text-muted-foreground">ليه؟ {stage.reason}</p>
+                                      </li>
+                                    ))}
+                                  </ol>
+                                  {step.studyMethod.teacherPolicyNote && <p className="mt-3 rounded-lg bg-amber-500/5 p-2 text-[11px] leading-5 text-muted-foreground">{step.studyMethod.teacherPolicyNote}</p>}
+                                  <p className="mt-3 border-t border-border/60 pt-3 text-xs font-semibold leading-6">متى تعتبر المهمة مكتملة؟ {step.studyMethod.completionCriteria}</p>
+                                </details>
+                              )}
+                              {step.priorityReason && <details className="mt-2 text-[11px] text-muted-foreground"><summary className="cursor-pointer">ليه المهمة دي في المرحلة دي؟</summary><p className="mt-2 max-w-xl leading-6">{step.priorityReason}</p></details>}
+                              {step.resourceRecommendation && <a href={step.resourceRecommendation.url} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-[11px] font-semibold text-primary">افتح شرح المدرس المقترح</a>}
+                              {editable && (
+                                <div className="mt-3 flex flex-wrap items-center gap-1 border-t border-border/50 pt-2">
+                                  <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => setEditing({ index, title: step.title, detail: step.detail })}>تعديل</Button>
+                                  <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" disabled={index === 0} onClick={() => onMoveStep(index, -1)}><ArrowUp className="size-3.5" /> لأعلى</Button>
+                                  <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" disabled={index === plan.steps.length - 1} onClick={() => onMoveStep(index, 1)}><ArrowDown className="size-3.5" /> لأسفل</Button>
+                                  <Button type="button" variant="ghost" size="sm" className="mr-auto h-8 px-2 text-xs text-destructive" disabled={plan.steps.length <= 1} onClick={() => onRemoveStep(index)}><X className="size-3.5" /> حذف</Button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </article>
+                    );
+                  }) : (
+                    <p className="p-4 text-xs leading-6 text-muted-foreground">لا توجد مهمة موثقة لهذه المرحلة في دورة التخطيط الحالية. لن نضيف عملًا افتراضيًا لمجرد ملء القائمة.</p>
+                  )}
+                </div>
+                <footer className="border-t border-border/60 bg-muted/10 px-4 py-3 text-[11px] leading-6 text-muted-foreground">
+                  متى نعتبر المرحلة تقدمت؟ {phase.completionCriteria}
+                </footer>
+              </section>
+            );
+          })}
+        </div>
+
+        {editable && (
+          <div className="flex flex-col gap-3 border-t border-border/70 pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" size="sm" className="h-9 rounded-lg" onClick={onAddStep}><Plus className="size-3.5" /> إضافة مهمة</Button>
+              <p className="self-center text-xs leading-5 text-muted-foreground">الاعتماد يضيف المهام إلى قائمتك. المواعيد لا تُنشأ إلا من موعد حقيقي أو من جدول المدرس.</p>
+            </div>
+            <Button type="button" className="h-11 rounded-xl px-6" onClick={onApprove} disabled={approving || plan.steps.length === 0 || !plan.title.trim()}>
+              {approving ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />} اعتماد المهام وإضافتها
+            </Button>
+          </div>
+        )}
+        <details className="rounded-xl border border-border/70 bg-muted/10 p-3">
+          <summary className="cursor-pointer text-xs font-semibold">تفاصيل إضافية</summary>
+          <div className="mt-3 whitespace-pre-line text-xs leading-6 text-muted-foreground">{plan.summary}</div>
+          {plan.habits.length > 0 && <div className="mt-3 grid gap-2 sm:grid-cols-2">{plan.habits.map((habit, index) => <div key={habit.title + ":" + index} className="rounded-lg bg-background p-3"><p className="text-xs font-semibold text-foreground">{habit.title}</p><p className="mt-1 text-xs leading-5">{habit.cue}</p></div>)}</div>}
+        </details>
+        <details className="rounded-xl border border-border/70">
+          <summary className="cursor-pointer px-4 py-3 text-xs font-semibold text-muted-foreground">اسأل مساعد الخطة</summary>
+          <div className="p-3"><PlanAssistantChat plan={plan} /></div>
+        </details>
+      </div>
+    </section>
+  );
 }
 
 function PlanAssistantChat({ plan }: { plan: PlanView }) {
