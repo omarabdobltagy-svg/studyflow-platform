@@ -45,6 +45,81 @@ describe("complete daily plan coverage", () => {
   });
 });
 
+describe("actual accumulated daily backlog scope", () => {
+  const subjectId = "ENG1_G2_BAC";
+  const grammar = getSIECheckpointProgressBranches(subjectId).find(branch => branch.branchId === "ENG_GRAMMAR")!;
+
+  const emptyPlan = () => ({
+    title: "خطة المتراكم الفعلي",
+    summary: "اختبار نطاق التراكم.",
+    durationLabel: "اختبار",
+    steps: [],
+    habits: [],
+  } as any);
+
+  it("includes reached and teacher-covered lessons but excludes curriculum beyond the teacher frontier", () => {
+    const choices = grammar.choices;
+    const now = "2026-11-27T00:00:00.000Z";
+    const profile = {
+      subjectIds: [subjectId],
+      selection: {
+        learningCourseProgress: {
+          [subjectId]: {
+            branches: {
+              [grammar.branchId]: {
+                lastCompletedLessonId: choices[1].nodeId,
+                studentFrontierConfirmedAt: now,
+                lessonStateModelVersion: 1,
+                teacherTeachingFrontierId: choices[4].nodeId,
+                teacherFrontierConfirmedAt: now,
+                lessonStates: {
+                  [choices[0].nodeId]: { state: "studied", updatedAt: now },
+                },
+              },
+            },
+          },
+        },
+      },
+    } as any;
+
+    const result = applyDailyPlanDepth(emptyPlan(), profile, []);
+    const plannedIds = result.steps.flatMap(step => step.curriculumNodeIds ?? []);
+
+    expect(plannedIds).toEqual(choices.slice(1, 5).map(choice => choice.nodeId));
+    expect(plannedIds).not.toContain(choices[5].nodeId);
+  });
+
+  it("does not fabricate a one-lesson backlog when the student's position is unknown", () => {
+    const choices = grammar.choices;
+    const now = "2026-11-27T00:00:00.000Z";
+    const profile = {
+      subjectIds: [subjectId],
+      selection: {
+        learningCourseProgress: {
+          [subjectId]: {
+            branches: {
+              [grammar.branchId]: {
+                lastCompletedLessonId: "__UNKNOWN__",
+                teacherTeachingFrontierId: choices[4].nodeId,
+                teacherFrontierConfirmedAt: now,
+              },
+            },
+          },
+        },
+      },
+    } as any;
+
+    const result = applyDailyPlanDepth(emptyPlan(), profile, []);
+    const plannedIds = result.steps.flatMap(step => step.curriculumNodeIds ?? []);
+
+    expect(plannedIds).not.toContain(choices[0].nodeId);
+    expect(plannedIds).not.toContain(choices[1].nodeId);
+    expect(plannedIds).not.toContain(choices[2].nodeId);
+    expect(plannedIds).not.toContain(choices[3].nodeId);
+    expect(plannedIds).not.toContain(choices[4].nodeId);
+  });
+});
+
 describe("official English curriculum sequence", () => {
   it("labels the Unit 1 Conditional Structures checkpoint as Lesson 4 & 5", () => {
     const branches = getSIECheckpointBranches("ENG1_G2_BAC");
