@@ -1048,7 +1048,7 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
                             <summary>تفاصيل التنفيذ</summary>
                             <p>{detailText}</p>
                             {step.scheduleNote && <small className="sf-sp-source-title">{displayArabicText(step.scheduleNote,"تم تأجيل هذه الخطوة إلى دورة التخطيط التالية.")}</small>}
-                          </details>}
+                          </details>
                           {step.studyMethod && (
                             <details className="sf-sp-study-method">
                               <summary>طريقة مذاكرة الدرس — {step.studyMethod.stages.length} مراحل</summary>
