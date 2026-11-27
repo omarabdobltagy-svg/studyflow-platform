@@ -488,7 +488,10 @@ export default function Planner() {
     history.isError,
     savedPlans,
     profile.data?.subjectIds,
+    profile.isLoading,
+    profile.isError,
     activeDailyPlan.isLoading,
+    activeDailyPlan.isError,
     activeDailyPlan.data?.plan,
   ]);
 
