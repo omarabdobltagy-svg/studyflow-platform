@@ -29,7 +29,7 @@ export type TeacherVideoAnalysis = z.infer<typeof TeacherVideoAnalysisSchema>;
 type GeminiInteractionState =
   | { status: "in_progress"; interactionId: string; model: string }
   | { status: "completed"; interactionId: string; model: string; analysis: TeacherVideoAnalysis }
-  | { status: "failed"; interactionId: string; model: string; error: string };
+  | { status: "failed"; interactionId: string; model: string; error: string; errorCode?: string; retryable: boolean };
 
 function getApiKey() {
   return process.env.GEMINI_API_KEY?.trim() || "";
@@ -154,8 +154,34 @@ export async function getTeacherVideoAnalysis(interactionId: string): Promise<Ge
   const payload = await requestJson(INTERACTIONS_BASE + "/" + encodeURIComponent(interactionId), apiKey, { method: "GET" });
   const model = typeof payload.model === "string" ? payload.model : process.env.GEMINI_VIDEO_MODEL || "gemini-3.8-flash";
   if (payload.status === "failed" || payload.status === "cancelled") {
-    const reason = payload.error?.message || payload.error || "Video analysis failed.";
-    return { status: "failed", interactionId, model, error: String(reason).slice(0, 500) };
+    const rawErrors = Array.isArray(payload.errors) ? payload.errors : [];
+    const primaryError = payload.error && typeof payload.error === "object"
+      ? payload.error as Record<string, unknown>
+      : {};
+    const firstNestedError = rawErrors.find((item: unknown) => item && typeof item === "object") as Record<string, unknown> | undefined;
+    const rawCode = primaryError.code ?? firstNestedError?.code ?? payload.error_code ?? payload.code;
+    const rawMessage = primaryError.message ?? firstNestedError?.message
+      ?? (typeof payload.error === "string" ? payload.error : undefined)
+      ?? payload.message;
+    const errorCode = rawCode === undefined || rawCode === null ? undefined : String(rawCode).slice(0, 80);
+    const message = typeof rawMessage === "string" && rawMessage.trim()
+      ? rawMessage.trim()
+      : "Gemini interaction ended with status " + String(payload.status) + " without a provider error message.";
+    const numericCode = Number(errorCode);
+    const retryable = payload.status !== "cancelled" && (
+      [408, 429, 500, 502, 503, 504].includes(numericCode)
+      || /api_error|internal|unavailable|resource[_ -]?exhausted|deadline[_ -]?exceeded|rate[_ -]?limit/i.test(errorCode || "")
+      || /high demand|temporar|deadline|timed? out|quota|resource exhausted|service unavailable|internal error/i.test(message)
+      || (!errorCode && !rawMessage)
+    );
+    return {
+      status: "failed",
+      interactionId,
+      model,
+      error: message.slice(0, 500),
+      ...(errorCode ? { errorCode } : {}),
+      retryable,
+    };
   }
   if (payload.status !== "completed") return { status: "in_progress", interactionId, model };
   const output = extractOutputText(payload);
