@@ -20,6 +20,7 @@ import {
   studySessions,
   taskChangeLogs,
   teacherCourseFacts,
+  teacherDirectoryEntries,
   tasks,
   users,
 } from "../drizzle/schema";
