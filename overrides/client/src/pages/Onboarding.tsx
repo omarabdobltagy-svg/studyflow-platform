@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
-import { getTeacherLectureDuration, mergeSuggestedTeacherScheduleSlots } from "@/lib/teacher-sessions";
+import { mergeSuggestedTeacherScheduleSlots } from "@/lib/teacher-sessions";
 import {
   SIE_CATALOG_META,
   SIE_SYSTEMS,
@@ -25,6 +25,7 @@ import {
   BookOpen,
   Check,
   CircleHelp,
+  Clock3,
   GraduationCap,
   Loader2,
   Pencil,
@@ -37,7 +38,7 @@ import { useLocation, type RouteComponentProps } from "wouter";
 import { toast } from "sonner";
 
 type TeacherChoiceMap = Record<string, string>;
-type TeacherScheduleSlot = { dayOfWeek: number; startTime: string; endTime?: string };
+type TeacherScheduleSlot = { dayOfWeek: number; startTime: string };
 type TeacherScheduleMap = Record<string, TeacherScheduleSlot[]>;
 
 type CustomTeacherProfile = { nameAr: string; brandName: string; sourceUrl: string; availableModes: Array<"center" | "online">; confidence: "low" | "medium" | "high"; evidence: Array<{ title: string; url: string; source: string }>; notes?: string };
@@ -118,6 +119,22 @@ function displayArabicScheduleTime(value?: string) {
   const hour12 = hour % 12 || 12;
   const period = hour < 12 ? "ص" : "م";
   return hour12.toLocaleString("ar-EG") + ":" + Number(minuteText).toLocaleString("ar-EG", { minimumIntegerDigits: 2 }) + " " + period;
+}
+
+function getScheduleTimeParts(value: string) {
+  const [hourText, minuteText] = value.split(":");
+  const hour = Number(hourText);
+  return {
+    hour: String(hour % 12 || 12).padStart(2, "0"),
+    minute: String(Number(minuteText)).padStart(2, "0"),
+    period: hour < 12 ? "am" as const : "pm" as const,
+  };
+}
+
+function buildScheduleTime(hourText: string, minuteText: string, period: "am" | "pm") {
+  let hour = Number(hourText) % 12;
+  if (period === "pm") hour += 12;
+  return String(hour).padStart(2, "0") + ":" + minuteText;
 }
 
 export default function Onboarding({ editMode = false }: Partial<RouteComponentProps> & { editMode?: boolean }) {
@@ -232,6 +249,14 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
   const currentSetupSubject = selectedSubjects[subjectSetupIndex] ?? selectedSubjects[0];
   const currentSetupSubjectId = currentSetupSubject?.subjectId ?? "";
   const setupTeacherOptions = currentSetupSubjectId && form.systemId ? getSIETeachersForSubject(currentSetupSubjectId, form.systemId) : [];
+  const sharedTeacherDirectory = trpc.teacherDirectory.list.useQuery({
+    subjectId: currentSetupSubjectId || "__none__",
+    systemId: (form.systemId || "EG_BACCALAUREATE") as "EG_BACCALAUREATE" | "EG_GENERAL_SECONDARY",
+    gradeYear: form.gradeYear || SIE_CATALOG_META.gradeYear,
+  }, {
+    enabled: Boolean(currentSetupSubjectId && form.systemId),
+    staleTime: 30_000,
+  });
   const selectedSetupTeacherId = form.teacherSelections[currentSetupSubjectId] && form.teacherSelections[currentSetupSubjectId] !== SKIP_TEACHER
     ? form.teacherSelections[currentSetupSubjectId] : "";
   const teacherFacts = trpc.teacherDirectory.facts.useQuery({
@@ -246,7 +271,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
   });
 
   const discoverTeacher = trpc.teacherDirectory.discover.useMutation({
-    onSuccess: (result, variables) => {
+    onSuccess: async (result, variables) => {
       if (!result.found) {
         toast.error("ملقيناش مصدرًا عامًا كافيًا يحدد المدرس ده. تقدر تحتفظ بالاسم وتختار طريقة متابعتك بنفسك.");
         return;
@@ -269,7 +294,12 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
           ? { ...current.courseModes, [variables.subjectId]: profile.availableModes[0] }
           : current.courseModes,
       }));
-      toast.success("لقينا مصدرًا عامًا مرتبطًا بالاسم وأضفناه لاختيارات المادة. راجع المنصة قبل المتابعة.");
+      await utils.teacherDirectory.list.invalidate({
+        subjectId: variables.subjectId,
+        systemId: variables.systemId,
+        gradeYear: variables.gradeYear,
+      });
+      toast.success("تم التحقق من المدرس وإضافته لدليل StudyFlow المشترك. هيظهر للطلاب الآخرين في نفس المادة والسنة.");
     },
     onError: error => toast.error(error.message || "تعذر البحث عن المدرس الآن."),
   });
@@ -405,7 +435,6 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
         (form.teacherSchedules[subject.subjectId] ?? []).map(slot => ({
           dayOfWeek: slot.dayOfWeek,
           startTime: slot.startTime,
-          ...(slot.endTime ? { endTime: slot.endTime } : {}),
         })),
       ])),
       teacherScheduleUnfixedSubjectIds: selectedSubjects
@@ -728,6 +757,61 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                       )}
                     </div>
 
+                    {sharedTeacherDirectory.data && sharedTeacherDirectory.data.length > 0 && (
+                      <section className="sf-shared-teacher-directory" aria-label="مدرسون أضافهم طلاب StudyFlow">
+                        <div className="sf-shared-teacher-heading">
+                          <div>
+                            <span>دليل StudyFlow المتنامي</span>
+                            <strong>مدرسون أضافهم طلاب آخرون</strong>
+                            <small>الأسماء دي متاحة لكل الطلاب في نفس المادة والنظام والسنة الدراسية.</small>
+                          </div>
+                          <span className="sf-shared-teacher-count">{sharedTeacherDirectory.data.length.toLocaleString("ar-EG")}</span>
+                        </div>
+                        <div className="sf-teacher-choice-grid grid gap-3 sm:grid-cols-2">
+                          {sharedTeacherDirectory.data
+                            .filter(entry => !setupTeacherOptions.some(teacher => teacher.nameAr.trim().toLocaleLowerCase() === entry.nameAr.trim().toLocaleLowerCase()))
+                            .map(entry => {
+                              const selected = form.teacherSelections[currentSetupSubjectId] === SKIP_TEACHER
+                                && form.customTeacherNames[currentSetupSubjectId] === entry.nameAr;
+                              return (
+                                <button key={entry.id} type="button" aria-pressed={selected}
+                                  onClick={() => setForm(current => {
+                                    const next = resetTeacherSpecificChoices(current, currentSetupSubjectId);
+                                    const entryProfile: CustomTeacherProfile = {
+                                      nameAr: entry.nameAr,
+                                      brandName: entry.brandName,
+                                      sourceUrl: entry.sourceUrl,
+                                      availableModes: entry.availableModes,
+                                      confidence: entry.confidence,
+                                      evidence: entry.evidence,
+                                      notes: entry.notes,
+                                    };
+                                    return {
+                                      ...next,
+                                      teacherSelections: { ...current.teacherSelections, [currentSetupSubjectId]: SKIP_TEACHER },
+                                      customTeacherNames: { ...current.customTeacherNames, [currentSetupSubjectId]: entry.nameAr },
+                                      customTeacherProfiles: { ...next.customTeacherProfiles, [currentSetupSubjectId]: entryProfile },
+                                      courseModes: entry.availableModes.length === 1
+                                        ? { ...next.courseModes, [currentSetupSubjectId]: entry.availableModes[0] }
+                                        : next.courseModes,
+                                    };
+                                  })}
+                                  className={"sf-teacher-choice sf-shared-teacher-choice flex min-h-16 items-center justify-between gap-3 rounded-2xl border p-4 text-right transition " + (selected ? "is-selected" : "")}>
+                                  <span className="sf-teacher-choice-copy min-w-0">
+                                    <b>{entry.nameAr}</b>
+                                    {entry.brandName !== entry.nameAr && <small className="sf-teacher-brand">{entry.brandName}</small>}
+                                    <small>{entry.confidence === "high" ? "مطابقة قوية للمصادر" : entry.confidence === "medium" ? "تم العثور على مصادر مرتبطة" : "مطابقة أولية — راجع المصدر"}</small>
+                                    {entry.confirmationCount > 1 && <small>ترشيحات الطلاب: {entry.confirmationCount.toLocaleString("ar-EG")}</small>}
+                                  </span>
+                                  <span className="sf-teacher-choice-check">{selected ? <Check className="size-4" /> : <span />}</span>
+                                </button>
+                              );
+                            })}
+                        </div>
+                      </section>
+                    )}
+                    {sharedTeacherDirectory.isLoading && <p className="sf-shared-teacher-loading">بنحمّل المدرسين اللي أضافهم الطلاب...</p>}
+                    {sharedTeacherDirectory.isError && <p className="sf-shared-teacher-loading">تعذّر تحميل الدليل المشترك الآن. تقدر تكمل من القائمة الأساسية أو تبحث عن مدرسك.</p>}
                     <div className="sf-teacher-custom-field">
                       <label htmlFor="sf-custom-teacher-name" className="block text-sm font-semibold">مش لاقي المدرس؟ اكتب اسمه</label>
                       <Input id="sf-custom-teacher-name" name="teacherName" type="text" inputMode="text" autoComplete="off" autoCapitalize="words" enterKeyHint="search"
@@ -823,7 +907,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                       <div>
                         <p className="eyebrow">موعد الحصص الأسبوعي</p>
                         <h4 id="sf-schedule-heading">مواعيد محاضرات {currentSetupSubject.nameAr}</h4>
-                        <p>حدد يوم المحاضرة ووقت بدايتها ونهايتها. تقدر تضيف أكثر من موعد في الأسبوع.</p>
+                        <p>حدد يوم المحاضرة ووقت المحاضرة فقط. تقدر تضيف أكثر من موعد في الأسبوع.</p>
                       </div>
                       <span className="sf-schedule-count">{(form.teacherSchedules[currentSetupSubjectId] ?? []).length} مواعيد</span>
                     </div>
@@ -871,38 +955,59 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                                 </button>
                               ))}
                             </div>
-                            <div className="sf-schedule-time-range" aria-label={"وقت المحاضرة " + (slotIndex + 1)}>
-                              <label className="sf-schedule-time-field">
-                                <span><b>تبدأ</b><small>وقت البداية</small></span>
-                                <input type="time" inputMode="numeric" dir="ltr" step={900} value={slot.startTime}
-                                  aria-label={"وقت بداية المحاضرة " + (slotIndex + 1) + " بنظام 24 ساعة"}
-                                  onChange={event => setForm(current => ({
-                                    ...current,
-                                    teacherSchedules: {
-                                      ...current.teacherSchedules,
-                                      [currentSetupSubjectId]: (current.teacherSchedules[currentSetupSubjectId] ?? []).map((item, index) => index === slotIndex ? { ...item, startTime: event.target.value } : item),
-                                    },
-                                  }))} />
-                                <small className="sf-schedule-time-preview">العرض بنظام 12 ساعة: {displayArabicScheduleTime(slot.startTime)}</small>
-                              </label>
-                              <span className="sf-schedule-time-range-arrow" aria-hidden="true">←</span>
-                              <label className="sf-schedule-time-field">
-                                <span><b>تنتهي</b><small>وقت النهاية</small></span>
-                                <input type="time" inputMode="numeric" dir="ltr" step={900} value={slot.endTime ?? ""}
-                                  aria-label={"وقت انتهاء المحاضرة " + (slotIndex + 1)}
-                                  onChange={event => setForm(current => ({
-                                    ...current,
-                                    teacherSchedules: {
-                                      ...current.teacherSchedules,
-                                      [currentSetupSubjectId]: (current.teacherSchedules[currentSetupSubjectId] ?? []).map((item, index) => index === slotIndex ? { ...item, endTime: event.target.value || undefined } : item),
-                                    },
-                                  }))} />
-                                <small className="sf-schedule-time-preview">العرض بنظام 12 ساعة: {displayArabicScheduleTime(slot.endTime)}</small>
-                              </label>
-                            </div>
-                            <div className={"sf-schedule-duration " + (slot.endTime ? "is-set" : "")}>
-                              <span className="sf-schedule-duration-mark" aria-hidden="true">◷</span>
-                              <span>{getTeacherLectureDuration(slot.startTime, slot.endTime) ?? "حدد وقت النهاية لمعرفة مدة المحاضرة"}</span>
+                            <div className="sf-lecture-time-card" aria-label={"وقت المحاضرة " + (slotIndex + 1)}>
+                              <div className="sf-lecture-time-copy">
+                                <span className="sf-lecture-time-icon"><Clock3 className="size-5" /></span>
+                                <div>
+                                  <b>وقت المحاضرة</b>
+                                  <small>اختار الساعة والدقيقة وحدد صباحًا أو مساءً</small>
+                                </div>
+                                <strong className="sf-lecture-time-current" dir="rtl">{displayArabicScheduleTime(slot.startTime)}</strong>
+                              </div>
+                              {(() => {
+                                const parts = getScheduleTimeParts(slot.startTime);
+                                const minuteOptions = Array.from({ length: 12 }, (_, index) => String(index * 5).padStart(2, "0"));
+                                if (!minuteOptions.includes(parts.minute)) minuteOptions.push(parts.minute);
+                                minuteOptions.sort((a, b) => Number(a) - Number(b));
+                                const updateTime = (hour: string, minute: string, period: "am" | "pm") => setForm(current => ({
+                                  ...current,
+                                  teacherSchedules: {
+                                    ...current.teacherSchedules,
+                                    [currentSetupSubjectId]: (current.teacherSchedules[currentSetupSubjectId] ?? []).map((item, index) =>
+                                      index === slotIndex ? { ...item, startTime: buildScheduleTime(hour, minute, period) } : item
+                                    ),
+                                  },
+                                }));
+                                return (
+                                  <div className="sf-lecture-time-controls" dir="rtl">
+                                    <label>
+                                      <span>الساعة</span>
+                                      <select aria-label={"ساعة المحاضرة " + (slotIndex + 1)} value={parts.hour}
+                                        onChange={event => updateTime(event.target.value, parts.minute, parts.period)}>
+                                        {Array.from({ length: 12 }, (_, index) => String(index + 1).padStart(2, "0")).map(hour =>
+                                          <option key={hour} value={hour}>{Number(hour).toLocaleString("ar-EG")}</option>
+                                        )}
+                                      </select>
+                                    </label>
+                                    <span className="sf-lecture-time-separator">:</span>
+                                    <label>
+                                      <span>الدقائق</span>
+                                      <select aria-label={"دقائق المحاضرة " + (slotIndex + 1)} value={parts.minute}
+                                        onChange={event => updateTime(parts.hour, event.target.value, parts.period)}>
+                                        {minuteOptions.map(minute =>
+                                          <option key={minute} value={minute}>{Number(minute).toLocaleString("ar-EG", { minimumIntegerDigits: 2 })}</option>
+                                        )}
+                                      </select>
+                                    </label>
+                                    <div className="sf-lecture-period" role="group" aria-label="صباحًا أم مساءً">
+                                      <button type="button" aria-pressed={parts.period === "am"} className={parts.period === "am" ? "is-active" : ""}
+                                        onClick={() => updateTime(parts.hour, parts.minute, "am")}>صباحًا</button>
+                                      <button type="button" aria-pressed={parts.period === "pm"} className={parts.period === "pm" ? "is-active" : ""}
+                                        onClick={() => updateTime(parts.hour, parts.minute, "pm")}>مساءً</button>
+                                    </div>
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </div>
                         ))}
@@ -914,7 +1019,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                             ...current,
                             teacherSchedules: {
                               ...current.teacherSchedules,
-                              [currentSetupSubjectId]: [...(current.teacherSchedules[currentSetupSubjectId] ?? []), { dayOfWeek: 0, startTime: "18:00", endTime: "" }],
+                              [currentSetupSubjectId]: [...(current.teacherSchedules[currentSetupSubjectId] ?? []), { dayOfWeek: 0, startTime: "18:00" }],
                             },
                           }))}>
                           <span className="text-lg leading-none">+</span> إضافة موعد محاضرة
