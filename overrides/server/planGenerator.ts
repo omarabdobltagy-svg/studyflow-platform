@@ -1080,6 +1080,16 @@ export function applyPlannerCurriculumCoverageGuard(
   return { ...plan, summary: (plan.summary + "\n\n" + coverageNote).slice(0, 1_500), steps };
 }
 
+export function getStudentPlanningFocusWeight(subjectId: string | null | undefined, branchId: string | null | undefined, labelText = ""): number {
+  const text = String(labelText ?? "");
+  // Student preference for near-term scheduling, not an official exam-weight claim.
+  const isStory = (subjectId === "ARB_G2_BAC" && branchId === "ARB_LITERATURE")
+    || (subjectId === "ENG1_G2_BAC" && branchId === "ENG_STORY");
+  const isGrePractice = /\bGRE\b/i.test(text);
+  const isTeacherObligation = /واجب|تسليم|امتحان|اختبار|كويز|quiz|homework|assignment|exam|\btest\b|تكليف|ورقة عمل|حل الأسئلة/i.test(text);
+  return isTeacherObligation ? 1 : (isStory || isGrePractice ? 0.42 : 1);
+}
+
 export function applyCurriculumPrioritySignals(
   plan: GeneratedPlan,
   profile: NonNullable<Awaited<ReturnType<typeof getStudentProfile>>>,
@@ -1121,7 +1131,8 @@ export function applyCurriculumPrioritySignals(
     const curriculumLocation = locations[0];
 
     if (!curriculumLocation) {
-      const score = prioritySignal(step.priority);
+      const focusWeight = getStudentPlanningFocusWeight(null, null, [step.title, step.detail, step.category].join(" "));
+      const score = prioritySignal(step.priority) * focusWeight;
       return {
         index,
         groupKey: "__unmapped__" + index,
@@ -1129,10 +1140,12 @@ export function applyCurriculumPrioritySignals(
         score,
         step: {
           ...step,
+          ...(focusWeight < 1 ? { priority: "low" as const } : {}),
           priorityScore: Math.round(score * 100),
           priorityEvidenceConfidence: "low" as const,
-          priorityReason: step.priorityReason
-            || "لم يُربط هذا الإجراء بنقطة منهج موثقة؛ لا يُقدّم على درس تالٍ معروف.",
+          priorityReason: focusWeight < 1
+            ? "تم خفض وزن هذا التدريب في التوزيع القريب حسب تفضيلك، مع إبقائه ضمن تغطية المنهج."
+            : step.priorityReason || "لم يُربط هذا الإجراء بنقطة منهج موثقة؛ لا يُقدّم على درس تالٍ معروف.",
         },
       };
     }
@@ -1172,10 +1185,12 @@ export function applyCurriculumPrioritySignals(
 
     // The first eligible checkpoint dominates. Teacher gap orders the near-term
     // lessons; difficulty and model hints may only adjust, never skip branch order.
-    const score = 0.70 * frontierUrgency
+    const baseScore = 0.70 * frontierUrgency
       + 0.10 * coreSignal
       + 0.10 * effortSignal
       + 0.10 * modelUrgency;
+    const focusWeight = getStudentPlanningFocusWeight(subjectId, branchId, [step.title, step.detail, step.category].join(" "));
+    const score = baseScore * focusWeight;
     const priority: GeneratedPlan["steps"][number]["priority"] = score >= 0.86 ? "critical"
       : score >= 0.70 ? "high"
         : score >= 0.48 ? "medium" : "low";
@@ -1200,6 +1215,7 @@ export function applyCurriculumPrioritySignals(
       "الفجوة الحالية: " + (branchProgress?.gapCount ?? "غير محسوبة"),
       "الصعوبة المسجلة من الطالب: " + (difficulty === "unknown" ? "غير محددة" : difficulty),
       branchPriorityGuidance?.tier === "core" ? "أولوية تأسيسية للفرع، وليست وزن درجات" : "",
+      focusWeight < 1 ? "وزن أقل مؤقتًا وفق تفضيل الطالب؛ التغطية طويلة المدى محفوظة" : "",
     ].filter(Boolean).join("؛ ").slice(0, 500);
 
     return {
@@ -1333,6 +1349,7 @@ function formatUpcomingTeacherSessions(
   if (!profile) return "لا يوجد ملف دراسي لقراءة مواعيد الحصص.";
   const selection = (profile.selection ?? {}) as Record<string, any>;
   const schedules = (selection.teacherSchedules ?? {}) as Record<string, Array<{ dayOfWeek: number; startTime: string }>>;
+  const teacherChoices = (selection.teacherChoices ?? profile.teacherSelections ?? {}) as Record<string, string>;
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
   const currentTime = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Africa/Cairo",
@@ -1356,10 +1373,11 @@ function formatUpcomingTeacherSessions(
       if (offset >= horizonDays) continue;
       const date = new Date(base);
       date.setUTCDate(date.getUTCDate() + offset);
+      const selectedTeacher = getSIETeacher(teacherChoices[subjectId]);
       sessions.push({
         date: date.toISOString().slice(0, 10),
         time: slot.startTime,
-        label: subjectName + " · " + dayNames[slot.dayOfWeek],
+        label: (selectedTeacher?.nameAr || "المدرس المختار") + " · " + subjectName + " · " + dayNames[slot.dayOfWeek],
       });
     }
   }
@@ -2020,7 +2038,8 @@ export async function generatePersonalPlan(
     "عند تكوين قائمة الخطة اليومية، اجعل الإيقاع المرن نحو 3 خطوات، والمتوازن نحو 4، والمكثف نحو 6 خطوات. ارفع العدد عند الحاجة لتغطية المواد المختارة والالتزامات المفتوحة المؤكدة، بحد أقصى عملي، ولا تسمح بأن تملأ مادة واحدة القائمة إذا كانت مواد أخرى لديها دروس مؤهلة. هذه أهداف مرنة وليست إلزامًا لاختلاق مهام؛ إذا لم توجد التزامات أو نقاط منهج متاحة، أظهر ذلك بدل اختراعها.",
     "في جميع الحالات، لا تجعل وجود مهام مراجعة أو مهام دروس شوهد شرحها يزيح الدروس التي لم يُشاهد شرحها. الالتزامات المفتوحة المرتبطة بدرس غير مشاهد يمكن ربطها بالدرس نفسه ومنع تكرارها.",
     "في نمط مواكبة المدرس: احجز وقتًا قبل أقرب حصة مسجلة لمراجعة ما سيشرحه المدرس أو استكمال متطلباته، ووزّع موضوعات ما بعد الحصة بعد موعدها المتوقع. لا تعتبر الحصة قد حدثت أو اتلغت إلا بإعلان موثوق أو تحديث مؤكد.",
-    "اقرأ teacherSchedules لكل مادة كموعد أسبوعي محلي متكرر يتضمن اليوم ووقت البداية فقط، وليس فترة زمنية. لا تفترض مدة الحصة أو وقت انتهائها، ولا تحجز فترة بعدها دون معلومة موثقة. استخدم قائمة المواعيد التالية المحسوبة بالتاريخ والساعة: " + formatUpcomingTeacherSessions(profile, constraints.startDate ?? new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date()), horizonDays) + ". قدّم التحضير للموضوع القادم قبل موعده متى أمكن، ولا تضع بداية مهمة عند الساعة المسجلة نفسها.",
+    "اقرأ teacherSchedules لكل مادة كموعد أسبوعي محلي متكرر يتضمن اليوم ووقت البداية فقط، وليس فترة زمنية. لا تفترض مدة الحصة أو وقت انتهائها، ولا تحجز فترة بعدها دون معلومة موثقة. استخدم قائمة المواعيد التالية المحسوبة بالتاريخ والساعة واسم المدرس المختار: " + formatUpcomingTeacherSessions(profile, constraints.startDate ?? new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date()), horizonDays) + ". قدّم التحضير للموضوع القادم قبل موعده متى أمكن، ولا تضع بداية مهمة عند الساعة المسجلة نفسها. إذا كان موعد الحصة معروفًا ومحتواها غير معروف، اذكر الموعد كما هو ولا تخترع درسًا قادمًا؛ اجعل التحضير مزيجًا من مراجعة آخر موضع معروف ومهمة متراكمة مناسبة من المادة، واترك موضوع الحصة الجديدة غير محدد حتى يتوفر مصدر موثوق.",
+    "تفضيل توزيع الوقت القريب: خفّض أولوية القصة في العربي والإنجليزي وتمارين GRE مقارنة بالنحو والنصوص والجرامر والفوكاب. هذا تفضيل تخطيطي وليس معلومة رسمية عن أوزان الدرجات أو عدد الأسئلة. لا تحذف هذه الفروع من التغطية طويلة المدى، ولا تتجاهل واجبًا أو تسليمًا أو اختبارًا مؤكدًا بسبب هذا التفضيل.",",
     "مهام الطالب الحالية ليست مجرد قائمة للتجاهل: إذا كانت مهمة مفتوحة ومطابقة لموضوع غير مكتمل، احتفظ بها واربط خطوة الخطة بها. لا تنشئ مهمة ثانية لنفس الموضوع. إذا لم تتطابق مهمة مع موضوع منهجي بثقة، اعرضها كالتزام مستقل ولا تخترع لها معرف منهج.",
     "المهام الحالية المعلّمة بأنها موجودة في بيانات السياق لا تُنشأ مرة ثانية. اربط كل خطوة بالموضوعات الصحيحة في curriculumNodeIds، وأعد existingTask فقط عند وجود مهمة مطابقة موثوقة في السياق؛ لا تخمن رقم مهمة أو حالتها.",
     "مصدر المرجع له أولوية صارمة داخل كل فرع: استخدم موضع المدرس إذا كان معروفًا، وإلا استخدم موضع الفصل في المدرسة داخل الفرع نفسه. موضع الطالب يظل مستقلًا عن الاثنين. لا تقارن أو تجمع فجوات فروع متوازية، ولا تستخدم رقم التراكم القديم كأنه فجوة مؤكدة.",
