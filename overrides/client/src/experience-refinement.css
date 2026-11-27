@@ -3611,3 +3611,121 @@ body[data-studyflow-sections-open="true"] .sf-hub-root {
   }
   .sf-sp-composite-subtasks { padding: 10px; }
 }
+
+
+/* Interactive checklist for a single verified YouTube review task. */
+.sf-task-composite-review {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, #71836a 28%, var(--border));
+  border-radius: 17px;
+  background: color-mix(in srgb, #71836a 5%, var(--card));
+}
+.sf-task-composite-review > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.sf-task-composite-review > header > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.sf-task-composite-review > header span {
+  color: #71836a;
+  font-size: 10px;
+  font-weight: 850;
+}
+.sf-task-composite-review > header strong {
+  color: var(--foreground);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.sf-task-composite-review > header small {
+  color: var(--muted-foreground);
+  font-size: 10px;
+}
+.sf-task-composite-review > header > a,
+.sf-task-composite-review li > div > a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  color: #63785c;
+  font-size: 10px;
+  font-weight: 850;
+  text-decoration: none;
+}
+.sf-task-composite-progress {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(113,131,106,.09);
+}
+.sf-task-composite-progress strong {
+  color: #63785c;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.sf-task-composite-progress span {
+  color: var(--muted-foreground);
+  font-size: 10px;
+}
+.sf-task-composite-review > ol {
+  display: grid;
+  gap: 9px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sf-task-composite-review > ol > li {
+  display: grid;
+  grid-template-columns: 19px minmax(0,1fr);
+  align-items: start;
+  gap: 9px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.sf-task-composite-review > ol > li > input[type="checkbox"] {
+  width: 17px;
+  height: 17px;
+  margin: 3px 0 0;
+  accent-color: #71836a;
+  cursor: pointer;
+}
+.sf-task-composite-review > ol > li > div { min-width: 0; }
+.sf-task-composite-review > ol > li strong {
+  display: block;
+  color: var(--foreground);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.sf-task-composite-review > ol > li p {
+  margin: 3px 0 0;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.8;
+}
+.sf-task-composite-review > ol > li.is-done > div > strong {
+  color: var(--muted-foreground);
+  text-decoration: line-through;
+}
+.sf-task-composite-review li > div > a { margin-top: 6px; }
+.sf-task-composite-review > small {
+  color: var(--muted-foreground);
+  font-size: 10px;
+  line-height: 1.7;
+}
+.sf-task-composite-review a:focus-visible {
+  outline: 2px solid #71836a;
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+@media (max-width: 520px) {
+  .sf-task-composite-review { padding: 11px; }
+  .sf-task-composite-review > header { flex-direction: column; }
+}
