@@ -993,13 +993,22 @@ export async function syncDailyPlanGoalTree(
         : step.priority === "low" ? "low" as const : "medium" as const;
       const stage = pendingStages[index];
       const linkedExistingTask = step.existingTask
-        ? (await tx.select({ id: tasks.id, status: tasks.status, notes: tasks.notes })
+        ? (await tx.select({ id: tasks.id, status: tasks.status, notes: tasks.notes, dueAt: tasks.dueAt })
             .from(tasks)
             .where(and(eq(tasks.id, step.existingTask.id), eq(tasks.userId, userId)))
             .limit(1))[0]
         : undefined;
       // Existing teacher/source task details are authoritative and are never
       // expanded with generated study-method text during plan synchronization.
+      // If an open task has no deadline, assign the planner's proposed day so
+      // it is visible in the student's calendar and task list.
+      if (linkedExistingTask && linkedExistingTask.status === "todo" && !linkedExistingTask.dueAt && dueAt) {
+        await tx.update(tasks).set({ dueAt }).where(and(
+          eq(tasks.id, linkedExistingTask.id),
+          eq(tasks.userId, userId),
+          eq(tasks.status, "todo"),
+        ));
+      }
 
       if (stage) {
         await tx.update(goals).set({
