@@ -1191,7 +1191,6 @@ function PlanLoading({ progress }: { progress: GenerationProgress | null }) {
         {stages.map((stage, index) => {
           const done = progress?.completedStages.includes(stage.id) ?? false;
           const current = progress?.status === "running" && progress.currentStage === stage.id;
-          const pending = !done && !current;
           return (
             <li key={stage.id} className={current ? "is-current" : done ? "is-done" : "is-pending"}>
               <span className="sf-plan-loading-index">
