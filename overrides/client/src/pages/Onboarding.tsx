@@ -545,12 +545,21 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                     </div>
                     <span className="rounded-full border border-border bg-background px-3 py-2 text-xs font-semibold">{subjectSetupIndex + 1} / {selectedSubjects.length}</span>
                   </div>
-                  <div className="space-y-4">
+                  <div className="sf-teacher-selection-panel space-y-5">
+                    <div className="sf-teacher-selection-title">
+                      <div className="sf-teacher-selection-icon"><GraduationCap className="size-5" /></div>
+                      <div>
+                        <p className="eyebrow">ملف المدرس</p>
+                        <h3>مين المدرس اللي بتتابع معاه {currentSetupSubject.nameAr}؟</h3>
+                        <p>حدد مدرسك مرة واحدة. هنربط به بيانات المواعيد والمصادر وتحديثات الشرح، من غير ما نخلط بياناته بموادك التانية.</p>
+                      </div>
+                      <span className="sf-teacher-subject-tag">{currentSetupSubject.nameAr}</span>
+                    </div>
                     <div>
-                      <p className="mb-3 text-sm font-bold">اختار المدرس اللي بتتابعه في {currentSetupSubject.nameAr}</p>
+                      <p className="mb-3 text-sm font-bold">اختر المدرس من دليل المادة</p>
                       <p className="mb-3 text-xs leading-6 text-muted-foreground">اختيار المدرس أولًا. بعده حدد هل بتتابعه في سنتر أو أونلاين؛ تغيير طريقة الدراسة لن يمسح المدرس المحدد.</p>
                       {setupTeacherOptions.length ? (
-                        <div className="grid gap-2 sm:grid-cols-2">
+                        <div className="sf-teacher-choice-grid grid gap-3 sm:grid-cols-2">
                           {setupTeacherOptions.map(teacher => {
                             const selected = form.teacherSelections[currentSetupSubjectId] === teacher.teacherId;
                             return (
@@ -560,9 +569,12 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                                   teacherSelections: { ...current.teacherSelections, [currentSetupSubjectId]: teacher.teacherId },
                                   customTeacherNames: { ...current.customTeacherNames, [currentSetupSubjectId]: "" },
                                 }))}
-                                className={"flex min-h-14 items-center justify-between gap-3 rounded-xl border p-4 text-right transition " + (selected ? "border-primary bg-secondary/45 ring-1 ring-primary/20" : "border-border bg-card hover:border-primary/40")}>
-                                <span className="font-semibold">{teacher.nameAr}</span>
-                                {selected && <Check className="size-4 shrink-0 text-primary" />}
+                                className={"sf-teacher-choice flex min-h-16 items-center justify-between gap-3 rounded-2xl border p-4 text-right transition " + (selected ? "is-selected border-primary bg-secondary/45 ring-1 ring-primary/20" : "border-border bg-card hover:border-primary/40")}>
+                                <span className="sf-teacher-choice-copy min-w-0">
+                                  <b>{teacher.nameAr}</b>
+                                  <small>{selected ? "مدرس محدد لهذه المادة" : "مدرس مسجل في دليل المادة"}</small>
+                                </span>
+                                <span className="sf-teacher-choice-check">{selected ? <Check className="size-4" /> : <span />}</span>
                               </button>
                             );
                           })}
@@ -572,7 +584,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                       )}
                     </div>
 
-                    <label className="block text-sm font-semibold">اسم مدرس آخر (لو مش موجود في القائمة)
+                    <label className="sf-teacher-custom-field block text-sm font-semibold">اسم مدرس آخر (لو مش موجود في القائمة)
                       <Input
                         value={form.customTeacherNames[currentSetupSubjectId] ?? ""}
                         onChange={event => setForm(current => ({
@@ -582,7 +594,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                         }))}
                         placeholder="اكتب اسم المدرس"
                         maxLength={120}
-                        className="mt-2 h-12 rounded-xl bg-background"
+                        className="sf-teacher-custom-input mt-2 h-12 rounded-xl bg-background"
                       />
                     </label>
 
@@ -593,7 +605,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                         teacherSelections: { ...current.teacherSelections, [currentSetupSubjectId]: SKIP_TEACHER },
                         customTeacherNames: { ...current.customTeacherNames, [currentSetupSubjectId]: "" },
                       }))}
-                      className={"rounded-lg border px-3 py-2 text-xs font-semibold transition " + (form.teacherSelections[currentSetupSubjectId] === SKIP_TEACHER && !form.customTeacherNames[currentSetupSubjectId]?.trim() ? "border-primary bg-secondary/40 text-foreground" : "border-border text-muted-foreground hover:border-primary/30")}>
+                      className={"sf-teacher-skip-choice rounded-xl border px-3 py-3 text-xs font-semibold transition " + (form.teacherSelections[currentSetupSubjectId] === SKIP_TEACHER && !form.customTeacherNames[currentSetupSubjectId]?.trim() ? "is-selected border-primary bg-secondary/40 text-foreground" : "border-border text-muted-foreground hover:border-primary/30")}>
                       لم أحدد مدرسًا لهذه المادة بعد
                     </button>
                   </div>
@@ -611,14 +623,14 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                           : "لسه مفيش دليل كافٍ يؤكد طرق الدراسة المتاحة. اختار الطريقة اللي بتتابع منها، والمعلومة هتفضل غير مؤكدة لحد ما يظهر مصدر موثوق."}
                       </p>
                     )}
-                    <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="sf-teacher-mode-grid grid gap-3 sm:grid-cols-2">
                       {(["center", "online"] as const)
                         .filter(mode => teacherFacts.data?.state !== "verified" || teacherFacts.data.facts.availableModes.length === 0 || teacherFacts.data.facts.availableModes.includes(mode))
                         .map(mode => (
                           <button key={mode} type="button" aria-pressed={form.courseModes[currentSetupSubjectId] === mode}
                             onClick={() => setForm(current => ({ ...current, courseModes: { ...current.courseModes, [currentSetupSubjectId]: mode } }))}
-                            className={"rounded-2xl border p-5 text-right transition " + (form.courseModes[currentSetupSubjectId] === mode ? "border-primary bg-secondary/45 ring-1 ring-primary/20" : "border-border bg-card hover:border-primary/40")}>
-                            <span className="block text-lg font-bold">{mode === "center" ? "سنتر / مجموعة حضورية" : "أونلاين"}</span>
+                            className={"sf-teacher-mode-choice rounded-2xl border p-5 text-right transition " + (form.courseModes[currentSetupSubjectId] === mode ? "is-selected border-primary bg-secondary/45 ring-1 ring-primary/20" : "border-border bg-card hover:border-primary/40")}>
+                            <span className="sf-teacher-mode-title block text-lg font-bold">{mode === "center" ? "سنتر / مجموعة حضورية" : "أونلاين"}</span>
                             <span className="mt-1 block text-xs leading-6 text-muted-foreground">{mode === "center" ? "بتحضر شرح المادة مع المدرس في مكان أو مجموعة." : "بتتابع الكورس أو المحاضرات من منصة أو بث أونلاين."}</span>
                           </button>
                         ))}
