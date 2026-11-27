@@ -444,12 +444,6 @@ export default function Planner() {
 
     return { unseen, deferred, unknownBranches, unknownLessons };
   }, [profile.data?.selection, profile.data?.subjectIds, learning.data]);
-  const curriculumLinkedTasks = mappedOpenTasks.filter(item => item.match);
-  const taskProgressConflicts = curriculumLinkedTasks.filter(({ match }) => {
-    if (!match) return false;
-    const lessonState = (learning.data as any)?.lessonStateByBranch?.[match.subjectId]?.[match.branchId]?.byNode?.[match.nodeId];
-    return lessonState === "studied";
-  });
   const isPreflightReady = !profile.isLoading && !learning.isLoading && !tasksQuery.isLoading
     && !profile.isError && !learning.isError && !tasksQuery.isError;
 
@@ -1058,7 +1052,6 @@ export default function Planner() {
           <div className="sf-sp-panel">
             <section className="sf-sp-section-card" data-scroll-reveal>
               <div className="sf-sp-section-heading"><div><span className="sf-sp-eyebrow">قائمة العمل الفعلية</span><h2>مهام مفتوحة تؤثر على ترتيب المذاكرة</h2></div><a href="/tasks" className="sf-sp-text-action">إدارة كل المهام <ArrowUpRight className="size-4" /></a></div>
-              {taskProgressConflicts.length > 0 && <div className="sf-sp-conflict sf-sp-ai-reconcile"><div><strong>المساعد الذكي بيراجع ارتباط المهام بالدروس</strong><p>رُصدت {taskProgressConflicts.length.toLocaleString("ar-EG")} مهمة مفتوحة مرتبطة بدرس سجلت أنك ذاكرته وفهمته. عند المراجعة، يعيد المخطط ترتيب مهامه ويحذف الخطوات القديمة التابعة لخطته فقط. الواجبات المستقلة والمهام الشخصية لن تُغلق لمجرد اكتمال الدرس.</p></div><Button type="button" size="sm" variant="outline" disabled={ensureDaily.isPending} onClick={() => ensureDaily.mutate({ forceRebuild: true })}>{ensureDaily.isPending ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />} {ensureDaily.isPending ? "المساعد بيراجع..." : "خلّي المساعد يراجع المهام"}</Button></div>}
               {tasksQuery.isLoading ? <div className="sf-sp-skeletons"><span /><span /><span /></div> : mappedOpenTasks.length ? (
                 <div className="sf-sp-task-list">
                   {mappedOpenTasks.map(({task,match}) => (
