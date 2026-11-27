@@ -3384,3 +3384,230 @@ body[data-studyflow-sections-open="true"] .sf-hub-root {
   color: var(--muted-foreground);
   font-size: 9px;
 }
+
+
+/* Final planner map pass: independent unit lanes, a single vertical connector,
+   fixed numbered nodes, and a muted olive/stone palette instead of blue. */
+.sf-sp-flow-map {
+  --sf-map-accent: #71836a;
+  --sf-map-accent-soft: #eef1e9;
+  --sf-map-line: #c9c6bb;
+  --sf-map-review: #b38a4c;
+  --sf-map-obligation: #927a59;
+  --sf-map-done: #56836b;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(113,131,106,.07), transparent 40%),
+    color-mix(in srgb, var(--background) 96%, #e9e6dc) !important;
+}
+.sf-sp-flow-map .sf-sp-flow-origin {
+  border-color: color-mix(in srgb, var(--sf-map-accent) 32%, var(--border));
+  background: linear-gradient(135deg, rgba(113,131,106,.10), var(--card));
+  box-shadow: 0 12px 28px -25px rgba(75,91,66,.45), inset 0 1px 0 rgba(255,255,255,.04);
+}
+.sf-sp-flow-map .sf-sp-flow-origin-kicker,
+.sf-sp-flow-map .sf-sp-flow-lane-heading > small,
+.sf-sp-flow-map .sf-sp-flow-node-details summary {
+  color: var(--sf-map-accent) !important;
+}
+.sf-sp-flow-map .sf-sp-flow-origin strong { color: var(--foreground); }
+.sf-sp-flow-map .sf-sp-flow-legend i {
+  background: var(--sf-map-accent) !important;
+  box-shadow: 0 0 0 3px rgba(113,131,106,.12) !important;
+}
+.sf-sp-flow-map .sf-sp-flow-legend i.is-review {
+  background: var(--sf-map-review) !important;
+  box-shadow: 0 0 0 3px rgba(179,138,76,.14) !important;
+}
+.sf-sp-flow-map .sf-sp-flow-legend i.is-obligation {
+  background: var(--sf-map-obligation) !important;
+  box-shadow: 0 0 0 3px rgba(146,122,89,.14) !important;
+}
+.sf-sp-flow-map .sf-sp-flow-legend i.is-done {
+  background: var(--sf-map-done) !important;
+  box-shadow: 0 0 0 3px rgba(86,131,107,.14) !important;
+}
+.sf-sp-flow-map .sf-sp-flow-lanes {
+  gap: 16px;
+}
+.sf-sp-flow-map .sf-sp-flow-lanes::before,
+.sf-sp-flow-map .sf-sp-flow-lane::before,
+.sf-sp-flow-map .sf-sp-flow-track::before {
+  display: none !important;
+  content: none !important;
+}
+.sf-sp-flow-map .sf-sp-flow-lane-port {
+  border-color: var(--sf-map-accent) !important;
+  box-shadow: 0 0 0 4px rgba(113,131,106,.12) !important;
+}
+.sf-sp-flow-map .sf-sp-flow-lane-branches span {
+  border-color: rgba(113,131,106,.22) !important;
+  background: rgba(113,131,106,.07) !important;
+  color: var(--muted-foreground);
+}
+.sf-sp-flow-map .sf-sp-flow-track {
+  display: grid;
+  gap: 12px;
+  padding: 14px 0 2px;
+}
+.sf-sp-flow-map .sf-sp-flow-node {
+  grid-template-columns: 32px minmax(0,1fr);
+  align-items: start;
+  gap: 10px;
+}
+.sf-sp-flow-map .sf-sp-flow-node-index {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  inline-size: 30px !important;
+  min-inline-size: 30px !important;
+  block-size: 30px !important;
+  min-block-size: 30px !important;
+  aspect-ratio: 1 / 1;
+  box-sizing: border-box;
+  place-items: center;
+  padding: 0 !important;
+  border: 1px solid #c9c6bb !important;
+  border-radius: 50% !important;
+  background: #f5f4ef !important;
+  color: #60675d !important;
+  font-size: 11px !important;
+  font-weight: 850;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.sf-sp-flow-map .sf-sp-flow-node:not(:last-child)::after {
+  position: absolute;
+  z-index: 0;
+  top: 30px;
+  right: 14px;
+  bottom: -27px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--sf-map-line) !important;
+  content: "";
+}
+.sf-sp-flow-map .sf-sp-flow-node.is-next .sf-sp-flow-node-index {
+  border-color: var(--sf-map-accent) !important;
+  background: var(--sf-map-accent-soft) !important;
+  color: #4f6748 !important;
+}
+.sf-sp-flow-map .sf-sp-flow-node.is-next .sf-sp-flow-node-card {
+  border-color: rgba(113,131,106,.54) !important;
+  box-shadow: 0 0 0 2px rgba(113,131,106,.08);
+}
+.sf-sp-flow-map .sf-sp-flow-node.is-done .sf-sp-flow-node-index {
+  border-color: rgba(86,131,107,.50) !important;
+  background: rgba(86,131,107,.10) !important;
+  color: var(--sf-map-done) !important;
+}
+.sf-sp-flow-map .sf-sp-flow-node.is-review .sf-sp-flow-node-index {
+  border-color: rgba(179,138,76,.48) !important;
+  background: rgba(179,138,76,.10) !important;
+  color: var(--sf-map-review) !important;
+}
+.sf-sp-flow-map .sf-sp-flow-node.is-obligation .sf-sp-flow-node-index {
+  border-color: rgba(146,122,89,.45) !important;
+  background: rgba(146,122,89,.10) !important;
+  color: var(--sf-map-obligation) !important;
+}
+.sf-sp-flow-map .sf-sp-flow-node-card:hover {
+  border-color: rgba(113,131,106,.48) !important;
+}
+.sf-sp-flow-map .sf-sp-flow-node-topline .is-current-step {
+  border-color: rgba(113,131,106,.42) !important;
+  background: rgba(113,131,106,.10) !important;
+  color: #5d7356 !important;
+}
+
+/* A parent review task contains the timestamped topics from its verified video. */
+.sf-sp-composite-subtasks {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--muted) 36%, transparent);
+}
+.sf-sp-composite-subtasks > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.sf-sp-composite-subtasks > header strong {
+  color: var(--foreground);
+  font-size: 11px;
+  font-weight: 850;
+}
+.sf-sp-composite-subtasks > header span {
+  color: var(--muted-foreground);
+  font-size: 10px;
+  white-space: nowrap;
+}
+.sf-sp-composite-subtasks > ol {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sf-sp-composite-subtasks > ol > li {
+  display: grid;
+  grid-template-columns: 25px minmax(0,1fr);
+  align-items: start;
+  gap: 9px;
+  min-width: 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.sf-sp-composite-subtask-index {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border: 1px solid rgba(113,131,106,.25);
+  border-radius: 50%;
+  background: rgba(113,131,106,.08);
+  color: #63785c;
+  font-size: 10px;
+  font-weight: 850;
+  font-variant-numeric: tabular-nums;
+}
+.sf-sp-composite-subtasks li > div { min-width: 0; }
+.sf-sp-composite-subtasks li strong {
+  display: block;
+  color: var(--foreground);
+  font-size: 11px;
+  line-height: 1.7;
+}
+.sf-sp-composite-subtasks li p {
+  margin: 3px 0 0;
+  color: var(--muted-foreground);
+  font-size: 10px;
+  line-height: 1.7;
+}
+.sf-sp-composite-subtasks li a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  color: #63785c;
+  font-size: 10px;
+  font-weight: 800;
+}
+.sf-sp-composite-subtasks li a:focus-visible {
+  outline: 2px solid #71836a;
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+@media (max-width: 640px) {
+  .sf-sp-flow-map .sf-sp-flow-node {
+    grid-template-columns: 32px minmax(0,1fr);
+    gap: 8px;
+  }
+  .sf-sp-flow-map .sf-sp-flow-node:not(:last-child)::after {
+    right: 14px;
+  }
+  .sf-sp-composite-subtasks { padding: 10px; }
+}
