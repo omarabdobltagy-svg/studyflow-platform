@@ -14,6 +14,39 @@ export type TeacherPublicUpdate = {
   announcementType?: "new_content" | "lecture_cancelled" | "class_suspended" | "schedule_changed" | "revision" | "general";
   confidence?: "high" | "medium" | "low";
   affectedDate?: string;
+  contentAnalysis?: TeacherVideoContentAnalysis;
+};
+
+export type TeacherVideoTopicSegment = {
+  titleAr: string;
+  descriptionAr: string;
+  startSeconds: number;
+  endSeconds: number;
+  subjectHints: string[];
+  branchHints: string[];
+  curriculumKeywords: string[];
+  confidence: "high" | "medium" | "low";
+};
+
+export type TeacherVideoInstruction = {
+  instructionAr: string;
+  kind: "homework" | "exam" | "platform_content" | "deadline" | "scope" | "other";
+  startSeconds?: number;
+  confidence: "high" | "medium" | "low";
+  explicit: boolean;
+};
+
+export type TeacherVideoContentAnalysis = {
+  status: "processing" | "complete" | "failed";
+  interactionId?: string;
+  model?: string;
+  startedAt?: string;
+  completedAt?: string;
+  error?: string;
+  summaryAr?: string;
+  topics?: TeacherVideoTopicSegment[];
+  teacherInstructions?: TeacherVideoInstruction[];
+  topicsNotCovered?: string[];
 };
 
 export type TeacherAnnouncementType = NonNullable<TeacherPublicUpdate["announcementType"]>;
