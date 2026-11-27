@@ -120,10 +120,13 @@ export function buildPlannerCurriculumLanes<TStep extends CurriculumStepLike>(
     const key = curriculum
       ? curriculum.subjectId + "::" + (curriculum.unitId || "BRANCH::" + curriculum.branch)
       : "__GENERAL_TASKS__";
+    const curriculumUnitLabel = curriculum?.unitNumber
+      ? "الوحدة " + curriculum.unitNumber.toLocaleString("ar-EG") + (curriculum.unitTitle ? " — " + displayCurriculumTitle(curriculum.unitTitle) : "")
+      : curriculum?.unitTitle
+        ? (curriculum.lessonType === "story" ? "القصة المقررة · " : "") + displayCurriculumTitle(curriculum.unitTitle)
+        : curriculum?.branch;
     const title = curriculum
-      ? curriculum.subject + (curriculum.unitNumber
-        ? " · الوحدة " + curriculum.unitNumber.toLocaleString("ar-EG") + (curriculum.unitTitle ? " — " + curriculum.unitTitle : "")
-        : curriculum.branch ? " · " + curriculum.branch : "")
+      ? curriculum.subject + (curriculumUnitLabel ? " · " + curriculumUnitLabel : "")
       : "التزامات ومهام أخرى";
     let lane = lanes.get(key);
     if (!lane) {
