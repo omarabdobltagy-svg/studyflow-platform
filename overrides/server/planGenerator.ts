@@ -7,7 +7,7 @@ import { updateAIActivity } from "./aiActivity";
 import { getStudentProfile, listTasks, saveAiPlan } from "./db";
 import { formatTextbookEvidence, getCurriculumBranchPriorityGuidance, orderPlanStepsByCurriculumDependencies, retrieveTextbookEvidence } from "./textbook-retrieval";
 import { buildExamBlueprintContext, SECOND_YEAR_BAC_EXAM_WINDOW_2026_2027 } from "./exam-blueprints";
-import { acceptedAlternativeReviewVideoIds, isHighConfidenceScheduleAnnouncement, isSecondYearBaccalaureateProfile, isSecondYearBaccalaureateUpdate, selectedTeacherIds } from "./teacher-content-monitor";
+import { acceptedAlternativeReviewVideoIds, getAcceptedAlternativeReviewContext, isHighConfidenceScheduleAnnouncement, isSecondYearBaccalaureateProfile, isSecondYearBaccalaureateUpdate, selectedTeacherIds } from "./teacher-content-monitor";
 import { buildLessonStudyMethod, isFirstLearningTask, type TeacherRequirementState } from "./study-method";
 import { getTeacherCourseFactsWithRefresh } from "./teacher-course-research";
 import { getEffectiveStudentLessonState, isStudentLessonStudyComplete, type StudentLessonState } from "@shared/sie-lesson-state";
@@ -867,8 +867,11 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
     const subject = getSIESubject(subjectId);
     const teacherId = choices[subjectId];
     const teacher = teacherId ? getSIETeacher(teacherId) : undefined;
-    const publicUpdates = teacherPublicUpdates.filter(update => update.teacherId === teacherId).slice(0, 6)
-      .map(update => [
+    const publicUpdates = teacherPublicUpdates.filter(update =>
+      update.teacherId === teacherId
+      || (acceptedAlternativeVideoIds.has(String(update.externalId ?? ""))
+        && getAcceptedAlternativeReviewContext(profile, String(update.externalId))?.subjectId === subjectId)
+    ).slice(0, 6).map(update => [
         update.publishedAt,
         update.announcementType ? "نوع التحديث: " + update.announcementType : "نوع التحديث: محتوى جديد",
         update.confidence ? "الثقة: " + update.confidence : "",
@@ -1222,7 +1225,9 @@ export function applyVerifiedTeacherResourceRecommendations(
   const allowedUpdates = updates.filter(update =>
     typeof update.teacherId === "string"
     && (allowedTeacherIds.has(update.teacherId) || acceptedAlternativeVideoIds.has(String(update.externalId ?? "")))
-    && (acceptedAlternativeVideoIds.has(String(update.externalId ?? "")) || isSecondYearBaccalaureateUpdate(update))
+    && (acceptedAlternativeVideoIds.has(String(update.externalId ?? ""))
+      ? update.contentAnalysis?.status === "complete"
+      : isSecondYearBaccalaureateUpdate(update))
     && typeof update.url === "string"
     && /^https:\/\//i.test(update.url)
   );
@@ -1447,7 +1452,14 @@ function applyDailyPlanDepth(
         ...(Array.isArray(topic.branchHints) ? topic.branchHints : []),
       ].filter(value => typeof value === "string").join(" ");
       const match = matchSIECheckpointTask(profile.subjectIds, matchingText);
-      if (!match || !snapshot.eligibleNodeIds.has(match.nodeId) || representedNodeIds.has(match.nodeId)) continue;
+      const acceptedContext = acceptedAlternativeVideoIds.has(String(video.externalId ?? ""))
+        ? getAcceptedAlternativeReviewContext(profile, String(video.externalId))
+        : undefined;
+      if (!match
+        || (acceptedContext && (match.subjectId !== acceptedContext.subjectId || match.branchId !== acceptedContext.branchId))
+        || !teacher?.subjectIds.includes(match.subjectId)
+        || !snapshot.eligibleNodeIds.has(match.nodeId)
+        || representedNodeIds.has(match.nodeId)) continue;
       const subjectName = getSIESubject(match.subjectId)?.nameAr ?? match.subjectId;
       const topicTitle = String(topic.titleAr || match.title).slice(0, 150);
       const startLabel = formatTopicTime(startSeconds);
