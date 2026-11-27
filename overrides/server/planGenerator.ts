@@ -854,8 +854,8 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
         .filter(update => typeof update.teacherId === "string"
           && (allowedTeacherIds.has(update.teacherId) || acceptedAlternativeVideoIds.has(String(update.externalId ?? ""))))
         .filter(update => acceptedAlternativeVideoIds.has(String(update.externalId ?? ""))
-          || isSecondYearBaccalaureateUpdate(update)
-          || isHighConfidenceScheduleAnnouncement(update))
+          ? update.contentAnalysis?.status === "complete"
+          : isSecondYearBaccalaureateUpdate(update) || isHighConfidenceScheduleAnnouncement(update))
         .filter(update => typeof update.url === "string" && /^https:\/\//i.test(update.url))
       : [])
     : [];
