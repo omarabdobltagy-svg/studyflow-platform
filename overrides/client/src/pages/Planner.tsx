@@ -3,7 +3,7 @@ import PlanExportActions from "@/components/PlanExportActions";
 import QueryErrorNotice from "@/components/QueryErrorNotice";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
-import { displayBranchTitle, displayCurriculumTitle } from "@/lib/curriculum-display";
+import { ENGLISH_CURRICULUM_LABELS, displayBranchTitle, displayCurriculumTitle } from "@/lib/curriculum-display";
 import {
   getSIECheckpointProgressBranches,
   getSIEStudentVisibleBranches,
@@ -125,7 +125,14 @@ function isEnglishOnlyText(value: string | null | undefined): boolean {
 function displayArabicText(value: string | null | undefined, fallback: string): string {
   const text = String(value ?? "").trim();
   if (!text) return fallback;
-  return isEnglishOnlyText(text) ? fallback : text;
+  if (isEnglishOnlyText(text)) return fallback;
+  let localized = text;
+  for (const [english, arabic] of Object.entries(ENGLISH_CURRICULUM_LABELS)) {
+    localized = localized.replaceAll(english, arabic);
+  }
+  return localized
+    .replace(/\\bUnit\\s+(\\d+)\\s*:/gi, "الوحدة $1:")
+    .replace(/\\bLesson\\s+(\\d+)\\b/gi, "الدرس $1");
 }
 
 function getPlanStepCurriculum(step: PlanStep, subjectIds: string[]) {
@@ -565,7 +572,7 @@ export default function Planner() {
               </span>
               {planNeedsRefresh && approved && <span className="sf-sp-update-note">توجد بيانات جديدة تحتاج إلى إعادة ترتيب</span>}
             </div>
-            <h1>خطة واضحة. جلسة وراء جلسة.</h1>
+            <h1>خطة واضحة. خطوة وراء خطوة.</h1>
             <p>StudyFlow يربط المنهج وتقدمك الفعلي والمهام المسجلة وجدول المدرس، ثم يرتب لك الخطوة التالية. لا نعتبر الدرس مكتملًا لمجرد ظهوره في الخطة.</p>
             <div className="sf-sp-context">
               {profile.data?.track && <span>{profile.data.track}</span>}
@@ -1051,23 +1058,22 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
         <footer className="sf-sp-approved-footer"><CheckCircle2 className="size-4" /><span>هذه الخطة معتمدة، والمهام مرتبطة بقائمة عملك. تعديل المصدر يتم من المهام أو من تقدم المنهج.</span>{plan.taskSync && <strong>{plan.taskSync.taskCount.toLocaleString("ar-EG")} مهمة مرتبطة</strong>}</footer>
       )}
 
-      <details className="sf-sp-plan-extra"><summary>ملخص إضافي ومساعد الخطة</summary><p>{displayArabicText(plan.summary,"خطة مذاكرة مرتبة حسب بيانات ملفك الدراسي.")}</p>{plan.habits.length > 0 && <div className="sf-sp-habits">{plan.habits.map((habit,index)=><article key={habit.title+index}><strong>{displayArabicText(habit.title,"عادة دراسية")}</strong><small>{displayArabicText(habit.cue,"استخدمها لدعم الاستمرارية في المذاكرة.")}</small></article>)}</div>}<PlanAssistantChat plan={plan} /></details>
+      <details className="sf-sp-plan-extra"><summary>ملخص إضافي ومساعد الخطة</summary><p>{displayArabicText(plan.summary,"خطة مذاكرة مرتبة حسب بيانات ملفك الدراسي.")}</p>{plan.habits.length > 0 && <div className="sf-sp-habits">{plan.habits.map((habit,index)=><article key={habit.title+index}><strong>{displayArabicText(habit.title,"عادة دراسية")}</strong><small>{displayArabicText(habit.cue,"استخدمها لدعم الاستمرارية في المذاكرة.")}</small></article>)}</div>}<PlanAssistantChat plan={plan} subjectIds={subjectIds} /></details>
     </section>
   );
 }
 
 
-function PlanAssistantChat({ plan }: { plan: PlanView }) {
+function PlanAssistantChat({ plan, subjectIds }: { plan: PlanView; subjectIds: string[] }) {
   const [messages, setMessages] = useState<Array<{ role: "user" | "assistant"; content: string }>>([]);
   const [draft, setDraft] = useState("");
   const context = useMemo(() => [
     "السياق: المستخدم يتحدث من صفحة خطة المذاكرة في StudyFlow.",
     "اسم الخطة: " + plan.title,
     "ملخص الخطة: " + plan.summary,
-    "مدة التنفيذ: " + plan.durationLabel,
     "خطوات الخطة الحالية:",
     ...plan.steps.map((step, index) =>
-      `${index + 1}. ${step.day} | ${step.title} | ${step.minutes} دقيقة | ${step.category} | ${step.detail}${step.priorityReason ? " | سبب الأولوية: " + step.priorityReason : ""}`
+      `${index + 1}. ${displayPlanStepTitle(step, subjectIds)} | ${displayPlanStepCategory(step, subjectIds)} | ${displayPlanStepDetail(step, subjectIds)}${step.priorityReason ? " | سبب الأولوية: " + displayArabicText(step.priorityReason, "تم اختيارها حسب الأولوية المسجلة.") : ""}`
     ),
   ].join("\n").slice(0, 7_500), [plan]);
 
