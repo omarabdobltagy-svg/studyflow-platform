@@ -2049,3 +2049,498 @@ body[data-studyflow-sections-open="true"] .sf-hub-root {
   .sf-sp-ai-reconcile > button { width: 100%; }
   .sf-english-lesson-row-stacked { align-items: flex-start; }
 }
+
+
+/* AI inbox — dedicated, accessible notification center. */
+.sf-topbar-actions .sf-ai-inbox-trigger {
+  position: relative !important;
+  display: inline-flex !important;
+  min-width: 44px !important;
+  min-height: 44px !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 9px !important;
+  padding: 0 12px !important;
+  border: 1px solid color-mix(in srgb, var(--primary) 26%, var(--border)) !important;
+  border-radius: 14px !important;
+  color: var(--foreground) !important;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--primary) 11%, var(--card)), var(--card)) !important;
+  box-shadow: 0 7px 20px -16px color-mix(in srgb, var(--primary) 55%, transparent), inset 0 1px 0 rgba(255,255,255,.42) !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  transition: transform .18s ease, border-color .18s ease, background .18s ease, box-shadow .18s ease !important;
+}
+.sf-topbar-actions .sf-ai-inbox-trigger:hover {
+  border-color: color-mix(in srgb, var(--primary) 58%, var(--border)) !important;
+  background: color-mix(in srgb, var(--primary) 15%, var(--card)) !important;
+  box-shadow: 0 12px 25px -18px color-mix(in srgb, var(--primary) 68%, transparent), inset 0 1px 0 rgba(255,255,255,.5) !important;
+  transform: translateY(-1px);
+}
+.sf-topbar-actions .sf-ai-inbox-trigger:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--ring) 55%, transparent) !important;
+  outline-offset: 3px !important;
+}
+.sf-ai-inbox-trigger-icon {
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 9px;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 13%, var(--card));
+}
+.sf-ai-inbox-trigger-label { white-space: nowrap; }
+.sf-ai-inbox-count {
+  position: absolute !important;
+  top: -7px !important;
+  inset-inline-start: -7px !important;
+  display: inline-flex !important;
+  min-width: 21px !important;
+  height: 21px !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 5px !important;
+  border: 2px solid var(--card) !important;
+  border-radius: 999px !important;
+  color: #fff !important;
+  background: #C94D5C !important;
+  box-shadow: 0 4px 10px rgba(132, 26, 42, .22) !important;
+  font: 800 10px/1 system-ui, sans-serif !important;
+  direction: ltr;
+  font-variant-numeric: tabular-nums;
+}
+.sf-ai-inbox-sheet {
+  position: fixed !important;
+  top: 0 !important;
+  inset-inline-end: 0 !important;
+  display: flex !important;
+  width: min(100vw, 500px) !important;
+  max-width: 500px !important;
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+  flex-direction: column !important;
+  gap: 0 !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-inline-start: 1px solid color-mix(in srgb, var(--border) 80%, var(--primary)) !important;
+  border-radius: 0 !important;
+  color: var(--foreground) !important;
+  background: var(--card) !important;
+  box-shadow: -30px 0 85px -48px rgba(0,0,0,.55) !important;
+  direction: rtl;
+}
+.sf-ai-inbox-sheet > button[aria-label="Close"],
+.sf-ai-inbox-sheet > button[aria-label="إغلاق"] {
+  position: absolute !important;
+  z-index: 5 !important;
+  top: 18px !important;
+  inset-inline-start: 18px !important;
+  display: inline-grid !important;
+  width: 38px !important;
+  height: 38px !important;
+  place-items: center !important;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, var(--primary)) !important;
+  border-radius: 12px !important;
+  color: var(--muted-foreground) !important;
+  background: color-mix(in srgb, var(--card) 90%, var(--muted)) !important;
+  opacity: 1 !important;
+}
+.sf-ai-inbox-sheet > button[aria-label="Close"]:hover,
+.sf-ai-inbox-sheet > button[aria-label="إغلاق"]:hover {
+  color: var(--foreground) !important;
+  background: var(--muted) !important;
+}
+.sf-ai-inbox-header {
+  flex: 0 0 auto;
+  padding: 27px 24px 19px !important;
+  border-bottom: 1px solid var(--border);
+  text-align: right !important;
+  background:
+    radial-gradient(ellipse at 100% 0%, color-mix(in srgb, var(--primary) 13%, transparent), transparent 68%),
+    linear-gradient(145deg, color-mix(in srgb, var(--muted) 72%, var(--card)), var(--card));
+}
+.sf-ai-inbox-heading {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding-inline-end: 38px;
+  text-align: right;
+}
+.sf-ai-inbox-mark {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--primary) 25%, var(--border));
+  border-radius: 16px;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, var(--card));
+  box-shadow: 0 8px 22px -17px var(--primary);
+}
+.sf-ai-inbox-heading-copy { display: grid; min-width: 0; gap: 4px; }
+.sf-ai-inbox-kicker {
+  color: var(--primary);
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: .035em;
+}
+.sf-ai-inbox-heading h2 {
+  margin: 0 !important;
+  color: var(--foreground) !important;
+  font-size: 19px !important;
+  font-weight: 900 !important;
+  line-height: 1.45 !important;
+}
+.sf-ai-inbox-heading p {
+  margin: 0 !important;
+  color: var(--muted-foreground) !important;
+  font-size: 11px !important;
+  line-height: 1.8 !important;
+}
+.sf-ai-inbox-summary {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 18px 20px 14px;
+  padding: 15px 16px;
+  border: 1px solid color-mix(in srgb, var(--primary) 20%, var(--border));
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 65%),
+    color-mix(in srgb, var(--muted) 40%, var(--card));
+}
+.sf-ai-inbox-summary-copy { display: grid; min-width: 0; gap: 3px; }
+.sf-ai-inbox-summary-copy > span {
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-weight: 750;
+}
+.sf-ai-inbox-summary-copy > strong {
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.7;
+}
+.sf-ai-inbox-summary-copy > small {
+  color: var(--muted-foreground);
+  font-size: 10px;
+}
+.sf-ai-inbox-summary-count {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  flex: 0 0 auto;
+  align-content: center;
+  justify-items: center;
+  border: 1px solid color-mix(in srgb, var(--primary) 25%, var(--border));
+  border-radius: 16px;
+  color: var(--primary);
+  background: var(--card);
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.sf-ai-inbox-summary-count small {
+  margin-top: 4px;
+  color: var(--muted-foreground);
+  font-size: 8px;
+  font-weight: 750;
+}
+.sf-ai-inbox-toolbar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 20px 13px;
+  border-bottom: 1px solid var(--border);
+}
+.sf-ai-inbox-filters {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--muted);
+}
+.sf-ai-inbox-filters button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 11px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  color: var(--muted-foreground);
+  background: transparent;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+  transition: color .16s ease, background .16s ease, box-shadow .16s ease;
+}
+.sf-ai-inbox-filters button span {
+  display: inline-grid;
+  min-width: 19px;
+  height: 19px;
+  place-items: center;
+  padding: 0 4px;
+  border-radius: 999px;
+  color: inherit;
+  background: color-mix(in srgb, var(--foreground) 7%, transparent);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+.sf-ai-inbox-filters button.is-active {
+  border-color: color-mix(in srgb, var(--primary) 22%, var(--border));
+  color: var(--foreground);
+  background: var(--card);
+  box-shadow: 0 2px 8px rgba(0,0,0,.06);
+}
+.sf-ai-inbox-filters button.is-active span {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, var(--card));
+}
+.sf-ai-inbox-refresh {
+  min-height: 36px !important;
+  padding-inline: 11px !important;
+  border-radius: 11px !important;
+  color: var(--foreground) !important;
+  font-size: 10px !important;
+  font-weight: 800 !important;
+}
+.sf-ai-inbox-list {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 11px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px 20px 20px;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--muted-foreground) 36%, transparent) transparent;
+}
+.sf-ai-inbox-message {
+  position: relative;
+  display: grid;
+  gap: 10px;
+  overflow: hidden;
+  padding: 15px 15px 13px;
+  border: 1px solid var(--border);
+  border-radius: 17px;
+  color: var(--card-foreground);
+  background: var(--card);
+  box-shadow: 0 8px 22px -22px rgba(0,0,0,.45);
+  transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease, background .18s ease;
+}
+.sf-ai-inbox-message:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--primary) 32%, var(--border));
+  box-shadow: 0 13px 28px -23px rgba(0,0,0,.38);
+}
+.sf-ai-inbox-message.is-unread {
+  border-color: color-mix(in srgb, var(--primary) 36%, var(--border));
+  background:
+    linear-gradient(115deg, color-mix(in srgb, var(--primary) 5%, var(--card)), var(--card) 52%);
+  box-shadow: inset 3px 0 0 var(--primary), 0 9px 24px -22px rgba(0,0,0,.48);
+}
+.sf-ai-inbox-message-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.sf-ai-inbox-status {
+  display: inline-flex;
+  min-height: 23px;
+  align-items: center;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted-foreground);
+  background: var(--muted);
+  font-size: 9px;
+  font-weight: 850;
+}
+.sf-ai-inbox-status.is-new {
+  border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 11%, var(--card));
+}
+.sf-ai-inbox-status.is-answered {
+  border-color: color-mix(in srgb, #21936D 24%, var(--border));
+  color: #16845F;
+  background: color-mix(in srgb, #21936D 8%, var(--card));
+}
+.sf-ai-inbox-message-top time {
+  color: var(--muted-foreground);
+  font-size: 9px;
+  font-weight: 650;
+  direction: ltr;
+  text-align: left;
+  white-space: nowrap;
+}
+.sf-ai-inbox-message h3 {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.sf-ai-inbox-message p {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.9;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.sf-ai-inbox-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+}
+.sf-ai-inbox-read,
+.sf-ai-inbox-response {
+  min-height: 36px !important;
+  padding-inline: 12px !important;
+  border-radius: 10px !important;
+  font-size: 10px !important;
+  font-weight: 800 !important;
+}
+.sf-ai-inbox-empty {
+  display: grid;
+  min-height: 260px;
+  flex: 1 1 auto;
+  align-content: center;
+  justify-items: center;
+  gap: 10px;
+  padding: 26px 20px;
+  border: 1px dashed color-mix(in srgb, var(--border) 80%, var(--primary));
+  border-radius: 19px;
+  color: var(--muted-foreground);
+  background: color-mix(in srgb, var(--muted) 30%, var(--card));
+  text-align: center;
+}
+.sf-ai-inbox-empty-mark {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  place-items: center;
+  margin-bottom: 2px;
+  border: 1px solid color-mix(in srgb, var(--primary) 25%, var(--border));
+  border-radius: 18px;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, var(--card));
+}
+.sf-ai-inbox-empty strong {
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 900;
+}
+.sf-ai-inbox-empty p {
+  max-width: 290px;
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.9;
+}
+.sf-ai-inbox-empty.is-error .sf-ai-inbox-empty-mark {
+  color: var(--destructive);
+  border-color: color-mix(in srgb, var(--destructive) 24%, var(--border));
+  background: color-mix(in srgb, var(--destructive) 8%, var(--card));
+}
+.sf-ai-inbox-loading { display: grid; gap: 11px; }
+.sf-ai-inbox-loading span {
+  display: block;
+  height: 132px;
+  border: 1px solid var(--border);
+  border-radius: 17px;
+  background: linear-gradient(90deg, var(--muted), color-mix(in srgb, var(--card) 70%, var(--muted)), var(--muted));
+  background-size: 220% 100%;
+  animation: sf-inbox-shimmer 1.25s ease-in-out infinite;
+}
+.sf-ai-inbox-footer {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 20px calc(13px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+  color: var(--muted-foreground);
+  background: color-mix(in srgb, var(--muted) 46%, var(--card));
+}
+.sf-ai-inbox-footer-mark {
+  display: grid;
+  width: 31px;
+  height: 31px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 10px;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, var(--card));
+}
+.sf-ai-inbox-footer p {
+  min-width: 0;
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: 9px;
+  line-height: 1.7;
+}
+.sf-ai-inbox-footer button {
+  flex: 0 0 auto;
+  min-height: 34px !important;
+  padding-inline: 9px !important;
+  border-radius: 10px !important;
+  font-size: 9px !important;
+  font-weight: 800 !important;
+  white-space: nowrap;
+}
+@keyframes sf-inbox-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -120% 0; }
+}
+@media (max-width: 640px) {
+  .sf-topbar-actions .sf-ai-inbox-trigger {
+    width: 44px !important;
+    min-width: 44px !important;
+    padding: 0 !important;
+    border-radius: 13px !important;
+  }
+  .sf-ai-inbox-trigger-label { display: none; }
+  .sf-ai-inbox-sheet {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: 100dvh !important;
+    border-inline-start: 0 !important;
+  }
+  .sf-ai-inbox-header { padding: 22px 16px 16px !important; }
+  .sf-ai-inbox-heading { gap: 10px; padding-inline-end: 36px; }
+  .sf-ai-inbox-summary { margin: 14px 14px 12px; padding: 13px; }
+  .sf-ai-inbox-toolbar { padding: 0 14px 12px; }
+  .sf-ai-inbox-list { padding: 13px 14px 16px; }
+  .sf-ai-inbox-message { padding: 13px; border-radius: 15px; }
+  .sf-ai-inbox-footer { align-items: flex-start; flex-wrap: wrap; padding: 11px 14px calc(11px + env(safe-area-inset-bottom)); }
+  .sf-ai-inbox-footer p { flex-basis: calc(100% - 45px); }
+  .sf-ai-inbox-footer button { margin-inline-start: 41px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sf-ai-inbox-trigger,
+  .sf-ai-inbox-message { transition: none !important; }
+  .sf-ai-inbox-loading span { animation: none !important; }
+}
