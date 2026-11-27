@@ -1743,9 +1743,12 @@ export function applyDailyPlanDepth(
   }
 
   const coveredNodeCount = new Set(orderedSteps.flatMap(step => step.curriculumNodeIds ?? [])).size;
-  const reviewVideoCount = orderedSteps.filter(step =>
-    Boolean(step.resourceRecommendation && /مراجعة/.test(step.resourceRecommendation.reason || ""))
-  ).length;
+  const reviewVideoCount = new Set(orderedSteps.flatMap(step => {
+    const resource = step.resourceRecommendation;
+    return resource && /مراجعة/.test(resource.reason || "") && resource.url
+      ? [resource.url.split("#")[0]]
+      : [];
+  })).size;
   const coverageNote = "تغطية المتراكم: أُدرجت " + coveredNodeCount
     + " نقطة منهجية مؤهلة في الخطة دون اقتطاع بسبب حدّ عددي. فيديوهات المراجعة المطابقة للمحتوى: "
     + reviewVideoCount + ". لا تستبدل المراجعة العادية إلا مراجعة فيديو عالية الثقة تطابق درسًا مسجلًا بأنه يحتاج مراجعة؛ وإلا تبقى المهمة الدراسية الأصلية.";
