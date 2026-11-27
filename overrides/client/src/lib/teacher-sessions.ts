@@ -1,6 +1,6 @@
 import { getSIESubject, getSIETeacher } from "@shared/sie-catalog";
 
-type PlannerTeacherSession = {
+export type PlannerTeacherSession = {
   key: string;
   subjectId: string;
   teacherName: string;

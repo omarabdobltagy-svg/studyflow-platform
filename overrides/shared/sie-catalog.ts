@@ -26,6 +26,9 @@ export type SIETeacher = {
   brandName: string;
   subjectIds: string[];
   profileUrl: string;
+  socialProfiles?: Array<{ platform: "Facebook" | "Instagram" | "TikTok"; url: string }>;
+  suggestedDefaultSchedule?: Array<{ dayOfWeek: number; startTime: string }>;
+  suggestedScheduleNote?: string;
   lastChecked: string;
   coursePresence: string;
   publicAudienceMetric?: number;

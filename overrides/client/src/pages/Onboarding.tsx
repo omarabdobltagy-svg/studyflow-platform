@@ -154,13 +154,13 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
 
   useEffect(() => {
     const saved = (profile.data as any)?.selection ?? null;
-    const teacherSelections = { ...(saved?.teacherChoices ?? {}), ...form.teacherSelections };
-    const teacherScheduleUnfixed = {
+    const teacherSelections: Record<string, string> = { ...((saved?.teacherChoices as Record<string, string> | undefined) ?? {}), ...form.teacherSelections };
+    const teacherScheduleUnfixed: Record<string, boolean> = {
       ...Object.fromEntries((saved?.teacherScheduleUnfixedSubjectIds ?? []).map((subjectId: string) => [subjectId, true])),
       ...(saved?.teacherScheduleUnfixed ?? {}),
       ...form.teacherScheduleUnfixed,
     };
-    const teacherSchedules = { ...(saved?.teacherSchedules ?? {}), ...form.teacherSchedules };
+    const teacherSchedules: TeacherScheduleMap = { ...((saved?.teacherSchedules as TeacherScheduleMap | undefined) ?? {}), ...form.teacherSchedules };
     // Fill only empty slots; existing student edits always win over the suggested defaults.
     for (const [subjectId, teacherId] of Object.entries(teacherSelections)) {
       if (teacherScheduleUnfixed[subjectId]) continue;
