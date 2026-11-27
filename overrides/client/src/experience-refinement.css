@@ -1532,3 +1532,70 @@ body[data-studyflow-sections-open="true"] .sf-hub-root {
   .sf-sp-flow-node-topline span { font-size: 8px; }
   .sf-sp-flow-node-card h5 { font-size: 11px; }
 }
+
+
+/* Final navigation palette: reset legacy brown icon tiles and apply one state palette. */
+.sf-shell-v3 .sf-nav-list .sf-nav-item .sf-nav-icon,
+.sf-shell-v3 .sf-mobile-sheet .sf-nav-item .sf-nav-icon {
+  color: #A7B09E !important;
+  stroke: currentColor !important;
+  background: transparent !important;
+  filter: none !important;
+  box-shadow: none !important;
+}
+.sf-shell-v3 .sf-nav-list .sf-nav-item:hover .sf-nav-icon,
+.sf-shell-v3 .sf-mobile-sheet .sf-nav-item:hover .sf-nav-icon {
+  color: #F5F7EF !important;
+}
+.sf-shell-v3 .sf-nav-list .sf-nav-item.is-active .sf-nav-icon,
+.sf-shell-v3 .sf-mobile-sheet .sf-nav-item.is-active .sf-nav-icon {
+  color: #C9ED62 !important;
+  stroke: currentColor !important;
+}
+.sf-shell-v3 .sf-desktop-dock .sf-dock-item .sf-dock-icon {
+  color: #A7B09E !important;
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+.sf-shell-v3 .sf-desktop-dock .sf-dock-item .sf-dock-icon svg {
+  color: #A7B09E !important;
+  stroke: currentColor !important;
+}
+.sf-shell-v3 .sf-desktop-dock .sf-dock-item:hover .sf-dock-icon,
+.sf-shell-v3 .sf-desktop-dock .sf-dock-item:hover .sf-dock-icon svg {
+  color: #F5F7EF !important;
+  background: transparent !important;
+  border-color: transparent !important;
+}
+.sf-shell-v3 .sf-desktop-dock .sf-dock-item.is-active {
+  color: #C9ED62 !important;
+  background: transparent !important;
+}
+.sf-shell-v3 .sf-desktop-dock .sf-dock-item.is-active .sf-dock-icon {
+  color: #C9ED62 !important;
+  background: color-mix(in srgb, #C9ED62 12%, transparent) !important;
+  border-color: color-mix(in srgb, #C9ED62 28%, transparent) !important;
+  box-shadow: none !important;
+}
+.sf-shell-v3 .sf-desktop-dock .sf-dock-item.is-active .sf-dock-icon svg {
+  color: #C9ED62 !important;
+  stroke: currentColor !important;
+}
+.sf-shell-v3 .sf-mobile-dock .sf-mobile-dock-item,
+.sf-shell-v3 .sf-mobile-dock .sf-mobile-dock-item svg {
+  color: #A7B09E !important;
+}
+.sf-shell-v3 .sf-mobile-dock .sf-mobile-dock-item.is-active {
+  color: #C9ED62 !important;
+  background: color-mix(in srgb, #C9ED62 10%, transparent) !important;
+  border-color: color-mix(in srgb, #C9ED62 26%, transparent) !important;
+}
+.sf-shell-v3 .sf-mobile-dock .sf-mobile-dock-item.is-active svg {
+  color: #C9ED62 !important;
+  stroke: currentColor !important;
+}
+.sf-shell-v3 .sf-desktop-dock .sf-dock-active,
+.sf-shell-v3 .sf-nav-indicator {
+  background: #C9ED62 !important;
+}
