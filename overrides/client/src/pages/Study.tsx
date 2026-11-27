@@ -72,6 +72,9 @@ export default function Study() {
     publishedAt: string;
     description: string;
     matchedSignals: number;
+    matchedTopics?: string[];
+    isSelectedTeacher?: boolean;
+    analysisStatus?: string;
     accepted: boolean;
     verificationState: string;
     relevance: string;
@@ -98,7 +101,7 @@ export default function Study() {
   const acceptAlternativeReview = trpc.teachers.acceptAlternativeReview.useMutation({
     onSuccess: async (result, variables) => {
       setReviewCandidates(current => current.map(item =>
-        item.externalId === variables.externalId ? { ...item, accepted: true } : item
+        item.externalId === variables.externalId ? { ...item, accepted: true, analysisStatus: "processing" } : item
       ));
       await Promise.all([utils.studentProfile.get.invalidate(), utils.ai.activity.invalidate()]);
       toast.success(result.message);
@@ -831,9 +834,9 @@ export default function Study() {
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="min-w-0">
                           <p className="text-[10px] font-bold tracking-[0.12em] text-primary">مصادر إضافية</p>
-                          <h4 className="mt-1 text-sm font-bold">مراجعات من مدرسين آخرين</h4>
+                          <h4 className="mt-1 text-sm font-bold">مراجعات مناسبة للمتراكم</h4>
                           <p className="mt-1 max-w-2xl text-xs leading-6 text-muted-foreground">
-                            نفحص مراجعات المدرسين الآخرين تلقائيًا عند فتح هذا الفرع. لن تؤثر أي مراجعة على خطتك قبل موافقتك، ثم تحليل الفيديو ومطابقة موضوعاته مع فهرس المنهج.
+                            نبحث لدى مدرسك المختار أولًا، ثم نلجأ لمدرس آخر للمادة عند عدم وجود مراجعة مناسبة. لا يدخل أي فيديو الخطة لمجرد عنوانه؛ يجب تحليل محتواه ومطابقة موضوعاته مع الدروس التي تحتاج مراجعة.
                           </p>
                         </div>
                         <Button type="button" size="sm" variant="outline" className="shrink-0 rounded-xl"
@@ -844,20 +847,24 @@ export default function Study() {
                       </div>
                       {reviewSearchNote && <p className="mt-3 rounded-xl bg-muted/40 px-3 py-2 text-[11px] leading-5 text-muted-foreground">{reviewSearchNote}</p>}
                       {!reviewSearch.isPending && reviewSearch.data && reviewCandidates.length === 0 && (
-                        <p className="mt-3 text-xs text-muted-foreground">لم نعثر على مراجعة بديلة من مدرس مسجل لهذه المادة في نتائج البحث الحالية.</p>
+                        <p className="mt-3 text-xs text-muted-foreground">لم نعثر على مراجعة مناسبة لهذا الفرع من مدرسك أو من مدرس بديل مسجل للمادة.</p>
                       )}
                       {reviewCandidates.length > 0 && (
                         <div className="mt-3 grid gap-3">
                           {reviewCandidates.map(item => (
                             <article key={item.externalId} className="min-w-0 rounded-xl border border-border/80 bg-background p-3 sm:p-4">
                               <div className="flex flex-wrap items-center gap-2">
-                                <span className="rounded-md bg-primary/10 px-2 py-1 text-[10px] font-bold text-primary">{item.teacherName}</span>
-                                <span className="text-[10px] text-muted-foreground">{item.teacherBrand}</span>
-                                {item.accepted && <span className="rounded-md bg-emerald-500/10 px-2 py-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">تمت الموافقة</span>}
+                                <span className="rounded-md bg-primary/10 px-2 py-1 text-[10px] font-bold text-primary">{item.isSelectedTeacher ? "مدرسك المختار" : "مدرس بديل"}</span>
+                                <span className="text-[10px] text-muted-foreground">{item.teacherName} · {item.teacherBrand}</span>
+                                {item.accepted && !item.isSelectedTeacher && <span className="rounded-md bg-emerald-500/10 px-2 py-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">تمت الموافقة على التحليل</span>}
+                                {item.verificationState === "content_verified" && <span className="rounded-md bg-emerald-500/10 px-2 py-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">المحتوى مطابق للفرع</span>}
+                                {item.analysisStatus === "processing" && <span className="rounded-md bg-amber-500/10 px-2 py-1 text-[10px] font-bold text-amber-700 dark:text-amber-300">جارٍ فحص المحتوى</span>}
+                                {item.analysisStatus === "awaiting_consent" && <span className="rounded-md bg-muted px-2 py-1 text-[10px] font-bold text-muted-foreground">بانتظار موافقتك على الفحص</span>}
                               </div>
                               <h5 className="mt-2 break-words text-sm font-bold leading-6">{item.title}</h5>
                               <p className="mt-1 break-words text-[11px] leading-5 text-muted-foreground">القناة: {item.channelTitle}</p>
                               {item.description && <p className="mt-2 line-clamp-3 break-words text-xs leading-5 text-muted-foreground">{item.description}</p>}
+                              {item.matchedTopics?.length ? <p className="mt-2 text-[10px] leading-5 text-emerald-700 dark:text-emerald-300">موضوعات طابقت المنهج: {item.matchedTopics.join("، ")}</p> : null}
                               <p className="mt-2 text-[10px] leading-5 text-muted-foreground">{item.relevance}</p>
                               <div className="mt-3 flex flex-wrap items-center gap-2">
                                 <a href={item.url} target="_blank" rel="noreferrer" className="inline-flex min-h-9 items-center rounded-lg border border-border px-3 text-xs font-semibold text-foreground hover:border-primary/40">فتح الفيديو</a>
@@ -870,7 +877,7 @@ export default function Study() {
                                         branchId: currentBranchId,
                                         externalId: item.externalId,
                                       })}>
-                                      موافق على تحليل الفيديو
+                                      موافق على فحص محتوى الفيديو
                                     </Button>
                                     <Button type="button" size="sm" variant="ghost" className="rounded-lg text-muted-foreground"
                                       disabled={acceptAlternativeReview.isPending || declineAlternativeReview.isPending}
