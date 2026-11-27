@@ -51,6 +51,22 @@ export default function Study() {
   const branches = useMemo(() => getSIEStudentVisibleBranches(subjectId), [subjectId]);
   const units = useMemo(() => getSIECheckpointUnits(subjectId), [subjectId]);
   const [branchTransition, setBranchTransition] = useState<{ from: string; to: string } | null>(null);
+  const [reviewCandidates, setReviewCandidates] = useState<Array<{
+    externalId: string;
+    teacherId: string;
+    teacherName: string;
+    teacherBrand: string;
+    title: string;
+    channelTitle: string;
+    url: string;
+    publishedAt: string;
+    description: string;
+    matchedSignals: number;
+    accepted: boolean;
+    verificationState: string;
+    relevance: string;
+  }>>([]);
+  const [reviewSearchNote, setReviewSearchNote] = useState("");
   useEffect(() => {
     if (!branchTransition) return;
     const timer = window.setTimeout(() => setBranchTransition(null), 3_200);
@@ -61,6 +77,35 @@ export default function Study() {
     ?? branches[0];
   const branchChoices = currentBranch?.choices ?? [];
   const currentBranchId = currentBranch?.branchId ?? "";
+  const reviewSearch = trpc.teachers.recommendReviews.useMutation({
+    onSuccess: result => {
+      setReviewCandidates(result.items);
+      setReviewSearchNote(result.note);
+      if (!result.items.length) toast.info("لم نعثر على مراجعة بديلة من مدرس معروف لهذه المادة في نتائج البحث الحالية.");
+    },
+    onError: error => toast.error(error.message || "تعذّر البحث عن مراجعات بديلة."),
+  });
+  const acceptAlternativeReview = trpc.teachers.acceptAlternativeReview.useMutation({
+    onSuccess: async (result, variables) => {
+      setReviewCandidates(current => current.map(item =>
+        item.externalId === variables.externalId ? { ...item, accepted: true } : item
+      ));
+      await Promise.all([utils.studentProfile.get.invalidate(), utils.ai.activity.invalidate()]);
+      toast.success(result.message);
+    },
+    onError: error => toast.error(error.message || "تعذّر قبول المراجعة."),
+  });
+  const declineAlternativeReview = trpc.teachers.declineAlternativeReview.useMutation({
+    onSuccess: (_result, variables) => {
+      setReviewCandidates(current => current.filter(item => item.externalId !== variables.externalId));
+      toast.success("تم إخفاء هذه المراجعة ولن تدخل في خطتك.");
+    },
+    onError: error => toast.error(error.message || "تعذّر رفض المراجعة."),
+  });
+  useEffect(() => {
+    setReviewCandidates([]);
+    setReviewSearchNote("");
+  }, [subjectId, currentBranchId]);
   const currentBranchPointLabel = currentBranch?.branchType === "official_section" ? "موضوع" : "درس";
   const isLinearSubject = subjectId === "HIS_G2_BAC" || subjectId === "PROG_AI_G2_BAC";
   const legacyLinearRecords = isLinearSubject ? Object.values(branchProgressMap) : [];
@@ -749,6 +794,70 @@ export default function Study() {
                       animate={{ width: (visibleBranchPosition / Math.max(branches.length, 1) * 100) + "%" }}
                       transition={{ type: "spring", stiffness: 110, damping: 22 }} />
                   </div>
+                  {branchChoices.length > 0 && (
+                    <section className="rounded-2xl border border-border/80 bg-card p-4 sm:p-5">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold tracking-[0.12em] text-primary">مصادر إضافية</p>
+                          <h4 className="mt-1 text-sm font-bold">مراجعات من مدرسين آخرين</h4>
+                          <p className="mt-1 max-w-2xl text-xs leading-6 text-muted-foreground">
+                            نبحث عن مدرس آخر مسجل لهذه المادة. لن تؤثر أي مراجعة على خطتك قبل موافقتك، ثم تحليل الفيديو ومطابقة موضوعاته مع فهرس المنهج.
+                          </p>
+                        </div>
+                        <Button type="button" size="sm" variant="outline" className="shrink-0 rounded-xl"
+                          disabled={reviewSearch.isPending || !subjectId || !currentBranchId}
+                          onClick={() => reviewSearch.mutate({ subjectId, branchId: currentBranchId, teacherId: selectedTeacherId })}>
+                          {reviewSearch.isPending ? "جارٍ البحث..." : "ابحث عن مراجعات بديلة"}
+                        </Button>
+                      </div>
+                      {reviewSearchNote && <p className="mt-3 rounded-xl bg-muted/40 px-3 py-2 text-[11px] leading-5 text-muted-foreground">{reviewSearchNote}</p>}
+                      {reviewCandidates.length > 0 && (
+                        <div className="mt-3 grid gap-3">
+                          {reviewCandidates.map(item => (
+                            <article key={item.externalId} className="min-w-0 rounded-xl border border-border/80 bg-background p-3 sm:p-4">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="rounded-md bg-primary/10 px-2 py-1 text-[10px] font-bold text-primary">{item.teacherName}</span>
+                                <span className="text-[10px] text-muted-foreground">{item.teacherBrand}</span>
+                                {item.accepted && <span className="rounded-md bg-emerald-500/10 px-2 py-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">تمت الموافقة</span>}
+                              </div>
+                              <h5 className="mt-2 break-words text-sm font-bold leading-6">{item.title}</h5>
+                              <p className="mt-1 break-words text-[11px] leading-5 text-muted-foreground">القناة: {item.channelTitle}</p>
+                              {item.description && <p className="mt-2 line-clamp-3 break-words text-xs leading-5 text-muted-foreground">{item.description}</p>}
+                              <p className="mt-2 text-[10px] leading-5 text-muted-foreground">{item.relevance}</p>
+                              <div className="mt-3 flex flex-wrap items-center gap-2">
+                                <a href={item.url} target="_blank" rel="noreferrer" className="inline-flex min-h-9 items-center rounded-lg border border-border px-3 text-xs font-semibold text-foreground hover:border-primary/40">فتح الفيديو</a>
+                                {!item.accepted ? (
+                                  <>
+                                    <Button type="button" size="sm" className="rounded-lg"
+                                      disabled={acceptAlternativeReview.isPending || declineAlternativeReview.isPending}
+                                      onClick={() => acceptAlternativeReview.mutate({
+                                        subjectId,
+                                        branchId: currentBranchId,
+                                        teacherId: item.teacherId,
+                                        externalId: item.externalId,
+                                        title: item.title,
+                                        url: item.url,
+                                        description: item.description,
+                                        publishedAt: item.publishedAt,
+                                      })}>
+                                      موافق على تحليل الفيديو
+                                    </Button>
+                                    <Button type="button" size="sm" variant="ghost" className="rounded-lg text-muted-foreground"
+                                      disabled={acceptAlternativeReview.isPending || declineAlternativeReview.isPending}
+                                      onClick={() => declineAlternativeReview.mutate({ externalId: item.externalId })}>
+                                      رفض
+                                    </Button>
+                                  </>
+                                ) : (
+                                  <span className="text-[11px] font-medium text-emerald-700 dark:text-emerald-300">سيُضاف فقط ما يجتاز تحليل المحتوى ومطابقة المنهج.</span>
+                                )}
+                              </div>
+                            </article>
+                          ))}
+                        </div>
+                      )}
+                    </section>
+                  )}
                   {branchChoices.length === 0 ? (
                     <div className="rounded-xl border border-dashed border-border bg-muted/10 p-4">
                       <div className="flex items-start gap-3">
