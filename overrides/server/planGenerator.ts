@@ -1580,13 +1580,14 @@ export function applyDailyPlanDepth(
     const teacherName = String(video.teacherName || teacher.nameAr || "المدرس").slice(0, 120);
     const videoUrl = String(video.url).replace(/#.*$/, "");
     for (const topic of topics) {
-      if (subtasks.length >= 12) break;
+      if (subtasks.length >= 8) break;
       // Only high-confidence, curriculum-matched topics for lessons explicitly marked
       // as needing review can replace generated review-only steps.
       if (topic.confidence !== "high") continue;
       const startSeconds = Number(topic.startSeconds);
       const endSeconds = Number(topic.endSeconds);
-      if (!Number.isInteger(startSeconds) || startSeconds < 0 || !Number.isInteger(endSeconds) || endSeconds <= startSeconds) continue;
+      if (!Number.isInteger(startSeconds) || startSeconds < 0 || startSeconds > 86_400
+        || !Number.isInteger(endSeconds) || endSeconds <= startSeconds || endSeconds > 86_400) continue;
       const matchingText = [
         topic.titleAr,
         topic.descriptionAr,
@@ -1615,7 +1616,7 @@ export function applyDailyPlanDepth(
       ].join(" ");
       subtasks.push({
         id: (match.nodeId + ":" + String(video.externalId || "youtube").slice(0, 40)).slice(0, 180),
-        title: subjectName + " — " + match.branchTitle + " — " + topicTitle,
+        title: (subjectName + " — " + match.branchTitle + " — " + topicTitle).slice(0, 160),
         detail: topicDetail,
         curriculumNodeIds: [match.nodeId],
         startSeconds,
@@ -1656,9 +1657,19 @@ export function applyDailyPlanDepth(
   // replace that generated top-level item with the video parent task. Real existing
   // teacher obligations are deliberately preserved as separate tasks.
   if (videoCoveredReviewNodeIds.size > 0) {
-    steps = steps.filter(step => step.existingTask
-      || !((step.curriculumNodeIds ?? []).length === 1
-        && videoCoveredReviewNodeIds.has(step.curriculumNodeIds[0])));
+    steps = steps.flatMap(step => {
+      if (step.existingTask) return [step];
+      const nodeIds = step.curriculumNodeIds ?? [];
+      if (nodeIds.length === 0) return [step];
+      const remainingNodeIds = nodeIds.filter(nodeId => !videoCoveredReviewNodeIds.has(nodeId));
+      return remainingNodeIds.length ? [{ ...step, curriculumNodeIds: remainingNodeIds }] : [];
+    });
+    // Rebuild duplicate-title tracking after replacement so a real open task
+    // matching a removed generated review step is not accidentally suppressed.
+    usedTitles.clear();
+    for (const step of [...steps, ...videoTopicSteps]) {
+      usedTitles.add(normalizePlannerLessonText(step.title));
+    }
   }
 
   // Add current obligations as candidates before selecting new curriculum work.
@@ -1809,7 +1820,7 @@ export function applyDailyPlanDepth(
   // with a watched/revision-only lesson and bypass the priority rule.
   const normalizedCandidates: GeneratedPlan["steps"] = deduplicated.flatMap(step => {
     const nodeIds = step.curriculumNodeIds ?? [];
-    if (nodeIds.length <= 1) return [step];
+    if (nodeIds.length <= 1 || step.subtasks?.length) return [step];
     return nodeIds.map((nodeId, index) => {
       const lesson = curriculumLearningByNode.get(nodeId);
       const subjectName = lesson ? getSIESubject(lesson.subjectId)?.nameAr ?? lesson.subjectId : "";
