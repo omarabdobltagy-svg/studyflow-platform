@@ -1193,6 +1193,152 @@ function queueDailyPlanReconciliation(
   });
 }
 
+
+type AIInboxAction = "mark_done" | "keep_open";
+
+function getRootGoalForTask(goalId: number | null, goalsById: Map<number, any>) {
+  let current = goalId ? goalsById.get(goalId) : undefined;
+  const seen = new Set<number>();
+  while (current?.parentGoalId && !seen.has(Number(current.id))) {
+    seen.add(Number(current.id));
+    current = goalsById.get(Number(current.parentGoalId));
+  }
+  return current;
+}
+
+function isStudyFlowManagedGoal(goal: any): boolean {
+  if (!goal) return false;
+  const category = String(goal.category ?? "").trim();
+  const title = String(goal.title ?? "").trim();
+  return ["خطة مذاكرة", "خطة يومية", "خطة ذكية", "خطة تدريبية"].includes(category)
+    || ["خطة المذاكرة", "خطة StudyFlow اليومية", "خطة StudyFlow الذكية الحالية"].includes(title);
+}
+
+function taskLooksLikeTeacherObligation(task: any): boolean {
+  const text = [task.title, task.notes, task.category].filter(Boolean).join(" ").toLocaleLowerCase("ar");
+  return /واجب|تسليم|امتحان|اختبار|كويز|quiz|homework|assignment|exam|\btest\b|تكليف|ورقة عمل|حل الأسئلة/.test(text);
+}
+
+/**
+ * Resolves only explicit curriculum/task conflicts. AI-owned study reminders can
+ * be completed automatically; user-created or teacher-obligation tasks require
+ * a direct answer from the student and remain open until then.
+ */
+async function reconcileCompletedCurriculumTasks(userId: number) {
+  const profile = await getStudentProfile(userId);
+  if (!profile?.subjectIds?.length) return { resolvedCount: 0, questionsCreated: 0, unchangedCount: 0 };
+
+  const [tasks, goals, events] = await Promise.all([
+    listTasks(userId),
+    listGoals(userId),
+    listRecentStudentActivityEvents(userId, 100),
+  ]);
+  const goalsById = new Map(goals.map(goal => [Number(goal.id), goal]));
+  const repliedMessageIds = new Set(events
+    .filter(event => event.eventType === "ai.proactive_message.responded")
+    .map(event => String(event.metadata?.messageId ?? event.entityId ?? "")));
+  const activeQuestionTaskIds = new Set(events
+    .filter(event => event.eventType === "ai.proactive_message.created")
+    .filter(event => !repliedMessageIds.has(String(event.id)))
+    .map(event => Number(event.metadata?.taskId))
+    .filter(id => Number.isInteger(id) && id > 0));
+
+  const courseProgress = ((profile.selection ?? {}) as Record<string, any>).learningCourseProgress ?? {};
+  let resolvedCount = 0;
+  let questionsCreated = 0;
+  let unchangedCount = 0;
+
+  for (const task of tasks) {
+    if (task.status !== "todo") continue;
+    const match = matchSIECheckpointTask(profile.subjectIds, [task.title, task.notes ?? ""].join(" "));
+    if (!match) continue;
+
+    const state = courseProgress[match.subjectId]?.branches?.[match.branchId]
+      ?.lessonStates?.[match.nodeId]?.state;
+    if (state !== "studied") continue;
+
+    const rootGoal = getRootGoalForTask(task.goalId ?? null, goalsById);
+    const flowManaged = isStudyFlowManagedGoal(rootGoal);
+    const teacherObligation = taskLooksLikeTeacherObligation(task);
+
+    if (flowManaged && !teacherObligation) {
+      await toggleTask(userId, task.id, true);
+      await logStudentActivity(userId, "ai.curriculum_task_resolved", "task", task.id,
+        "أغلق المساعد مهمة مذاكرة أنشأها بعد تأكيد اكتمال الدرس", {
+          subjectId: match.subjectId, branchId: match.branchId, nodeId: match.nodeId,
+        });
+      resolvedCount += 1;
+      continue;
+    }
+
+    if (activeQuestionTaskIds.has(task.id)) {
+      unchangedCount += 1;
+      continue;
+    }
+
+    const subjectName = getSIESubject(match.subjectId)?.nameAr ?? "المادة";
+    const branchName = getSIECheckpointProgressBranches(match.subjectId)
+      .find(item => item.branchId === match.branchId)?.branchTitle ?? "";
+    const lessonTitle = match.title;
+    const question = teacherObligation
+      ? `سجلت إنك ذاكرت وفهمت «${lessonTitle}» في ${subjectName}، لكن ما زالت هناك مهمة مرتبطة به تبدو كواجب أو تكليف: «${task.title}». هل أنهيت التكليف نفسه أيضًا، أم أن المطلوب من المدرس ما زال قائمًا؟`
+      : `سجلت إنك ذاكرت وفهمت «${lessonTitle}» في ${subjectName}، لكن توجد مهمة مفتوحة مرتبطة به: «${task.title}». هل كانت مجرد تذكير بالمذاكرة وانتهت، أم تريد إبقاءها مفتوحة؟`;
+    await recordStudentActivityEvent({
+      userId,
+      eventType: "ai.proactive_message.created",
+      entityType: "ai_message",
+      entityId: task.id,
+      summary: "سؤال من المساعد حول مهمة مرتبطة بدرس مكتمل",
+      metadata: {
+        version: 1,
+        kind: "question",
+        taskId: task.id,
+        subjectId: match.subjectId,
+        branchId: match.branchId,
+        branchName,
+        nodeId: match.nodeId,
+        lessonTitle,
+        title: "محتاج أتأكد من مهمة مرتبطة بدرس أنهيته",
+        message: question,
+        actions: [
+          { id: "mark_done", label: "أنهيت المهمة أيضًا" },
+          { id: "keep_open", label: "لسه مطلوبة — اتركها مفتوحة" },
+        ],
+      },
+    });
+    activeQuestionTaskIds.add(task.id);
+    questionsCreated += 1;
+  }
+
+  if (resolvedCount > 0) {
+    queueDailyPlanReconciliation(userId, "task.completed", "task");
+  }
+  return { resolvedCount, questionsCreated, unchangedCount };
+}
+
+async function getAIInboxForStudent(userId: number) {
+  const events = await listRecentStudentActivityEvents(userId, 100);
+  const readIds = new Set(events
+    .filter(event => event.eventType === "ai.proactive_message.read")
+    .map(event => String(event.metadata?.messageId ?? event.entityId ?? "")));
+  const respondedIds = new Set(events
+    .filter(event => event.eventType === "ai.proactive_message.responded")
+    .map(event => String(event.metadata?.messageId ?? event.entityId ?? "")));
+  const items = events
+    .filter(event => event.eventType === "ai.proactive_message.created")
+    .slice()
+    .reverse()
+    .slice(0, 40)
+    .map(event => ({
+      id: event.id,
+      createdAt: event.createdAt,
+      ...(event.metadata ?? {}),
+      read: readIds.has(String(event.id)) || respondedIds.has(String(event.id)),
+      answered: respondedIds.has(String(event.id)),
+    }));
+  return { items, unreadCount: items.filter(item => !item.read).length };
+}
+
 let plannerReconciliationWorkerStarted = false;
 let plannerReconciliationWorkerRunning = false;
 
@@ -3119,9 +3265,62 @@ export const appRouter = router({
 
   ai: router({
     activity: protectedProcedure.query(({ ctx }) => getAIActivitySnapshot(ctx.user.id)),
+    inbox: protectedProcedure.query(({ ctx }) => getAIInboxForStudent(ctx.user.id)),
+    reconcileCurriculumTasks: protectedProcedure.mutation(({ ctx }) => reconcileCompletedCurriculumTasks(ctx.user.id)),
+    markInboxMessageRead: protectedProcedure
+      .input(z.object({ messageId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const events = await listRecentStudentActivityEvents(ctx.user.id, 100);
+        const source = events.find(event => event.id === input.messageId && event.eventType === "ai.proactive_message.created");
+        if (!source) throw new TRPCError({ code: "NOT_FOUND", message: "الرسالة غير موجودة." });
+        await recordStudentActivityEvent({
+          userId: ctx.user.id,
+          eventType: "ai.proactive_message.read",
+          entityType: "ai_message",
+          entityId: input.messageId,
+          summary: "قرأ الطالب رسالة من المساعد الذكي",
+          metadata: { messageId: input.messageId },
+        });
+        return { success: true };
+      }),
+    respondToInboxMessage: protectedProcedure
+      .input(z.object({
+        messageId: z.number().int().positive(),
+        action: z.enum(["mark_done", "keep_open"]),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const events = await listRecentStudentActivityEvents(ctx.user.id, 100);
+        const source = events.find(event => event.id === input.messageId && event.eventType === "ai.proactive_message.created");
+        if (!source) throw new TRPCError({ code: "NOT_FOUND", message: "الرسالة غير موجودة." });
+        const alreadyAnswered = events.some(event => event.eventType === "ai.proactive_message.responded"
+          && Number(event.metadata?.messageId ?? event.entityId) === input.messageId);
+        if (alreadyAnswered) return { success: true, alreadyAnswered: true };
+
+        const taskId = Number(source.metadata?.taskId);
+        const task = (await listTasks(ctx.user.id)).find(item => item.id === taskId);
+        if (!task) throw new TRPCError({ code: "NOT_FOUND", message: "المهمة المرتبطة بالرسالة لم تعد موجودة." });
+        if (input.action === "mark_done" && task.status !== "done") {
+          await toggleTask(ctx.user.id, task.id, true);
+          await logStudentActivity(ctx.user.id, "task.completed", "task", task.id,
+            "أكد الطالب للمساعد أنه أنهى المهمة المرتبطة بالدرس", { source: "ai_inbox" });
+        }
+        await recordStudentActivityEvent({
+          userId: ctx.user.id,
+          eventType: "ai.proactive_message.responded",
+          entityType: "ai_message",
+          entityId: input.messageId,
+          summary: input.action === "mark_done"
+            ? "أكد الطالب إكمال المهمة المرتبطة بالدرس"
+            : "أكد الطالب أن المهمة ما زالت مطلوبة",
+          metadata: { messageId: input.messageId, taskId: task.id, action: input.action },
+        });
+        if (input.action === "mark_done") queueDailyPlanReconciliation(ctx.user.id, "task.completed", "task");
+        return { success: true, action: input.action };
+      }),
     capabilities: protectedProcedure.query(() => ({
       youtubeMonitoring: Boolean(process.env.YOUTUBE_API_KEY?.trim()),
       teacherVideoAnalysis: isTeacherVideoAnalysisConfigured(),
+      proactiveInbox: true,
     })),
     chat: protectedProcedure
       .input(assistantChatInputSchema)
@@ -3700,8 +3899,11 @@ export const appRouter = router({
           "تم تحديث حالة مشاهدة ومذاكرة درس",
           { subjectId: input.subjectId, branchId: input.branchId, state: input.state },
         );
+        const taskReconciliation = input.state === "studied"
+          ? await reconcileCompletedCurriculumTasks(ctx.user.id)
+          : { resolvedCount: 0, questionsCreated: 0, unchangedCount: 0 };
         queueDailyPlanReconciliation(ctx.user.id);
-        return { success: true, state: input.state, updatedAt: now };
+        return { success: true, state: input.state, updatedAt: now, taskReconciliation };
       }),
     updateCourseProgress: protectedProcedure
       .input(z.object({
