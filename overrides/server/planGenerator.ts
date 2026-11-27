@@ -1455,11 +1455,13 @@ export function applyDailyPlanDepth(
         const choice = eligibleById.get(syllabusChoice.nodeId);
         if (!choice || choice.learningState === "not_recorded") continue;
         const explicitlyReported = choice.explicitlyReported === true;
-        const alreadyReachedByStudent = progress.studentPosition !== null && index < progress.studentPosition;
         const insideTeacherCoverage = progress.referencePosition !== null && index < progress.referencePosition;
-        const include = explicitlyReported
-          || alreadyReachedByStudent
-          || (insideTeacherCoverage && progress.studentPosition !== null && index >= progress.studentPosition);
+        // A saved lesson state can describe a lesson the student studied ahead of
+        // the teacher. It does not make that lesson part of the current backlog.
+        // Include only lessons inside the teacher/school coverage frontier; when
+        // the student frontier is unknown, require an explicit non-empty state.
+        const include = insideTeacherCoverage
+          && (progress.studentPosition !== null || explicitlyReported);
         if (!include) continue;
         branchBacklog.push({ subjectId, branch, choice, index, progress });
       }
