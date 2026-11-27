@@ -4586,3 +4586,34 @@ body[data-studyflow-sections-open="true"] .sf-hub-root {
   .sf-main-planner .sf-sp-schedule-header-actions { justify-content:flex-start; width:100%; }
   .sf-main-planner .sf-sp-schedule-toggle { min-height:38px; }
 }
+
+
+/* Keep every flow-map connector and neutral node accent on the planner's olive scale. */
+.sf-main-planner .sf-sp-flow-map {
+  --sf-map-accent: #91a85b;
+  --sf-map-line: color-mix(in srgb, var(--sf-map-accent) 70%, var(--border));
+}
+.sf-main-planner .sf-sp-flow-map .sf-sp-flow-origin,
+.sf-main-planner .sf-sp-flow-map .sf-sp-flow-finish {
+  border-color: color-mix(in srgb, #91a85b 56%, var(--border));
+  background: color-mix(in srgb, #91a85b 9%, var(--card));
+}
+.sf-main-planner .sf-sp-flow-map .sf-sp-flow-origin-kicker,
+.sf-main-planner .sf-sp-flow-map .sf-sp-flow-finish > span,
+.sf-main-planner .sf-sp-flow-map .sf-sp-flow-lane-header > strong,
+.sf-main-planner .sf-sp-flow-map .sf-sp-flow-node-details summary {
+  color: #91a85b;
+}
+.sf-main-planner .sf-sp-flow-map .sf-sp-flow-lane-port {
+  border-color: #91a85b;
+  box-shadow: 0 0 0 4px color-mix(in srgb, #91a85b 12%, transparent);
+}
+.sf-main-planner .sf-sp-flow-map .sf-sp-flow-node-index {
+  border-color: color-mix(in srgb, #91a85b 48%, var(--border));
+}
+.sf-main-planner .sf-sp-flow-map .sf-sp-flow-node-card {
+  border-inline-start-color: #91a85b;
+}
+.sf-main-planner .sf-sp-flow-map .sf-sp-flow-lane-progress-rail i {
+  background: #91a85b;
+}
