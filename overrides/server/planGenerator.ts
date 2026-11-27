@@ -1414,7 +1414,6 @@ function applyDailyPlanDepth(
   plan: GeneratedPlan,
   profile: NonNullable<Awaited<ReturnType<typeof getStudentProfile>>>,
   existingTasks: ExistingPlannerTask[],
-  dailyMinutes: number,
 ): GeneratedPlan {
   const openTasks = existingTasks.filter(task => task.status !== "done");
   // Keep the complete eligible backlog in the plan. Daily capacity controls dates,
@@ -2254,7 +2253,7 @@ export async function generatePersonalPlan(
   if (planScope === "daily" && profile) {
     // Finish candidate selection and deduplication before assigning dates.
     // Otherwise appended backlog/curriculum steps would have no due date.
-    plan = applyDailyPlanDepth(plan, profile, existingTasks, dailyMinutes);
+    plan = applyDailyPlanDepth(plan, profile, existingTasks);
     plan = {
       ...plan,
       steps: plan.steps.map(step => ({
