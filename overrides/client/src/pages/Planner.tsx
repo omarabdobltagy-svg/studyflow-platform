@@ -158,13 +158,16 @@ function getPlanStepCurriculum(step: PlanStep, subjectIds: string[]) {
 
 function displayPlanStepTitle(step: PlanStep, subjectIds: string[]): string {
   const curriculum = getPlanStepCurriculum(step, subjectIds);
-  if (curriculum) {
+  const hasLatinText = /[A-Za-z]{3,}/.test(String(step.title ?? ""));
+  if (curriculum && hasLatinText) {
     const segment = step.segmentIndex && step.segmentCount && step.segmentCount > 1
       ? " — الجزء " + step.segmentIndex.toLocaleString("ar-EG") + " من " + step.segmentCount.toLocaleString("ar-EG")
       : "";
     return curriculum.subject + " · " + curriculum.branch + " · " + curriculum.lesson + segment;
   }
-  return displayArabicText(displayCurriculumTitle(step.title), "مهمة دراسية");
+  return displayArabicText(displayCurriculumTitle(step.title), curriculum
+    ? curriculum.subject + " · " + curriculum.branch + " · " + curriculum.lesson
+    : "مهمة دراسية");
 }
 
 function displayPlanStepCategory(step: PlanStep, subjectIds: string[]): string {
@@ -518,20 +521,29 @@ export default function Planner() {
   const overdueTaskRows = openTaskRows.filter(task => task.dueAt && new Date(task.dueAt).getTime() < Date.now());
   const todayTaskRows = openTaskRows.filter(task => task.dueAt && new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date(task.dueAt)) === todayCairo);
   const curriculumGapCount = progressPreview.reduce((sum, item) => sum + (typeof item.gapCount === "number" ? item.gapCount : 0), 0);
-  const paceRecommendation: StudyPace = overdueTaskRows.length >= 3 || openTaskRows.length >= 10 || curriculumGapCount >= 12
-    ? "intensive"
-    : openTaskRows.length <= 2 && overdueTaskRows.length === 0 && curriculumGapCount <= 3
-      ? "relaxed"
-      : "balanced";
-  const paceEvidence = tasksQuery.isLoading || learning.isLoading
-    ? "جارٍ حساب التراكم من بياناتك المسجلة."
+  const workloadReady = !tasksQuery.isLoading && !learning.isLoading && !tasksQuery.isError && !learning.isError;
+  const paceRecommendation: StudyPace = !workloadReady
+    ? "balanced"
+    : overdueTaskRows.length >= 3 || openTaskRows.length >= 10 || curriculumGapCount >= 12
+      ? "intensive"
+      : openTaskRows.length <= 2 && overdueTaskRows.length === 0 && curriculumGapCount <= 3
+        ? "relaxed"
+        : "balanced";
+  const paceEvidence = !workloadReady
+    ? "لم تكتمل قراءة المهام وتقدم المنهج؛ ستظهر التوصية بعد تحميل البيانات."
     : "بياناتك الحالية: " + openTaskRows.length.toLocaleString("ar-EG") + " مهمة مفتوحة، "
       + overdueTaskRows.length.toLocaleString("ar-EG") + " متأخرة، و"
       + curriculumGapCount.toLocaleString("ar-EG") + " موضعًا متأخرًا عن مرجع المدرس عبر الفروع المعروفة.";
-  const paceReasons: Record<StudyPace, string> = {
-    relaxed: "يحافظ على الاستمرارية بخطوات أقل، ويناسب الفترات التي يكون فيها التراكم محدودًا.",
-    balanced: "يوازن بين إغلاق الالتزامات الحالية ومواكبة الدروس التالية عبر المواد.",
-    intensive: "يرفع عدد الخطوات في دورة التخطيط لتقليل التراكم، مع الحفاظ على ترتيب الأولويات وعدم اختراع واجبات.",
+  const pacePersonalReasons: Record<StudyPace, string> = {
+    relaxed: "لديك " + openTaskRows.length.toLocaleString("ar-EG") + " مهمة مفتوحة و"
+      + overdueTaskRows.length.toLocaleString("ar-EG") + " متأخرة، مع " + curriculumGapCount.toLocaleString("ar-EG")
+      + " موضعًا معروفًا في فجوات المنهج. الإيقاع المرن يقلل عدد الخطوات ويترك مساحة للثبات.",
+    balanced: "لديك " + openTaskRows.length.toLocaleString("ar-EG") + " مهمة مفتوحة و"
+      + overdueTaskRows.length.toLocaleString("ar-EG") + " متأخرة، و" + curriculumGapCount.toLocaleString("ar-EG")
+      + " موضعًا في فجوات المنهج. المتوازن يقسم الانتباه بين إغلاق الالتزامات ومواكبة المواد.",
+    intensive: "لديك " + openTaskRows.length.toLocaleString("ar-EG") + " مهمة مفتوحة، منها "
+      + overdueTaskRows.length.toLocaleString("ar-EG") + " متأخرة، إضافة إلى "
+      + curriculumGapCount.toLocaleString("ar-EG") + " موضعًا في فجوات المنهج. المكثف يرفع عدد الخطوات المقترحة لتقليل هذا التراكم تدريجيًا.",
   };
   const planSubjectCount = plan
     ? new Set(plan.steps.map(step => getPlanStepCurriculum(step, profile.data?.subjectIds ?? [])?.subjectId).filter(Boolean)).size
@@ -582,7 +594,7 @@ export default function Planner() {
         <nav className="sf-sp-tabs" role="tablist" aria-label="أقسام خطة المذاكرة">
           {([
             ["overview", "الملخص", Sparkles],
-            ["schedule", "الجدول", CalendarClock],
+            ["schedule", "التوزيع", CalendarClock],
             ["curriculum", "المنهج", BrainCircuit],
             ["tasks", "المهام", CheckCircle2],
             ["history", "السجل", RefreshCw],
@@ -606,13 +618,11 @@ export default function Planner() {
                     <div className="sf-sp-focus-title">{displayPlanStepTitle(nextPlanStep, profile.data?.subjectIds ?? [])}</div>
                     <p className="sf-sp-focus-detail">{displayPlanStepDetail(nextPlanStep, profile.data?.subjectIds ?? [])}</p>
                     <div className="sf-sp-step-meta">
-                      {nextPlanStep.minutes > 0 && <span><CalendarClock className="size-3.5" />{nextPlanStep.minutes.toLocaleString("ar-EG")} دقيقة</span>}
-                      {nextPlanStep.category && <span>{nextPlanStep.category}</span>}
+                      {nextPlanStep.category && <span>{displayPlanStepCategory(nextPlanStep, profile.data?.subjectIds ?? [])}</span>}
                       {nextPlanStep.priority && <span>{({critical:"عاجلة",high:"أولوية عالية",medium:"متوسطة",low:"مرنة"} as Record<string,string>)[nextPlanStep.priority] || "أولوية عادية"}</span>}
                     </div>
                     <div className="sf-sp-focus-actions">
-                      <Button type="button" onClick={() => setPlannerTab("schedule")}><ArrowUpRight className="size-4" />افتح تفاصيل الجلسة</Button>
-                      <span>المدة تقديرية، وليست موعدًا ثابتًا.</span>
+                      <Button type="button" onClick={() => setPlannerTab("schedule")}><ArrowUpRight className="size-4" />افتح تفاصيل المهمة</Button>
                     </div>
                   </>
                 ) : plan ? (
@@ -642,28 +652,26 @@ export default function Planner() {
                     >
                       <span className="sf-sp-pace-choice-top">
                         <strong>{label}</strong>
-                        {paceRecommendation === pace && <em>الأنسب لبياناتك</em>}
+                        {workloadReady && paceRecommendation === pace && <em>الموصى بها لك</em>}
                       </span>
                       <small>{subtitle}</small>
                       <p>{baseReason}</p>
-                      <span className="sf-sp-pace-personal">
-                        {pace === "relaxed"
-                          ? (openTaskRows.length <= 2 && overdueTaskRows.length === 0
-                            ? "التراكم المسجل محدود حاليًا؛ تقدر تحافظ على وتيرة ثابتة."
-                            : "هذا الخيار يقلل عدد الخطوات، لكنه قد يترك جزءًا من التراكم للدورة القادمة.")
-                          : pace === "balanced"
-                            ? "يراعي المهام المفتوحة ويترك مساحة لمتابعة الدروس التالية في المواد المختارة."
-                            : (overdueTaskRows.length > 0 || curriculumGapCount > 0
-                              ? "مناسب لو هدفك معالجة التراكم بسرعة أكبر، مع مراجعة قدرتك على تنفيذ المقترح."
-                              : "يزيد عدد الخطوات حتى مع قلة التراكم؛ اختره فقط إذا كانت لديك مساحة فعلية.") }
-                      </span>
+                      <span className="sf-sp-pace-personal">{workloadReady
+                        ? pacePersonalReasons[pace]
+                        : "تظهر ملاءمة هذا الإيقاع بعد اكتمال قراءة بياناتك."}</span>
                     </button>
                   ))}
                 </div>
                 <div className="sf-sp-pace-evidence">
-                  <strong>سبب التوصية</strong>
+                  <strong>{workloadReady ? "لماذا رُشّح هذا الإيقاع؟" : "جاري تجهيز التوصية"}</strong>
                   <p>{paceEvidence}</p>
-                  <small>{paceReasons[paceRecommendation]}</small>
+                  <small>{workloadReady
+                    ? (paceRecommendation === "intensive"
+                      ? "تميل التوصية للمكثف عند وجود 3 مهام متأخرة أو 10 مهام مفتوحة أو 12 موضع فجوة فأكثر."
+                      : paceRecommendation === "relaxed"
+                        ? "تميل التوصية للمرن عندما تكون المهام المفتوحة 2 أو أقل، ولا توجد مهام متأخرة، والفجوات المعروفة 3 أو أقل."
+                        : "المتوازن هو الاختيار الافتراضي عندما لا تكون البيانات قليلة بما يكفي للمرن، ولا مرتفعة بما يكفي للمكثف.")
+                    : "لن نحدد إيقاعًا موصى به قبل اكتمال تحميل بيانات المهام والمنهج."}</small>
                 </div>
                 <Button type="button" className="sf-sp-build-button" disabled={!isPreflightReady || generate.isPending || !profile.data?.subjectIds?.length} onClick={runGeneration}>
                   {generate.isPending ? <><Loader2 className="size-4 animate-spin" /> جارٍ بناء الخطة</> : <>{plan ? <RefreshCw className="size-4" /> : <Sparkles className="size-4" />}{plan ? "إعادة بناء الخطة" : "أنشئ خطة المذاكرة"}</>}
@@ -726,7 +734,7 @@ export default function Planner() {
             {plan ? (
               <PlanCard plan={plan} subjectIds={profile.data?.subjectIds ?? []} title={approved ? "الخطة المعتمدة" : loadedSavedDraft ? "مسودة محفوظة" : "مقترح للمراجعة"} studentName={profile.data?.studentName} editable={!approved} onChange={updatePlan} onApprove={approveCurrentPlan} onAddStep={addStep} onRemoveStep={removeStep} onMoveStep={moveStep} approving={approvePlan.isPending} approved={approved} />
             ) : (
-              <section className="sf-sp-empty"><h2>لا يوجد جدول مذاكرة حالي</h2><p>أنشئ مقترحًا أولًا، ثم راجع توزيع المهام حسب اليوم والمرحلة واعتمده لإضافته إلى قائمتك.</p><Button type="button" onClick={() => setPlannerTab("overview")}>العودة إلى الملخص</Button></section>
+              <section className="sf-sp-empty"><h2>لا يوجد توزيع مذاكرة حالي</h2><p>أنشئ مقترحًا أولًا، ثم راجع توزيع المهام حسب الأولوية والمرحلة واعتمده لإضافته إلى قائمتك.</p><Button type="button" onClick={() => setPlannerTab("overview")}>العودة إلى الملخص</Button></section>
             )}
           </div>
         )}
@@ -860,8 +868,7 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
   const [editing, setEditing] = useState<{ index: number; title: string; detail: string } | null>(null);
   const [filter, setFilter] = useState<"all" | "open" | "done">("all");
   const completedCount = plan.steps.filter(step => step.plannerTaskStatus === "done" || step.existingTask?.status === "done").length;
-  const deferredCount = plan.steps.filter(step => step.scheduleState === "deferred").length;
-  const subjectCount = new Set(plan.steps.map(step => getPlanStepCurriculum(step, subjectIds)?.subjectId).filter(Boolean)).size;
+    const subjectCount = new Set(plan.steps.map(step => getPlanStepCurriculum(step, subjectIds)?.subjectId).filter(Boolean)).size;
   const confirmedTaskCount = plan.steps.filter(step => Boolean(step.existingTask)).length;
   const phaseLabels: Record<string,string> = {
     backlog: "المتراكم والالتزامات المفتوحة",
