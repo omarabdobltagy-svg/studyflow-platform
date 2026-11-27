@@ -29,7 +29,7 @@ describe("curated public teacher delivery modes", () => {
   });
 
   it("offers only online for teachers whose current public course is online", () => {
-    expect(getCuratedTeacherDeliveryFacts("T_AR_MOHAMED_SALAH")?.availableModes).toEqual(["online"]);
+    expect(getCuratedTeacherDeliveryFacts("T_EN_SHERIF")?.availableModes).toEqual(["online"]);
     expect(getCuratedTeacherDeliveryFacts("T_EN_SHERIF")?.availableModes).toEqual(["online"]);
   });
 

@@ -44,12 +44,12 @@ type CuratedDeliveryFacts = {
  */
 const CURATED_DELIVERY_FACTS: Record<string, CuratedDeliveryFacts> = {
   T_AR_MOHAMED_SALAH: {
-    availableModes: ["online"], confidence: "high", verified: true,
-    evidence: [{ title: "بسطتهالك — كورسات الصف الثاني بكالوريا", url: "https://bassthalk.com/userprofile/", source: "منصة بسطتهالك", excerpt: "صفحة المدرس تعرض كورسات للصف الثاني بكالوريا مع وصول للمحتوى عبر الهاتف أو الحاسوب." }],
+    availableModes: ["online", "center"], confidence: "high", verified: true,
+    evidence: [{ title: "تفاصيل بداية دفعة 2027 — أونلاين وسنتر مع أ. محمد صلاح", url: "https://www.youtube.com/watch?v=H_1-JOKbMW8", source: "قناة بسطتهالك الرسمية", excerpt: "الفيديو الرسمي يذكر صراحة تقديم محمد صلاح للأونلاين والسنتر ضمن دفعة 2027 للبكالوريا والثانوية العامة." }, { title: "صفحة بسطتهالك الرسمية على فيسبوك", url: "https://www.facebook.com/salah.bassthalk", source: "Facebook · بسطتهالك", excerpt: "صفحة اجتماعية مرتبطة بقنوات المدرس الرسمية؛ لا يعتمد عليها وحدها لإثبات نوع الدراسة." }],
   },
   T_AR_REDA_FAROUK: {
-    availableModes: ["online"], confidence: "high", verified: true,
-    evidence: [{ title: "قناة رضا الفاروق — محتوى الصف الثاني بكالوريا", url: "https://youtube.com/channel/UC7fHSfm6zxGJYC-P7RMzX7w", source: "قناة رضا الفاروق", excerpt: "تظهر دروسًا حديثة للصف الثاني بكالوريا 2027 وروابط التسجيل بالمنصة؛ لم يظهر دليل على سنتر حضوري." }],
+    availableModes: ["online", "center"], confidence: "high", verified: true,
+    evidence: [{ title: "مواعيد السنة الجديدة ونظام الأونلاين والسنتر — دفعة 2027", url: "https://youtu.be/8CoIm7Ul5Wo", source: "قناة رضا الفاروق الرسمية", excerpt: "وصف الفيديو الرسمي يذكر تفاصيل الأونلاين والسنتر ضمن إعلان دفعة 2027 للثانوية والبكالوريا." }, { title: "صفحة رضا الفاروق الرسمية على فيسبوك", url: "https://www.facebook.com/RedaElfaroukOfficial/", source: "Facebook · رضا الفاروق", excerpt: "رابط الصفحة الرسمية مذكور ضمن روابط المدرس؛ لا يعتمد عليه وحده لإثبات نوع الدراسة." }],
   },
   T_AR_MOHAMED_TAREK: {
     availableModes: [], confidence: "low", verified: false,
@@ -212,6 +212,69 @@ async function collectYouTubeEvidence(teacherName: string, brandName: string, su
   return [...byUrl.values()].slice(0, 20);
 }
 
+type PublicEvidenceItem = { title: string; url: string; source: string; excerpt?: string; publishedAt?: string };
+
+export function normalizeSocialSearchItems(
+  teacherName: string,
+  brandName: string,
+  items: Array<Record<string, unknown>>,
+): PublicEvidenceItem[] {
+  const byUrl = new Map<string, PublicEvidenceItem>();
+  for (const item of items) {
+    const title = normalized(item.title ?? item.name ?? item.heading, 240);
+    const url = normalized(item.link ?? item.url ?? item.href, 1_000);
+    const excerpt = normalized(item.snippet ?? item.description ?? item.text ?? item.summary, 900);
+    if (!title || !/^https:\/\/(?:www\.|m\.|mbasic\.)?(?:facebook\.com|instagram\.com|tiktok\.com)\//i.test(url)) continue;
+    if (!teacherSourceMatches(teacherName, brandName, title, excerpt)) continue;
+    if (byUrl.has(url)) continue;
+    const platform = /facebook\.com/i.test(url) ? "Facebook" : /instagram\.com/i.test(url) ? "Instagram" : "TikTok";
+    byUrl.set(url, {
+      title, url, source: platform + " · " + title.slice(0, 120),
+      ...(excerpt ? { excerpt } : {}),
+      ...(typeof item.date === "string" ? { publishedAt: item.date.slice(0, 40) } : {}),
+    });
+  }
+  return [...byUrl.values()].slice(0, 12);
+}
+
+async function collectSocialEvidence(teacherName: string, brandName: string, subjectName: string): Promise<PublicEvidenceItem[]> {
+  const queries = [...new Set([
+    `site:facebook.com "${teacherName}" "${subjectName}" سنتر بكالوريا`,
+    `site:facebook.com "${teacherName}" "${subjectName}" أونلاين محاضرات`,
+    `site:facebook.com "${brandName}" دفعة 2027 سنتر`,
+    `site:instagram.com "${teacherName}" "${subjectName}"`,
+    `site:tiktok.com "${teacherName}" "${subjectName}"`,
+  ])];
+  const responses = await Promise.allSettled(queries.map(query =>
+    callDataApi("Google/search", { query: { gl: "EG", hl: "ar", q: query } }) as Promise<Record<string, unknown>>
+  ));
+  const items: Array<Record<string, unknown>> = [];
+  for (const response of responses) {
+    if (response.status !== "fulfilled") continue;
+    const payload = response.value;
+    const raw = Array.isArray(payload.items) ? payload.items
+      : Array.isArray(payload.organic) ? payload.organic
+      : Array.isArray(payload.organic_results) ? payload.organic_results
+      : Array.isArray(payload.results) ? payload.results
+      : [];
+    items.push(...raw as Array<Record<string, unknown>>);
+  }
+  return normalizeSocialSearchItems(teacherName, brandName, items);
+}
+
+async function collectPublicTeacherEvidence(teacherName: string, brandName: string, subjectName: string): Promise<PublicEvidenceItem[]> {
+  const [youtube, social] = await Promise.all([
+    collectYouTubeEvidence(teacherName, brandName, subjectName),
+    collectSocialEvidence(teacherName, brandName, subjectName).catch(error => {
+      console.warn("[Teacher directory] Social search unavailable:", error instanceof Error ? error.message.slice(0, 180) : "unknown error");
+      return [] as PublicEvidenceItem[];
+    }),
+  ]);
+  const byUrl = new Map<string, PublicEvidenceItem>();
+  for (const item of [...social, ...youtube]) if (!byUrl.has(item.url)) byUrl.set(item.url, item);
+  return [...byUrl.values()].slice(0, 30);
+}
+
 async function classifyEvidence(
   teacherName: string,
   subjectName: string,
@@ -315,7 +378,7 @@ async function refreshTeacherCourseFacts(scope: ResearchScope) {
     let evidence: TeacherCourseFactsInput["evidence"] = [];
     let classified: TeacherResearchClassification;
     try {
-      evidence = await collectYouTubeEvidence(teacher.nameAr, teacher.brandName, subject.nameAr);
+      evidence = await collectPublicTeacherEvidence(teacher.nameAr, teacher.brandName, subject.nameAr);
       classified = await classifyEvidence(teacher.nameAr, subject.nameAr, scope, evidence);
     } catch (error) {
       console.warn("[Teacher directory] Research pipeline failed:", error instanceof Error ? error.message.slice(0, 250) : "unknown error");
@@ -445,11 +508,11 @@ export async function discoverTeacherForSubject(input: {
     notes: "لم نعثر على قناة أو مصدر عام يطابق اسم المدرس بدرجة كافية.",
   };
   if (teacherName.length < 2) return empty;
-  const sources = await collectYouTubeEvidence(teacherName, teacherName, subject.nameAr);
+  const sources = await collectPublicTeacherEvidence(teacherName, teacherName, subject.nameAr);
   if (!sources.length) return empty;
   const channelCounts = new Map<string, number>();
   for (const source of sources) {
-    const channel = source.source.replace(/^YouTube\s*·\s*/i, "").trim();
+    const channel = source.source.replace(/^(?:YouTube|Facebook|Instagram|TikTok)\s*·\s*/i, "").trim();
     if (channel) channelCounts.set(channel, (channelCounts.get(channel) ?? 0) + 1);
   }
   const brandName = [...channelCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? teacherName;
