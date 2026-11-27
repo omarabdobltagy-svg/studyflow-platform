@@ -1351,7 +1351,7 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
                       <div key={session.key} className="sf-sp-teacher-session-slot" data-testid={"planner-teacher-slot-" + group.subjectId + "-" + session.dayOfWeek}>
                         <span>{new Intl.DateTimeFormat("ar-EG", { timeZone: "Africa/Cairo", weekday: "long" }).format(new Date(session.sortDate + "T12:00:00.000Z"))}</span>
                         <strong>{displayTime12Hour(session.time)}</strong>
-                        {session.endTime && <small>حتى {displayTime12Hour(session.endTime)}</small>}
+                        <small>وقت المحاضرة</small>
                       </div>
                     ))}
                   </div>
