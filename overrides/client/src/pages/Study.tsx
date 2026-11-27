@@ -833,13 +833,7 @@ export default function Study() {
                                       onClick={() => acceptAlternativeReview.mutate({
                                         subjectId,
                                         branchId: currentBranchId,
-                                        teacherId: item.teacherId,
                                         externalId: item.externalId,
-                                        title: item.title,
-                                        channelTitle: item.channelTitle,
-                                        url: item.url,
-                                        description: item.description,
-                                        publishedAt: item.publishedAt,
                                       })}>
                                       موافق على تحليل الفيديو
                                     </Button>
