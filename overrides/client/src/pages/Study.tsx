@@ -1253,8 +1253,8 @@ export default function Study() {
                           const isFrontier = choice.nodeId === lastCompletedLessonId;
                           const isAtOrBeforeFrontier = index <= studentFrontierIndex && studentFrontierIndex >= 0;
                           const reachedInLecture = isAtOrBeforeFrontier && state !== "not_watched" && state !== "not_recorded";
-                          const canToggleReachMarker = state === "watched_only" || state === "not_watched"
-                            || (state === "not_recorded" && isAtOrBeforeFrontier);
+                          const canToggleReachMarker = isAtOrBeforeFrontier
+                            && (state === "watched_only" || state === "not_watched" || state === "not_recorded");
                           const pending = updateLessonLearningState.isPending
                             && updateLessonLearningState.variables?.nodeId === choice.nodeId;
                           return (

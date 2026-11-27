@@ -176,7 +176,7 @@ function displayArabicText(value: string | null | undefined, fallback: string): 
     .replace(/\bLesson\s+(\d+)\b/gi, "الدرس $1");
 }
 
-function displayTime24Hour(value: string): string {
+function displayTime12Hour(value: string): string {
   return formatTime12Hour(value, "ar-EG", "UTC");
 }
 
@@ -1363,7 +1363,7 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
                     {group.sessions.map(session => (
                       <div key={session.key} className="sf-sp-teacher-session-slot" data-testid={"planner-teacher-slot-" + group.subjectId + "-" + session.dayOfWeek}>
                         <span>{new Intl.DateTimeFormat("ar-EG", { timeZone: "Africa/Cairo", weekday: "long" }).format(new Date(session.sortDate + "T12:00:00.000Z"))}</span>
-                        <strong>{displayTime24Hour(session.time)}</strong>
+                        <strong>{displayTime12Hour(session.time)}</strong>
                         <small>وقت المحاضرة</small>
                       </div>
                     ))}

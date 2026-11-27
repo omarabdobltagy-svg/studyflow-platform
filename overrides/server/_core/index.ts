@@ -16,6 +16,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { sdk } from "./sdk";
 import { processScheduledReminder } from "../reminders";
+import { getSecurityHeaders, isAllowedSameOrigin } from "./security";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -39,6 +40,33 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 async function startServer() {
   const app = express();
   const server = createServer(app);
+  app.disable("x-powered-by");
+  app.use((req, res, next) => {
+    const forwardedProto = req.get("x-forwarded-proto")?.split(",")[0]?.trim().toLowerCase();
+    const isSecure = req.secure || forwardedProto === "https";
+    for (const [name, value] of Object.entries(getSecurityHeaders(isSecure))) {
+      res.setHeader(name, value);
+    }
+    if (req.originalUrl.startsWith("/api/")) {
+      res.setHeader("Cache-Control", "no-store");
+      res.setHeader("Pragma", "no-cache");
+    }
+
+    const isUnsafeMethod = !["GET", "HEAD", "OPTIONS"].includes(req.method.toUpperCase());
+    const isApiRequest = req.originalUrl.startsWith("/api/");
+    const isScheduledReminder = req.path === "/api/scheduled/daily-reminder";
+    if (isUnsafeMethod && isApiRequest && !isScheduledReminder) {
+      const fetchSite = req.get("sec-fetch-site")?.toLowerCase();
+      const requestHost = (req.get("x-forwarded-host") ?? req.get("host") ?? "")
+        .split(",")[0].trim();
+      const requestProto = forwardedProto || (req.secure ? "https" : "http");
+      if (fetchSite === "cross-site"
+        || !isAllowedSameOrigin(req.get("origin"), requestHost, requestProto)) {
+        return res.status(403).json({ error: "cross-origin request rejected" });
+      }
+    }
+    return next();
+  });
   // Attachment payloads are capped at 8 MiB; base64 adds roughly 33% overhead.
   // Keep the parser limit bounded to avoid large request bodies exhausting memory.
   app.use(express.json({ limit: "12mb" }));
