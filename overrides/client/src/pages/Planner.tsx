@@ -4,6 +4,7 @@ import QueryErrorNotice from "@/components/QueryErrorNotice";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { getNextOpenPlanStep } from "@/lib/plan-actions";
+import { buildPlannerCurriculumLanes, getPlannerStepCurriculum as getPlanStepCurriculum } from "@/lib/planner-curriculum";
 import { ENGLISH_CURRICULUM_LABELS, displayBranchTitle, displayCurriculumTitle } from "@/lib/curriculum-display";
 import {
   getSIECheckpointProgressBranches,
@@ -232,80 +233,24 @@ function displayArabicText(value: string | null | undefined, fallback: string): 
     .replace(/\bLesson\s+(\d+)\b/gi, "الدرس $1");
 }
 
-function getPlanStepCurriculum(step: PlanStep, subjectIds: string[]) {
-  const nodeIds = new Set(step.curriculumNodeIds ?? []);
-  for (const subjectId of subjectIds) {
-    const branch = getSIECheckpointProgressBranches(subjectId).find(item =>
-      item.choices.some(choice => nodeIds.has(choice.nodeId))
-    );
-    if (!branch) continue;
-    const choice = branch.choices.find(item => nodeIds.has(item.nodeId));
-    if (!choice) continue;
-    return {
-      subjectId,
-      subject: getSIESubject(subjectId)?.nameAr ?? "مادة دراسية",
-      branch: displayBranchTitle(branch.branchTitle),
-      lesson: displayCurriculumTitle(choice.title),
-      unitNumber: choice.unitNumber,
-      unitTitle: choice.unitTitle,
-      lessonNumber: choice.lessonNumber,
-      lessonType: choice.lessonType,
-    };
-  }
-  const match = matchSIECheckpointTask(subjectIds, [step.title, step.detail, step.category].join(" "));
-  if (match) {
-    const choice = getSIECheckpointProgressBranches(match.subjectId)
-      .flatMap(branch => branch.choices)
-      .find(item => item.nodeId === match.nodeId);
-    return {
-      subjectId: match.subjectId,
-      subject: getSIESubject(match.subjectId)?.nameAr ?? "مادة دراسية",
-      branch: displayBranchTitle(match.branchTitle),
-      lesson: displayCurriculumTitle(match.title),
-      unitNumber: choice?.unitNumber,
-      unitTitle: choice?.unitTitle,
-      lessonNumber: choice?.lessonNumber,
-      lessonType: choice?.lessonType,
-    };
-  }
-  return null;
-}
-
 function displayPlanStepTitle(step: PlanStep, subjectIds: string[]): string {
   const curriculum = getPlanStepCurriculum(step, subjectIds);
-  if (curriculum?.subjectId === "ENG1_G2_BAC" && curriculum.lessonNumber) {
+  if (curriculum) {
     const unitLabel = curriculum.unitNumber
-      ? "الوحدة " + curriculum.unitNumber.toLocaleString("ar-EG")
-        + (curriculum.unitTitle ? " — " + curriculum.unitTitle : "")
-      : curriculum.unitTitle || "القصة المقررة";
-    const lessonKind = curriculum.lessonType === "story" ? "Chapter" : "Lesson";
-    const officialSequence = String(curriculum.lessonNumber);
-    const unitSequenceMatch = officialSequence.match(/^\\d+\\.(\\d+)$/);
-    const lessonLabel = unitSequenceMatch && curriculum.unitNumber
-      ? lessonKind + " " + unitSequenceMatch[1] + " (" + officialSequence + ")"
-      : lessonKind + " " + officialSequence;
+      ? "الوحدة " + curriculum.unitNumber.toLocaleString("ar-EG") + (curriculum.unitTitle ? " — " + curriculum.unitTitle : "")
+      : curriculum.unitTitle || curriculum.branch;
+    const lessonSequence = curriculum.lessonNumber
+      ? (curriculum.lessonType === "story" ? "الفصل " : "الدرس ") + curriculum.lessonNumber
+      : curriculum.courseSequenceNumber
+        ? "الدرس " + curriculum.courseSequenceNumber.toLocaleString("ar-EG") + " من تسلسل الكورس"
+        : "";
     const segment = step.segmentIndex && step.segmentCount && step.segmentCount > 1
       ? " — الجزء " + step.segmentIndex.toLocaleString("ar-EG") + " من " + step.segmentCount.toLocaleString("ar-EG")
       : "";
-    return [unitLabel, lessonLabel, curriculum.lesson]
-      .filter(Boolean).join(" · ") + segment;
+    return [unitLabel, lessonSequence, curriculum.lesson].filter(Boolean).join(" · ") + segment;
   }
-
-  const hasLatinText = /[A-Za-z]{3,}/.test(String(step.title ?? ""));
-  if (curriculum && hasLatinText) {
-    const segment = step.segmentIndex && step.segmentCount && step.segmentCount > 1
-      ? " — الجزء " + step.segmentIndex.toLocaleString("ar-EG") + " من " + step.segmentCount.toLocaleString("ar-EG")
-      : "";
-    return [curriculum.subject, curriculum.branch === "الدروس" ? "" : curriculum.branch, curriculum.lesson]
-      .filter(Boolean).join(" · ") + segment;
-  }
-  const fallback = curriculum
-    ? [curriculum.subject, curriculum.branch === "الدروس" ? "" : curriculum.branch, curriculum.lesson]
-        .filter(Boolean).join(" · ")
-    : "مهمة دراسية";
-  return displayArabicText(displayCurriculumTitle(step.title), fallback);
+  return displayArabicText(displayCurriculumTitle(step.title), "مهمة دراسية");
 }
-
 function displayPlanStepCategory(step: PlanStep, subjectIds: string[]): string {
   const curriculum = getPlanStepCurriculum(step, subjectIds);
   if (curriculum) return [curriculum.subject, curriculum.branch === "الدروس" ? "" : curriculum.branch].filter(Boolean).join(" · ");
@@ -1272,38 +1217,17 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
       : step.plannerTaskStatus !== "done" && step.existingTask?.status !== "done")),
   })).filter(group => group.items.length > 0);
 
-  const mapLaneMap = new Map<string, {
-    key: string;
-    title: string;
-    subjectId?: string;
-    branch?: string;
-    items: Array<{ step: PlanStep; index: number; curriculum: ReturnType<typeof getPlanStepCurriculum> }>;
-  }>();
-  plan.steps.forEach((step, index) => {
-    const isDone = step.plannerTaskStatus === "done" || step.existingTask?.status === "done";
-    if (filter === "done" && !isDone) return;
-    if (filter === "open" && isDone) return;
-    const curriculum = getPlanStepCurriculum(step, subjectIds);
-    const laneKey = curriculum
-      ? curriculum.subjectId + "::" + (curriculum.branch || "الدروس")
-      : "__GENERAL_TASKS__";
-    const title = curriculum
-      ? curriculum.subject + (curriculum.branch ? " · " + curriculum.branch : "")
-      : "التزامات ومهام أخرى";
-    if (!mapLaneMap.has(laneKey)) {
-      mapLaneMap.set(laneKey, {
-        key: laneKey,
-        title,
-        subjectId: curriculum?.subjectId,
-        branch: curriculum?.branch,
-        items: [],
-      });
-    }
-    mapLaneMap.get(laneKey)!.items.push({ step, index, curriculum });
-  });
-  // Preserve the exact execution order from the planner. Sorting branches by
-  // their display names would make the visual route contradict the plan sequence.
-  const mapLanes = [...mapLaneMap.values()];
+  const mapEntries = plan.steps
+    .map((step, index) => ({ step, index }))
+    .filter(({ step }) => {
+      const isDone = step.plannerTaskStatus === "done" || step.existingTask?.status === "done";
+      if (filter === "done") return isDone;
+      if (filter === "open") return !isDone;
+      return true;
+    });
+  // Group by actual syllabus unit first. Branch badges remain visible within a
+  // unit so Arabic multi-branch units and English Vocabulary/Grammar stay linked.
+  const mapLanes = buildPlannerCurriculumLanes(mapEntries, subjectIds);
   const selectedMapStep = selectedMapStepIndex === null
     ? null
     : plan.steps[selectedMapStepIndex] ?? null;
@@ -1442,11 +1366,16 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
                 <section className="sf-sp-flow-lane" key={lane.key}>
                   <header className="sf-sp-flow-lane-header">
                     <span className="sf-sp-flow-lane-port" />
-                    <div>
-                      <small>{lane.subjectId ? "مسار مادة" : "مسار التزامات"}</small>
+                    <div className="sf-sp-flow-lane-heading">
+                      <small>{lane.subjectId ? lane.unitNumber ? "وحدة من المنهج" : "مسار مهاري / كورس" : "التزامات ومهام"}</small>
                       <h4>{lane.title}</h4>
+                      {lane.branchLabels.length > 0 && (
+                        <div className="sf-sp-flow-lane-branches" aria-label="فروع الوحدة">
+                          {lane.branchLabels.map(label => <span key={label}>{label}</span>)}
+                        </div>
+                      )}
                     </div>
-                    <strong>{lane.items.length.toLocaleString("ar-EG")} عقدة</strong>
+                    <strong>{lane.items.length.toLocaleString("ar-EG")} خطوة</strong>
                   </header>
                   <div className="sf-sp-flow-track">
                     {lane.items.map(({step,index,curriculum}, laneIndex) => {
@@ -1464,8 +1393,15 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
                           <span className="sf-sp-flow-node-index">{isDone ? <CheckCircle2 className="size-4" /> : (laneIndex + 1).toLocaleString("ar-EG")}</span>
                           <div className="sf-sp-flow-node-card">
                             <div className="sf-sp-flow-node-topline">
-                              <span>{step.day || "اليوم غير محدد"}</span>
-                              <span>{isCurrentStep ? "الخطوة التالية" : isDone ? "المهمة منتهية" : isReview || isDeferred ? "مراجعة" : step.existingTask ? "التزام" : "مذاكرة"}</span>
+                              {step.day && <span>{step.day}</span>}
+                              {curriculum?.unitNumber && <span>الوحدة {curriculum.unitNumber.toLocaleString("ar-EG")}</span>}
+                              {curriculum?.lessonNumber && <span>{curriculum.lessonType === "story" ? "الفصل" : "الدرس"} {curriculum.lessonNumber}</span>}
+                              {!curriculum?.lessonNumber && curriculum?.courseSequenceNumber && <span>الدرس {curriculum.courseSequenceNumber.toLocaleString("ar-EG")}</span>}
+                              {isCurrentStep && <span className="is-current-step">الخطوة التالية</span>}
+                              {isDone && <span>مكتملة</span>}
+                              {!isDone && (isReview || isDeferred) && <span>مراجعة</span>}
+                              {!isDone && !isReview && !isDeferred && step.existingTask && <span>التزام</span>}
+                              {!isDone && !isReview && !isDeferred && !step.existingTask && <span>مذاكرة</span>}
                               {step.minutes > 0 && <span>{step.minutes.toLocaleString("ar-EG")} دقيقة</span>}
                             </div>
                             <button
