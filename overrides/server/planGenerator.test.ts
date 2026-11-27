@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyCurriculumPrioritySignals,
+  getStudentPlanningFocusWeight,
   applyDailyPlanDepth,
   applyPlannerCurriculumCoverageGuard,
   applyPlannerProgressGuard,
@@ -15,6 +16,22 @@ import {
   mergeLegacyLinearBranchProgress,
   selectLegacyLinearFrontier,
 } from "@shared/sie-learning-progress";
+
+describe("student-aware near-term curriculum focus", () => {
+  it("reduces story and GRE practice weight without lowering core grammar, vocabulary, or Arabic texts", () => {
+    expect(getStudentPlanningFocusWeight("ARB_G2_BAC", "ARB_LITERATURE", "القصة")).toBe(0.42);
+    expect(getStudentPlanningFocusWeight("ENG1_G2_BAC", "ENG_STORY", "Story")).toBe(0.42);
+    expect(getStudentPlanningFocusWeight("ARB_G2_BAC", "ARB_TEXTS", "النصوص")).toBe(1);
+    expect(getStudentPlanningFocusWeight("ENG1_G2_BAC", "ENG_GRAMMAR", "Grammar")).toBe(1);
+    expect(getStudentPlanningFocusWeight("ENG1_G2_BAC", "ENG_VOCABULARY", "Vocabulary")).toBe(1);
+    expect(getStudentPlanningFocusWeight(null, null, "GRE Exercises")).toBe(0.42);
+  });
+
+  it("does not downgrade a confirmed teacher obligation just because it mentions a story or GRE", () => {
+    expect(getStudentPlanningFocusWeight("ENG1_G2_BAC", "ENG_STORY", "Story homework")).toBe(1);
+    expect(getStudentPlanningFocusWeight(null, null, "GRE assignment due tomorrow")).toBe(1);
+  });
+});
 
 describe("complete daily plan coverage", () => {
   it("keeps more than eighteen candidate tasks instead of silently truncating the plan", () => {
