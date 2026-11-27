@@ -1011,7 +1011,7 @@ export default function Study() {
                         </div>
                         {courseMode === "center" ? (
                           <div className="min-w-0 rounded-xl border border-border/70 bg-background/70 p-3 md:col-span-2">
-                            <SearchableFrontierPicker label="موضع السنتر / المجموعة (اختياري)" hint="يمكنك تسجيل موضع المجموعة عند الحاجة."
+                            <SearchableFrontierPicker testId="school-frontier" label="موضع السنتر / المجموعة (اختياري)" hint="يمكنك تسجيل موضع المجموعة عند الحاجة."
                               value={schoolClassFrontierId} onChange={setSchoolFrontier} disabled={saveBranchFrontier.isPending}
                               onPrevious={() => setSchoolFrontier(stepFrontier(schoolClassFrontierId, "previous"))}
                               onNext={() => setSchoolFrontier(stepFrontier(schoolClassFrontierId, "next"))}
@@ -1236,8 +1236,8 @@ function SearchableFrontierPicker({
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div><p className="text-sm font-bold">{label}</p>{hint && <p className="mt-1 text-xs leading-5 text-muted-foreground">{hint}</p>}</div>
         {(onPrevious || onNext) && <div className="flex shrink-0 gap-1">
-          {onPrevious && <Button type="button" size="sm" variant="outline" disabled={disabled || previousDisabled} onClick={onPrevious} className="h-8 rounded-lg px-2 text-[11px]"><ChevronRight className="ml-1 size-3.5" />السابق</Button>}
-          {onNext && <Button type="button" size="sm" variant="outline" disabled={disabled || nextDisabled} onClick={onNext} className="h-8 rounded-lg px-2 text-[11px]">التالي<ChevronLeft className="mr-1 size-3.5" /></Button>}
+          {onPrevious && <Button type="button" data-testid={testId ? testId + "-previous" : undefined} size="sm" variant="outline" disabled={disabled || previousDisabled} onClick={onPrevious} className="h-8 rounded-lg px-2 text-[11px]"><ChevronRight className="ml-1 size-3.5" />السابق</Button>}
+          {onNext && <Button type="button" data-testid={testId ? testId + "-next" : undefined} size="sm" variant="outline" disabled={disabled || nextDisabled} onClick={onNext} className="h-8 rounded-lg px-2 text-[11px]">التالي<ChevronLeft className="mr-1 size-3.5" /></Button>}
         </div>}
       </div>
       <div className="relative">
@@ -1259,10 +1259,10 @@ function SearchableFrontierPicker({
           </button>;
         })}
       </div>
-      {!normalizedQuery && hiddenOptionCount > 0 && !showAllOptions && <Button type="button" variant="outline" size="sm" className="w-full rounded-xl text-xs" onClick={() => setShowAllOptions(true)}>إظهار باقي الدروس ({hiddenOptionCount})</Button>}
-      {!normalizedQuery && showAllOptions && hiddenOptionCount > 0 && <Button type="button" variant="ghost" size="sm" className="w-full rounded-xl text-xs" onClick={() => setShowAllOptions(false)}>عرض خيارات أقل</Button>}
+      {!normalizedQuery && hiddenOptionCount > 0 && !showAllOptions && <Button type="button" data-testid={testId ? testId + "-show-all" : undefined} variant="outline" size="sm" className="w-full rounded-xl text-xs" onClick={() => setShowAllOptions(true)}>إظهار باقي الدروس ({hiddenOptionCount})</Button>}
+      {!normalizedQuery && showAllOptions && hiddenOptionCount > 0 && <Button type="button" data-testid={testId ? testId + "-show-less" : undefined} variant="ghost" size="sm" className="w-full rounded-xl text-xs" onClick={() => setShowAllOptions(false)}>عرض خيارات أقل</Button>}
       {!visibleOptions.length && <p className="rounded-xl bg-muted/30 p-3 text-center text-xs text-muted-foreground">لا توجد نتيجة مطابقة في فهرس هذا الفرع.</p>}
-      {value && <button type="button" disabled={disabled} onClick={() => onChange(options.some(option => option.value === "__UNKNOWN__") ? "__UNKNOWN__" : "")}
+      {value && <button type="button" data-testid={testId ? testId + "-clear" : undefined} disabled={disabled} onClick={() => onChange(options.some(option => option.value === "__UNKNOWN__") ? "__UNKNOWN__" : "")}
         className="text-xs font-semibold text-muted-foreground underline underline-offset-4 disabled:opacity-50">إلغاء الاختيار</button>}
     </div>
   );
