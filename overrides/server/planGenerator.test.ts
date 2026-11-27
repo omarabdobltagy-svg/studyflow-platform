@@ -15,6 +15,21 @@ import {
   selectLegacyLinearFrontier,
 } from "@shared/sie-learning-progress";
 
+describe("official English curriculum sequence", () => {
+  it("labels the Unit 1 Conditional Structures checkpoint as Lesson 4 & 5", () => {
+    const branches = getSIECheckpointBranches("ENG1_G2_BAC");
+    const grammar = branches.find(branch => branch.branchId === "ENG_GRAMMAR");
+    const conditional = grammar?.choices.find(choice => choice.nodeId === "ENG_GRAMMAR_U1_2");
+
+    expect(conditional?.lessonNumber).toBe("4 & 5");
+  });
+
+  it("does not expose GRE as an English curriculum branch", () => {
+    const branches = getSIECheckpointBranches("ENG1_G2_BAC");
+    expect(branches.some(branch => branch.branchId === "ENG_GRE")).toBe(false);
+  });
+});
+
 describe("unknown curriculum position safety", () => {
   it("does not classify an entire legacy linear subject as accumulated when the student position is unknown", () => {
     const branch = getSIECheckpointProgressBranches("HIS_G2_BAC")[0];
