@@ -51,6 +51,9 @@ export default function Study() {
       const analysisStillRunning = updates.some((update: any) => {
         const videoId = typeof update.externalId === "string" ? update.externalId : "";
         const status = String(update.contentAnalysis?.status ?? "processing");
+        const descriptionAlreadyVerified = Array.isArray(update.descriptionMatch?.topics)
+          && update.descriptionMatch.topics.length > 0;
+        if (descriptionAlreadyVerified) return false;
         const selectedTeacherVideo = typeof update.teacherId === "string" && selectedTeacherIds.has(update.teacherId);
         return (acceptedIds.has(videoId) || selectedTeacherVideo) && status !== "complete" && status !== "failed";
       });
@@ -997,8 +1000,9 @@ export default function Study() {
                                 <span className="rounded-md bg-primary/10 px-2 py-1 text-[10px] font-bold text-primary">{item.isSelectedTeacher ? "مدرسك المختار" : "مدرس بديل"}</span>
                                 <span className="text-[10px] text-muted-foreground">{item.teacherName} · {item.teacherBrand}</span>
                                 {item.accepted && !item.isSelectedTeacher && <span className="rounded-md bg-emerald-500/10 px-2 py-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">تمت الموافقة على التحليل</span>}
-                                {item.verificationState === "content_verified" && <span className="rounded-md bg-emerald-500/10 px-2 py-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">مطابقة مؤكدة لدروس متراكمة</span>}
-                                {item.analysisStatus === "processing" && <span className="rounded-md bg-amber-500/10 px-2 py-1 text-[10px] font-bold text-amber-700 dark:text-amber-300">الذكاء الاصطناعي يحلل المحتوى</span>}
+                                {item.verificationState === "content_verified" && <span className="rounded-md bg-emerald-500/10 px-2 py-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">مطابقة من تحليل الفيديو</span>}
+                                {item.verificationState === "description_verified" && <span className="rounded-md bg-emerald-500/10 px-2 py-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">الوصف يحدد درسًا من هذا الفرع</span>}
+                                {item.analysisStatus === "processing" && <span className="rounded-md bg-amber-500/10 px-2 py-1 text-[10px] font-bold text-amber-700 dark:text-amber-300">الوصف غير كافٍ · جارٍ تحليل الفيديو</span>}
                               {item.analysisStatus === "analysis_unavailable" && <span className="rounded-md bg-muted px-2 py-1 text-[10px] font-bold text-muted-foreground">تحليل Gemini غير متاح حاليًا</span>}
                                 {item.analysisStatus === "awaiting_consent" && <span className="rounded-md bg-muted px-2 py-1 text-[10px] font-bold text-muted-foreground">مرشح أولي · ينتظر موافقتك على التحليل</span>}
                                 {item.analysisStatus === "failed" && <span className="rounded-md bg-destructive/10 px-2 py-1 text-[10px] font-bold text-destructive">تعذر تحليل الفيديو</span>}
