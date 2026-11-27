@@ -7,7 +7,7 @@ import { updateAIActivity } from "./aiActivity";
 import { getStudentProfile, listTasks, saveAiPlan } from "./db";
 import { formatTextbookEvidence, getCurriculumBranchPriorityGuidance, orderPlanStepsByCurriculumDependencies, retrieveTextbookEvidence } from "./textbook-retrieval";
 import { buildExamBlueprintContext, SECOND_YEAR_BAC_EXAM_WINDOW_2026_2027 } from "./exam-blueprints";
-import { isHighConfidenceScheduleAnnouncement, isSecondYearBaccalaureateProfile, isSecondYearBaccalaureateUpdate, selectedTeacherIds } from "./teacher-content-monitor";
+import { acceptedAlternativeReviewVideoIds, isHighConfidenceScheduleAnnouncement, isSecondYearBaccalaureateProfile, isSecondYearBaccalaureateUpdate, selectedTeacherIds } from "./teacher-content-monitor";
 import { buildLessonStudyMethod, isFirstLearningTask, type TeacherRequirementState } from "./study-method";
 import { getTeacherCourseFactsWithRefresh } from "./teacher-course-research";
 import { getEffectiveStudentLessonState, isStudentLessonStudyComplete, type StudentLessonState } from "@shared/sie-lesson-state";
@@ -847,11 +847,15 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
   const courseProgress = (selection.learningCourseProgress || {}) as Record<string, any>;
   const progressSnapshot = buildPlannerProgressSnapshot(profile);
   const allowedTeacherIds = new Set(selectedTeacherIds(profile));
+  const acceptedAlternativeVideoIds = acceptedAlternativeReviewVideoIds(profile);
   const teacherPublicUpdates = isSecondYearBaccalaureateProfile(profile)
     ? (Array.isArray(selection.teacherPublicUpdates)
       ? (selection.teacherPublicUpdates as Array<Record<string, any>>)
-        .filter(update => typeof update.teacherId === "string" && allowedTeacherIds.has(update.teacherId))
-        .filter(update => isSecondYearBaccalaureateUpdate(update) || isHighConfidenceScheduleAnnouncement(update))
+        .filter(update => typeof update.teacherId === "string"
+          && (allowedTeacherIds.has(update.teacherId) || acceptedAlternativeVideoIds.has(String(update.externalId ?? ""))))
+        .filter(update => acceptedAlternativeVideoIds.has(String(update.externalId ?? ""))
+          || isSecondYearBaccalaureateUpdate(update)
+          || isHighConfidenceScheduleAnnouncement(update))
         .filter(update => typeof update.url === "string" && /^https:\/\//i.test(update.url))
       : [])
     : [];
@@ -1210,14 +1214,15 @@ export function applyVerifiedTeacherResourceRecommendations(
   profile: NonNullable<Awaited<ReturnType<typeof getStudentProfile>>>,
 ): GeneratedPlan {
   const allowedTeacherIds = new Set(selectedTeacherIds(profile));
+  const acceptedAlternativeVideoIds = acceptedAlternativeReviewVideoIds(profile);
   const selection = (profile.selection || {}) as Record<string, any>;
   const updates = Array.isArray(selection.teacherPublicUpdates)
     ? selection.teacherPublicUpdates as Array<Record<string, any>>
     : [];
   const allowedUpdates = updates.filter(update =>
     typeof update.teacherId === "string"
-    && allowedTeacherIds.has(update.teacherId)
-    && isSecondYearBaccalaureateUpdate(update)
+    && (allowedTeacherIds.has(update.teacherId) || acceptedAlternativeVideoIds.has(String(update.externalId ?? "")))
+    && (acceptedAlternativeVideoIds.has(String(update.externalId ?? "")) || isSecondYearBaccalaureateUpdate(update))
     && typeof update.url === "string"
     && /^https:\/\//i.test(update.url)
   );
@@ -1409,6 +1414,7 @@ function applyDailyPlanDepth(
     ? selection.teacherPublicUpdates as Array<Record<string, any>>
     : [];
   const allowedTeacherIds = new Set(selectedTeacherIds(profile));
+  const acceptedAlternativeVideoIds = acceptedAlternativeReviewVideoIds(profile);
   const formatTopicTime = (seconds: number) => {
     const value = Math.max(0, Math.floor(seconds));
     const hours = Math.floor(value / 3_600);
@@ -1420,7 +1426,7 @@ function applyDailyPlanDepth(
   };
   const analyzedVideos = rawTeacherVideos
     .filter(update => typeof update.teacherId === "string"
-      && allowedTeacherIds.has(update.teacherId)
+      && (allowedTeacherIds.has(update.teacherId) || acceptedAlternativeVideoIds.has(String(update.externalId ?? "")))
       && update.sourceType === "youtube"
       && update.contentAnalysis?.status === "complete"
       && Array.isArray(update.contentAnalysis.topics))
