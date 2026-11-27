@@ -285,8 +285,8 @@ export default function Planner() {
   const dailyMinutes = PACE_DAILY_CAPACITY[selectedPace];
   const [approved, setApproved] = useState(false);
   const [loadedSavedDraft, setLoadedSavedDraft] = useState(false);
-  const [showGenerationModal, setShowGenerationModal] = useState(false);
-  const [generationModalHiddenForRun, setGenerationModalHiddenForRun] = useState(false);
+  const [showGenerationDetails, setShowGenerationDetails] = useState(false);
+  const [generationDetailsHiddenForRun, setGenerationDetailsHiddenForRun] = useState(false);
   const historyInitialized = useRef(false);
   const initialDailyGenerationStarted = useRef(false);
   const plannerPreferencesInitialized = useRef(false);
@@ -500,30 +500,38 @@ export default function Planner() {
     onError: error => toast.error("تعذّر تحديث الخطة: " + error.message),
   });
 
-  const generationProgress = trpc.plans.generationProgress.useQuery(undefined, {
-    enabled: ensureDaily.isPending,
-    refetchInterval: ensureDaily.isPending ? 750 : false,
-    refetchOnWindowFocus: false,
-  });
-
-  useEffect(() => {
-    if (ensureDaily.isPending) {
-      if (!generationModalHiddenForRun) setShowGenerationModal(true);
-      return;
-    }
-    setShowGenerationModal(false);
-    setGenerationModalHiddenForRun(false);
-  }, [ensureDaily.isPending, generationModalHiddenForRun]);
-
   const aiActivity = trpc.ai.activity.useQuery(undefined, {
     enabled: Boolean(profile.data?.subjectIds?.length),
     refetchInterval: query => {
       const active = query.state.data?.active ?? [];
       const monitorIsRunning = active.some(item => item.kind === "daily_plan" || item.kind === "teacher_monitor");
-      return activeDailyPlan.isLoading || ensureDaily.isPending || monitorIsRunning ? 1_200 : false;
+      return activeDailyPlan.isLoading || ensureDaily.isPending || monitorIsRunning ? 1_000 : false;
     },
     refetchOnWindowFocus: false,
   });
+  const backgroundPlanRunning = (aiActivity.data?.active ?? []).some(item => item.kind === "daily_plan");
+  const generationProgress = trpc.plans.generationProgress.useQuery(undefined, {
+    enabled: ensureDaily.isPending || backgroundPlanRunning || Boolean(activeDailyPlan.data?.needsRefresh),
+    refetchInterval: query => (
+      ensureDaily.isPending
+      || backgroundPlanRunning
+      || Boolean(activeDailyPlan.data?.needsRefresh)
+      || query.state.data?.status === "running"
+    ) ? 900 : false,
+    refetchOnWindowFocus: false,
+  });
+  const isPlanGenerationRunning = ensureDaily.isPending
+    || backgroundPlanRunning
+    || generationProgress.data?.status === "running";
+
+  useEffect(() => {
+    if (!isPlanGenerationRunning) {
+      setShowGenerationDetails(false);
+      setGenerationDetailsHiddenForRun(false);
+      return;
+    }
+    if (!generationDetailsHiddenForRun) setShowGenerationDetails(true);
+  }, [isPlanGenerationRunning, generationDetailsHiddenForRun]);
   const aiCapabilities = trpc.ai.capabilities.useQuery(undefined, {
     enabled: Boolean(profile.data?.subjectIds?.length),
     staleTime: 30_000,
@@ -589,8 +597,8 @@ export default function Planner() {
   });
 
   const runGeneration = () => {
-    setGenerationModalHiddenForRun(false);
-    setShowGenerationModal(true);
+    setGenerationDetailsHiddenForRun(false);
+    setShowGenerationDetails(true);
     ensureDaily.mutate({ dailyMinutes, forceRebuild: true });
   };
 
@@ -752,26 +760,6 @@ export default function Planner() {
   return (
     <DashboardLayout title="خطة المذاكرة" description="مساحة واحدة لفهم أولوياتك، وتنظيم جلساتك، ومتابعة ما أنجزته.">
       <div className="sf-study-plan-v2">
-        {showGenerationModal && ensureDaily.isPending && (
-          <div className="sf-plan-generation-overlay" role="presentation">
-            <section className="sf-plan-generation-dialog" role="dialog" aria-modal="true" aria-labelledby="sf-generation-dialog-title">
-              <header className="sf-plan-generation-dialog-header">
-                <div>
-                  <span>إعادة بناء الخطة بالذكاء الاصطناعي</span>
-                  <h2 id="sf-generation-dialog-title">StudyFlow يعيد ترتيب خطتك</h2>
-                  <p>أنت في: <strong>{SIE_CATALOG_META.gradeYear}</strong></p>
-                </div>
-                <button type="button" className="sf-plan-generation-hide" onClick={() => {
-                  setGenerationModalHiddenForRun(true);
-                  setShowGenerationModal(false);
-                }}>
-                  إخفاء هذه المرة <X className="size-4" />
-                </button>
-              </header>
-              <PlanLoading progress={generationProgress.data ?? null} gradeLabel={SIE_CATALOG_META.gradeYear} />
-            </section>
-          </div>
-        )}
         {history.isError && <QueryErrorNotice onRetry={() => void history.refetch()} label="تعذّر تحميل خططك المحفوظة." />}
         {profile.isError && <QueryErrorNotice onRetry={() => void profile.refetch()} label="تعذّر تحميل ملفك الدراسي. أعد المحاولة قبل إنشاء الخطة." />}
 
@@ -963,24 +951,37 @@ export default function Planner() {
 
         {plannerTab === "schedule" && (
           <div className="sf-sp-panel" data-scroll-reveal>
-            {planNeedsRefresh && approved ? (
-              <section className="sf-sp-empty" role="status" aria-live="polite">
-                <h2>الخريطة السابقة لم تعد مطابقة لبياناتك</h2>
-                <p>بنحدّث ترتيب الدروس وفق موضع المدرس وحالة كل درس. لن نعرض الخريطة القديمة كأنها الأولوية الحالية.</p>
-                {ensureDaily.isPending ? (
-                  <PlanGenerationInlineStatus progress={generationProgress.data ?? null} onShow={() => {
-                    setGenerationModalHiddenForRun(false);
-                    setShowGenerationModal(true);
-                  }} />
+            {isPlanGenerationRunning ? (
+              <section className="sf-sp-generation-in-distribution" aria-label="حالة بناء خريطة المذاكرة">
+                <div className="sf-sp-generation-context">
+                  <span className="sf-plan-generation-inline-mark"><Loader2 className="size-4 animate-spin" /></span>
+                  <div><strong>نعيد ترتيب خريطة مذاكرتك الآن</strong><p>الصف: {SIE_CATALOG_META.gradeYear} · يتم تحديث التوزيع في الخلفية.</p></div>
+                </div>
+                {showGenerationDetails ? (
+                  <PlanLoading
+                    progress={generationProgress.data ?? null}
+                    gradeLabel={SIE_CATALOG_META.gradeYear}
+                    onHide={() => {
+                      setGenerationDetailsHiddenForRun(true);
+                      setShowGenerationDetails(false);
+                    }}
+                  />
                 ) : (
-                  <Button type="button" onClick={runGeneration}>إعادة بناء خريطة المذاكرة الآن</Button>
+                  <PlanGenerationInlineStatus
+                    progress={generationProgress.data ?? null}
+                    onShow={() => {
+                      setGenerationDetailsHiddenForRun(false);
+                      setShowGenerationDetails(true);
+                    }}
+                  />
                 )}
               </section>
-            ) : ensureDaily.isPending ? (
-              <PlanGenerationInlineStatus progress={generationProgress.data ?? null} onShow={() => {
-                setGenerationModalHiddenForRun(false);
-                setShowGenerationModal(true);
-              }} />
+            ) : planNeedsRefresh && approved ? (
+              <section className="sf-sp-empty" role="status" aria-live="polite">
+                <h2>الخريطة تحتاج إلى إعادة ترتيب</h2>
+                <p>وصلت بيانات جديدة عن تقدمك أو مواعيدك. ابدأ تحديث الخطة حتى يعكس التوزيع أولوياتك الحالية.</p>
+                <Button type="button" onClick={runGeneration}>إعادة ترتيب الخطة</Button>
+              </section>
             ) : activeDailyPlan.isLoading || history.isLoading ? (
               <section className="sf-sp-empty" role="status" aria-live="polite">
                 <h2>بنحمّل خريطة خطتك</h2>
@@ -1142,7 +1143,7 @@ function PlanGenerationInlineStatus({ progress, onShow }: { progress: Generation
   );
 }
 
-function PlanLoading({ progress, gradeLabel }: { progress: GenerationProgress | null; gradeLabel?: string }) {
+function PlanLoading({ progress, gradeLabel, onHide }: { progress: GenerationProgress | null; gradeLabel?: string; onHide?: () => void }) {
   const stages: Array<{ id: GenerationProgress["currentStage"]; title: string; detail: string }> = [
     { id: "profile", title: "مراجعة ملفك وتقدمك", detail: "قراءة المواد المختارة وآخر موضع مؤكد لكل فرع وما أنجزته بالفعل." },
     { id: "curriculum", title: "مطابقة خريطة المنهج", detail: "ربط المهام بالدروس والوحدات، واستبعاد الخطوات التي لم تعد مؤهلة." },
@@ -1165,7 +1166,10 @@ function PlanLoading({ progress, gradeLabel }: { progress: GenerationProgress | 
           {gradeLabel && <span className="sf-plan-loading-grade">أنت في: {gradeLabel}</span>}
           <span>{progress?.detail || "نراجع ملفك الدراسي والمهام وتقدم المنهج قبل ترتيب الأولويات."}</span>
         </div>
-        <Loader2 className="sf-plan-loading-spinner size-5" />
+        <div className="sf-plan-loading-heading-actions">
+          <Loader2 className="sf-plan-loading-spinner size-5" />
+          {onHide && <button type="button" className="sf-plan-loading-hide" onClick={onHide}>إخفاء هذه المرة <X className="size-3.5" /></button>}
+        </div>
       </header>
       <div className="sf-plan-loading-summary">
         <strong>{completedCount.toLocaleString("ar-EG")} من {stages.length.toLocaleString("ar-EG")} مراحل مكتملة</strong>
