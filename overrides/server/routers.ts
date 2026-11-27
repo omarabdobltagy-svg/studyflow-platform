@@ -2370,6 +2370,7 @@ export const appRouter = router({
         studentName: z.string().trim().min(2).max(120),
         phone: z.string().trim().regex(/^\+[1-9]\d{7,14}$/, "رقم الهاتف يجب أن يكون بالصيغة الدولية."),
         systemId: z.enum(["EG_BACCALAUREATE", "EG_GENERAL_SECONDARY"]),
+        gradeYear: z.string().trim().min(2).max(60).default(SIE_CATALOG_META.gradeYear),
         trackId: z.string().trim().min(1).max(80),
         subjectIds: z.array(z.string().trim().min(1).max(80)).min(1).max(12),
         teacherSelections: z.record(z.string(), z.string().trim().min(1).max(80)).default({}),
@@ -2406,6 +2407,9 @@ export const appRouter = router({
         const system = SIE_SYSTEMS.find(item => item.systemId === input.systemId);
         if (!system || !track || track.systemId !== input.systemId) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "اختيار النظام أو المسار غير صحيح." });
+        }
+        if (track.gradeYear !== input.gradeYear) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "السنة الدراسية لا تتوافق مع فهرس المسار المختار." });
         }
         if (!validateSIESubjectSelection(input.systemId, input.trackId, input.subjectIds)) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "اختيارات المواد لا تطابق المسار المحدد." });
@@ -2538,7 +2542,7 @@ export const appRouter = router({
           studentName: input.studentName,
           phone: input.phone,
           educationSystem: getSIEEducationSystem(input.systemId),
-          gradeYear: SIE_CATALOG_META.gradeYear,
+          gradeYear: input.gradeYear,
           track: track.nameAr,
           subjects: subjectNames,
           teacherSelections: input.teacherSelections,
@@ -2546,6 +2550,7 @@ export const appRouter = router({
             packageVersion: SIE_CATALOG_META.packageVersion,
             systemId: input.systemId,
             academicYear: SIE_CATALOG_META.academicYear,
+            gradeYear: input.gradeYear,
             gradeId: SIE_CATALOG_META.gradeId,
             trackId: track.trackId,
             electiveSubjectId: track.electiveOptions.length ? (input.subjectIds.find(id => !track.requiredSubjectIds.includes(id)) ?? null) : null,
