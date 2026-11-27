@@ -355,7 +355,7 @@ export default function Planner() {
             ].includes(choice.nodeId))
           ) ?? {};
         }
-        const savedLessonStates = (savedBranch.lessonStates ?? {}) as Record<string, { state?: unknown }>;
+        const savedLessonStates = (savedBranch.lessonStates ?? {}) as Record<string, { state?: StudentLessonState }>;
         const modelVersion = Number(savedBranch.lessonStateModelVersion ?? 0);
         const gap = gaps[subjectId]?.[branch.branchId];
         const studentPosition = typeof gap?.studentPosition === "number" ? gap.studentPosition : null;
