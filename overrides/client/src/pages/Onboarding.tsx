@@ -38,8 +38,21 @@ import { useLocation, type RouteComponentProps } from "wouter";
 import { toast } from "sonner";
 
 type TeacherChoiceMap = Record<string, string>;
-type TeacherScheduleSlot = { dayOfWeek: number; startTime: string };
+type TeacherScheduleSlot = { dayOfWeek: number; startTime: string; endTime?: string };
 type TeacherScheduleMap = Record<string, TeacherScheduleSlot[]>;
+
+function getTeacherLectureDuration(startTime: string, endTime?: string): string | null {
+  if (!endTime || !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(startTime) || !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(endTime)) return null;
+  const toMinutes = (value: string) => Number(value.slice(0, 2)) * 60 + Number(value.slice(3, 5));
+  const start = toMinutes(startTime);
+  const end = toMinutes(endTime);
+  const total = (end - start + 1440) % 1440;
+  if (!total) return "وقت النهاية لازم يختلف عن البداية";
+  const hours = Math.floor(total / 60);
+  const minutes = total % 60;
+  const parts = [hours ? hours.toLocaleString("ar-EG") + " ساعة" : "", minutes ? minutes.toLocaleString("ar-EG") + " دقيقة" : ""].filter(Boolean);
+  return "مدة المحاضرة " + parts.join(" و ") + (end <= start ? " · تمتد لليوم التالي" : "");
+}
 type CustomTeacherProfile = { nameAr: string; brandName: string; sourceUrl: string; availableModes: Array<"center" | "online">; confidence: "low" | "medium" | "high"; evidence: Array<{ title: string; url: string; source: string }>; notes?: string };
 type TeacherRequirementState = "yes" | "no" | "varies" | "unknown";
 const WEEK_DAYS = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
@@ -808,7 +821,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                       <div>
                         <p className="eyebrow">موعد الحصص الأسبوعي</p>
                         <h4 id="sf-schedule-heading">مواعيد محاضرات {currentSetupSubject.nameAr}</h4>
-                        <p>أضف اليوم ووقت بداية كل محاضرة متكررة. تقدر تضيف أكتر من موعد.</p>
+                        <p>حدد يوم المحاضرة ووقت بدايتها ونهايتها. تقدر تضيف أكثر من موعد في الأسبوع.</p>
                       </div>
                       <span className="sf-schedule-count">{(form.teacherSchedules[currentSetupSubjectId] ?? []).length} مواعيد</span>
                     </div>
@@ -856,17 +869,36 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                                 </button>
                               ))}
                             </div>
-                            <label className="sf-schedule-time">
-                              <span>وقت بداية المحاضرة</span>
-                              <input type="time" inputMode="numeric" dir="ltr" step={900} value={slot.startTime}
-                                onChange={event => setForm(current => ({
-                                  ...current,
-                                  teacherSchedules: {
-                                    ...current.teacherSchedules,
-                                    [currentSetupSubjectId]: (current.teacherSchedules[currentSetupSubjectId] ?? []).map((item, index) => index === slotIndex ? { ...item, startTime: event.target.value } : item),
-                                  },
-                                }))} />
-                            </label>
+                            <div className="sf-schedule-time-range" aria-label={"وقت المحاضرة " + (slotIndex + 1)}>
+                              <label className="sf-schedule-time-field">
+                                <span><b>تبدأ</b><small>وقت البداية</small></span>
+                                <input type="time" inputMode="numeric" dir="ltr" step={900} value={slot.startTime}
+                                  onChange={event => setForm(current => ({
+                                    ...current,
+                                    teacherSchedules: {
+                                      ...current.teacherSchedules,
+                                      [currentSetupSubjectId]: (current.teacherSchedules[currentSetupSubjectId] ?? []).map((item, index) => index === slotIndex ? { ...item, startTime: event.target.value } : item),
+                                    },
+                                  }))} />
+                              </label>
+                              <span className="sf-schedule-time-range-arrow" aria-hidden="true">←</span>
+                              <label className="sf-schedule-time-field">
+                                <span><b>تنتهي</b><small>وقت النهاية</small></span>
+                                <input type="time" inputMode="numeric" dir="ltr" step={900} value={slot.endTime ?? ""}
+                                  aria-label={"وقت انتهاء المحاضرة " + (slotIndex + 1)}
+                                  onChange={event => setForm(current => ({
+                                    ...current,
+                                    teacherSchedules: {
+                                      ...current.teacherSchedules,
+                                      [currentSetupSubjectId]: (current.teacherSchedules[currentSetupSubjectId] ?? []).map((item, index) => index === slotIndex ? { ...item, endTime: event.target.value || undefined } : item),
+                                    },
+                                  }))} />
+                              </label>
+                            </div>
+                            <div className={"sf-schedule-duration " + (slot.endTime ? "is-set" : "")}>
+                              <span className="sf-schedule-duration-mark" aria-hidden="true">◷</span>
+                              <span>{getTeacherLectureDuration(slot.startTime, slot.endTime) ?? "حدد وقت النهاية لمعرفة مدة المحاضرة"}</span>
+                            </div>
                           </div>
                         ))}
                         {!form.teacherSchedules[currentSetupSubjectId]?.length && (
@@ -877,7 +909,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                             ...current,
                             teacherSchedules: {
                               ...current.teacherSchedules,
-                              [currentSetupSubjectId]: [...(current.teacherSchedules[currentSetupSubjectId] ?? []), { dayOfWeek: 0, startTime: "18:00" }],
+                              [currentSetupSubjectId]: [...(current.teacherSchedules[currentSetupSubjectId] ?? []), { dayOfWeek: 0, startTime: "18:00", endTime: "" }],
                             },
                           }))}>
                           <span className="text-lg leading-none">+</span> إضافة موعد محاضرة

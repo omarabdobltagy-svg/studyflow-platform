@@ -1342,7 +1342,11 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
               return (
                 <article key={session.key} className="sf-sp-teacher-session-card">
                   <div className="sf-sp-teacher-session-main">
-                    <div className="sf-sp-teacher-session-time"><strong>{displayTime12Hour(session.time)}</strong><span>{session.dateLabel}</span></div>
+                    <div className="sf-sp-teacher-session-time">
+                      <strong>{displayTime12Hour(session.time)}</strong>
+                      {session.endTime && <small className="sf-sp-teacher-session-end">حتى {displayTime12Hour(session.endTime)}</small>}
+                      <span>{session.dateLabel}</span>
+                    </div>
                     <div className="sf-sp-teacher-session-copy"><strong>{session.teacherName}</strong><span>{session.subjectName}</span></div>
                   </div>
                   <div className="sf-sp-session-preparation">

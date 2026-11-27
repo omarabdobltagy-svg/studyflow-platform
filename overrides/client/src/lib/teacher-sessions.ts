@@ -1,10 +1,11 @@
 import { getSIESubject, getSIETeacher } from "@shared/sie-catalog";
 
-export type TeacherScheduleSlot = { dayOfWeek: number; startTime: string };
+export type TeacherScheduleSlot = { dayOfWeek: number; startTime: string; endTime?: string };
 
 const isValidTeacherScheduleSlot = (slot: Partial<TeacherScheduleSlot>): slot is TeacherScheduleSlot =>
   Number.isInteger(slot.dayOfWeek) && Number(slot.dayOfWeek) >= 0 && Number(slot.dayOfWeek) <= 6
-  && typeof slot.startTime === "string" && /^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(slot.startTime);
+  && typeof slot.startTime === "string" && /^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(slot.startTime)
+  && (slot.endTime === undefined || slot.endTime === "" || (typeof slot.endTime === "string" && /^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(slot.endTime)));
 
 /** Fill missing default weekdays without overriding a time the student has changed. */
 export function mergeSuggestedTeacherScheduleSlots(
@@ -12,7 +13,11 @@ export function mergeSuggestedTeacherScheduleSlots(
   suggested: TeacherScheduleSlot[] | undefined,
 ): TeacherScheduleSlot[] {
   const merged = (Array.isArray(existing) ? existing : []).filter(isValidTeacherScheduleSlot)
-    .map(slot => ({ dayOfWeek: slot.dayOfWeek, startTime: slot.startTime }));
+    .map(slot => ({
+      dayOfWeek: slot.dayOfWeek,
+      startTime: slot.startTime,
+      ...(slot.endTime ? { endTime: slot.endTime } : {}),
+    }));
   const occupiedDays = new Set(merged.map(slot => slot.dayOfWeek));
   for (const slot of Array.isArray(suggested) ? suggested : []) {
     if (!isValidTeacherScheduleSlot(slot) || occupiedDays.has(slot.dayOfWeek)) continue;
@@ -29,6 +34,7 @@ export type PlannerTeacherSession = {
   subjectName: string;
   dateLabel: string;
   time: string;
+  endTime?: string;
   sortDate: string;
   dateOffsetDays: number;
 };
@@ -95,6 +101,7 @@ export function getPlannerTeacherSessions(profile?: {
           timeZone: "Africa/Cairo", weekday: "long", day: "numeric", month: "long",
         }).format(date),
         time: slot.startTime,
+        ...(slot.endTime ? { endTime: slot.endTime } : {}),
         sortDate,
         dateOffsetDays,
       });

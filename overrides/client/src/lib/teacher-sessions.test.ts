@@ -106,3 +106,49 @@ describe("mergeSuggestedTeacherScheduleSlots", () => {
     expect(new Set(sessions.map(item => item.sortDate)).size).toBe(2);
   });
 });
+
+
+describe("teacher lecture time ranges", () => {
+  it("preserves an optional end time when merging suggested weekdays", () => {
+    expect(mergeSuggestedTeacherScheduleSlots(
+      [{ dayOfWeek: 0, startTime: "09:00", endTime: "10:30" }],
+      [{ dayOfWeek: 0, startTime: "09:00" }, { dayOfWeek: 3, startTime: "09:00" }],
+    )).toEqual([
+      { dayOfWeek: 0, startTime: "09:00", endTime: "10:30" },
+      { dayOfWeek: 3, startTime: "09:00" },
+    ]);
+  });
+
+  it("returns the lecture end time to planner session cards", () => {
+    const profile = {
+      subjectIds: ["ENG1_G2_BAC"],
+      selection: {
+        teacherChoices: { ENG1_G2_BAC: "T_EN_MAHMOUD_RADWAN" },
+        teacherSchedules: {
+          ENG1_G2_BAC: [
+            { dayOfWeek: 0, startTime: "21:00", endTime: "22:30" },
+            { dayOfWeek: 3, startTime: "21:00" },
+          ],
+        },
+      },
+    };
+    const sessions = getPlannerTeacherSessions(profile, new Date("2026-11-27T12:00:00.000Z"));
+    expect(sessions.find(item => item.sortDate === "2026-11-29")?.endTime).toBe("22:30");
+    expect(sessions.find(item => item.sortDate === "2026-12-02")?.endTime).toBeUndefined();
+  });
+
+  it("ignores an invalid end time without dropping a valid start appointment", () => {
+    const profile = {
+      subjectIds: ["ENG1_G2_BAC"],
+      selection: {
+        teacherChoices: { ENG1_G2_BAC: "T_EN_MAHMOUD_RADWAN" },
+        teacherSchedules: {
+          ENG1_G2_BAC: [{ dayOfWeek: 0, startTime: "21:00", endTime: "29:90" }],
+        },
+      },
+    };
+    const sessions = getPlannerTeacherSessions(profile, new Date("2026-11-27T12:00:00.000Z"));
+    expect(sessions.find(item => item.sortDate === "2026-11-29")).toMatchObject({ time: "21:00" });
+    expect(sessions.find(item => item.sortDate === "2026-11-29")?.endTime).toBeUndefined();
+  });
+});

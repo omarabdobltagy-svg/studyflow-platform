@@ -3824,3 +3824,25 @@ body[data-studyflow-sections-open="true"] .sf-hub-root {
   .sf-session-finish-footer{display:grid;grid-template-columns:1fr 1.35fr}
   .sf-session-finish-options button{padding:11px;gap:9px}
 }
+
+
+/* Teacher schedule range: a readable paired start/end control instead of a single native time field. */
+.sf-schedule-time-range{display:grid;grid-template-columns:minmax(0,1fr) 22px minmax(0,1fr);align-items:end;gap:9px;margin-top:15px}
+.sf-schedule-time-field{display:grid;min-width:0;gap:8px;padding:11px;border:1px solid var(--border);border-radius:14px;background:var(--card);box-shadow:0 8px 20px -22px rgba(0,0,0,.5)}
+.sf-schedule-time-field>span{display:flex;align-items:center;justify-content:space-between;gap:5px}
+.sf-schedule-time-field b{color:var(--foreground);font-size:11px;font-weight:900}
+.sf-schedule-time-field small{color:var(--muted-foreground);font-size:9px;font-weight:650}
+.sf-schedule-time-field input{width:100%;min-width:0;height:42px;padding:0 8px;border:1px solid var(--input);border-radius:10px;color:var(--foreground);background:var(--background);font:850 14px/1 ui-monospace,monospace;color-scheme:normal}
+.sf-schedule-time-field input:focus-visible{outline:2px solid color-mix(in srgb,var(--primary) 60%,transparent);outline-offset:2px}
+.sf-schedule-time-range-arrow{display:grid;width:22px;height:35px;place-items:center;color:var(--primary);font-size:18px;font-weight:900}
+.sf-schedule-duration{display:flex;align-items:center;gap:8px;min-height:34px;margin-top:8px;padding:7px 10px;border:1px dashed var(--border);border-radius:10px;color:var(--muted-foreground);background:color-mix(in srgb,var(--muted) 15%,var(--card));font-size:10px;line-height:1.6}
+.sf-schedule-duration.is-set{border-style:solid;border-color:color-mix(in srgb,var(--primary) 25%,var(--border));color:var(--primary);background:color-mix(in srgb,var(--primary) 6%,var(--card))}
+.sf-schedule-duration-mark{font-size:16px;line-height:1}
+.sf-sp-teacher-session-end{display:block;color:var(--muted-foreground);font-size:10px;font-weight:800;font-variant-numeric:tabular-nums}
+@media(max-width:520px){
+  .sf-schedule-time-range{grid-template-columns:minmax(0,1fr) 18px minmax(0,1fr);gap:6px}
+  .sf-schedule-time-field{padding:9px 8px}
+  .sf-schedule-time-field>span{align-items:flex-start;flex-direction:column;gap:2px}
+  .sf-schedule-time-field input{height:40px;font-size:13px}
+  .sf-sp-teacher-session-end{font-size:9px}
+}
