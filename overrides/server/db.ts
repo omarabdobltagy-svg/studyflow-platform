@@ -1605,7 +1605,7 @@ function getAiPlanDatabaseErrorDetails(error: unknown) {
     code: String(pick(cause.code, cause.errno, outer.code, outer.errno, "unknown")).slice(0, 80),
     sqlState: String(pick(cause.sqlState, outer.sqlState, "unknown")).slice(0, 40),
     message: String(pick(cause.message, outer.message, error) ?? "Unknown database error")
-      .replace(/\\s+/g, " ")
+      .replace(/\s+/g, " ")
       .slice(0, 360),
   };
 }
