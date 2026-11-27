@@ -2865,7 +2865,7 @@ export const appRouter = router({
               confidence: "medium",
             };
         const nextUpdates = existingUpdate
-          ? updates
+          ? updates.map(update => update.externalId === input.externalId ? acceptedUpdate : update)
           : [acceptedUpdate, ...updates].slice(0, 60);
         const acceptedVideoIds = [...new Set([...accepted, input.externalId])].slice(-120);
         const acceptedContexts = latestSelection.acceptedAlternativeReviewContext
