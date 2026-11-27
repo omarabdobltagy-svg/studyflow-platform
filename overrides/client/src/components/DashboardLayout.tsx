@@ -29,7 +29,7 @@ function DeferredStudyOrbScene({ className }: { className: string }) {
 import { gsap } from "gsap";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
-  BarChart3, BookOpenCheck, BookOpenText, BrainCircuit, CalendarDays, CalendarRange, MessageCircle, Network, X as XIcon,
+  BarChart3, BookOpenCheck, BookOpenText, BrainCircuit, CalendarDays, CalendarRange, MessageCircle, Network, Bell, BellRing, X as XIcon,
   CheckSquare2, ChevronLeft, Goal, LayoutDashboard, LibraryBig, LogOut,
   Menu, Moon, Settings2, Sparkles, Sun,
 } from "lucide-react";
@@ -41,6 +41,8 @@ type NavigationGroup = {
   label: string;
   items: { label: string; path: string; icon: typeof LayoutDashboard }[];
 };
+
+const aiReconciliationStartedForSession = new Set<string>();
 
 const navigation: NavigationGroup[] = [
   { label: "مساحة اليوم", items: [
@@ -109,8 +111,82 @@ export default function DashboardLayout({ title, description, children, action }
     { label: "الخطة", path: "/planner", icon: CalendarRange, group: "التخطيط" },
   ];
   const studentProfile = trpc.studentProfile.get.useQuery(undefined, { enabled: Boolean(user) });
+  const aiInbox = trpc.ai.inbox.useQuery(undefined, {
+    enabled: Boolean(user),
+    refetchInterval: 15_000,
+    refetchOnWindowFocus: true,
+  });
+  const aiInboxUtils = trpc.useUtils();
+  const [aiInboxOpen, setAIInboxOpen] = useState(false);
+  const notifiedAIMessageIds = useRef(new Set<number>());
+  const reconcileCurriculumTasks = trpc.ai.reconcileCurriculumTasks.useMutation({
+    onSuccess: async result => {
+      if (result.resolvedCount || result.questionsCreated) {
+        await Promise.all([
+          aiInboxUtils.ai.inbox.invalidate(),
+          aiInboxUtils.tasks.list.invalidate(),
+          aiInboxUtils.plans.currentDaily.invalidate(),
+          aiInboxUtils.dashboard.summary.invalidate(),
+        ]);
+      }
+    },
+  });
+  const markAIMessageRead = trpc.ai.markInboxMessageRead.useMutation({
+    onSuccess: () => void aiInboxUtils.ai.inbox.invalidate(),
+  });
+  const respondToAIMessage = trpc.ai.respondToInboxMessage.useMutation({
+    onSuccess: async () => {
+      await Promise.all([
+        aiInboxUtils.ai.inbox.invalidate(),
+        aiInboxUtils.tasks.list.invalidate(),
+        aiInboxUtils.goals.list.invalidate(),
+        aiInboxUtils.plans.currentDaily.invalidate(),
+        aiInboxUtils.dashboard.summary.invalidate(),
+      ]);
+    },
+    onError: error => toast.error(error.message || "تعذّر تسجيل ردك للمساعد."),
+  });
   const { theme, toggleTheme } = useTheme();
   const reduceMotion = useReducedMotion();
+
+  useEffect(() => {
+    if (!user) return;
+    const sessionKey = String(user.id);
+    if (aiReconciliationStartedForSession.has(sessionKey)) return;
+    aiReconciliationStartedForSession.add(sessionKey);
+    reconcileCurriculumTasks.mutate(undefined, {
+      onError: error => {
+        aiReconciliationStartedForSession.delete(sessionKey);
+        console.warn("[StudyFlow AI] Startup task reconciliation could not finish:", error.message);
+      },
+    });
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("Notification" in window)
+      || Notification.permission !== "granted" || document.visibilityState === "visible") return;
+    for (const message of aiInbox.data?.items ?? []) {
+      if (message.read || notifiedAIMessageIds.current.has(message.id)) continue;
+      notifiedAIMessageIds.current.add(message.id);
+      new Notification(String(message.title || "رسالة من مساعد StudyFlow"), {
+        body: String(message.message || "لديك سؤال يحتاج إلى ردك."),
+        tag: "studyflow-ai-" + message.id,
+      });
+    }
+  }, [aiInbox.data?.items]);
+
+  const enableBrowserAINotifications = async () => {
+    if (typeof window === "undefined" || !("Notification" in window)) {
+      toast.info("المتصفح الحالي لا يدعم إشعارات النظام. ستظل الرسائل ظاهرة داخل المنصة.");
+      return;
+    }
+    const permission = await Notification.requestPermission();
+    if (permission === "granted") {
+      toast.success("تم تفعيل إشعارات المساعد على هذا المتصفح.");
+    } else {
+      toast.info("لم يتم تفعيل إشعارات النظام. يمكنك متابعة الرسائل من صندوق المساعد داخل المنصة.");
+    }
+  };
 
   useEffect(() => {
     if (isMobileNavOpen) document.body.dataset.studyflowSectionsOpen = "true";
@@ -432,6 +508,18 @@ export default function DashboardLayout({ title, description, children, action }
               <Button
                 type="button"
                 variant="outline"
+                size="icon"
+                className="sf-ai-inbox-trigger relative"
+                aria-label={"رسائل المساعد" + (aiInbox.data?.unreadCount ? "، " + aiInbox.data.unreadCount + " غير مقروءة" : "")}
+                title="رسائل المساعد"
+                onClick={() => setAIInboxOpen(true)}
+              >
+                {aiInbox.data?.unreadCount ? <BellRing className="size-4" /> : <Bell className="size-4" />}
+                {Boolean(aiInbox.data?.unreadCount) && <span className="sf-ai-inbox-count">{aiInbox.data?.unreadCount}</span>}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
                 size="sm"
                 className="sf-sections-trigger hidden md:inline-flex"
                 onClick={() => setMobileNavOpen(true)}
@@ -498,6 +586,77 @@ export default function DashboardLayout({ title, description, children, action }
           <span>الأقسام</span>
         </button>
       </nav>
+
+      <Sheet open={aiInboxOpen} onOpenChange={setAIInboxOpen}>
+        <SheetContent side="right" className="sf-ai-inbox-sheet w-full sm:max-w-[460px]">
+          <SheetHeader className="text-right">
+            <div className="sf-ai-inbox-heading">
+              <span className="sf-ai-inbox-mark"><BrainCircuit className="size-5" /></span>
+              <div>
+                <SheetTitle>رسائل مساعدك الدراسي</SheetTitle>
+                <SheetDescription>هنا هتلاقي أسئلة ومتابعات مرتبطة بتقدمك ومهامك.</SheetDescription>
+              </div>
+            </div>
+          </SheetHeader>
+          <div className="sf-ai-inbox-tools">
+            <span>{aiInbox.data?.unreadCount ? aiInbox.data.unreadCount + " رسالة تحتاج ردك" : "لا توجد رسائل جديدة"}</span>
+            <Button type="button" variant="outline" size="sm" onClick={() => void enableBrowserAINotifications()}>
+              <Bell className="size-3.5" /> تفعيل إشعارات المتصفح
+            </Button>
+          </div>
+          <div className="sf-ai-inbox-list">
+            {aiInbox.isLoading ? (
+              <div className="sf-ai-inbox-empty">بنحمّل رسائلك...</div>
+            ) : aiInbox.isError ? (
+              <div className="sf-ai-inbox-empty">
+                تعذّر تحميل الرسائل.
+                <Button type="button" variant="link" onClick={() => void aiInbox.refetch()}>إعادة المحاولة</Button>
+              </div>
+            ) : (aiInbox.data?.items.length ?? 0) === 0 ? (
+              <div className="sf-ai-inbox-empty">
+                <BrainCircuit className="size-8" />
+                <strong>المساعد متابع معاك</strong>
+                <p>لما يظهر تعارض يحتاج قرارك أو معلومة ناقصة توقف الخطوة التالية، هتوصلك رسالة هنا.</p>
+              </div>
+            ) : (
+              (aiInbox.data?.items ?? []).map(message => (
+                <article key={message.id} className={"sf-ai-inbox-message" + (!message.read ? " is-unread" : "")}>
+                  <div className="sf-ai-inbox-message-top">
+                    <span>{message.answered ? "تم الرد" : message.read ? "مقروءة" : "تحتاج ردك"}</span>
+                    <time>{new Date(message.createdAt).toLocaleString("ar-EG", { dateStyle: "medium", timeStyle: "short" })}</time>
+                  </div>
+                  <h3>{message.title}</h3>
+                  <p>{message.message}</p>
+                  {!message.read && (
+                    <Button type="button" variant="ghost" size="sm" className="sf-ai-inbox-read"
+                      onClick={() => markAIMessageRead.mutate({ messageId: message.id })}>
+                      تعليم كمقروءة
+                    </Button>
+                  )}
+                  {!message.answered && Array.isArray(message.actions) && (
+                    <div className="sf-ai-inbox-actions">
+                      {message.actions.map(action => (
+                        <Button key={action.id} type="button" size="sm"
+                          variant={action.id === "mark_done" ? "default" : "outline"}
+                          disabled={respondToAIMessage.isPending}
+                          onClick={() => respondToAIMessage.mutate({
+                            messageId: message.id,
+                            action: action.id as "mark_done" | "keep_open",
+                          })}>
+                          {action.label}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+                </article>
+              ))
+            )}
+          </div>
+          <div className="sf-ai-inbox-footer">
+            الرسائل داخل المنصة محفوظة في حسابك. إشعارات المتصفح تعمل بعد منح الإذن، طالما المتصفح يسمح للتطبيق بالعمل في الخلفية.
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {showLogoutConfirm&&<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setShowLogoutConfirm(false);}}>
         <section role="alertdialog" aria-modal="true" aria-labelledby="sf-logout-title" className="w-full max-w-sm rounded-2xl border border-border bg-card p-5 shadow-2xl">
