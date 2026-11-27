@@ -3846,3 +3846,48 @@ body[data-studyflow-sections-open="true"] .sf-hub-root {
   .sf-schedule-time-field input{height:40px;font-size:13px}
   .sf-sp-teacher-session-end{font-size:9px}
 }
+
+
+/* Focused interaction layer for the live assistant, schedules and review recommendations. */
+.sf-ai-stream-message{min-width:0;line-height:1.85;overflow-wrap:anywhere}
+.sf-ai-stream-empty{display:inline-flex;align-items:center;gap:9px;color:var(--muted-foreground);font-size:12px;font-weight:700}
+.sf-ai-stream-dots{display:inline-flex;align-items:center;gap:3px}
+.sf-ai-stream-dots i{width:4px;height:4px;border-radius:50%;background:var(--primary);animation:sf-ai-dot 1.05s ease-in-out infinite}
+.sf-ai-stream-dots i:nth-child(2){animation-delay:.14s}
+.sf-ai-stream-dots i:nth-child(3){animation-delay:.28s}
+.sf-ai-stream-cursor{display:inline-block;width:2px;height:1.05em;margin-inline-start:3px;vertical-align:-.16em;border-radius:2px;background:var(--primary);animation:sf-ai-cursor 1s steps(2,end) infinite}
+@keyframes sf-ai-dot{0%,65%,100%{opacity:.3;transform:translateY(0)}32%{opacity:1;transform:translateY(-3px)}}
+@keyframes sf-ai-cursor{0%,49%{opacity:1}50%,100%{opacity:0}}
+.sf-ai-stream-message .prose>:first-child{margin-top:0}
+.sf-ai-stream-message .prose>:last-child{margin-bottom:0}
+.sf-ai-stream-message .prose p{line-height:1.9}
+.sf-schedule-time-preview{display:block;margin-top:2px;color:var(--primary);font-size:10px;font-weight:800;line-height:1.5;font-variant-numeric:tabular-nums}
+.sf-youtube-review-card{display:grid;grid-template-columns:minmax(148px,220px) minmax(0,1fr);gap:0;overflow:hidden;border:1px solid var(--border);border-radius:17px;background:var(--card);box-shadow:0 14px 36px -34px rgba(0,0,0,.8);transition:transform .22s ease,border-color .22s ease,box-shadow .22s ease;transform-style:preserve-3d}
+.sf-youtube-review-card:hover{transform:translateY(-3px) perspective(900px) rotateX(.35deg);border-color:color-mix(in srgb,var(--primary) 42%,var(--border));box-shadow:0 18px 36px -30px color-mix(in srgb,var(--primary) 30%,transparent)}
+.sf-youtube-review-thumb{position:relative;min-height:112px;overflow:hidden;background:color-mix(in srgb,var(--muted) 62%,var(--card))}
+.sf-youtube-review-thumb img{display:block;width:100%;height:100%;min-height:112px;object-fit:cover;transition:transform .35s cubic-bezier(.2,.75,.25,1)}
+.sf-youtube-review-card:hover .sf-youtube-review-thumb img{transform:scale(1.045)}
+.sf-youtube-review-thumb>span{position:absolute;right:9px;bottom:9px;padding:4px 7px;border:1px solid rgba(255,255,255,.22);border-radius:7px;background:rgba(9,12,17,.82);color:#fff;font-size:9px;font-weight:900;letter-spacing:.04em;backdrop-filter:blur(8px)}
+.sf-youtube-review-content{min-width:0;padding:13px 14px}
+.sf-youtube-review-content h5{font-size:13px;line-height:1.75}
+.sf-youtube-review-content>p{line-height:1.8}
+.sf-youtube-review-content a{transition:transform .18s ease,border-color .18s ease,background .18s ease}
+.sf-youtube-review-content a:hover{transform:translateY(-1px);border-color:var(--primary);background:color-mix(in srgb,var(--primary) 6%,var(--card))}
+.sf-sp-hero{transform-style:preserve-3d;isolation:isolate}
+.sf-sp-hero:after{content:"";position:absolute;inset:auto 8% -1px;height:1px;pointer-events:none;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--primary) 55%,transparent),transparent);opacity:.75}
+.sf-sp-metric,.sf-sp-tab,.sf-sp-focus-card,.sf-sp-branch-card{transition:transform .2s cubic-bezier(.2,.75,.25,1),border-color .2s ease,box-shadow .2s ease}
+.sf-sp-metric:hover,.sf-sp-branch-card:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--primary) 30%,var(--border))}
+.sf-sp-tab:active{transform:scale(.975)}
+.sf-sp-focus-card{transform-style:preserve-3d}
+.sf-sp-focus-card:hover{transform:translateY(-2px);box-shadow:0 20px 44px -38px color-mix(in srgb,var(--primary) 44%,transparent)}
+.sf-sp-teacher-session-slot{transition:transform .18s ease,border-color .18s ease,background .18s ease}
+.sf-sp-teacher-session-slot:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--primary) 35%,var(--border));background:color-mix(in srgb,var(--primary) 5%,var(--card))}
+@media(max-width:680px){
+  .sf-youtube-review-card{grid-template-columns:1fr}
+  .sf-youtube-review-thumb{aspect-ratio:16/9;min-height:0}
+  .sf-youtube-review-thumb img{min-height:0}
+}
+@media(prefers-reduced-motion:reduce){
+  .sf-ai-stream-dots i,.sf-ai-stream-cursor{animation:none!important}
+  .sf-youtube-review-card,.sf-youtube-review-thumb img,.sf-sp-metric,.sf-sp-tab,.sf-sp-focus-card,.sf-sp-branch-card,.sf-sp-teacher-session-slot{transition:none!important;transform:none!important}
+}
