@@ -246,17 +246,35 @@ async function processTeacherVideoAnalysis(userId: number, externalId: string) {
 
 function queueTeacherVideoAnalyses(userId: number, updates: TeacherPublicUpdate[]) {
   if (!isTeacherVideoAnalysisConfigured() || process.env.NODE_ENV === "test") return;
-  for (const update of updates) {
-    if (update.sourceType !== "youtube" || !update.externalId || !update.url) continue;
-    if (update.contentAnalysis?.status === "complete" || update.contentAnalysis?.status === "failed") continue;
+  const activePrefix = userId + ":";
+  const activeCount = [...teacherVideoAnalysisLocks.keys()].filter(key => key.startsWith(activePrefix)).length;
+  const capacity = Math.max(0, 2 - activeCount);
+  if (!capacity) return;
+  const pending = updates
+    .filter(update => update.sourceType === "youtube"
+      && Boolean(update.externalId && update.url)
+      && update.contentAnalysis?.status !== "complete"
+      && update.contentAnalysis?.status !== "failed")
+    .sort((left, right) => Date.parse(String(right.publishedAt)) - Date.parse(String(left.publishedAt)))
+    .slice(0, 36);
+  let queued = 0;
+  for (const update of pending) {
+    if (queued >= capacity) break;
     const lockKey = userId + ":" + update.externalId;
     if (teacherVideoAnalysisLocks.has(lockKey)) continue;
+    queued += 1;
     const task = processTeacherVideoAnalysis(userId, update.externalId)
       .catch(error => {
         console.warn("[StudyFlow video analysis] Could not analyze teacher video:", error instanceof Error ? error.message.slice(0, 500) : "unknown error");
       })
-      .finally(() => {
+      .finally(async () => {
         if (teacherVideoAnalysisLocks.get(lockKey) === task) teacherVideoAnalysisLocks.delete(lockKey);
+        const latest = await getStudentProfile(userId);
+        const latestSelection = (latest?.selection ?? {}) as Record<string, any>;
+        const latestUpdates = Array.isArray(latestSelection.teacherPublicUpdates)
+          ? latestSelection.teacherPublicUpdates as TeacherPublicUpdate[]
+          : [];
+        queueTeacherVideoAnalyses(userId, latestUpdates);
       });
     teacherVideoAnalysisLocks.set(lockKey, task);
   }
