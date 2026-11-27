@@ -1623,6 +1623,7 @@ export async function generatePersonalPlan(
     deadline?: string | null;
     activityId?: string;
     memorySnapshot?: Record<string, unknown>;
+    persist?: boolean;
   } = {}
 ): Promise<GeneratedPlan> {
   const dailyMinutes = Math.max(20, Math.min(600, Math.trunc(constraints.dailyMinutes ?? 120)));
@@ -1737,16 +1738,16 @@ export async function generatePersonalPlan(
     constraints.deadline ? "الموعد الشخصي الإضافي: " + constraints.deadline + ". احسبه ضمن المهام الواقعة في أفق الخطة فقط." : "لا يوجد موعد شخصي إضافي مسجل.",
     "مستوى انشغال الطالب: " + (dailyMinutes <= 60 ? "مرتفع جدًا؛ أنشئ عددًا قليلًا جدًا من المهام ذات الأولوية القصوى." : dailyMinutes <= 120 ? "متوسط؛ أنشئ عددًا متوسطًا من المهام." : "أقل نسبيًا؛ يمكن اقتراح مهام أكثر عند الحاجة.") + " هذا المؤشر لا يمثل مدة للمحاضرات أو المهام ولا سقفًا بالدقائق.",
     constraints.startDate ? "تاريخ بداية التنفيذ: " + constraints.startDate + "." : "تاريخ البداية يحدده الطالب عند اعتماد الخطة.",
-    "احترم مستوى الانشغال الذي حدده الطالب باختيار عدد المهام المناسبة له. لا توزع المهام على أيام أو ساعات، ولا تنشئ مواعيد أو مددًا؛ إذا نقصت البيانات فاختر عددًا أقل من المهام واذكر الافتراض في الملخص.",
+    "وزّع الخطة على أيام فعلية بالتاريخ ابتداءً من تاريخ البداية. كل خطوة لها يوم واحد واضح. لا تستخدم دقائق أو ساعات لتجزئة المحاضرات؛ قسّم المحتوى الطويل إلى موضوعات مستقلة مسماة كما شرحها المدرس. المرن: موضوع أساسي واحد في يوم الدراسة. المتوازن: حتى موضوعين صغيرين أو متوسطين في اليوم؛ الموضوع الكبير أو الصعب يستقل بيوم. المكثف: حتى ثلاثة موضوعات صغيرة أو موضوعين متوسطين؛ الموضوع الكبير أو الصعب يستقل بيوم. لا تضع موضوعين من نفس المراجعة في اليوم إذا كان أحدهما يتطلب فهمًا تأسيسيًا للآخر.",
     "كيّف قائمة المهام مع ظروف الطالب المعلنة: الطاقة المنخفضة أو الانشغال الشديد يعني عدد مهام أقل وبداية أسهل، والحالة المعنوية المنخفضة تعني اختيار مهمة أولى سهلة، وقيود الموارد تعني عدم تكليف الطالب بأداة أو كتاب أو اتصال غير متاح. لا تقدم تشخيصًا طبيًا أو نفسيًا.",
     "لا تعتبر غياب السجل دليلًا على الإنجاز، ولا توبّخ الطالب.",
     "لا تحوّل منظومة الأداءات الأسبوعية والشهرية إلى دروس منهجية؛ تعامل معها كالتزامات منفصلة يجب تتبع إنجازها لأن لها شرط أهلية مستقلًا، ولا تخلط نسبها مع توزيع درجات ورقة الامتحان.",
-    "أخرج JSON صحيحًا فقط بالعربية: title, summary, durationLabel, steps (1-240 عنصرًا، وكل عنصر فيه title,detail,category,curriculumNodeIds,phaseId: backlog|teacher_sync|steady,priority,difficulty,lessonSize,difficultyBasis,difficultyConfidence,resourceRecommendation?,printedPageRange,sourcePages)، executionStrategy ({objective,rationale,phases:[{id,title,purpose,actions,completionCriteria}]}), habits (0-5 فيها title,cue). resourceRecommendation اختياري ولا يُضاف إلا لمصدر مدرس موثق ومطابق حرفيًا لأحد تحديثات الصف الثاني بكالوريا ومفيد لدرس غير مكتمل؛ شكله {title,url,teacherName,reason}. يجب أن يحتوي curriculumNodeIds على معرف واحد أو أكثر من الدروس المتاحة التي ترتبط بها الخطوة. printedPageRange نطاق صفحات الكتاب المطبوع [البداية، النهاية] عند توافره فقط؛ sourcePages مراجع PDF المسترجعة فعليًا فقط وتكون [] في غير ذلك. اجعل الملخص واضحًا والتفاصيل مركزة.",
+    "أخرج JSON صحيحًا فقط بالعربية: title, summary, durationLabel, steps (1-240 عنصرًا، وكل عنصر فيه title,detail,category,curriculumNodeIds,phaseId: backlog|teacher_sync|steady,priority,difficulty,lessonSize,difficultyBasis,difficultyConfidence,resourceRecommendation?,printedPageRange,sourcePages,day,dayIndex,dateOffsetDays,scheduleState)، executionStrategy ({objective,rationale,phases:[{id,title,purpose,actions,completionCriteria}]}), habits (0-5 فيها title,cue). resourceRecommendation اختياري ولا يُضاف إلا لمصدر مدرس موثق ومطابق حرفيًا لأحد تحديثات الصف الثاني بكالوريا ومفيد لدرس غير مكتمل؛ شكله {title,url,teacherName,reason}. يجب أن يحتوي curriculumNodeIds على معرف واحد أو أكثر من الدروس المتاحة التي ترتبط بها الخطوة. printedPageRange نطاق صفحات الكتاب المطبوع [البداية، النهاية] عند توافره فقط؛ sourcePages مراجع PDF المسترجعة فعليًا فقط وتكون [] في غير ذلك. اجعل الملخص واضحًا والتفاصيل مركزة.",
     "كل خطوة يجب أن تحدد المادة والوحدة/الفرع والدرس وطريقة مذاكرته، لا عنوانًا عامًا.",
     planScope === "daily"
       ? "هذه قائمة مهام تشغيلية حالية. نمط الأولوية المختار: " + (planningMode === "backlog" ? "المتراكم أولًا فقط" : planningMode === "teacher_sync" ? "مواكبة متطلبات المدرس" : "ذكي متوازن: إنهاء الالتزامات الحالية والاستعداد للموضوع التالي") + ". أخرج مهامًا قليلة أو أكثر حسب مستوى الانشغال، دون أي أيام أو مواعيد أو مدد."
       : "نطاق هذه الخطة سنوي قديم للتوافق مع المسودات السابقة فقط.",
-    "قاعدة نهائية: الخطة اليومية قائمة مهام وليست جدولًا زمنيًا. لا تضع ساعات أو دقائق أو مددًا للمحاضرات أو المهام، ولا تقسّم المهمة إلى جلسات أو أيام أو تواريخ. قيمة الوقت المتاح التي يختارها الطالب تعبّر عن انشغاله وسعته العامة فقط؛ ساعة واحدة تعني حملاً قليلاً جدًا ومهامًا أقل، وساعتان حملاً متوسطًا، وثلاث ساعات أو أكثر تسمح بعدد مهام أكبر عند الحاجة. لا تحوّلها إلى مدة لكل مهمة. اجعل كل خطوة مهمة واحدة واضحة قابلة للتنفيذ، من دون وقت أو موعد محدد؛ لا تضف موعدًا إلا إذا كان موجودًا فعلًا في التزام المدرس أو حدده الطالب بنفسه. إذا قال المدرس إن واجبًا أو امتحانًا شرط للمحاضرة التالية، فاجعل إكمال المتطلب المسجل أولوية قبل الدرس التالي. لا تختلق واجبًا أو امتحانًا أو أسئلة، ولا تعتبر المتطلب مكتملًا دون دليل من الطالب.",
+    "قاعدة نهائية: الخطة اليومية قائمة مهام مؤرخة وليست جدول ساعات. لا تضع مدة مشاهدة أو مذاكرة، ولا تحوّل طول الفيديو إلى وقت يومي. قسّم الفيديو إلى موضوعات حقيقية مستخرجة من محتواه؛ اليوم يحتوي عنوان الجزء الذي سيذاكره الطالب، وليس «مشاهدة 30 دقيقة». day وdateOffsetDays يحددان يوم التنفيذ الفعلي. لا تختلق يوم الحصة أو موعد المدرس؛ استخدم تواريخ بداية الخطة وتقويم الطالب والالتزامات المسجلة. إذا قال المدرس إن واجبًا أو امتحانًا شرط للمحاضرة التالية، فاجعل إكمال المتطلب المسجل أولوية قبل الدرس التالي. لا تختلق واجبًا أو امتحانًا أو أسئلة، ولا تعتبر المتطلب مكتملًا دون دليل من الطالب.",
   ].join("\n");
   const paceLabel = selectedPace === "intensive" ? "مكثفة"
     : selectedPace === "relaxed" ? "مرنة ومريحة" : "متوازنة";
@@ -2003,17 +2004,87 @@ export async function generatePersonalPlan(
     };
   }
 
-  // Daily plans are flexible tasks, not a timetable. Availability is only a workload signal.
+  // Daily plans are topic-based: pace controls how many distinct learning chunks
+  // fit in a study day. Video duration is never converted into task duration.
   let scheduleDay = 1;
   const totalPlannedMinutes = plan.steps.reduce((sum, step) => sum + step.minutes, 0);
   if (planScope === "daily") {
+    const pace = constraints.pace ?? "balanced";
+    const dailyTopicCapacity = pace === "relaxed" ? 1 : pace === "intensive" ? 3 : 2;
+    const weeklyDays = constraints.daysPerWeek ?? 6;
+    const startDate = constraints.startDate ?? new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
+    const start = new Date(startDate + "T12:00:00.000Z");
+    const formatStudyDate = (date: Date) => new Intl.DateTimeFormat("ar-EG", {
+      weekday: "long", day: "numeric", month: "long", timeZone: "Africa/Cairo",
+    }).format(date);
+    let studyDayIndex = 0;
+    let itemsOnDay = 0;
+    let dayHasHeavyTopic = false;
+    const datedSteps = plan.steps.map((step, index) => {
+      const isHeavy = step.lessonSize === "large" || step.difficulty === "hard";
+      const existingDate = step.existingTask?.dueAt ? new Date(step.existingTask.dueAt) : null;
+      const existingOffset = existingDate && Number.isFinite(existingDate.getTime())
+        ? Math.max(0, Math.round((Date.UTC(existingDate.getUTCFullYear(), existingDate.getUTCMonth(), existingDate.getUTCDate())
+          - Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate())) / 86_400_000))
+        : null;
+      if (existingOffset !== null) {
+        const dueDate = new Date(start);
+        dueDate.setUTCDate(dueDate.getUTCDate() + existingOffset);
+        const studyDay = Math.max(1, Math.floor(existingOffset / 7) * weeklyDays + Math.min(weeklyDays, existingOffset % 7 + 1));
+        return {
+          ...step,
+          day: formatStudyDate(dueDate),
+          minutes: 0,
+          scheduleState: "scheduled" as const,
+          dayIndex: studyDay,
+          dateOffsetDays: existingOffset,
+          sourceStepIndex: index,
+          segmentIndex: undefined,
+          segmentCount: undefined,
+        };
+      }
+
+      if (isHeavy) {
+        if (itemsOnDay > 0) {
+          studyDayIndex += 1;
+          itemsOnDay = 0;
+          dayHasHeavyTopic = false;
+        }
+      } else if (itemsOnDay >= dailyTopicCapacity || dayHasHeavyTopic) {
+        studyDayIndex += 1;
+        itemsOnDay = 0;
+        dayHasHeavyTopic = false;
+      }
+
+      const calendarOffset = studyDayIndex + Math.floor(studyDayIndex / weeklyDays) * (7 - weeklyDays);
+      const dueDate = new Date(start);
+      dueDate.setUTCDate(dueDate.getUTCDate() + calendarOffset);
+      itemsOnDay += 1;
+      if (isHeavy) dayHasHeavyTopic = true;
+      const assignedStudyDay = studyDayIndex + 1;
+      if (itemsOnDay >= dailyTopicCapacity || dayHasHeavyTopic) {
+        studyDayIndex += 1;
+        itemsOnDay = 0;
+        dayHasHeavyTopic = false;
+      }
+      return {
+        ...step,
+        day: formatStudyDate(dueDate),
+        minutes: 0,
+        scheduleState: "scheduled" as const,
+        dayIndex: assignedStudyDay,
+        dateOffsetDays: calendarOffset,
+        scheduleNote: undefined,
+        sourceStepIndex: index,
+        segmentIndex: undefined,
+        segmentCount: undefined,
+      };
+    });
     plan = {
-      ...plan, durationLabel: "مهام مرنة", quality: undefined,
-      steps: plan.steps.map((step, index) => ({
-        ...step, day: "", minutes: 0, scheduleState: "scheduled" as const,
-        dayIndex: null, dateOffsetDays: null, scheduleNote: undefined,
-        sourceStepIndex: index, segmentIndex: undefined, segmentCount: undefined,
-      })),
+      ...plan,
+      durationLabel: "خطة موزعة على أيام الدراسة",
+      quality: undefined,
+      steps: datedSteps,
     };
   } else {
     let usedMinutes = 0;
@@ -2044,7 +2115,7 @@ export async function generatePersonalPlan(
       : "تقدير الجدوى: يمكن توزيع الخطوات على " + scheduleDay + " أيام دراسة حتى " + effectiveDeadline + ". نافذة الامتحانات التقريبية " + examWindowLabel + ".";
     plan = { ...plan, summary: (plan.summary + "\n\n" + feasibilityNote).slice(0, 1_500) };
   } else {
-    const adaptiveNote = "هذه قائمة مهام مرنة وليست جدولًا زمنيًا. لا توجد مدة أو ساعة محددة لأي مهمة؛ اختر منها ما يناسب وقتك، وسيُعاد ترتيب الأولويات مع تقدمك.";
+    const adaptiveNote = "كل مهمة موزعة على يوم دراسة محدد بحسب عدد الموضوعات التي يناسبها إيقاعك. لم نحول طول أي فيديو إلى ساعات مذاكرة أو مدد مفروضة.";
     plan = { ...plan, summary: (plan.summary + "\n\n" + adaptiveNote).slice(0, 1_500) };
   }
   if (planScope === "daily" && profile) {
@@ -2060,7 +2131,9 @@ export async function generatePersonalPlan(
   }
   if (constraints.memorySnapshot) plan = { ...plan, memorySnapshot: constraints.memorySnapshot };
   updatePlanGenerationProgress(userId, "saving", undefined, undefined, constraints.activityId);
-  await saveAiPlan(userId, { prompt, title: plan.title, planJson: JSON.stringify(plan) });
+  if (constraints.persist !== false) {
+    await saveAiPlan(userId, { prompt, title: plan.title, planJson: JSON.stringify(plan) });
+  }
   updatePlanGenerationProgress(userId, "complete", undefined, undefined, constraints.activityId);
   return plan;
 }
