@@ -78,7 +78,7 @@ import {
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
-import { generatePersonalPlan, getPlanGenerationProgress, markPlanGenerationFailed } from "./planGenerator";
+import { buildPlannerProgressSnapshot, generatePersonalPlan, getPlanGenerationProgress, markPlanGenerationFailed } from "./planGenerator";
 import { completeAIActivity, failAIActivity, getAIActivitySnapshot, startAIActivity, updateAIActivity } from "./aiActivity";
 import { classifyTeacherPublicUpdate, isHighConfidenceScheduleAnnouncement, isSecondYearBaccalaureateUpdate, isTeacherVideoUpdateAllowed, parseYoutubeAtomFeed, scanSelectedTeacherSources, selectedTeacherIds, type TeacherPublicUpdate } from "./teacher-content-monitor";
 import { getTeacherVideoAnalysis, isTeacherVideoAnalysisConfigured, startTeacherVideoAnalysis } from "./teacher-video-analysis";
@@ -875,7 +875,20 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number, f
       : 6;
     const startDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
     const currentTasks = await listTasks(userId);
-    const existingCurriculumTasks = currentTasks.flatMap(task => {
+    const currentGoals = await listGoals(userId);
+    const goalsById = new Map(currentGoals.map(goal => [goal.id, goal]));
+    const progressSnapshot = buildPlannerProgressSnapshot(profile);
+    // Reconcile only tasks owned by StudyFlow's generated plan. If a linked
+    // curriculum node is now confirmed studied, omit that stale AI task so the
+    // goal-tree sync retires it. Independent tasks and teacher obligations stay.
+    const tasksForPlanning = currentTasks.filter(task => {
+      if (task.status !== "todo" || !task.goalId) return true;
+      const match = matchSIECheckpointTask(profile.subjectIds, [task.title, task.notes || ""].join(" "));
+      if (!match || !progressSnapshot.completedNodeIds.has(match.nodeId)) return true;
+      const rootGoal = getRootGoalForTask(task.goalId, goalsById);
+      return !isStudyFlowManagedGoal(rootGoal) || taskLooksLikeTeacherObligation(task);
+    });
+    const existingCurriculumTasks = tasksForPlanning.flatMap(task => {
       const match = matchSIECheckpointTask(profile.subjectIds, [task.title, task.notes || ""].join(" "));
       return match ? [{
         ...match,
@@ -931,7 +944,7 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number, f
         pace: dailyMinutes <= 60 ? "relaxed" : dailyMinutes <= 150 ? "balanced" : "intensive",
         persist: false,
         existingCurriculumTasks,
-        existingTasks: currentTasks.map(task => ({
+        existingTasks: tasksForPlanning.map(task => ({
           id: task.id,
           title: task.title,
           notes: task.notes ?? null,
