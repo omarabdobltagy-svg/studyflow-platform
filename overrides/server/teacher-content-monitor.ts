@@ -325,6 +325,23 @@ export function isTeacherVideoUpdateAllowed(
     || acceptedAlternativeReviewVideoIds(profile).has(update.externalId);
 }
 
+export function getAcceptedAlternativeReviewContext(
+  profile: TeacherMonitoringProfile,
+  externalId: string,
+): { subjectId: string; branchId: string } | undefined {
+  if (!acceptedAlternativeReviewVideoIds(profile).has(externalId)) return undefined;
+  const selection = profile.selection ?? {};
+  const contexts = selection.acceptedAlternativeReviewContext;
+  if (!contexts || typeof contexts !== "object" || Array.isArray(contexts)) return undefined;
+  const context = contexts[externalId];
+  if (!context || typeof context !== "object") return undefined;
+  const subjectId = typeof context.subjectId === "string" ? context.subjectId : "";
+  const branchId = typeof context.branchId === "string" ? context.branchId : "";
+  if (!profile.subjectIds?.includes(subjectId) || !/_G2_BAC$/.test(subjectId)
+    || !/^[A-Z0-9_-]{2,120}$/.test(branchId)) return undefined;
+  return { subjectId, branchId };
+}
+
 function configuredFacebookPageIds(): Record<string, string> {
   const raw = process.env.STUDYFLOW_TEACHER_FACEBOOK_PAGES;
   if (!raw) return {};
