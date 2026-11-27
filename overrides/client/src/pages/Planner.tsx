@@ -1139,6 +1139,12 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
   const [editing, setEditing] = useState<{ index: number; title: string; detail: string } | null>(null);
   const [filter, setFilter] = useState<"all" | "open" | "done">("all");
   const [viewMode, setViewMode] = useState<"map" | "list">("map");
+  const [selectedMapStepIndex, setSelectedMapStepIndex] = useState<number | null>(() => {
+    const firstOpen = plan.steps.findIndex(step =>
+      step.plannerTaskStatus !== "done" && step.existingTask?.status !== "done"
+    );
+    return firstOpen >= 0 ? firstOpen : plan.steps.length > 0 ? 0 : null;
+  });
   const completedCount = plan.steps.filter(step => step.plannerTaskStatus === "done" || step.existingTask?.status === "done").length;
     const subjectCount = new Set(plan.steps.map(step => getPlanStepCurriculum(step, subjectIds)?.subjectId).filter(Boolean)).size;
   const confirmedTaskCount = plan.steps.filter(step => Boolean(step.existingTask)).length;
@@ -1211,13 +1217,15 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
     }
     mapLaneMap.get(laneKey)!.items.push({ step, index, curriculum });
   });
-  const mapLanes = [...mapLaneMap.values()].sort((left, right) => {
-    if (left.key === "__GENERAL_TASKS__") return 1;
-    if (right.key === "__GENERAL_TASKS__") return -1;
-    const leftSubject = left.subjectId ? subjectIds.indexOf(left.subjectId) : Number.MAX_SAFE_INTEGER;
-    const rightSubject = right.subjectId ? subjectIds.indexOf(right.subjectId) : Number.MAX_SAFE_INTEGER;
-    return leftSubject - rightSubject || (left.branch || "").localeCompare(right.branch || "", "ar");
-  });
+  // Preserve the exact execution order from the planner. Sorting branches by
+  // their display names would make the visual route contradict the plan sequence.
+  const mapLanes = [...mapLaneMap.values()];
+  const selectedMapStep = selectedMapStepIndex === null
+    ? null
+    : plan.steps[selectedMapStepIndex] ?? null;
+  const selectedMapCurriculum = selectedMapStep
+    ? getPlanStepCurriculum(selectedMapStep, subjectIds)
+    : null;
   const saveEdit = () => {
     if (!editing) return;
     onChange({
@@ -1291,7 +1299,7 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
       <div className="sf-sp-board-toolbar sf-sp-map-toolbar">
         <div>
           <h3>خريطة تنفيذ الخطة</h3>
-          <p>كل مادة وفرع له مساره، والعُقد مرتبطة حسب ترتيب التنفيذ حتى نقطة النهاية.</p>
+          <p>كل مادة وفرع له مساره. اضغط على أي عقدة لعرض تفاصيلها وفتح الدرس أو المهمة مباشرة.</p>
         </div>
         <div className="sf-sp-map-controls">
           <div className="sf-sp-filter-group" role="group" aria-label="تصفية مهام الخطة">
@@ -1343,7 +1351,15 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
                               <span>{isDone ? "مكتملة" : isReview || isDeferred ? "مراجعة" : step.existingTask ? "التزام" : "مذاكرة"}</span>
                               {step.minutes > 0 && <span>{step.minutes.toLocaleString("ar-EG")} دقيقة</span>}
                             </div>
-                            <h5>{titleText}</h5>
+                            <button
+                              type="button"
+                              className="sf-sp-flow-node-select"
+                              aria-pressed={selectedMapStepIndex === index}
+                              onClick={() => setSelectedMapStepIndex(current => current === index ? null : index)}
+                            >
+                              <h5>{titleText}</h5>
+                              <span>{selectedMapStepIndex === index ? "محددة الآن" : "اختر العقدة لعرض تفاصيلها"}</span>
+                            </button>
                             {curriculum?.branch && curriculum.branch !== "الدروس" && <small className="sf-sp-flow-node-branch">{curriculum.branch}</small>}
                             <details className="sf-sp-flow-node-details">
                               <summary>تفاصيل هذه الخطوة</summary>
@@ -1394,6 +1410,61 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
             </div>
           ) : (
             <div className="sf-sp-empty-inline">{filter === "done" ? "لا توجد خطوات مكتملة." : filter === "open" ? "لا توجد خطوات متبقية." : "لا توجد خطوات في الخطة بعد."}</div>
+          )}
+          {selectedMapStep && (
+            <aside className="sf-sp-flow-selection" aria-live="polite">
+              <header>
+                <div>
+                  <span>العقدة المحددة</span>
+                  <strong>{selectedMapCurriculum?.subject ?? "التزام مسجل"}{selectedMapCurriculum?.branch ? " · " + selectedMapCurriculum.branch : ""}</strong>
+                </div>
+                <button type="button" onClick={() => setSelectedMapStepIndex(null)} aria-label="إغلاق تفاصيل العقدة">إغلاق</button>
+              </header>
+              <h4>{displayPlanStepTitle(selectedMapStep, subjectIds)}</h4>
+              <div className="sf-sp-flow-selection-meta">
+                {selectedMapStep.day && <span>{selectedMapStep.day}</span>}
+                {selectedMapStep.priority && <span>{priorityLabel[selectedMapStep.priority] ?? "أولوية عادية"}</span>}
+                {selectedMapStep.existingTask && <span>مهمة مسجلة</span>}
+                {selectedMapStep.minutes > 0 && <span>{selectedMapStep.minutes.toLocaleString("ar-EG")} دقيقة</span>}
+              </div>
+              <p>{displayPlanStepDetail(selectedMapStep, subjectIds)}</p>
+              {selectedMapStep.studyMethod && (
+                <details className="sf-sp-flow-selection-method" open>
+                  <summary>طريقة التنفيذ — {selectedMapStep.studyMethod.stages.length} مراحل</summary>
+                  <ol>
+                    {selectedMapStep.studyMethod.stages.map((stage, index) => (
+                      <li key={index}>
+                        <strong>{(index + 1).toLocaleString("ar-EG")}. {displayArabicText(stage.title, "مرحلة المذاكرة")}</strong>
+                        <p>{displayArabicText(stage.instruction, "نفّذ هذه المرحلة من مصدر المادة ثم حدّث تقدمك.")}</p>
+                      </li>
+                    ))}
+                  </ol>
+                  <small>معيار الاكتمال: {displayArabicText(selectedMapStep.studyMethod.completionCriteria, "بعد تنفيذ المراحل وتسجيل تقدمك الفعلي.")}</small>
+                </details>
+              )}
+              {selectedMapStep.resourceRecommendation && (
+                <a className="sf-sp-resource-link" href={selectedMapStep.resourceRecommendation.url} target="_blank" rel="noreferrer">
+                  افتح المصدر المرتبط بهذه الخطوة <ArrowUpRight className="size-3.5" />
+                </a>
+              )}
+              <div className="sf-sp-flow-selection-actions">
+                {editable && (
+                  <Button type="button" size="sm" variant="outline" onClick={() => setEditing({
+                    index: selectedMapStepIndex!,
+                    title: selectedMapStep.title,
+                    detail: selectedMapStep.detail,
+                  })}>تعديل الخطوة</Button>
+                )}
+                {selectedMapCurriculum && selectedMapStep.curriculumNodeIds?.[0] && (
+                  <a href={"/study?subject=" + encodeURIComponent(selectedMapCurriculum.subjectId)
+                    + "&branch=" + encodeURIComponent(selectedMapCurriculum.branchId)
+                    + "&lesson=" + encodeURIComponent(selectedMapStep.curriculumNodeIds[0])}>
+                    افتح الدرس في صفحة المذاكرة <ArrowUpRight className="size-3.5" />
+                  </a>
+                )}
+                {selectedMapStep.existingTask && <a href="/tasks">افتح المهمة المسجلة <ArrowUpRight className="size-3.5" /></a>}
+              </div>
+            </aside>
           )}
           {mapLanes.length > 0 && (
             <div className="sf-sp-flow-finish">
