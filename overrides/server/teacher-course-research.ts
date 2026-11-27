@@ -30,6 +30,85 @@ type ResearchResult = {
   };
 };
 
+type CuratedDeliveryFacts = {
+  availableModes: Array<"center" | "online">;
+  confidence: "medium" | "high";
+  evidence: TeacherCourseFactsInput["evidence"];
+  verified: boolean;
+};
+
+/**
+ * Curated public-profile checks for the current StudyFlow G2 BAC cohort.
+ * Online means an online course/video platform was found; it does not imply live tutoring.
+ * A physical center is included only where the teacher's public first-party page explicitly lists it.
+ */
+const CURATED_DELIVERY_FACTS: Record<string, CuratedDeliveryFacts> = {
+  T_AR_MOHAMED_SALAH: {
+    availableModes: ["online"], confidence: "high", verified: true,
+    evidence: [{ title: "بسطتهالك — كورسات الصف الثاني بكالوريا", url: "https://bassthalk.com/userprofile/", source: "منصة بسطتهالك", excerpt: "صفحة المدرس تعرض كورسات للصف الثاني بكالوريا مع وصول للمحتوى عبر الهاتف أو الحاسوب." }],
+  },
+  T_AR_REDA_FAROUK: {
+    availableModes: ["online"], confidence: "high", verified: true,
+    evidence: [{ title: "قناة رضا الفاروق — محتوى الصف الثاني بكالوريا", url: "https://youtube.com/channel/UC7fHSfm6zxGJYC-P7RMzX7w", source: "قناة رضا الفاروق", excerpt: "تظهر دروسًا حديثة للصف الثاني بكالوريا 2027 وروابط التسجيل بالمنصة؛ لم يظهر دليل على سنتر حضوري." }],
+  },
+  T_AR_MOHAMED_TAREK: {
+    availableModes: [], confidence: "low", verified: false,
+    evidence: [{ title: "قناة محمد طارق — لم تتأكد مطابقة المنهج الحالي", url: "https://youtube.com/@mr.mohamed_tarek", source: "قناة يوتيوب عامة", excerpt: "لم يظهر دليل كافٍ يثبت تقديمه الحالي لمنهج الصف الثاني بكالوريا 2027 أو وجود سنتر." }],
+  },
+  T_EN_MAHMOUD_RADWAN: {
+    availableModes: ["online"], confidence: "high", verified: true,
+    evidence: [{ title: "Englishawy — مراجعات الصف الثاني بكالوريا 2027", url: "https://www.youtube.com/@MahmoudRadwan.Englishawy", source: "قناة إنجلشاوي", excerpt: "قناة المدرس تعرض محتوى حديثًا للصف الثاني بكالوريا وروابط المنصة؛ لا يوجد دليل على مركز حضوري." }],
+  },
+  T_EN_SHERIF: {
+    availableModes: ["online"], confidence: "high", verified: true,
+    evidence: [{ title: "منصة شريف المصري — اللغة الإنجليزية للصف الثاني بكالوريا", url: "https://sherifelmassry.com/", source: "منصة شريف المصري", excerpt: "المنصة تعرض شرحًا وتطبيقات واختبارات للصف الثاني بكالوريا؛ عناوين المكتبات المعروضة تخص بيع الكتب وليست مراكز تدريس." }],
+  },
+  T_EN_AHMED_SOBHY: {
+    availableModes: ["online"], confidence: "medium", verified: true,
+    evidence: [{ title: "إنجليزي البكالوريا — دروس الصف الثاني بكالوريا", url: "https://zolotube.com/channel?id=UCP4vtEvANSvCszyJFBEiqOA", source: "قناة إنجليزي البكالوريا", excerpt: "محتوى دروس حديثة للصف الثاني بكالوريا متاح أونلاين؛ لم يظهر دليل على سنتر حضوري." }],
+  },
+  T_HIS_AHMED_GHONIEM: {
+    availableModes: ["online", "center"], confidence: "high", verified: true,
+    evidence: [{ title: "أحمد غنيم — المحاضرات الأونلاين والحضورية", url: "https://ahmedghoniem.com/", source: "موقع أحمد غنيم الرسمي", excerpt: "الموقع يعرض دروسًا أونلاين وقسم Offline Lectures ويذكر قاعة غنيم بالمعادي وعدة سناتر تعليمية." }],
+  },
+  T_HIS_MARWAN: {
+    availableModes: ["online"], confidence: "medium", verified: true,
+    evidence: [{ title: "المؤرخ مروان حسن — محتوى تاريخ الصف الثاني بكالوريا 2027", url: "https://youtube.com/channel/UCJqSCcNDCxe4b259TXPZbcw", source: "قناة المؤرخ مروان حسن", excerpt: "تظهر دروسًا حديثة لمنهج التاريخ للصف الثاني بكالوريا؛ لم يظهر دليل موثق على سنتر حضوري." }],
+  },
+  T_HIS_ABDELHADY: {
+    availableModes: ["online"], confidence: "medium", verified: true,
+    evidence: [{ title: "محمود عبدالهادي — محتوى تاريخ الصف الثاني بكالوريا", url: "https://zolotube.com/channel?id=UCThV5LrCMIWs9tyDvZ9IC2w", source: "قناة محمود عبدالهادي", excerpt: "تظهر دروس تاريخ للصف الثاني بكالوريا متاحة أونلاين؛ لم يظهر دليل على مركز حضوري." }],
+  },
+  T_PROG_IMAD_SHARAF: {
+    availableModes: ["online"], confidence: "high", verified: true,
+    evidence: [{ title: "WE4CODE — كورس البرمجة والذكاء الاصطناعي", url: "https://we4code.com/course/7", source: "منصة WE4CODE", excerpt: "المنصة تعرض كورس الصف الثاني بكالوريا بدروس وملفات وواجبات واختبارات واجتماعات أونلاين." }],
+  },
+  T_PROG_ANAS_AHMED: {
+    availableModes: [], confidence: "low", verified: false,
+    evidence: [{ title: "Code-UP — لم يتأكد ارتباط المدرس بالمقرر الظاهر", url: "https://www.code-up.tech/", source: "منصة Code-UP", excerpt: "المنصة تعرض مقرر البرمجة للصف الثاني بكالوريا، لكن صفحة المصدر لا تثبت أن د. أنس أحمد هو المدرس المسؤول عنه." }],
+  },
+  T_PROG_KHALED_ASHRAF: {
+    availableModes: ["online"], confidence: "high", verified: true,
+    evidence: [{ title: "برمجة بكالوريا — درس الصف الثاني بكالوريا 2027", url: "https://www.youtube.com/watch?v=oIYgUBLUJxU", source: "قناة برمجة بكالوريا", excerpt: "يوجد درس برمجة حديث للصف الثاني بكالوريا 2027 متاح عبر يوتيوب؛ لم يظهر دليل على سنتر حضوري." }],
+  },
+  T_HIS_AHMED_ADEL: {
+    availableModes: [], confidence: "low", verified: false,
+    evidence: [{ title: "أحمد عادل — مصدر غير مطابق للصف الثاني بكالوريا", url: "https://www.mr-ahmed-adel.com/course/90", source: "موقع أحمد عادل", excerpt: "الصفحة المعروضة مراجعة نهائية لطلاب الأزهر ولا تثبت تدريس تاريخ الصف الثاني بكالوريا الحالي أو تقديم سنتر." }],
+  },
+  T_HIS_GOMAA_EL_SAYED: {
+    availableModes: ["online"], confidence: "high", verified: true,
+    evidence: [{ title: "منصة القيصر — تاريخ الصف الثاني بكالوريا", url: "https://gomaa-elsayed.com/years/2", source: "منصة القيصر", excerpt: "الصفحة تعرض مقررات تاريخ للصف الثاني بكالوريا مع التسجيل والاشتراك عبر المنصة؛ لم يظهر دليل على مركز حضوري." }],
+  },
+  T_PROG_MAZEN_ALI_BARMAGTHALK: {
+    availableModes: ["online"], confidence: "high", verified: true,
+    evidence: [{ title: "برمجتهالك — البرمجة والذكاء الاصطناعي للصف الثاني بكالوريا", url: "https://barmagthalk.pyramitech.com/", source: "منصة برمجتهالك", excerpt: "المنصة تعرض كورس البرمجة والذكاء الاصطناعي للصف الثاني بكالوريا، وتذكر م. مازن علي كمدرب ومؤسس." }],
+  },
+};
+
+export function getCuratedTeacherDeliveryFacts(teacherId: string) {
+  return CURATED_DELIVERY_FACTS[teacherId] ?? null;
+}
+
 const inFlight = new Map<string, Promise<void>>();
 const CACHE_DAYS = 30;
 const FAILURE_RETRY_HOURS = 12;
@@ -281,6 +360,27 @@ async function refreshTeacherCourseFacts(scope: ResearchScope) {
 
 export async function getTeacherCourseFactsWithRefresh(scope: ResearchScope): Promise<ResearchResult> {
   const current = await getTeacherCourseFacts(scope);
+  const curated = scope.educationSystem === "EG_BACCALAUREATE"
+    && scope.gradeYear === "الصف الثاني الثانوي – دفعة 2027"
+    ? getCuratedTeacherDeliveryFacts(scope.teacherId)
+    : null;
+  if (curated) {
+    const now = new Date();
+    return {
+      state: curated.verified ? "verified" : "insufficient_evidence",
+      facts: {
+        availableModes: curated.availableModes,
+        homeworkPolicy: current?.homeworkPolicy as TeacherCourseFactsInput["homeworkPolicy"] ?? "unknown",
+        homeworkRequiredBeforeNextLecture: current?.homeworkRequiredBeforeNextLecture as TeacherCourseFactsInput["homeworkRequiredBeforeNextLecture"] ?? "unknown",
+        preLectureExamRequired: current?.preLectureExamRequired as TeacherCourseFactsInput["preLectureExamRequired"] ?? "unknown",
+        confidence: curated.confidence,
+        evidence: curated.evidence,
+        checkedAt: now,
+        expiresAt: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1_000),
+        isStale: false,
+      },
+    };
+  }
   const stale = !current || current.isStale;
   if (stale) {
     void refreshTeacherCourseFacts(scope).catch(error => {

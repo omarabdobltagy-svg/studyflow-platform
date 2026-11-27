@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeTeacherSearchText, teacherSourceMatches } from "./teacher-course-research";
+import { getCuratedTeacherDeliveryFacts, normalizeTeacherSearchText, teacherSourceMatches } from "./teacher-course-research";
 
 describe("teacher source matching", () => {
   it("normalizes common Arabic spelling variants", () => {
@@ -18,5 +18,27 @@ describe("teacher source matching", () => {
 
   it("accepts a direct brand match in a source title", () => {
     expect(teacherSourceMatches("محمود رضوان", "Englishawy", "قناة تعليمية", "Englishawy - قواعد اللغة الإنجليزية")).toBe(true);
+  });
+});
+
+
+describe("curated public teacher delivery modes", () => {
+  it("offers only online for teachers whose current public course is online", () => {
+    expect(getCuratedTeacherDeliveryFacts("T_AR_MOHAMED_SALAH")?.availableModes).toEqual(["online"]);
+    expect(getCuratedTeacherDeliveryFacts("T_EN_SHERIF")?.availableModes).toEqual(["online"]);
+  });
+
+  it("offers online and center only when both are supported by a first-party source", () => {
+    expect(getCuratedTeacherDeliveryFacts("T_HIS_AHMED_GHONIEM")?.availableModes).toEqual(["online", "center"]);
+  });
+
+  it("keeps teacher identity or delivery details unknown when source evidence is not conclusive", () => {
+    expect(getCuratedTeacherDeliveryFacts("T_AR_MOHAMED_TAREK")?.availableModes).toEqual([]);
+    expect(getCuratedTeacherDeliveryFacts("T_PROG_ANAS_AHMED")?.verified).toBe(false);
+    expect(getCuratedTeacherDeliveryFacts("T_HIS_AHMED_ADEL")?.availableModes).toEqual([]);
+  });
+
+  it("does not invent modes for an unreviewed teacher", () => {
+    expect(getCuratedTeacherDeliveryFacts("T_NOT_IN_CATALOG")).toBeNull();
   });
 });
