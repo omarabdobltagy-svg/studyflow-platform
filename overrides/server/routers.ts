@@ -366,7 +366,10 @@ async function scanTeacherSourcesForStudent(userId: number, activityId?: string)
         if (activityId) updateAIActivity(userId, activityId, "لا توجد قنوات محددة", "لم يتم اختيار مدرسين لموادك بعد؛ سيبدأ البحث تلقائيًا بعد اختيارهم.");
         return false;
       }
-      if (activityId) updateAIActivity(userId, activityId, "فحص القنوات المختارة", "يبحث في " + selectedIds.length + " قناة/مصدرًا تابعًا للمدرسين المختارين ويجلب الفيديوهات الحديثة.");
+      if (activityId) {
+        const teacherNames = selectedIds.map(teacherId => getSIETeacher(teacherId)?.nameAr ?? teacherId).join("، ");
+        updateAIActivity(userId, activityId, "فحص القنوات المختارة", "يبحث الآن في قنوات: " + teacherNames + "، ويجلب أحدث الفيديوهات العامة.");
+      }
       const result = await scanSelectedTeacherSources(profile);
       const latestProfile = await getStudentProfile(userId);
       if (!latestProfile) return false;
@@ -2638,6 +2641,10 @@ export const appRouter = router({
 
   ai: router({
     activity: protectedProcedure.query(({ ctx }) => getAIActivitySnapshot(ctx.user.id)),
+    capabilities: protectedProcedure.query(() => ({
+      youtubeMonitoring: Boolean(process.env.YOUTUBE_API_KEY?.trim()),
+      teacherVideoAnalysis: isTeacherVideoAnalysisConfigured(),
+    })),
     chat: protectedProcedure
       .input(assistantChatInputSchema)
       .mutation(({ ctx, input }) => runAssistantChat(ctx.user.id, input)),
