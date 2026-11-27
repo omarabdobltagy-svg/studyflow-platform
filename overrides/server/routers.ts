@@ -2923,6 +2923,9 @@ export const appRouter = router({
           }))];
         };
 
+        const savedTeacherUpdates = Array.isArray(selection.teacherPublicUpdates)
+          ? selection.teacherPublicUpdates as Array<Record<string, any>>
+          : [];
         const acceptedAlternativeContexts = selection.acceptedAlternativeReviewContext
           && typeof selection.acceptedAlternativeReviewContext === "object"
           && !Array.isArray(selection.acceptedAlternativeReviewContext)
@@ -2966,9 +2969,6 @@ export const appRouter = router({
         // Start with revision material from the student's selected teacher.
         // A completed analysis must match this exact curriculum branch; otherwise
         // the video is not presented as a suitable revision recommendation.
-        const savedTeacherUpdates = Array.isArray(selection.teacherPublicUpdates)
-          ? selection.teacherPublicUpdates as Array<Record<string, any>>
-          : [];
         const storedSelectedTeacherItems = (selectedTeacherId ? savedTeacherUpdates : [])
           .filter(update => update.teacherId === selectedTeacherId
             && update.sourceType === "youtube"
