@@ -135,6 +135,7 @@ type PlanStep = {
   curriculumNodeIds?: string[];
   existingTask?: { id: number; title: string; status: "todo" | "done"; confidence: "exact" | "strong"; dueAt?: string | null };
   resourceRecommendation?: { title: string; url: string; teacherName?: string; reason: string };
+  subtasks?: Array<{ id: string; title: string; detail: string; curriculumNodeIds?: string[]; startSeconds: number }>;
   difficulty?: "easy" | "medium" | "hard" | "unknown";
   lessonSize?: "small" | "medium" | "large" | "unknown";
   difficultyBasis?: "student_report" | "curriculum_profile" | "unknown";
@@ -240,6 +241,18 @@ function displayArabicText(value: string | null | undefined, fallback: string): 
     .replace(/\bLesson\s+(\d+)\b/gi, "الدرس $1");
 }
 
+function displayTime12Hour(value: string): string {
+  const match = /^(?:([01]\\d|2[0-3])):([0-5]\\d)$/.exec(value);
+  if (!match) return value;
+  const hour24 = Number(match[1]);
+  const minute = Number(match[2]);
+  const hour12 = hour24 % 12 || 12;
+  const period = hour24 < 12 ? "ص" : "م";
+  return hour12.toLocaleString("ar-EG") + ":"
+    + minute.toLocaleString("ar-EG", { minimumIntegerDigits: 2, useGrouping: false })
+    + " " + period;
+}
+
 function displayPlanStepTitle(step: PlanStep, subjectIds: string[]): string {
   const curriculum = getPlanStepCurriculum(step, subjectIds);
   if (curriculum) {
@@ -251,7 +264,7 @@ function displayPlanStepTitle(step: PlanStep, subjectIds: string[]): string {
     const lessonSequence = curriculum.lessonNumber
       ? (curriculum.lessonType === "story" ? "الفصل " : "الدرس ") + curriculum.lessonNumber
       : curriculum.courseSequenceNumber
-        ? "الدرس " + curriculum.courseSequenceNumber.toLocaleString("ar-EG") + " من تسلسل الكورس"
+        ? "الدرس " + curriculum.courseSequenceNumber.toLocaleString("ar-EG")
         : "";
     const segment = step.segmentIndex && step.segmentCount && step.segmentCount > 1
       ? " — الجزء " + step.segmentIndex.toLocaleString("ar-EG") + " من " + step.segmentCount.toLocaleString("ar-EG")
@@ -273,6 +286,34 @@ function displayPlanStepDetail(step: PlanStep, subjectIds: string[]): string {
       ? "ابدأ من مصدر المادة للدرس المحدد، وتابع شرح المدرس عند توفره، ثم سجّل تقدمك بعد المذاكرة."
       : "راجع المطلوب في المهمة، ونفّذه من المصدر المسجل، ثم حدّث حالتها.";
   return displayArabicText(step.detail, fallback);
+}
+
+function PlanReviewSubtasks({ step }: { step: PlanStep }) {
+  if (!step.subtasks?.length) return null;
+  const baseUrl = step.resourceRecommendation?.url || "";
+  return (
+    <section className="sf-sp-composite-subtasks">
+      <header>
+        <strong>خطوات المراجعة داخل المهمة</strong>
+        <span>{step.subtasks.length.toLocaleString("ar-EG")} موضوعات</span>
+      </header>
+      <ol>
+        {step.subtasks.map((subtask, index) => {
+          const timestampUrl = baseUrl ? baseUrl + "#t=" + subtask.startSeconds : "";
+          return (
+            <li key={subtask.id}>
+              <span className="sf-sp-composite-subtask-index">{(index + 1).toLocaleString("ar-EG")}</span>
+              <div>
+                <strong>{displayArabicText(subtask.title, "موضوع مراجعة")}</strong>
+                <p>{displayArabicText(subtask.detail, "راجع الجزء المحدد من الفيديو.")}</p>
+                {timestampUrl && <a href={timestampUrl} target="_blank" rel="noreferrer">شاهد هذا الجزء <ArrowUpRight className="size-3.5" /></a>}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
+  );
 }
 
 function parseSavedPlan(record: { planJson: string }): PlanView | null {
@@ -1305,7 +1346,7 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
               return (
                 <article key={session.key} className="sf-sp-teacher-session-card">
                   <div className="sf-sp-teacher-session-main">
-                    <div className="sf-sp-teacher-session-time"><strong>{session.time}</strong><span>{session.dateLabel}</span></div>
+                    <div className="sf-sp-teacher-session-time"><strong>{displayTime12Hour(session.time)}</strong><span>{session.dateLabel}</span></div>
                     <div className="sf-sp-teacher-session-copy"><strong>{session.teacherName}</strong><span>{session.subjectName}</span></div>
                   </div>
                   <div className="sf-sp-session-preparation">
@@ -1473,6 +1514,7 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
                               )}
                               {step.priorityReason && <p>{displayArabicText(step.priorityReason,"تم اختيارها حسب موضعك الدراسي.")}</p>}
                               {step.resourceRecommendation && <a className="sf-sp-resource-link" href={step.resourceRecommendation.url} target="_blank" rel="noreferrer">{isReview ? "افتح المراجعة المطابقة للدرس" : "افتح شرح المدرس المقترح"} <ArrowUpRight className="size-3.5" /></a>}
+                              <PlanReviewSubtasks step={step} />
                             </details>
                             {editing?.index === index ? (
                               <div className="sf-sp-step-editor">
@@ -1538,6 +1580,7 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
                   افتح المصدر المرتبط بهذه الخطوة <ArrowUpRight className="size-3.5" />
                 </a>
               )}
+              <PlanReviewSubtasks step={selectedMapStep} />
               <div className="sf-sp-flow-selection-actions">
                 {editable && (
                   <Button type="button" size="sm" variant="outline" onClick={() => setEditing({
@@ -1627,7 +1670,8 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
                             </details>
                           )}
                           {step.priorityReason && <details className="sf-sp-step-extra"><summary>لماذا ظهرت هذه الخطوة في الخطة؟</summary><p>{displayArabicText(step.priorityReason,"تم اختيارها حسب ترتيب تقدمك والالتزامات المسجلة.")}</p></details>}
-                          {step.resourceRecommendation && <a className="sf-sp-resource-link" href={step.resourceRecommendation.url} target="_blank" rel="noreferrer">{/مراجعة|review|revision/i.test(step.resourceRecommendation.reason || "") ? "شاهد جزء المراجعة المقترح" : "افتح شرح المدرس المقترح"} <ArrowUpRight className="size-3.5" /></a>}
+                          {step.resourceRecommendation && <a className="sf-sp-resource-link" href={step.resourceRecommendation.url} target="_blank" rel="noreferrer">{/مراجعة|review|revision/i.test(step.resourceRecommendation.reason || "") ? "شاهد فيديو المراجعة" : "افتح شرح المدرس المقترح"} <ArrowUpRight className="size-3.5" /></a>}
+                          <PlanReviewSubtasks step={step} />
                           {editable && (
                             <div className="sf-sp-step-actions">
                               <Button type="button" size="sm" variant="ghost" onClick={()=>setEditing({index,title:step.title,detail:step.detail})}>تعديل</Button>
