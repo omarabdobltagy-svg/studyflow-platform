@@ -67,6 +67,7 @@ export default function Study() {
     relevance: string;
   }>>([]);
   const [reviewSearchNote, setReviewSearchNote] = useState("");
+  const lastAutoReviewSearchKey = useRef("");
   useEffect(() => {
     if (!branchTransition) return;
     const timer = window.setTimeout(() => setBranchTransition(null), 3_200);
@@ -81,7 +82,6 @@ export default function Study() {
     onSuccess: result => {
       setReviewCandidates(result.items);
       setReviewSearchNote(result.note);
-      if (!result.items.length) toast.info("لم نعثر على مراجعة بديلة من مدرس معروف لهذه المادة في نتائج البحث الحالية.");
     },
     onError: error => toast.error(error.message || "تعذّر البحث عن مراجعات بديلة."),
   });
@@ -105,7 +105,14 @@ export default function Study() {
   useEffect(() => {
     setReviewCandidates([]);
     setReviewSearchNote("");
-  }, [subjectId, currentBranchId]);
+    if (!subjectId || !currentBranchId) return;
+    const searchKey = subjectId + ":" + currentBranchId + ":" + (selectedTeacherId || "");
+    if (lastAutoReviewSearchKey.current === searchKey) return;
+    lastAutoReviewSearchKey.current = searchKey;
+    // Discover alternative teachers' reviews as soon as a student opens a
+    // curriculum branch; manual refresh remains available for later updates.
+    reviewSearch.mutate({ subjectId, branchId: currentBranchId, teacherId: selectedTeacherId });
+  }, [subjectId, currentBranchId, selectedTeacherId]);
   const currentBranchPointLabel = currentBranch?.branchType === "official_section" ? "موضوع" : "درس";
   const isLinearSubject = subjectId === "HIS_G2_BAC" || subjectId === "PROG_AI_G2_BAC";
   const legacyLinearRecords = isLinearSubject ? Object.values(branchProgressMap) : [];
@@ -801,16 +808,19 @@ export default function Study() {
                           <p className="text-[10px] font-bold tracking-[0.12em] text-primary">مصادر إضافية</p>
                           <h4 className="mt-1 text-sm font-bold">مراجعات من مدرسين آخرين</h4>
                           <p className="mt-1 max-w-2xl text-xs leading-6 text-muted-foreground">
-                            نبحث عن مدرس آخر مسجل لهذه المادة. لن تؤثر أي مراجعة على خطتك قبل موافقتك، ثم تحليل الفيديو ومطابقة موضوعاته مع فهرس المنهج.
+                            نفحص مراجعات المدرسين الآخرين تلقائيًا عند فتح هذا الفرع. لن تؤثر أي مراجعة على خطتك قبل موافقتك، ثم تحليل الفيديو ومطابقة موضوعاته مع فهرس المنهج.
                           </p>
                         </div>
                         <Button type="button" size="sm" variant="outline" className="shrink-0 rounded-xl"
                           disabled={reviewSearch.isPending || !subjectId || !currentBranchId}
                           onClick={() => reviewSearch.mutate({ subjectId, branchId: currentBranchId, teacherId: selectedTeacherId })}>
-                          {reviewSearch.isPending ? "جارٍ البحث..." : "ابحث عن مراجعات بديلة"}
+                          {reviewSearch.isPending ? "جارٍ البحث..." : "تحديث نتائج المراجعات"}
                         </Button>
                       </div>
                       {reviewSearchNote && <p className="mt-3 rounded-xl bg-muted/40 px-3 py-2 text-[11px] leading-5 text-muted-foreground">{reviewSearchNote}</p>}
+                      {!reviewSearch.isPending && reviewSearch.data && reviewCandidates.length === 0 && (
+                        <p className="mt-3 text-xs text-muted-foreground">لم نعثر على مراجعة بديلة من مدرس مسجل لهذه المادة في نتائج البحث الحالية.</p>
+                      )}
                       {reviewCandidates.length > 0 && (
                         <div className="mt-3 grid gap-3">
                           {reviewCandidates.map(item => (
