@@ -10,6 +10,10 @@ import {
   interleavePlannerItemsBySubject,
 } from "./planGenerator";
 import { getSIECheckpointBranches, getSIECheckpointProgressBranches } from "@shared/sie-catalog";
+import {
+  mergeLegacyLinearBranchProgress,
+  selectLegacyLinearFrontier,
+} from "@shared/sie-learning-progress";
 
 describe("unknown curriculum position safety", () => {
   it("does not classify an entire legacy linear subject as accumulated when the student position is unknown", () => {
@@ -28,6 +32,65 @@ describe("unknown curriculum position safety", () => {
       learningState: "not_recorded",
     });
     expect(snapshot.eligibleNodeIds.size).toBe(1);
+  });
+});
+
+describe("English and History legacy progress resolution", () => {
+  const choices = [
+    { nodeId: "HIS_U1_1" },
+    { nodeId: "HIS_U1_2" },
+    { nodeId: "HIS_U2_1" },
+    { nodeId: "HIS_U3_1" },
+  ];
+
+  it("keeps legacy student and school positions when a current History row contains only teacher position", () => {
+    const merged = mergeLegacyLinearBranchProgress(
+      choices,
+      { teacherTeachingFrontierId: "HIS_U2_1", teacherFrontierConfirmedAt: "2026-11-27T00:00:00.000Z" },
+      { lastCompletedLessonId: "HIS_U1_2", schoolClassFrontierId: "HIS_U3_1" },
+    );
+    expect(merged.lastCompletedLessonId).toBe("HIS_U1_2");
+    expect(merged.teacherTeachingFrontierId).toBe("HIS_U2_1");
+    expect(merged.schoolClassFrontierId).toBe("HIS_U3_1");
+  });
+
+  it("preserves a deliberately confirmed unknown position instead of substituting an old value", () => {
+    const merged = mergeLegacyLinearBranchProgress(
+      choices,
+      { lastCompletedLessonId: "__UNKNOWN__", studentFrontierConfirmedAt: "2026-11-27T00:00:00.000Z" },
+      { lastCompletedLessonId: "HIS_U1_2" },
+    );
+    expect(merged.lastCompletedLessonId).toBe("__UNKNOWN__");
+  });
+
+  it("prefers valid consolidated positions and ignores invalid or cross-curriculum legacy IDs", () => {
+    const merged = mergeLegacyLinearBranchProgress(
+      choices,
+      { lastCompletedLessonId: "HIS_U2_1" },
+      { lastCompletedLessonId: "OTHER_SUBJECT_NODE" },
+    );
+    expect(merged.lastCompletedLessonId).toBe("HIS_U2_1");
+    expect(selectLegacyLinearFrontier(choices, [
+      { lastCompletedLessonId: "HIS_U1_2" },
+      { lastCompletedLessonId: "OTHER_SUBJECT_NODE" },
+      { lastCompletedLessonId: "HIS_U2_1" },
+    ], "lastCompletedLessonId")).toBe("HIS_U2_1");
+  });
+
+  it("does not borrow another teacher's position when no teacher is selected", () => {
+    expect(selectLegacyLinearFrontier(choices, [
+      { teacherId: "teacher-a", teacherTeachingFrontierId: "HIS_U3_1" },
+      { teacherId: "teacher-b", teacherTeachingFrontierId: "HIS_U2_1" },
+      { teacherTeachingFrontierId: "HIS_U1_2" },
+    ], "teacherTeachingFrontierId", { teacherOnly: true })).toBe("HIS_U1_2");
+  });
+
+  it("uses only the currently selected teacher's legacy position", () => {
+    expect(selectLegacyLinearFrontier(choices, [
+      { teacherId: "old-teacher", teacherTeachingFrontierId: "HIS_U3_1" },
+      { teacherId: "current-teacher", teacherTeachingFrontierId: "HIS_U1_2" },
+    ], "teacherTeachingFrontierId", { teacherOnly: true, teacherId: "current-teacher" }))
+      .toBe("HIS_U1_2");
   });
 });
 
