@@ -96,6 +96,39 @@ describe("actual accumulated daily backlog scope", () => {
     expect(plannedIds).not.toContain(choices[5].nodeId);
   });
 
+  it("excludes an explicitly recorded lesson that is beyond the teacher coverage frontier", () => {
+    const choices = grammar.choices;
+    const now = "2026-11-27T00:00:00.000Z";
+    const profile = {
+      subjectIds: [subjectId],
+      selection: {
+        learningCourseProgress: {
+          [subjectId]: {
+            branches: {
+              [grammar.branchId]: {
+                lastCompletedLessonId: choices[1].nodeId,
+                studentFrontierConfirmedAt: now,
+                lessonStateModelVersion: 1,
+                teacherTeachingFrontierId: choices[4].nodeId,
+                teacherFrontierConfirmedAt: now,
+                lessonStates: {
+                  [choices[5].nodeId]: { state: "needs_review", updatedAt: now },
+                },
+              },
+            },
+          },
+        },
+      },
+    } as any;
+
+    const result = applyDailyPlanDepth(emptyPlan(), profile, []);
+    const plannedIds = result.steps.flatMap(step => step.curriculumNodeIds ?? []);
+
+    expect(plannedIds).toContain(choices[2].nodeId);
+    expect(plannedIds).toContain(choices[4].nodeId);
+    expect(plannedIds).not.toContain(choices[5].nodeId);
+  });
+
   it("does not fabricate a one-lesson backlog when the student's position is unknown", () => {
     const choices = grammar.choices;
     const now = "2026-11-27T00:00:00.000Z";
