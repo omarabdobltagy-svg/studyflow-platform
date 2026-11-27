@@ -529,13 +529,14 @@ export default function Planner() {
     });
   };
 
-  const approveCurrentPlan = () => {
-    if (!plan) return;
+  const approveCurrentPlan = (nextPlan?: PlanView) => {
+    const planToApprove = nextPlan ?? plan;
+    if (!planToApprove || approvePlan.isPending) return;
     approvePlan.mutate({
       plan: {
-        title: plan.title,
-        summary: plan.summary,
-        steps: plan.steps.map((step, index) => ({
+        title: planToApprove.title,
+        summary: planToApprove.summary,
+        steps: planToApprove.steps.map((step, index) => ({
           ...step,
           day: step.day || `اليوم ${index + 1}`,
         })),
