@@ -4,7 +4,7 @@ import QueryErrorNotice from "@/components/QueryErrorNotice";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { getNextOpenPlanStep } from "@/lib/plan-actions";
-import { buildPlannerCurriculumLanes, getPlannerStepCurriculum as getPlanStepCurriculum } from "@/lib/planner-curriculum";
+import { buildPlannerCurriculumLanes, getPlannerStepCurriculum as getPlanStepCurriculum, getTeacherSessionPreparationSteps } from "@/lib/planner-curriculum";
 import { ENGLISH_CURRICULUM_LABELS, displayBranchTitle, displayCurriculumTitle } from "@/lib/curriculum-display";
 import {
   getSIECheckpointProgressBranches,
@@ -39,6 +39,7 @@ import { toast } from "sonner";
 
 type PlannerTeacherSession = {
   key: string;
+  subjectId: string;
   teacherName: string;
   subjectName: string;
   dateLabel: string;
@@ -85,6 +86,7 @@ function getPlannerTeacherSessions(profile?: {
       const sortDate = date.toISOString().slice(0, 10);
       sessions.push({
         key: subjectId + "-" + slot.dayOfWeek + "-" + slot.startTime + "-" + sortDate,
+        subjectId,
         teacherName,
         subjectName,
         dateLabel: new Intl.DateTimeFormat("ar-EG", {
@@ -1287,21 +1289,48 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
       {teacherSessions.length > 0 && (
         <section className="sf-sp-teacher-schedule" aria-label="مواعيد الحصص القادمة">
           <header>
-            <div><span>مواعيد المدرسين</span><h3>الحصص القادمة في جدولك</h3></div>
-            <small>مواعيد بداية مسجلة</small>
+            <div><span>المواعيد القادمة</span><h3>الحصة التالية وما يسبقها من متراكم</h3></div>
+            <small>موعد البداية المسجل فقط</small>
           </header>
           <div className="sf-sp-teacher-session-list">
-            {teacherSessions.map(session => (
-              <article key={session.key}>
-                <div className="sf-sp-teacher-session-time"><strong>{session.time}</strong><span>{session.dateLabel}</span></div>
-                <div className="sf-sp-teacher-session-copy"><strong>{session.teacherName}</strong><span>{session.subjectName}</span></div>
-              </article>
-            ))}
+            {teacherSessions.map(session => {
+              const preparationSteps = getTeacherSessionPreparationSteps(plan.steps, session.subjectId, subjectIds, 2);
+              return (
+                <article key={session.key} className="sf-sp-teacher-session-card">
+                  <div className="sf-sp-teacher-session-main">
+                    <div className="sf-sp-teacher-session-time"><strong>{session.time}</strong><span>{session.dateLabel}</span></div>
+                    <div className="sf-sp-teacher-session-copy"><strong>{session.teacherName}</strong><span>{session.subjectName}</span></div>
+                  </div>
+                  <div className="sf-sp-session-preparation">
+                    <span className="sf-sp-session-preparation-label">التحضير من بياناتك الحالية</span>
+                    {preparationSteps.length > 0 ? (
+                      <div className="sf-sp-session-preparation-list">
+                        {preparationSteps.map(step => {
+                          const index = plan.steps.indexOf(step);
+                          return (
+                            <button
+                              key={step.existingTask?.id ?? step.plannerTaskId ?? step.title}
+                              type="button"
+                              onClick={() => setSelectedMapStepIndex(index)}
+                              aria-label={"عرض مهمة التحضير: " + displayPlanStepTitle(step, subjectIds)}
+                            >
+                              <span>{displayPlanStepTitle(step, subjectIds)}</span>
+                              <small>{step.day || "ضمن الخطة الحالية"}</small>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p>لا يوجد متراكم مؤكد مرتبط بهذه المادة في الخطة الحالية. سيحافظ المساعد على موعد الحصة، ولن يخترع عنوان المحاضرة أو واجبًا جديدًا قبل توفر معلومة موثوقة.</p>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
           </div>
-          <p>المساعد يوازن بين المتراكم والتحضير قبل الحصة. لو موضوع المحاضرة الجديدة غير معروف، يثبت الموعد ويختار مراجعة من آخر موضع معروف بدل اختراع درس أو محتوى.</p>
+          <p>المساعد يربط موعد الحصة بالمهام المفتوحة المسجلة للمادة، ويعرضها كتحضير سابق للحصة. لا يفترض مدة المحاضرة أو وقت انتهائها.</p>
         </section>
       )}
-
       {plan.executionStrategy && (
         <section className="sf-sp-plan-rationale">
           <span className="sf-sp-eyebrow">ترتيب التنفيذ</span>
@@ -1332,7 +1361,7 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
       <div className="sf-sp-board-toolbar sf-sp-map-toolbar">
         <div>
           <h3>خريطة تنفيذ الخطة</h3>
-          <p>كل مادة وفرع له مساره. اضغط على أي عقدة لعرض تفاصيلها وفتح الدرس أو المهمة مباشرة.</p>
+          <p>الخريطة مرتبة حسب وحدات المنهج الفعلية، وتُظهر فروع كل وحدة ودروسها. افتح أي خطوة لعرض تفاصيلها.</p>
         </div>
         <div className="sf-sp-map-controls">
           <div className="sf-sp-filter-group" role="group" aria-label="تصفية مهام الخطة">
@@ -1389,7 +1418,7 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
                       const detailText = displayPlanStepDetail(step, subjectIds);
                       const stageTitles = ["معاينة الدرس", "تحديد المطلوب", "القراءة والفهم", "الاسترجاع من الذاكرة", "المراجعة والتثبيت"];
                       return (
-                        <article key={step.plannerTaskId ?? step.existingTask?.id ?? step.sourceStepIndex ?? index} className={"sf-sp-flow-node " + nodeState}>
+                        <article key={step.plannerTaskId ?? step.existingTask?.id ?? step.sourceStepIndex ?? index} data-testid={"planner-node-" + (step.curriculumNodeIds?.[0] ?? step.existingTask?.id ?? index)} className={"sf-sp-flow-node " + nodeState}>
                           <span className="sf-sp-flow-node-index">{isDone ? <CheckCircle2 className="size-4" /> : (laneIndex + 1).toLocaleString("ar-EG")}</span>
                           <div className="sf-sp-flow-node-card">
                             <div className="sf-sp-flow-node-topline">
