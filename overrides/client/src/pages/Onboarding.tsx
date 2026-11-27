@@ -260,9 +260,13 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
   });
   const sharedTeacherOptions = (sharedTeacherDirectory.data ?? []).filter(entry => {
     const normalize = (value: string) => value.normalize("NFKC").toLocaleLowerCase("ar-EG")
-      .replace(/[أإآٱ]/g, "ا").replace(/ى/g, "ي").replace(/[ً-ٟـ]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+      .replace(/[أإآٱ]/g, "ا").replace(/ى/g, "ي").replace(/[ً-ٟـ]/g, "").replace(/[^\\p{L}\\p{N}]+/gu, " ").trim();
     const query = normalize(teacherDirectorySearch);
-    return !query || normalize(entry.nameAr + " " + entry.brandName).includes(query);
+    const matchesSearch = !query || normalize(entry.nameAr + " " + entry.brandName).includes(query);
+    const existsInOfficialList = setupTeacherOptions.some(teacher =>
+      normalize(teacher.nameAr) === normalize(entry.nameAr) || normalize(teacher.brandName || "") === normalize(entry.brandName)
+    );
+    return matchesSearch && !existsInOfficialList;
   });
   useEffect(() => setTeacherDirectorySearch(""), [currentSetupSubjectId]);
   const selectedSetupTeacherId = form.teacherSelections[currentSetupSubjectId] && form.teacherSelections[currentSetupSubjectId] !== SKIP_TEACHER
@@ -307,7 +311,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
         systemId: variables.systemId,
         gradeYear: variables.gradeYear,
       });
-      toast.success("تم التحقق من المدرس وإضافته لدليل StudyFlow المشترك. هيظهر للطلاب الآخرين في نفس المادة والسنة.");
+      toast.success("لقينا مصادر مرتبطة بالمدرس وأضفناه لدليل StudyFlow المشترك. راجع قوة المطابقة والمصدر قبل الاختيار.");
     },
     onError: error => toast.error(error.message || "تعذر البحث عن المدرس الآن."),
   });
@@ -779,9 +783,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                           placeholder="ابحث بالاسم أو اسم القناة..." aria-label="البحث في دليل المدرسين المشترك"
                           className="sf-shared-teacher-search h-11 rounded-xl bg-background" />
                         <div className="sf-teacher-choice-grid grid gap-3 sm:grid-cols-2">
-                          {sharedTeacherOptions
-                            .filter(entry => !setupTeacherOptions.some(teacher => teacher.nameAr.trim().toLocaleLowerCase() === entry.nameAr.trim().toLocaleLowerCase()))
-                            .map(entry => {
+                          {sharedTeacherOptions.map(entry => {
                               const selected = form.teacherSelections[currentSetupSubjectId] === SKIP_TEACHER
                                 && form.customTeacherNames[currentSetupSubjectId] === entry.nameAr;
                               return (
@@ -819,8 +821,8 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                               );
                             })}
                         </div>
-                        {sharedTeacherOptions.length === 0 && (
-                          <p className="sf-shared-teacher-loading">مفيش اسم مطابق للبحث ده في الدليل. جرّب اسم المدرس أو القناة بشكل مختلف، أو استخدم البحث بالذكاء الاصطناعي.</p>
+                        {teacherDirectorySearch.trim() && sharedTeacherOptions.length === 0 && (
+                          <p className="sf-shared-teacher-loading">الاسم ده موجود بالفعل في دليل المدرسين الأساسي بالأعلى، أو جرّب صيغة اسم أخرى أو اسم القناة.</p>
                         )}
                       </section>
                     )}
