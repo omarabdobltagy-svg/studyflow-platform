@@ -131,8 +131,8 @@ function displayArabicText(value: string | null | undefined, fallback: string): 
     localized = localized.replaceAll(english, arabic);
   }
   return localized
-    .replace(/\\bUnit\\s+(\\d+)\\s*:/gi, "الوحدة $1:")
-    .replace(/\\bLesson\\s+(\\d+)\\b/gi, "الدرس $1");
+    .replace(/\bUnit\s+(\d+)\s*:/gi, "الوحدة $1:")
+    .replace(/\bLesson\s+(\d+)\b/gi, "الدرس $1");
 }
 
 function getPlanStepCurriculum(step: PlanStep, subjectIds: string[]) {
