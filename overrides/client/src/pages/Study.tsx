@@ -836,6 +836,7 @@ export default function Study() {
                                         teacherId: item.teacherId,
                                         externalId: item.externalId,
                                         title: item.title,
+                                        channelTitle: item.channelTitle,
                                         url: item.url,
                                         description: item.description,
                                         publishedAt: item.publishedAt,
