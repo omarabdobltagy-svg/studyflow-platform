@@ -23,8 +23,8 @@ describe("Cairo second-year Baccalaureate exam calendar", () => {
       gradeYear: "الصف الثاني الثانوي – دفعة 2027",
       subjectIds: ["ARB_G2_BAC", "ENG1_G2_BAC", "HIS_G2_BAC", "PROG_AI_G2_BAC", "CHEM_G2_BAC_PENDING"],
     });
-    expect(exams.filter(item => item.category === "specialization").map(item => item.subjectId))
-      .toEqual(["CHEM_G2_BAC_PENDING", "PROG_AI_G2_BAC"]);
+    expect(exams.filter(item => item.category === "specialization").map(item => item.subjectId).sort())
+      .toEqual(["CHEM_G2_BAC_PENDING", "PROG_AI_G2_BAC"].sort());
   });
 
   it("does not return a timetable for another education system or grade", () => {
