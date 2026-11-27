@@ -907,7 +907,7 @@ export default function Planner() {
               <section className="sf-sp-empty" data-scroll-reveal>
                 <h2>ملفك الدراسي يحتاج إلى استكمال</h2>
                 <p>اختر الصف والمواد والمدرسين من ملفك الدراسي حتى نستطيع إنشاء خطة مرتبطة بمنهجك بدل اقتراح مهام عامة.</p>
-                <a href="/profile"><ArrowUpRight className="size-4" />افتح الملف الدراسي</a>
+                <a href="/settings/academic"><ArrowUpRight className="size-4" />افتح الملف الدراسي</a>
               </section>
             )}
 
@@ -977,7 +977,7 @@ export default function Planner() {
                   <span className="sf-sp-eyebrow">المسار التدريجي</span>
                   <h2>كل الدروس حسب أولويتها</h2>
                 </div>
-                <a href="/curriculum" className="sf-sp-text-action">تحديث موضعك <ArrowUpRight className="size-4" /></a>
+                <a href="/learning-map" className="sf-sp-text-action">تحديث موضعك <ArrowUpRight className="size-4" /></a>
               </div>
               <p className="sf-sp-muted-intro">القائمة تعرض كل درس حالته معروفة، لا عينة من أول الخطة فقط. الجدول اليومي يختار منها ما يناسب وقتك.</p>
 
