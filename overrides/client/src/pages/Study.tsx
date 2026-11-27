@@ -681,7 +681,7 @@ export default function Study() {
                                   setBranchId(choice.displayBranchId);
                                   setStudyViewMode("lessons");
                                 }} className="sf-english-lesson-row flex w-full min-w-0 items-start gap-2 rounded-xl border border-border/60 bg-card px-3 py-2 text-right transition-colors hover:border-primary/40 hover:bg-accent/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
-                                  <span className="sf-english-section-tag shrink-0 rounded-md border border-border bg-muted px-2 py-1 text-[9px] font-semibold text-muted-foreground">{"Topic " + choice.lessonNumber}</span>
+                                  <span className="sf-english-section-tag shrink-0 rounded-md border border-border bg-muted px-2 py-1 text-[9px] font-semibold text-muted-foreground">{"Lesson " + (String(choice.lessonNumber || "").match(/^\\d+\\.(\\d+)$/)?.[1] ?? choice.lessonNumber) + (/^\\d+\\.\\d+$/.test(String(choice.lessonNumber || "")) ? " (" + choice.lessonNumber + ")" : "")}</span>
                                   <span className="min-w-0 flex-1 text-xs leading-6 text-foreground">{choice.title}</span>
                                   {sectionLabel && <span className="sf-english-section-tag shrink-0 rounded-md border border-border bg-muted px-2 py-1 text-[9px] font-semibold text-muted-foreground">{sectionLabel}</span>}
                                 </button>
