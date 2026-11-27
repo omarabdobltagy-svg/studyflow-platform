@@ -56,6 +56,7 @@ export default function Tasks() {
   const utils = trpc.useUtils();
   const [isFormOpen, setFormOpen] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const [filter, setFilter] = useState<"all" | "todo" | "done">("todo");
   const [searchQuery, setSearchQuery] = useState("");
   const [reportingTaskId, setReportingTaskId] = useState<number | null>(null);
@@ -99,6 +100,10 @@ export default function Tasks() {
       });
   }, [tasksQuery.data, filter, searchQuery]);
   const allTasks = tasksQuery.data || [];
+  const selectedTask = allTasks.find(task => task.id === selectedTaskId) ?? null;
+  const selectedTaskPresentation = selectedTask
+    ? taskArabicPresentation(selectedTask, subjectIds)
+    : null;
   const todoCount = allTasks.filter(task => task.status === "todo").length;
   const doneCount = allTasks.filter(task => task.status === "done").length;
   const todayKey = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
@@ -139,6 +144,37 @@ export default function Tasks() {
       )}
       {isFormOpen && <TaskForm goals={goalsQuery.data || []} onClose={() => setFormOpen(false)} onSubmit={data => createTask.mutate(data)} loading={createTask.isPending} />}
       {editingTaskId !== null && tasksQuery.data?.find(task => task.id === editingTaskId) ? <TaskEditForm task={tasksQuery.data.find(task => task.id === editingTaskId)!} goals={goalsQuery.data || []} onClose={() => setEditingTaskId(null)} onSubmit={data => updateTask.mutate({ id: editingTaskId, ...data })} onDelete={() => { if (window.confirm("هل تريد حذف هذه المهمة؟")) deleteTask.mutate({ id: editingTaskId }); }} loading={updateTask.isPending} /> : null}
+      {selectedTask && selectedTaskPresentation && editingTaskId === null && (
+        <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/55 p-0 backdrop-blur-sm sm:items-center sm:p-4" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setSelectedTaskId(null); }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="sf-task-detail-title" className="max-h-[88dvh] w-full max-w-2xl overflow-y-auto rounded-t-3xl border border-border bg-card shadow-2xl sm:rounded-3xl">
+            <header className="sticky top-0 flex items-start justify-between gap-3 border-b border-border/70 bg-card/95 p-5 backdrop-blur">
+              <div className="min-w-0">
+                <p className="eyebrow">تفاصيل المهمة</p>
+                <h2 id="sf-task-detail-title" className="mt-1 text-lg font-bold leading-8">{selectedTaskPresentation.title}</h2>
+                <p className="mt-1 text-xs text-muted-foreground">{selectedTaskPresentation.category}</p>
+              </div>
+              <Button type="button" variant="ghost" size="icon" onClick={() => setSelectedTaskId(null)} aria-label="إغلاق التفاصيل"><X className="size-4" /></Button>
+            </header>
+            <div className="grid gap-4 p-5">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <div className="rounded-xl border border-border/70 bg-muted/20 p-3"><span className="text-xs text-muted-foreground">الحالة</span><b className="mt-1 block text-sm">{selectedTask.status === "done" ? "مكتملة" : "قيد التنفيذ"}</b></div>
+                <div className="rounded-xl border border-border/70 bg-muted/20 p-3"><span className="text-xs text-muted-foreground">الأولوية</span><b className="mt-1 block text-sm">{priorityMeta[selectedTask.priority].label}</b></div>
+                <div className="rounded-xl border border-border/70 bg-muted/20 p-3 col-span-2 sm:col-span-1"><span className="text-xs text-muted-foreground">موعد الاستحقاق</span><b className="mt-1 block text-sm">{displayDate(selectedTask.dueAt) || "بدون موعد"}</b></div>
+              </div>
+              <section className="rounded-2xl border border-border/70 p-4">
+                <h3 className="text-sm font-bold">تفاصيل التنفيذ</h3>
+                <p className="mt-2 whitespace-pre-line text-sm leading-7 text-muted-foreground">{selectedTaskPresentation.notes || "لا توجد تفاصيل إضافية مسجلة لهذه المهمة."}</p>
+              </section>
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => { setEditingTaskId(selectedTask.id); setSelectedTaskId(null); }}><Pencil className="size-4" />تعديل</Button>
+                <Button type="button" onClick={() => { const done = selectedTask.status !== "done"; if (done && selectedTask.notes?.includes("طريقة المذاكرة:") && !window.confirm("هل أنهيت طريقة المذاكرة المطلوبة، وخلصت واجب أو امتحان المدرس لو كان مطلوبًا؟")) return; toggleTask.mutate({ id: selectedTask.id, done }); setSelectedTaskId(null); }}>
+                  <Check className="size-4" />{selectedTask.status === "done" ? "إعادة فتح المهمة" : "إنهاء المهمة"}
+                </Button>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
       {reportingTaskId!==null&&<section className="app-card mb-5 border-primary/20 p-5">
         <div className="flex items-start justify-between gap-3"><div><p className="eyebrow">تغذية راجعة للمخطط الذكي</p><h2 className="mt-1 font-bold">ليه ما كملتش المهمة؟</h2><p className="mt-1 text-xs leading-6 text-muted-foreground">إجابتك هتساعد النظام يقلل الحمل أو يغيّر ترتيب المهام بدل ما يكرر نفس الخطة.</p></div><Button type="button" variant="ghost" size="icon" onClick={()=>setReportingTaskId(null)} aria-label="إغلاق"><X className="size-4"/></Button></div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -170,11 +206,24 @@ export default function Tasks() {
         <div className="divide-y divide-border/60">
           {tasksQuery.isLoading ? <TaskSkeletons /> : shownTasks.length ? shownTasks.map(task => {
             const meta = priorityMeta[task.priority];
-            return <div key={task.id} className="group flex items-center gap-3 px-5 py-4 transition-colors hover:bg-muted/30 sm:px-6">
-              <button onClick={() => { const done = task.status !== "done"; if (done && task.notes?.includes("طريقة المذاكرة:") && !window.confirm("هل أنهيت طريقة المذاكرة المطلوبة، وخلصت واجب أو امتحان المدرس لو كان مطلوبًا؟")) return; toggleTask.mutate({ id: task.id, done }); }} disabled={toggleTask.isPending} className={cn("pressable flex size-6 shrink-0 items-center justify-center rounded-full border-2", task.status === "done" ? "border-emerald-500 bg-emerald-500 text-white" : "border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground")} aria-label={task.status === "done" ? `إعادة فتح ${presentation.title}` : `إكمال ${presentation.title}`}>{task.status === "done" && <Check className="size-3.5" />}</button>
-              <div className="min-w-0 flex-1"><p className={cn("font-semibold", task.status === "done" && "text-muted-foreground line-through")}>{presentation.title}</p><div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground"><span className="inline-flex items-center gap-1"><Tag className="size-3" />{presentation.category}</span>{task.dueAt && <span className="inline-flex items-center gap-1"><CalendarDays className="size-3" />{displayDate(task.dueAt)}</span>}</div>{presentation.notes&&<details className="mt-2 max-w-2xl rounded-lg border border-border/60 bg-muted/20 px-3 py-2"><summary className="cursor-pointer text-[11px] font-semibold text-primary">{presentation.notes.includes("طريقة المذاكرة:")?"عرض طريقة المذاكرة وسبب كل مرحلة":"عرض تفاصيل المهمة"}</summary><p className="mt-2 whitespace-pre-line text-xs leading-6 text-muted-foreground">{presentation.notes}</p></details>}</div>
-              <Badge className={cn("shrink-0 rounded-lg border-0 px-2 py-1 text-[11px]", meta.pill)}><span className={cn("ml-1 inline-block size-1.5 rounded-full", meta.dot)} />{meta.label}</Badge>{task.status!=="done"&&<Button type="button" size="sm" variant="ghost" onClick={()=>{setReportingTaskId(task.id);setBlockerReason("low_time");setBlockerNote("");}} className="h-8 shrink-0 rounded-lg px-2 text-[11px] text-muted-foreground">ليه ما كملتش؟</Button>}<div className="flex shrink-0 items-center gap-1"><Button size="icon" variant="ghost" onClick={() => setEditingTaskId(task.id)} className="size-8 rounded-lg" aria-label={`تعديل ${presentation.title}`}><Pencil className="size-3.5" /></Button><Button size="icon" variant="ghost" onClick={() => { if (window.confirm("حذف هذه المهمة؟")) deleteTask.mutate({ id: task.id }); }} className="size-8 rounded-lg text-destructive hover:text-destructive" aria-label={`حذف ${task.title}`}><Trash2 className="size-3.5" /></Button></div>
-            </div>;
+            const presentation = taskArabicPresentation(task, subjectIds);
+            return <article key={task.id} className="group flex items-center gap-3 border-b border-border/60 px-4 py-4 transition-colors hover:bg-muted/35 sm:px-5">
+              <button type="button" onClick={() => { const done = task.status !== "done"; if (done && task.notes?.includes("طريقة المذاكرة:") && !window.confirm("هل أنهيت طريقة المذاكرة المطلوبة، وخلصت واجب أو امتحان المدرس لو كان مطلوبًا؟")) return; toggleTask.mutate({ id: task.id, done }); }} disabled={toggleTask.isPending} className={cn("pressable flex size-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors", task.status === "done" ? "border-emerald-500 bg-emerald-500 text-white" : "border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground")} aria-label={task.status === "done" ? `إعادة فتح ${presentation.title}` : `إكمال ${presentation.title}`}>{task.status === "done" && <Check className="size-3.5" />}</button>
+              <button type="button" onClick={() => setSelectedTaskId(task.id)} className="min-w-0 flex-1 rounded-xl text-right outline-none focus-visible:ring-2 focus-visible:ring-primary/60">
+                <span className={cn("block truncate text-sm font-semibold", task.status === "done" && "text-muted-foreground line-through")}>{presentation.title}</span>
+                <span className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                  <span className="inline-flex items-center gap-1"><Tag className="size-3" />{presentation.category}</span>
+                  {task.dueAt && <span className="inline-flex items-center gap-1"><CalendarDays className="size-3" />{displayDate(task.dueAt)}</span>}
+                  {task.status === "todo" && <span>اضغط لفتح التفاصيل</span>}
+                </span>
+              </button>
+              <Badge className={cn("shrink-0 rounded-lg border-0 px-2 py-1 text-[11px]", meta.pill)}><span className={cn("ml-1 inline-block size-1.5 rounded-full", meta.dot)} />{meta.label}</Badge>
+              <div className="flex shrink-0 items-center gap-0.5">
+                <Button size="icon" variant="ghost" onClick={() => { setReportingTaskId(task.id); setBlockerReason("low_time"); setBlockerNote(""); }} className="size-8 rounded-lg text-muted-foreground" aria-label={`تسجيل سبب عدم إكمال ${presentation.title}`}><Circle className="size-3.5" /></Button>
+                <Button size="icon" variant="ghost" onClick={() => setEditingTaskId(task.id)} className="size-8 rounded-lg" aria-label={`تعديل ${presentation.title}`}><Pencil className="size-3.5" /></Button>
+                <Button size="icon" variant="ghost" onClick={() => { if (window.confirm("حذف هذه المهمة؟")) deleteTask.mutate({ id: task.id }); }} className="size-8 rounded-lg text-destructive hover:text-destructive" aria-label={`حذف ${presentation.title}`}><Trash2 className="size-3.5" /></Button>
+              </div>
+            </article>;
           }) : <div className="flex min-h-64 flex-col items-center justify-center px-5 text-center"><Circle className="mb-3 size-8 text-muted-foreground/35" /><p className="font-semibold">{searchQuery ? "مفيش نتائج مطابقة للبحث" : "لا توجد مهام في هذه القائمة"}</p><p className="mt-1 max-w-sm text-sm text-muted-foreground">{searchQuery ? "جرّب كلمة مختلفة أو امسح البحث لعرض المهام." : "أضف مهمة محددة وصغيرة بما يكفي لتبدأ بها اليوم."}</p>{searchQuery ? <Button variant="link" onClick={() => setSearchQuery("")} className="mt-2 text-primary">مسح البحث</Button> : <Button variant="link" onClick={() => setFormOpen(true)} className="mt-2 gap-1 text-primary"><Plus className="size-4" />أضف مهمة</Button>}</div>}
         </div>
       </section>
