@@ -206,7 +206,7 @@ export const SIE_TEACHERS: SIETeacher[] = [
   {
     teacherId: "T_AR_REDA_FAROUK", nameAr: "رضا الفاروق", brandName: "رضا الفاروق",
     subjectIds: ["ARB_G2_BAC"], profileUrl: "https://youtube.com/channel/UC7fHSfm6zxGJYC-P7RMzX7w",
-    socialProfiles: [{ platform: "Facebook", url: "https://www.facebook.com/RedaElfaroukOfficial/" }, { platform: "Facebook", url: "https://linktr.ee/redaelfaroukofficial" }],
+    socialProfiles: [{ platform: "Facebook", url: "https://www.facebook.com/RedaElfaroukOfficial/" }],
     lastChecked: "2026-11-27",
     publicAudienceMetric: 1570000,
     publicAudienceMetricDate: "2026-11-14",
@@ -270,7 +270,7 @@ export const SIE_TEACHERS: SIETeacher[] = [
   {
     teacherId: "T_EN_MAHMOUD_RADWAN", nameAr: "محمود رضوان", brandName: "إنجلشاوي",
     subjectIds: ["ENG1_G2_BAC"], profileUrl: "https://www.youtube.com/@MahmoudRadwan.Englishawy",
-    socialProfiles: [{ platform: "Facebook", url: "https://bit.ly/EnglishawyFbPage" }],
+    socialProfiles: [{ platform: "Facebook", url: "https://www.facebook.com/MahmoudRadwan.Englishawy" }],
     suggestedDefaultSchedule: [{ dayOfWeek: 0, startTime: "21:00" }, { dayOfWeek: 3, startTime: "21:00" }],
     suggestedScheduleNote: "موعدان افتراضيان أُضيفا كبداية قابلة للتعديل، وليس إعلانًا رسميًا بجدول المدرس.",
     lastChecked: "2026-11-27",
