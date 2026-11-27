@@ -577,6 +577,61 @@ async function buildDailyPlanOperationalContext(userId: number) {
       update.affectedDate ? "التاريخ المتأثر: " + update.affectedDate : "",
       update.url,
     ].filter(Boolean).join(" — "));
+  const videoTimeLabel = (seconds: number) => {
+    const safe = Math.max(0, Math.floor(Number(seconds) || 0));
+    const hours = Math.floor(safe / 3_600);
+    const minutes = Math.floor((safe % 3_600) / 60);
+    const remainder = safe % 60;
+    return hours > 0
+      ? hours.toLocaleString("ar-EG") + ":" + String(minutes).padStart(2, "0") + ":" + String(remainder).padStart(2, "0")
+      : minutes.toLocaleString("ar-EG") + ":" + String(remainder).padStart(2, "0");
+  };
+  const analyzedTeacherVideos = rawTeacherUpdates
+    .filter(update => typeof update.teacherId === "string"
+      && selectedTeacherIds(profile!).includes(update.teacherId)
+      && update.sourceType === "youtube"
+      && update.contentAnalysis?.status === "complete"
+      && Array.isArray(update.contentAnalysis.topics))
+    .sort((left, right) => Date.parse(String(right.publishedAt)) - Date.parse(String(left.publishedAt)))
+    .slice(0, 8)
+    .map(update => {
+      const analysis = update.contentAnalysis as Record<string, any>;
+      const topics = (analysis.topics as Array<Record<string, any>>).slice(0, 12).map(topic => {
+        const startSeconds = Math.max(0, Math.floor(Number(topic.startSeconds) || 0));
+        const endSeconds = Math.max(startSeconds + 1, Math.floor(Number(topic.endSeconds) || startSeconds + 1));
+        return [
+          "الموضوع: " + String(topic.titleAr ?? ""),
+          "الشرح: " + String(topic.descriptionAr ?? ""),
+          "من " + videoTimeLabel(startSeconds) + " إلى " + videoTimeLabel(endSeconds),
+          "المادة/الفرع المقترح: " + [...(Array.isArray(topic.subjectHints) ? topic.subjectHints : []), ...(Array.isArray(topic.branchHints) ? topic.branchHints : [])].join("، "),
+          "مفاتيح المنهج: " + (Array.isArray(topic.curriculumKeywords) ? topic.curriculumKeywords.join("، ") : ""),
+          "رابط بدء هذا الجزء: " + String(update.url) + "#t=" + startSeconds,
+          "ثقة التحليل: " + String(topic.confidence ?? "medium"),
+        ].join(" | ");
+      });
+      const instructions = (Array.isArray(analysis.teacherInstructions) ? analysis.teacherInstructions : [])
+        .filter((item: any) => item?.explicit === true)
+        .slice(0, 8)
+        .map((item: any) => [
+          String(item.instructionAr ?? ""),
+          "النوع: " + String(item.kind ?? "other"),
+          item.startSeconds !== undefined ? "عند " + videoTimeLabel(Number(item.startSeconds)) : "",
+          "الثقة: " + String(item.confidence ?? "medium"),
+        ].filter(Boolean).join(" | "));
+      return [
+        "تحليل فيديو مدرس موثّق — " + String(update.teacherName ?? ""),
+        "العنوان: " + String(update.title ?? ""),
+        "تاريخ النشر: " + String(update.publishedAt ?? ""),
+        "رابط المصدر: " + String(update.url ?? ""),
+        "ملخص المحتوى: " + String(analysis.summaryAr ?? ""),
+        "الموضوعات الفعلية المستخرجة من الفيديو:",
+        topics.join("\\n") || "لم يتمكن التحليل من تحديد مقاطع موضوعية.",
+        "تعليمات المدرس الصريحة داخل الفيديو:",
+        instructions.join("\\n") || "لم تُستخرج تعليمات صريحة موثوقة.",
+        "موضوعات قال المدرس إنها غير مشمولة:",
+        (Array.isArray(analysis.topicsNotCovered) ? analysis.topicsNotCovered : []).join("، ") || "لا توجد موضوعات مستبعدة موثقة.",
+      ].join("\\n");
+    });
 
   const upcomingEvents = calendar
     .filter(event => {
@@ -613,13 +668,15 @@ async function buildDailyPlanOperationalContext(userId: number) {
     completedRecentTasks.length ? completedRecentTasks.join("\n") : "لا توجد مهام منتهية مسجلة.",
     "إعلانات عامة موثوقة بتغيير أو إلغاء محاضرات (مصدرها صفحة المدرس المختار؛ التحديثات الغامضة لا تُستخدم لتغيير الجدول):",
     teacherScheduleUpdates.length ? teacherScheduleUpdates.join("\\n") : "لا توجد إعلانات عالية الثقة عن إلغاء أو تغيير حصص ضمن آخر تحديثات المدرسين.",
+    "تحليلات فيديوهات المدرسين المختارين (هذه الموضوعات استخرجها نموذج فيديو من محتوى الفيديو الفعلي؛ استخدم فقط المقاطع التي تطابق عقد المنهج الرسمي ولا تحول مدة الفيديو إلى مدد مذاكرة):",
+    analyzedTeacherVideos.length ? analyzedTeacherVideos.join("\\n\\n") : "لا توجد تحليلات فيديو مكتملة حتى الآن. لا تستنتج موضوعات الفيديو من العنوان أو مدة الفيديو وحدهما.",
     "الأحداث والمواعيد خلال 14 يومًا:",
     upcomingEvents.length ? upcomingEvents.join("\n") : "لا توجد أحداث قادمة محفوظة.",
     "الأهداف النشطة:",
     activeGoals.length ? activeGoals.join("\n") : "لا توجد أهداف نشطة محفوظة.",
     "الكتب والموارد المتاحة:",
     availableBooks.length ? availableBooks.join("، ") : "لا توجد كتب محفوظة.",
-  ].join("\n").slice(0, 3_800);
+  ].join("\n").slice(0, 7_800);
   return {
     text: readableContext + "\n\nذاكرة الطالب المنظمة مع المصدر ودرجة الثقة لكل معلومة:\n" + formatPlannerMemorySnapshot(memorySnapshot),
     memorySnapshot,
