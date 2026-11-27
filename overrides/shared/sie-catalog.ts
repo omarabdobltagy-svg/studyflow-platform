@@ -735,8 +735,8 @@ const ENGLISH_SECTION_TITLES: Record<string, string> = {
 
 /**
  * التصنيف التفاعلي يراعي بنية المادة الفعلية:
- * العربية مسارات مهارية مستقلة، والإنجليزية Vocabulary/Grammar/GRE
- * إلى جانب موضوعات الكتاب، بينما التاريخ والبرمجة مساران خطيان كاملان.
+ * العربية مسارات مهارية مستقلة، والإنجليزية Vocabulary/Grammar وموضوعات الكتاب والقصة المقررة،
+ * بينما التاريخ والبرمجة مساران خطيان كاملان. لا تُعرض مسارات إثرائية خارج فهرس الوزارة ضمن المنهج.
  * المواد التي لم يكتمل فهرسها تظهر كمسار غير مكتمل بلا عناوين مخترعة؛
  * لا يُسمح للطالب بإنشاء نقاط منهج خارج الفهرس الرسمي.
  */
@@ -1118,7 +1118,7 @@ export function getSIECheckpointBranches(subjectId: string): SIECheckpointBranch
         title,
         unitTitle: unit.unitTitle,
         unitNumber: unit.unitNumber,
-        lessonNumber: String(index + 2),
+        lessonNumber: unit.unitNumber === 1 && index === 1 ? "4 & 5" : String(index + 2),
         lessonType: "grammar" as const,
         sourceLabel: unitSource(unit.unitNumber),
         branchId: "ENG_GRAMMAR",
@@ -1127,28 +1127,9 @@ export function getSIECheckpointBranches(subjectId: string): SIECheckpointBranch
       }))
     );
 
-    const greTitles = [
-      "المفردات الأكاديمية وفهمها من السياق",
-      "إكمال النصوص (Text Completion)",
-      "تكافؤ الجمل (Sentence Equivalence)",
-      "فهم المقروء والاستدلال (Reading Comprehension)",
-    ];
-    const greChoices = greTitles.map((title, index) => ({
-      nodeId: `ENG_GRE_${index + 1}`,
-      title,
-      unitTitle: "مسار GRE التكميلي",
-      courseSequenceNumber: index + 1,
-      lessonType: "topic" as const,
-      sourceLabel: "مسار إثرائي مستقل عن المنهج الوزاري",
-      branchId: "ENG_GRE",
-      branchTitle: "GRE — مسار تكميلي",
-      branchType: "course_track" as const,
-    }));
-
     return [
       { branchId: "ENG_VOCABULARY", branchTitle: "دروس المفردات داخل الوحدات", branchType: "course_track", choices: vocabularyChoices },
       { branchId: "ENG_GRAMMAR", branchTitle: "دروس القواعد داخل الوحدات", branchType: "course_track", choices: grammarChoices },
-      { branchId: "ENG_GRE", branchTitle: "GRE — مسار تكميلي", branchType: "course_track", choices: greChoices },
       {
         branchId: textbookBranchId,
         branchTitle: "الوحدات (Units)",
