@@ -379,6 +379,23 @@ export default function Planner() {
     refetchOnWindowFocus: false,
   });
 
+  const aiActivity = trpc.ai.activity.useQuery(undefined, {
+    enabled: Boolean(profile.data?.subjectIds?.length),
+    refetchInterval: query => {
+      const active = query.state.data?.active ?? [];
+      const monitorIsRunning = active.some(item => item.kind === "daily_plan" || item.kind === "teacher_monitor");
+      return activeDailyPlan.isLoading || ensureDaily.isPending || monitorIsRunning ? 1_200 : false;
+    },
+    refetchOnWindowFocus: false,
+  });
+  const aiCapabilities = trpc.ai.capabilities.useQuery(undefined, {
+    enabled: Boolean(profile.data?.subjectIds?.length),
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
+  const visibleAIActivities = (aiActivity.data?.active ?? [])
+    .filter(item => item.kind === "daily_plan" || item.kind === "teacher_monitor");
+
   const approvePlan = trpc.plans.approve.useMutation({
     onSuccess: async result => {
       setApproved(true);
@@ -723,6 +740,54 @@ export default function Planner() {
             </section>
 
             {ensureDaily.isPending && <PlanLoading progress={generationProgress.data ?? null} />}
+
+            {profile.data?.subjectIds?.length && aiCapabilities.data && (
+              <section className="app-card flex flex-wrap items-start gap-3 rounded-2xl p-4" aria-live="polite">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Sparkles className="size-4" /></span>
+                <div className="min-w-0 flex-1">
+                  <strong className="text-sm">الرصد التلقائي للمدرسين</strong>
+                  <p className="mt-1 text-xs leading-6 text-muted-foreground">
+                    {aiCapabilities.data.youtubeMonitoring
+                      ? "البحث عن قنوات المدرسين المختارين وفحص الفيديوهات العامة مفعّل."
+                      : "البحث التلقائي عن قنوات YouTube يحتاج إعداد YOUTUBE_API_KEY على خدمة Preview."}
+                    {" "}
+                    {aiCapabilities.data.teacherVideoAnalysis
+                      ? "تحليل الفيديو إلى موضوعات فعلية مفعّل."
+                      : "تحليل محتوى الفيديو غير مفعّل: أضف GEMINI_API_KEY إلى متغيرات خدمة StudyFlow Preview في Railway. لا تضع المفتاح في المحادثة أو في واجهة الطالب."}
+                  </p>
+                </div>
+              </section>
+            )}
+
+            {visibleAIActivities.length > 0 && (
+              <section className="app-card rounded-2xl p-4 sm:p-5" role="status" aria-live="polite">
+                <div className="mb-3 flex items-center gap-2">
+                  <Sparkles className="size-4 animate-pulse text-primary" />
+                  <strong className="text-sm">ماذا يفعل StudyFlow الآن؟</strong>
+                  <span className="mr-auto text-[10px] text-primary">يعمل تلقائيًا</span>
+                </div>
+                <div className="space-y-3">
+                  {visibleAIActivities.map(activity => (
+                    <article key={activity.id} className="rounded-xl border border-border/70 bg-muted/10 p-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <strong className="text-sm">{activity.title}</strong>
+                        <span className="rounded-full bg-primary/10 px-2 py-1 text-[10px] text-primary">{activity.stage}</span>
+                      </div>
+                      <p className="mt-1 text-xs leading-6 text-muted-foreground">{activity.detail}</p>
+                      {activity.events.length > 1 && (
+                        <ol className="mt-2 space-y-1 border-r border-border pr-3">
+                          {activity.events.slice(-3).map(event => (
+                            <li key={event.updatedAt} className="text-[11px] leading-5 text-muted-foreground">
+                              <span className="font-semibold text-foreground">{event.stage}:</span> {event.detail}
+                            </li>
+                          ))}
+                        </ol>
+                      )}
+                    </article>
+                  ))}
+                </div>
+              </section>
+            )}
 
             {!profile.isLoading && profile.data && profile.data.subjectIds.length === 0 && (
               <section className="sf-sp-empty" data-scroll-reveal>
