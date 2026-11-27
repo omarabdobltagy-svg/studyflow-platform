@@ -305,6 +305,7 @@ type PlannerCurriculumChoice = {
   nodeId: string;
   title: string;
   learningState?: StudentLessonState;
+  explicitlyReported?: boolean;
 };
 
 type PlannerBranchProgress = {
@@ -471,6 +472,7 @@ export function buildPlannerProgressSnapshot(
           nodeId: choice.nodeId,
           title: choice.title,
           learningState,
+          explicitlyReported: isStudentLessonState(lessonStates[choice.nodeId]?.state),
         };
         if (isStudentLessonStudyComplete(learningState) || completedBySq3r) {
           branchCompleted.push(item);
@@ -1432,17 +1434,71 @@ export function applyDailyPlanDepth(
     return match?.subjectId;
   };
 
-  const steps: GeneratedPlan["steps"] = plan.steps.map(step => {
-    if (step.phaseId || step.existingTask) {
-      return { ...step, phaseId: step.phaseId ?? "backlog" as const };
+  // Build the daily backlog from the intersection of the student's known progress
+  // and the instructor/school coverage frontier. Never turn the rest of the syllabus
+  // into "accumulated" work simply because it is after the student's position.
+  const dailyBacklogItems: Array<{
+    subjectId: string;
+    branch: ReturnType<typeof getPlanningBranches>[number];
+    choice: PlannerCurriculumChoice;
+    index: number;
+    progress: PlannerBranchProgress;
+  }> = [];
+  const unresolvedBacklogByBranch: Array<{ subjectId: string; branchTitle: string; count: number }> = [];
+  for (const subjectId of profile.subjectIds ?? []) {
+    for (const branch of getPlanningBranches(subjectId)) {
+      const progress = snapshot.branches.get(plannerBranchKey(subjectId, branch.branchId));
+      if (!progress) continue;
+      const eligibleById = new Map((progress.eligibleChoices ?? []).map(choice => [choice.nodeId, choice]));
+      const branchBacklog: typeof dailyBacklogItems = [];
+      for (const [index, syllabusChoice] of branch.choices.entries()) {
+        const choice = eligibleById.get(syllabusChoice.nodeId);
+        if (!choice || choice.learningState === "not_recorded") continue;
+        const explicitlyReported = choice.explicitlyReported === true;
+        const alreadyReachedByStudent = progress.studentPosition !== null && index < progress.studentPosition;
+        const insideTeacherCoverage = progress.referencePosition !== null && index < progress.referencePosition;
+        const include = explicitlyReported
+          || alreadyReachedByStudent
+          || (insideTeacherCoverage && progress.studentPosition !== null && index >= progress.studentPosition);
+        if (!include) continue;
+        branchBacklog.push({ subjectId, branch, choice, index, progress });
+      }
+      dailyBacklogItems.push(...branchBacklog);
+
+      const knownBacklogFrontier = Math.max(progress.studentPosition ?? 0, progress.referencePosition ?? 0);
+      const unresolvedCount = branch.choices.slice(0, knownBacklogFrontier).filter(syllabusChoice => {
+        if (snapshot.completedNodeIds.has(syllabusChoice.nodeId)) return false;
+        if (branchBacklog.some(item => item.choice.nodeId === syllabusChoice.nodeId)) return false;
+        const savedState = (selection.learningCourseProgress?.[subjectId]?.branches?.[branch.branchId]?.lessonStates ?? {}) as Record<string, { state?: StudentLessonState }>;
+        return !isStudentLessonState(savedState[syllabusChoice.nodeId]?.state)
+          || savedState[syllabusChoice.nodeId]?.state === "not_recorded";
+      }).length;
+      if (unresolvedCount > 0) {
+        unresolvedBacklogByBranch.push({ subjectId, branchTitle: branch.branchTitle, count: unresolvedCount });
+      }
     }
-    const subjectId = subjectForStep(step);
-    const isTeacherSync = Boolean(subjectId
-      && teacherChoices[subjectId]
-      && teacherChoices[subjectId] !== "__SKIP__"
-      && Array.isArray(teacherSchedules[subjectId])
-      && teacherSchedules[subjectId].length > 0);
-    return { ...step, phaseId: isTeacherSync ? "teacher_sync" as const : "steady" as const };
+  }
+  const dailyBacklogNodeIds = new Set(dailyBacklogItems.map(item => item.choice.nodeId));
+
+  const steps: GeneratedPlan["steps"] = plan.steps.flatMap(step => {
+    const sourceNodeIds = step.curriculumNodeIds ?? [];
+    if (sourceNodeIds.length > 0) {
+      const validNodeIds = sourceNodeIds.filter(nodeId => dailyBacklogNodeIds.has(nodeId));
+      if (validNodeIds.length === 0) return [];
+      const subjectId = subjectForStep({ ...step, curriculumNodeIds: validNodeIds });
+      const isTeacherSync = Boolean(subjectId
+        && teacherChoices[subjectId]
+        && teacherChoices[subjectId] !== "__SKIP__"
+        && Array.isArray(teacherSchedules[subjectId])
+        && teacherSchedules[subjectId].length > 0);
+      return [{ ...step, curriculumNodeIds: validNodeIds, phaseId: step.phaseId ?? (isTeacherSync ? "teacher_sync" as const : "steady" as const) }];
+    }
+    const match = matchSIECheckpointTask(profile.subjectIds, [step.title, step.detail, step.category].join(" "));
+    if (match) {
+      if (!dailyBacklogNodeIds.has(match.nodeId)) return [];
+      return [{ ...step, curriculumNodeIds: [match.nodeId], phaseId: step.phaseId ?? "steady" as const }];
+    }
+    return [{ ...step, phaseId: step.phaseId ?? (step.existingTask ? "backlog" as const : "steady" as const) }];
   });
 
   const usedTaskIds = new Set(steps.map(step => step.existingTask?.id).filter((id): id is number => typeof id === "number"));
@@ -1467,16 +1523,11 @@ export function applyDailyPlanDepth(
       ? hours + ":" + String(minutes).padStart(2, "0") + ":" + String(rest).padStart(2, "0")
       : minutes + ":" + String(rest).padStart(2, "0");
   };
-  const reviewEligibleNodeIds = new Set<string>();
-  for (const branchProgress of snapshot.branches.values()) {
-    for (const choice of branchProgress.eligibleChoices ?? []) {
-      // A revision video replaces only a lesson already studied and explicitly marked
-      // as needing review. Watched-only lessons still require ordinary learning tasks.
-      if (choice.learningState === "needs_review") {
-        reviewEligibleNodeIds.add(choice.nodeId);
-      }
-    }
-  }
+  const reviewEligibleNodeIds = new Set(
+    dailyBacklogItems
+      .filter(item => item.choice.learningState === "needs_review")
+      .map(item => item.choice.nodeId),
+  );
   const analyzedVideos = rawTeacherVideos
     .filter(update => typeof update.teacherId === "string"
       && (allowedTeacherIds.has(update.teacherId) || acceptedAlternativeVideoIds.has(String(update.externalId ?? "")))
@@ -1564,7 +1615,7 @@ export function applyDailyPlanDepth(
     const normalizedTitle = normalizePlannerLessonText(task.title);
     if (usedTitles.has(normalizedTitle)) continue;
     const match = matchSIECheckpointTask(profile.subjectIds, [task.title, task.notes ?? ""].join(" "));
-    const linkedNodeId = match && snapshot.eligibleNodeIds.has(match.nodeId) && !representedNodeIds.has(match.nodeId)
+    const linkedNodeId = match && dailyBacklogNodeIds.has(match.nodeId) && !representedNodeIds.has(match.nodeId)
       ? match.nodeId
       : undefined;
     const dueAt = task.dueAt instanceof Date && !Number.isNaN(task.dueAt.getTime())
@@ -1605,26 +1656,21 @@ export function applyDailyPlanDepth(
     isNext: boolean; teacherSelected: boolean; learningState: StudentLessonState; curriculumIndex: number;
   }> = [];
 
-  for (const subjectId of profile.subjectIds ?? []) {
-    for (const branch of getPlanningBranches(subjectId)) {
-      const progress = snapshot.branches.get(plannerBranchKey(subjectId, branch.branchId));
-      for (const choice of progress?.eligibleChoices ?? []) {
-        const index = branch.choices.findIndex(item => item.nodeId === choice.nodeId);
-        const learningState = choice.learningState ?? "not_recorded";
-        curriculumLearningByNode.set(choice.nodeId, {
-          subjectId, branchId: branch.branchId, branchTitle: branch.branchTitle,
-          title: choice.title, learningState, curriculumIndex: index,
-        });
-        if (representedNodeIds.has(choice.nodeId)) continue;
-        nextChoices.push({
-          subjectId, branchId: branch.branchId, branchTitle: branch.branchTitle,
-          nodeId: choice.nodeId, title: choice.title,
-          isNext: progress?.nextEligiblePosition === index,
-          teacherSelected: Boolean(teacherChoices[subjectId] && teacherChoices[subjectId] !== "__SKIP__"),
-          learningState, curriculumIndex: index,
-        });
-      }
-    }
+  for (const item of dailyBacklogItems) {
+    const { subjectId, branch, choice, index, progress } = item;
+    const learningState = choice.learningState ?? "not_recorded";
+    curriculumLearningByNode.set(choice.nodeId, {
+      subjectId, branchId: branch.branchId, branchTitle: branch.branchTitle,
+      title: choice.title, learningState, curriculumIndex: index,
+    });
+    if (representedNodeIds.has(choice.nodeId)) continue;
+    nextChoices.push({
+      subjectId, branchId: branch.branchId, branchTitle: branch.branchTitle,
+      nodeId: choice.nodeId, title: choice.title,
+      isNext: progress.nextEligiblePosition === index,
+      teacherSelected: Boolean(teacherChoices[subjectId] && teacherChoices[subjectId] !== "__SKIP__"),
+      learningState, curriculumIndex: index,
+    });
   }
 
   // Interleave subjects only within the same learning-state priority.
@@ -1742,16 +1788,29 @@ export function applyDailyPlanDepth(
     orderedSteps.push(...interleavePlannerItemsBySubject(bucket, profile.subjectIds ?? [], subjectForStep));
   }
 
-  const coveredNodeCount = new Set(orderedSteps.flatMap(step => step.curriculumNodeIds ?? [])).size;
+  const expectedBacklogCount = dailyBacklogNodeIds.size;
+  const scheduledBacklogNodeIds = new Set(orderedSteps.flatMap(step => step.curriculumNodeIds ?? [])
+    .filter(nodeId => dailyBacklogNodeIds.has(nodeId)));
+  const coveredNodeCount = scheduledBacklogNodeIds.size;
+  const missingBacklogCount = Math.max(0, expectedBacklogCount - coveredNodeCount);
   const reviewVideoCount = new Set(orderedSteps.flatMap(step => {
     const resource = step.resourceRecommendation;
     return resource && /مراجعة/.test(resource.reason || "") && resource.url
       ? [resource.url.split("#")[0]]
       : [];
   })).size;
-  const coverageNote = "تغطية المتراكم: أُدرجت " + coveredNodeCount
-    + " نقطة منهجية مؤهلة في الخطة دون اقتطاع بسبب حدّ عددي. فيديوهات المراجعة المطابقة للمحتوى: "
-    + reviewVideoCount + ". لا تستبدل المراجعة العادية إلا مراجعة فيديو عالية الثقة تطابق درسًا مسجلًا بأنه يحتاج مراجعة؛ وإلا تبقى المهمة الدراسية الأصلية.";
+  const unresolvedSummary = unresolvedBacklogByBranch.length > 0
+    ? "مواضع غير مؤكدة: " + unresolvedBacklogByBranch.reduce((sum, item) => sum + item.count, 0)
+      + " درسًا داخل نطاق شرح المدرس تحتاج تأكيد موضع الطالب قبل احتسابها ضمن المتراكم."
+    : "";
+  const missingSummary = missingBacklogCount > 0
+    ? "تعذّر إسناد " + missingBacklogCount + " نقطة متراكمة إلى مهمة؛ لم نعتبر التغطية كاملة."
+    : "كل نقاط المتراكم المؤكد أُدرجت في الخطة.";
+  const coverageNote = "المتراكم الفعلي: " + expectedBacklogCount + " نقطة مؤكدة؛ أُدرج " + coveredNodeCount
+    + " منها في الخطة. " + missingSummary
+    + (unresolvedSummary ? " " + unresolvedSummary : "")
+    + " فيديوهات المراجعة المطابقة للمحتوى: " + reviewVideoCount
+    + ". لا تستبدل المراجعة العادية إلا مراجعة فيديو عالية الثقة تطابق درسًا مسجلًا بأنه يحتاج مراجعة.";
   return {
     ...plan,
     summary: (coverageNote + "\n\n" + plan.summary).slice(0, 1_500),
