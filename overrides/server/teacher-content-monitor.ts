@@ -1,4 +1,4 @@
-import { getSIETeacher, SIE_CATALOG_META } from "@shared/sie-catalog";
+import { getSIETeacher, getSIESubject, SIE_CATALOG_META } from "@shared/sie-catalog";
 
 export type TeacherPublicUpdate = {
   externalId: string;
@@ -141,12 +141,63 @@ export function isHighConfidenceScheduleAnnouncement(
 export type TeacherSourceScanResult = {
   updates: TeacherPublicUpdate[];
   scanState: Record<string, string>;
+  resolvedChannels: Record<string, string>;
 };
 
 const YOUTUBE_CHANNEL_IDS: Record<string, string> = {
   T_AR_MOHAMED_SALAH: "UCdur25RCItdfoXA89ORWSkw",
   T_EN_MAHMOUD_RADWAN: "UCndPJfSCMRiJTI2QuCqjn_Q",
 };
+
+function normalizeYoutubeChannelText(value: string): string {
+  return value.normalize("NFKC")
+    .toLocaleLowerCase("ar")
+    .replace(/[ً-ٰٟـ]/g, "")
+    .replace(/[أإآٱ]/g, "ا")
+    .replace(/ؤ/g, "و")
+    .replace(/ئ/g, "ي")
+    .replace(/ى/g, "ي")
+    .replace(/[^a-z0-9ء-ي]+/giu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function youtubeChannelMatchesTeacher(channelTitle: string, teacherName: string, brandName: string): boolean {
+  const channel = normalizeYoutubeChannelText(channelTitle);
+  if (!channel) return false;
+  return [teacherName, brandName]
+    .map(normalizeYoutubeChannelText)
+    .filter(alias => alias.length >= 4)
+    .some(alias => channel.includes(alias));
+}
+
+async function searchTeacherYoutubeChannelId(teacherId: string, apiKey: string): Promise<string | null> {
+  const teacher = getSIETeacher(teacherId);
+  if (!teacher) return null;
+  const subjectName = teacher.subjectIds
+    .map(subjectId => getSIESubject(subjectId)?.nameAr)
+    .filter((value): value is string => Boolean(value))
+    .join(" ");
+  const query = [teacher.nameAr, subjectName].filter(Boolean).join(" ");
+  if (!query.trim()) return null;
+  const url = new URL("https://www.googleapis.com/youtube/v3/search");
+  url.searchParams.set("part", "snippet");
+  url.searchParams.set("type", "channel");
+  url.searchParams.set("maxResults", "10");
+  url.searchParams.set("q", query);
+  url.searchParams.set("key", apiKey);
+  const response = await fetchJson(url.toString());
+  const items = Array.isArray(response.items) ? response.items as Array<Record<string, any>> : [];
+  for (const item of items) {
+    const channelId = typeof item.id?.channelId === "string" ? item.id.channelId : "";
+    const channelTitle = typeof item.snippet?.title === "string" ? item.snippet.title : "";
+    if (/^UC[\w-]{20,}$/.test(channelId)
+      && youtubeChannelMatchesTeacher(channelTitle, teacher.nameAr, teacher.brandName)) {
+      return channelId;
+    }
+  }
+  return null;
+}
 
 const SOURCE_SCAN_INTERVAL_MS = 45 * 60 * 1_000;
 const MAX_UPDATES_PER_SCAN = 12;
@@ -371,21 +422,27 @@ export async function scanSelectedTeacherSources(
     ? selection.teacherPublicScanState as Record<string, string>
     : {};
   const selectedIds = selectedTeacherIds(profile);
+  const savedChannels = selection.teacherYoutubeChannels && typeof selection.teacherYoutubeChannels === "object"
+    ? selection.teacherYoutubeChannels as Record<string, string>
+    : {};
+  const resolvedChannels: Record<string, string> = {};
   if (!isSecondYearBaccalaureateProfile(profile) || selectedIds.length === 0) {
-    return { updates: [], scanState: previousState };
+    return { updates: [], scanState: previousState, resolvedChannels };
   }
   const youtubeApiKey = process.env.YOUTUBE_API_KEY?.trim() ?? "";
   if (youtubeApiKey) await probeYoutubeApiKey(youtubeApiKey, now.getTime());
   const facebookPages = configuredFacebookPageIds();
   const pageToken = process.env.META_PAGE_ACCESS_TOKEN || process.env.FACEBOOK_PAGE_ACCESS_TOKEN;
   const graphVersion = process.env.META_GRAPH_API_VERSION || "v27.0";
-  const tasks: Promise<{ key: string; updates: TeacherPublicUpdate[] } | null>[] = [];
+  const tasks: Promise<{ key: string; updates: TeacherPublicUpdate[]; channelId?: string } | null>[] = [];
 
   for (const teacherId of selectedIds) {
     const teacher = getSIETeacher(teacherId);
     const teacherName = teacher?.nameAr ?? teacherId;
     const teacherYoutubeUrl = teacher?.profileUrl ?? "";
-    const directChannelId = YOUTUBE_CHANNEL_IDS[teacherId] ?? teacherYoutubeUrl.match(/youtube\.com\/channel\/(UC[\w-]+)/i)?.[1];
+    const directChannelId = YOUTUBE_CHANNEL_IDS[teacherId]
+      ?? savedChannels[teacherId]
+      ?? teacherYoutubeUrl.match(/youtube\.com\/channel\/(UC[\w-]+)/i)?.[1];
     const youtubeKey = teacherId + ":youtube";
     if (shouldScanTeacherSource(previousState[youtubeKey], now.getTime())) {
       tasks.push((async () => {
@@ -393,14 +450,21 @@ export async function scanSelectedTeacherSources(
         const handle = teacherYoutubeUrl.match(/youtube\.com\/@([^/?]+)/i)?.[1];
         const apiKey = youtubeApiKey;
         if (!channelId && handle && apiKey) {
-          const channelResponse = await fetchJson("https://www.googleapis.com/youtube/v3/channels?part=id&forHandle=" + encodeURIComponent("@" + handle) + "&key=" + encodeURIComponent(apiKey));
+          const channelResponse = await fetchJson("https://www.googleapis.com/youtube/v3/channels?part=id&forHandle=" + encodeURIComponent("@" + handle) + "&key=" + apiKey);
           const channelItems = Array.isArray(channelResponse.items) ? channelResponse.items as Array<Record<string, unknown>> : [];
           const resolvedChannelId = typeof channelItems[0]?.id === "string" ? channelItems[0].id : undefined;
           if (resolvedChannelId) channelId = resolvedChannelId;
         }
+        if (!channelId && apiKey) {
+          channelId = await searchTeacherYoutubeChannelId(teacherId, apiKey) ?? undefined;
+        }
         if (!channelId) return { key: youtubeKey, updates: [] };
         const xml = await fetchText("https://www.youtube.com/feeds/videos.xml?channel_id=" + encodeURIComponent(channelId));
-        return { key: youtubeKey, updates: parseYoutubeAtomFeed(xml, { teacherId, teacherName }, now) };
+        return {
+          key: youtubeKey,
+          updates: parseYoutubeAtomFeed(xml, { teacherId, teacherName }, now),
+          channelId,
+        };
       })().catch(() => null));
     }
 
@@ -442,10 +506,19 @@ export async function scanSelectedTeacherSources(
     if (!item) continue;
     scanState[item.key] = now.toISOString();
     updates.push(...item.updates);
+    if (item.channelId) {
+      const teacherId = item.key.replace(/:youtube$/, "");
+      resolvedChannels[teacherId] = item.channelId;
+    }
   }
   let orderedUpdates = updates
     .map(classifyTeacherPublicUpdate)
-    .filter(update => isSecondYearBaccalaureateUpdate(update) || isHighConfidenceScheduleAnnouncement(update))
+    // These uploads come from the verified public channel of a selected teacher.
+    // Keep recent videos even when the title omits a grade marker; Gemini must map
+    // actual segments to this student's official curriculum before creating tasks.
+    .filter(update => update.sourceType === "youtube"
+      || isSecondYearBaccalaureateUpdate(update)
+      || isHighConfidenceScheduleAnnouncement(update))
     .filter(update => now.getTime() - Date.parse(update.publishedAt) <= 30 * 24 * 60 * 60 * 1_000)
     .sort((left, right) => Date.parse(right.publishedAt) - Date.parse(left.publishedAt))
     .slice(0, MAX_UPDATES_PER_SCAN);
@@ -477,5 +550,5 @@ export async function scanSelectedTeacherSources(
     }
   }
 
-  return { updates: orderedUpdates, scanState };
+  return { updates: orderedUpdates, scanState, resolvedChannels };
 }
