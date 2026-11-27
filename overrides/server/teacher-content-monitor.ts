@@ -483,7 +483,7 @@ export async function scanSelectedTeacherSources(
     const youtubeKey = teacherId + ":youtube";
     if (shouldScanTeacherSource(previousState[youtubeKey], now.getTime())) {
       tasks.push((async () => {
-        let channelId = directChannelId;
+        let channelId: string | undefined = directChannelId;
         const handle = teacherYoutubeUrl.match(/youtube\.com\/@([^/?]+)/i)?.[1];
         const apiKey = youtubeApiKey;
         if (!channelId && handle && apiKey) {
