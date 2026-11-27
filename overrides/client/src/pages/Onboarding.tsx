@@ -161,6 +161,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
   const [subjectSetupIndex, setSubjectSetupIndex] = useState(0);
   const [expandedCheckpointChoices, setExpandedCheckpointChoices] = useState<Record<string, number>>({});
   const [refreshCheckpointMode, setRefreshCheckpointMode] = useState(false);
+  const [teacherDirectorySearch, setTeacherDirectorySearch] = useState("");
   const [form, setForm] = useState<FormState>({
     studentName: "",
     phone: "",
@@ -257,6 +258,13 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
     enabled: Boolean(currentSetupSubjectId && form.systemId),
     staleTime: 30_000,
   });
+  const sharedTeacherOptions = (sharedTeacherDirectory.data ?? []).filter(entry => {
+    const normalize = (value: string) => value.normalize("NFKC").toLocaleLowerCase("ar-EG")
+      .replace(/[أإآٱ]/g, "ا").replace(/ى/g, "ي").replace(/[ً-ٟـ]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+    const query = normalize(teacherDirectorySearch);
+    return !query || normalize(entry.nameAr + " " + entry.brandName).includes(query);
+  });
+  useEffect(() => setTeacherDirectorySearch(""), [currentSetupSubjectId]);
   const selectedSetupTeacherId = form.teacherSelections[currentSetupSubjectId] && form.teacherSelections[currentSetupSubjectId] !== SKIP_TEACHER
     ? form.teacherSelections[currentSetupSubjectId] : "";
   const teacherFacts = trpc.teacherDirectory.facts.useQuery({
@@ -767,8 +775,11 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                           </div>
                           <span className="sf-shared-teacher-count">{sharedTeacherDirectory.data.length.toLocaleString("ar-EG")}</span>
                         </div>
+                        <Input value={teacherDirectorySearch} onChange={event => setTeacherDirectorySearch(event.target.value)}
+                          placeholder="ابحث بالاسم أو اسم القناة..." aria-label="البحث في دليل المدرسين المشترك"
+                          className="sf-shared-teacher-search h-11 rounded-xl bg-background" />
                         <div className="sf-teacher-choice-grid grid gap-3 sm:grid-cols-2">
-                          {sharedTeacherDirectory.data
+                          {sharedTeacherOptions
                             .filter(entry => !setupTeacherOptions.some(teacher => teacher.nameAr.trim().toLocaleLowerCase() === entry.nameAr.trim().toLocaleLowerCase()))
                             .map(entry => {
                               const selected = form.teacherSelections[currentSetupSubjectId] === SKIP_TEACHER
@@ -801,13 +812,16 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                                     <b>{entry.nameAr}</b>
                                     {entry.brandName !== entry.nameAr && <small className="sf-teacher-brand">{entry.brandName}</small>}
                                     <small>{entry.confidence === "high" ? "مطابقة قوية للمصادر" : entry.confidence === "medium" ? "تم العثور على مصادر مرتبطة" : "مطابقة أولية — راجع المصدر"}</small>
-                                    {entry.confirmationCount > 1 && <small>ترشيحات الطلاب: {entry.confirmationCount.toLocaleString("ar-EG")}</small>}
+                                    {entry.confirmationCount > 1 && <small>مرات البحث المؤكدة: {entry.confirmationCount.toLocaleString("ar-EG")}</small>}
                                   </span>
                                   <span className="sf-teacher-choice-check">{selected ? <Check className="size-4" /> : <span />}</span>
                                 </button>
                               );
                             })}
                         </div>
+                        {sharedTeacherOptions.length === 0 && (
+                          <p className="sf-shared-teacher-loading">مفيش اسم مطابق للبحث ده في الدليل. جرّب اسم المدرس أو القناة بشكل مختلف، أو استخدم البحث بالذكاء الاصطناعي.</p>
+                        )}
                       </section>
                     )}
                     {sharedTeacherDirectory.isLoading && <p className="sf-shared-teacher-loading">بنحمّل المدرسين اللي أضافهم الطلاب...</p>}
