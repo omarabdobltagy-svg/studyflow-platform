@@ -10,22 +10,40 @@ export type TeacherReviewDescriptionMatchInput = {
   description?: string | null;
 };
 
+function normalizeDescriptionText(value: string): string {
+  return value.normalize("NFKC")
+    .toLocaleLowerCase("ar")
+    .replace(/[أإآٱ]/g, "ا")
+    .replace(/[ً-ٰٟـ]/g, "")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 /**
- * Use the publisher-supplied YouTube description as the first verification source.
- * The video is considered description-matched only when the description is substantive
- * and the curriculum matcher resolves a concrete checkpoint inside the requested branch.
- * This never treats a generic "revision" title as sufficient evidence.
+ * Prefer the publisher-supplied YouTube description when it explicitly names a
+ * curriculum checkpoint in the exact requested branch. A generic "revision"
+ * title is never evidence. Fuzzy catalog matching is only used after exact
+ * normalized lesson-title matching.
  */
 export function matchTeacherReviewDescription(input: TeacherReviewDescriptionMatchInput): string[] {
-  const description = String(input.description ?? "").normalize("NFKC").trim();
-  if (description.length < 60) return [];
+  const rawDescription = String(input.description ?? "").trim();
+  if (rawDescription.length < 60) return [];
 
   const branch = getSIECheckpointProgressBranches(input.subjectId)
     .find(item => item.branchId === input.branchId);
   if (!branch?.choices?.length) return [];
 
-  const match = matchSIECheckpointTask([input.subjectId], description);
-  if (!match || !branch.choices.some(choice => choice.nodeId === match.nodeId)) return [];
+  const normalizedDescription = " " + normalizeDescriptionText(rawDescription) + " ";
+  const directMatches = branch.choices.filter(choice => {
+    const normalizedTitle = normalizeDescriptionText(choice.title);
+    return normalizedTitle.length >= 3 && normalizedDescription.includes(" " + normalizedTitle + " ");
+  });
+  if (directMatches.length) {
+    return [...new Set(directMatches.slice(0, 5).map(choice => choice.title))];
+  }
 
+  const match = matchSIECheckpointTask([input.subjectId], rawDescription);
+  if (!match || !branch.choices.some(choice => choice.nodeId === match.nodeId)) return [];
   return [match.title];
 }
