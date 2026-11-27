@@ -134,6 +134,7 @@ function applyPlannerAssistantPatch(plan: PlanView, patch: PlannerAssistantPatch
   };
 }
 const DAILY_SNAPSHOT_PREFIX = "SIE_DAILY_PLAN_V4:";
+const DAILY_PLAN_PREFIX = "SIE_DAILY_PLAN_V5:";
 const DAILY_PLAN_DRAFT_PREFIX = "SIE_DAILY_PLAN_DRAFT_V1:";
 const ANNUAL_PLAN_PREFIX = "SIE_ANNUAL_PLAN_V1:";
 const STUDY_PLAN_PREFIX = "SIE_STUDY_PLAN_V2:";
