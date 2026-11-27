@@ -120,6 +120,7 @@ export default function Study() {
     relevance: string;
   }>>([]);
   const [reviewSearchNote, setReviewSearchNote] = useState("");
+  const [reviewPanelOpen, setReviewPanelOpen] = useState(false);
   const reviewSearchContextRef = useRef("");
   const autoReviewSearchKeyRef = useRef("");
   const refreshedReviewStatusesRef = useRef(new Set<string>());
@@ -174,10 +175,11 @@ export default function Study() {
     refreshedReviewStatusesRef.current.clear();
     setReviewCandidates([]);
     setReviewSearchNote("");
+    setReviewPanelOpen(false);
   }, [subjectId, currentBranchId, selectedTeacherId]);
 
   useEffect(() => {
-    if (profile.isLoading || profile.isError || profile.data?.educationSystem !== "baccalaureate"
+    if (!reviewPanelOpen || profile.isLoading || profile.isError || profile.data?.educationSystem !== "baccalaureate"
       || !profile.data.subjectIds?.includes(subjectId) || !/_G2_BAC$/.test(subjectId)
       || !currentBranchId || reviewSearch.isPending) return;
     const searchKey = subjectId + "::" + currentBranchId + "::" + (selectedTeacherId || "no-teacher");
@@ -193,12 +195,13 @@ export default function Study() {
     subjectId,
     currentBranchId,
     selectedTeacherId,
+    reviewPanelOpen,
     reviewSearch.isPending,
   ]);
 
   useEffect(() => {
     const activeContext = subjectId + "::" + currentBranchId;
-    if (!currentBranchId || reviewSearchContextRef.current !== activeContext || reviewSearch.isPending) return;
+    if (!reviewPanelOpen || !currentBranchId || reviewSearchContextRef.current !== activeContext || reviewSearch.isPending) return;
     const savedUpdates = Array.isArray(selection.teacherPublicUpdates) ? selection.teacherPublicUpdates : [];
     const acceptedIds = new Set(Array.isArray(selection.acceptedAlternativeReviewVideoIds)
       ? selection.acceptedAlternativeReviewVideoIds.filter((value: unknown): value is string => typeof value === "string")
@@ -220,7 +223,7 @@ export default function Study() {
     if (refreshCandidates.length) {
       reviewSearch.mutate({ subjectId, branchId: currentBranchId, teacherId: selectedTeacherId });
     }
-  }, [selection.teacherPublicUpdates, selection.acceptedAlternativeReviewVideoIds, reviewCandidates, currentBranchId, subjectId, selectedTeacherId, reviewSearch.isPending]);
+  }, [selection.teacherPublicUpdates, selection.acceptedAlternativeReviewVideoIds, reviewCandidates, currentBranchId, subjectId, selectedTeacherId, reviewPanelOpen, reviewSearch.isPending]);
   const currentBranchPointLabel = currentBranch?.branchType === "official_section" ? "موضوع" : "درس";
   const isLinearSubject = subjectId === "HIS_G2_BAC" || subjectId === "PROG_AI_G2_BAC";
   const legacyLinearRecords = isLinearSubject ? Object.values(branchProgressMap) : [];
@@ -312,6 +315,9 @@ export default function Study() {
   const hasSchoolFrontierSelection = schoolClassFrontierId !== "__UNKNOWN__"
     || Boolean(currentBranchProgress.schoolFrontierConfirmedAt)
     || Object.prototype.hasOwnProperty.call(schoolFrontierDrafts, studentFrontierDraftKey);
+  const wasFrontierPairConfirmed = Boolean(
+    currentBranchProgress.studentFrontierConfirmedAt && currentBranchProgress.teacherFrontierConfirmedAt
+  );
   const branchChoiceOptions = getSIECheckpointProgressOptions(subjectId, currentBranchId);
   const currentBranchLastLessonId = branchChoices[branchChoices.length - 1]?.nodeId;
   const hasReachedEndOfCurrentBranch = Boolean(currentBranchLastLessonId && lastCompletedLessonId === currentBranchLastLessonId);
@@ -399,8 +405,12 @@ export default function Study() {
       setStudentFrontierDrafts(clearSavedDraft);
       setTeacherFrontierDrafts(clearTeacherDraft);
       setSchoolFrontierDrafts(clearSchoolDraft);
-      if (result.savedStudent && variables.subjectId === "ARB_G2_BAC"
-        && Object.prototype.hasOwnProperty.call(variables, "studentFrontierId")) {
+      const pairConfirmedNow = Boolean(
+        result.record?.studentFrontierConfirmedAt && result.record?.teacherFrontierConfirmedAt
+      );
+      const pairJustCompleted = pairConfirmedNow && !wasFrontierPairConfirmed
+        && (result.savedStudent || result.savedTeacher);
+      if (pairJustCompleted && variables.subjectId === "ARB_G2_BAC") {
         const savedBranchIndex = allBranches.findIndex(item => item.branchId === variables.branchId);
         const nextBranch = savedBranchIndex >= 0
           ? allBranches.slice(savedBranchIndex + 1).find(candidate =>
@@ -429,7 +439,7 @@ export default function Study() {
           return;
         }
         toast.success("تم حفظ آخر موضع في جميع فروع العربي.");
-      } else if (result.savedStudent && result.learningGap?.studentPosition === branchChoices.length && branchChoices.length > 0) {
+      } else if (pairJustCompleted && branchChoices.length > 0) {
         if (isEnglishSkillBranch) {
           toast.success(currentBranchId === "ENG_VOCABULARY"
             ? "أنهيت دروس Vocabulary المفهرسة داخل الوحدات."
@@ -999,11 +1009,24 @@ export default function Study() {
                       transition={{ type: "spring", stiffness: 110, damping: 22 }} />
                   </div>
                   {branchChoices.length > 0 && (
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-card px-3 py-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold">مراجعات YouTube</p>
+                        <p className="mt-1 text-xs text-muted-foreground">افتح المصادر عند الحاجة؛ لن نبحث أو نعرض ترشيحات أثناء تحديد موضعك في المنهج.</p>
+                      </div>
+                      <Button type="button" variant="outline" size="sm" data-testid="study-open-youtube-reviews"
+                        aria-expanded={reviewPanelOpen}
+                        onClick={() => setReviewPanelOpen(value => !value)}>
+                        {reviewPanelOpen ? "إخفاء المراجعات" : "فتح مراجعات هذا الفرع"}
+                      </Button>
+                    </div>
+                  )}
+                  {branchChoices.length > 0 && reviewPanelOpen && (
                     <section className="rounded-2xl border border-border/80 bg-card p-4 sm:p-5">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="text-[10px] font-bold tracking-[0.12em] text-primary">مصادر إضافية</p>
-                          <h4 className="mt-1 text-sm font-bold">ترشيحات YouTube الذكية للدروس المتراكمة</h4>
+                          <p className="text-[10px] font-bold tracking-[0.12em] text-primary">مركز المراجعات</p>
+                          <h4 className="mt-1 text-sm font-bold">مراجعات YouTube المرتبطة بهذا الفرع</h4>
                           <p className="mt-1 max-w-2xl text-xs leading-6 text-muted-foreground">
                             StudyFlow يفحص قناة مدرسك تلقائيًا، ويبحث عن المراجعات المرتبطة بالفرع الحالي. فيديوهات مدرسك المختار تُحلّل مباشرةً عند توافر Gemini، أما المدرسون البدلاء فلا يدخل محتواهم المسار قبل اعتمادك له. لا نربط أي فيديو بالمنهج لمجرد عنوانه.
                           </p>
@@ -1016,7 +1039,19 @@ export default function Study() {
                               : <><Sparkles className="size-3.5" /> البحث يبدأ تلقائيًا عند فتح الفرع</>}
                         </span>
                       </div>
-                      {reviewSearchNote && <p className="mt-3 rounded-xl bg-muted/40 px-3 py-2 text-[11px] leading-5 text-muted-foreground">{reviewSearchNote}</p>}
+                      {reviewSearchNote && (
+                        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted/40 px-3 py-2">
+                          <p className="text-[11px] leading-5 text-muted-foreground">{reviewSearchNote}</p>
+                          <Button type="button" size="sm" variant="outline" className="rounded-lg"
+                            disabled={reviewSearch.isPending}
+                            onClick={() => {
+                              reviewSearchContextRef.current = subjectId + "::" + currentBranchId;
+                              reviewSearch.mutate({ subjectId, branchId: currentBranchId, teacherId: selectedTeacherId });
+                            }}>
+                            {reviewSearch.isPending ? "جارٍ البحث..." : "إعادة المحاولة"}
+                          </Button>
+                        </div>
+                      )}
                       {!reviewSearch.isPending && reviewSearch.data && reviewSearchContextRef.current === subjectId + "::" + currentBranchId && reviewCandidates.length === 0 && (
                         <p className="mt-3 text-xs text-muted-foreground">لم نعثر على مراجعة مناسبة لهذا الفرع من مدرسك أو من مدرس بديل مسجل للمادة.</p>
                       )}
@@ -1212,19 +1247,32 @@ export default function Study() {
                           </div>
                         )}
                       </header>
-                      <div className="max-h-[640px] divide-y divide-border/60 overflow-y-auto">
+                      <div className="divide-y divide-border/60">
                         {branchChoices.map((choice, index) => {
                           const state = getLessonState(choice.nodeId);
                           const isFrontier = choice.nodeId === lastCompletedLessonId;
-                          const reachedInLecture = index <= studentFrontierIndex && studentFrontierIndex >= 0 && state !== "not_watched" && state !== "not_recorded";
+                          const isAtOrBeforeFrontier = index <= studentFrontierIndex && studentFrontierIndex >= 0;
+                          const reachedInLecture = isAtOrBeforeFrontier && state !== "not_watched" && state !== "not_recorded";
+                          const canToggleReachMarker = state === "watched_only" || state === "not_watched"
+                            || (state === "not_recorded" && isAtOrBeforeFrontier);
                           const pending = updateLessonLearningState.isPending
                             && updateLessonLearningState.variables?.nodeId === choice.nodeId;
                           return (
                             <article key={choice.nodeId} data-testid={"study-lesson-" + choice.nodeId} className={"sf-lesson-state-row flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:gap-4 sm:px-4 " + (isFrontier ? "is-frontier" : "") + (state === "not_watched" ? " is-missed" : "")}>
                               <div className="flex min-w-0 items-center gap-3 sm:flex-1">
-                                <span className={"sf-lesson-state-marker flex size-8 shrink-0 items-center justify-center rounded-xl border text-xs font-bold " + (state === "not_recorded" || state === "not_watched" ? "border-border bg-muted text-muted-foreground" : isFrontier ? "border-primary/40 bg-primary/15 text-primary" : "border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300")}>
+                                <button type="button"
+                                  className={"sf-lesson-state-marker flex size-8 shrink-0 items-center justify-center rounded-xl border text-xs font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-default " + (state === "not_recorded" || state === "not_watched" ? "border-border bg-muted text-muted-foreground" : isFrontier ? "border-primary/40 bg-primary/15 text-primary" : "border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300")}
+                                  aria-label={state === "watched_only" ? "إزالة علامة مشاهدة " + choice.title : "تسجيل مشاهدة " + choice.title}
+                                  aria-pressed={state === "watched_only" || state === "studied" || state === "needs_review"}
+                                  disabled={pending || !canToggleReachMarker}
+                                  onClick={() => updateLessonLearningState.mutate({
+                                    subjectId,
+                                    branchId: currentBranchId,
+                                    nodeId: choice.nodeId,
+                                    state: state === "watched_only" ? "not_watched" : "watched_only",
+                                  })}>
                                   {state === "not_recorded" ? "؟" : state === "not_watched" ? <X className="size-3.5" /> : <Check className="size-4" />}
-                                </span>
+                                </button>
                                 <div className="min-w-0 flex-1">
                                   <p className="break-words text-xs font-bold leading-6">{subjectId === "ENG1_G2_BAC" && choice.lessonNumber ? "Lesson " + choice.lessonNumber : displayCurriculumTitle(choice.title)}</p>
                                   {subjectId === "ENG1_G2_BAC" && choice.lessonNumber && <p className="mt-0.5 break-words text-[11px] leading-5 text-muted-foreground">{displayCurriculumTitle(choice.title)}</p>}

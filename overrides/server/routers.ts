@@ -9,6 +9,8 @@ import { SIE_CATALOG_META, SIE_SYSTEMS, SIE_TEACHERS, SIE_SUBJECTS, getSIEEducat
 import { getCairoSecondYearBaccalaureateExams } from "@shared/cairo-baccalaureate-exam-calendar";
 import { matchTeacherReviewDescription } from "./teacher-review-description";
 import { calculateLearningGap, selectLegacyLinearFrontier } from "@shared/sie-learning-progress";
+import { buildMonthlyExamCoveredScope } from "@shared/monthly-exam-scope";
+import { getDateKeyInTimeZone } from "@shared/date-time";
 import {
   addChapter,
   addLibraryAttachment,
@@ -702,15 +704,26 @@ async function buildDailyPlanOperationalContext(userId: number) {
   });
   const nonCompletionReports = recentActivity.filter(event => event.eventType === "task.not_completed").slice(-10).map(event => event.summary);
   const now = new Date();
-  const todayCairo = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(now);
+  const todayCairo = getDateKeyInTimeZone(now, "Africa/Cairo");
   const cairoExams = getCairoSecondYearBaccalaureateExams(profile)
     .filter(exam => exam.date >= todayCairo);
-  const cairoExamContext = cairoExams.map(exam => [
-    exam.date,
-    exam.dayName,
-    exam.subjectName,
-    exam.category === "specialization" ? "مادة تخصصية حسب المسار" : "مادة أساسية مضافة للمجموع",
-  ].join(" — "));
+  const monthlyExamCoveredScope = buildMonthlyExamCoveredScope(
+    subjectIds,
+    (selection.learningCourseProgress ?? {}) as Record<string, any>,
+    (selection.courseModes ?? {}) as Record<string, string>,
+  );
+  const cairoExamContext = cairoExams.map(exam => {
+    const scope = monthlyExamCoveredScope.filter(branch => branch.subjectId === exam.subjectId);
+    const coveredTopics = scope.flatMap(branch => branch.lessonTitles.map(title => branch.branchTitle + ": " + title));
+    return [
+      exam.date,
+      exam.dayName,
+      exam.subjectName,
+      exam.category === "specialization" ? "مادة تخصصية حسب المسار" : "مادة أساسية مضافة للمجموع",
+      "نطاق الشرح المسجل حتى الآن (تقدير للمراجعة وليس قائمة امتحان رسمية): "
+        + (coveredTopics.length ? coveredTopics.slice(0, 60).join("، ") : "لا يوجد موضع مدرس/سنتر مؤكد؛ لا تخمّن محتوى الامتحان."),
+    ].join(" — ");
+  });
   const horizon = now.getTime() + 14 * 24 * 60 * 60 * 1_000;
   const formatDate = (value: unknown) => {
     if (!value) return "";
@@ -720,8 +733,9 @@ async function buildDailyPlanOperationalContext(userId: number) {
       weekday: "short",
       day: "numeric",
       month: "short",
-      hour: "2-digit",
+      hour: "numeric",
       minute: "2-digit",
+      hour12: true,
       timeZone: "Africa/Cairo",
     }).format(date);
   };
@@ -861,7 +875,8 @@ async function buildDailyPlanOperationalContext(userId: number) {
     cairoExamContext.length
       ? cairoExamContext.join("\n")
       : "لا توجد امتحانات مضافة للمجموع من جدول القاهرة ضمن المواد المحددة في ملف الطالب.",
-    "عند ترتيب الاستعداد لهذه الامتحانات، قدّم المواد المضافة للمجموع فقط، واستبعد الثقافة المالية والتربية الرياضية من قائمة امتحانات المجموع. لا تخترع تاريخًا أو مادة تخصصية غير محددة في ملف الطالب.",
+    "عند ترتيب الاستعداد لامتحان شهري قريب خلال 14 يومًا، استخدم نطاق الدروس المسجل أعلاه فقط، وقدّم مراجعة مرتبة له: قراءة وفهم، استرجاع، حل تدريبات موجودة من مصدر الطالب/المدرس، ثم مراجعة ختامية قبل الموعد. لا تنشئ أسئلة من عندك ولا تعتبر نطاق شرح المدرس إعلانًا رسميًا بمحتوى الامتحان. إذا لم يوجد موضع مدرس/سنتر، أظهر نقص البيانات بدل اختراع دروس.",
+    "قدّم المواد المضافة للمجموع فقط، واستبعد الثقافة المالية والتربية الرياضية من قائمة امتحانات المجموع. لا تخترع تاريخًا أو مادة تخصصية غير محددة في ملف الطالب.",
     "الأهداف النشطة:",
     activeGoals.length ? activeGoals.join("\n") : "لا توجد أهداف نشطة محفوظة.",
     "الكتب والموارد المتاحة:",

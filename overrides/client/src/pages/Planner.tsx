@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { getNextOpenPlanStep } from "@/lib/plan-actions";
 import { getPlannerTeacherSessions, groupPlannerTeacherSessions, type PlannerTeacherSession } from "@/lib/teacher-sessions";
+import { formatTime12Hour, getDateKeyInTimeZone } from "@shared/date-time";
 import { buildPlannerCurriculumLanes, getPlannerStepCurriculum as getPlanStepCurriculum, getTeacherSessionPreparationSteps } from "@/lib/planner-curriculum";
 import { ENGLISH_CURRICULUM_LABELS, displayBranchTitle, displayCurriculumTitle } from "@/lib/curriculum-display";
 import {
@@ -149,7 +150,7 @@ const DAILY_PLAN_PREFIX = "SIE_DAILY_PLAN_V5:";
 const DAILY_PLAN_DRAFT_PREFIX = "SIE_DAILY_PLAN_DRAFT_V1:";
 const ANNUAL_PLAN_PREFIX = "SIE_ANNUAL_PLAN_V1:";
 const STUDY_PLAN_PREFIX = "SIE_STUDY_PLAN_V2:";
-const todayCairo = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
+const todayCairo = getDateKeyInTimeZone(new Date(), "Africa/Cairo");
 const initialPrompt = "كوّن لي خطة مذاكرة عملية موزعة على جميع المواد المحددة في ملفي الدراسي، وليس مادة واحدة فقط. استخدم المهام الحالية وآخر موضع مكتمل وجدول حصص المدرسين، ووازن بين إنهاء المتراكم والاستعداد للمحاضرات الجديدة. اجعل عناوين المهام وشرحها بالعربية الواضحة. لا تنشئ اختبارات أو أسئلة أو واجبات من عندك.";
 const planningModeOptions: Array<{ value: PlanningMode; title: string; description: string; marker: string }> = [
   { value: "smart", title: "الخطة الذكية", description: "تخلّص المتراكم، وفي نفس الوقت تجهّزك لشرح المدرس القادم.", marker: "الموصى بها" },
@@ -176,10 +177,7 @@ function displayArabicText(value: string | null | undefined, fallback: string): 
 }
 
 function displayTime24Hour(value: string): string {
-  const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(value);
-  if (!match) return value;
-  const arabicDigits = (part: string) => part.replace(/\d/g, digit => "٠١٢٣٤٥٦٧٨٩"[Number(digit)]);
-  return arabicDigits(match[1]) + ":" + arabicDigits(match[2]);
+  return formatTime12Hour(value, "ar-EG", "UTC");
 }
 
 function displayPlanStepTitle(step: PlanStep, subjectIds: string[]): string {
@@ -1161,7 +1159,7 @@ function PlanLoading({ progress, gradeLabel, onHide }: { progress: GenerationPro
   const completedCount = stages.filter(stage => progress?.completedStages.includes(stage.id)).length;
   const currentIndex = stages.findIndex(stage => stage.id === progress?.currentStage);
   const updatedLabel = progress?.updatedAt
-    ? new Intl.DateTimeFormat("ar-EG", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date(progress.updatedAt))
+    ? new Intl.DateTimeFormat("ar-EG", { hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true, timeZone: "Africa/Cairo" }).format(new Date(progress.updatedAt))
     : null;
   return (
     <section className="sf-plan-loading" role="status" aria-live="polite" aria-label="مراحل بناء خطة المذاكرة">

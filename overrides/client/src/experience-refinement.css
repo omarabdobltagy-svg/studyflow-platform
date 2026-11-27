@@ -4801,3 +4801,46 @@ body[data-studyflow-sections-open="true"] .sf-hub-root {
   .sf-onboarding-shell .sf-teacher-choice,
   .sf-progress-position-pickers [data-selected="true"] { transition: none !important; }
 }
+
+/* Tablet portrait: keep the six mobile-dock destinations in a stable, non-overlapping grid. */
+@media (min-width: 721px) and (max-width: 900px) and (orientation: portrait) {
+  .sf-shell-v3 .sf-desktop-dock { display: none !important; }
+  .sf-shell-v3 .sf-mobile-dock {
+    position: fixed !important;
+    z-index: 60 !important;
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
+    display: grid !important;
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+    align-items: stretch !important;
+    gap: 4px !important;
+    width: calc(100vw - 24px) !important;
+    max-width: 720px !important;
+    min-height: 68px !important;
+    bottom: max(10px, env(safe-area-inset-bottom)) !important;
+    padding: 6px !important;
+  }
+  .sf-shell-v3 .sf-mobile-dock-item {
+    display: flex !important;
+    min-width: 0 !important;
+    min-height: 54px !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 4px !important;
+    padding: 4px 2px !important;
+    font-size: 10px !important;
+    line-height: 1.2 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+  }
+  .sf-shell-v3 .sf-mobile-dock-item span {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .sf-shell-v3 .sf-main {
+    padding-bottom: calc(112px + env(safe-area-inset-bottom)) !important;
+  }
+}

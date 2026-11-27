@@ -11,6 +11,7 @@ import { getNextOpenPlanStep } from "@/lib/plan-actions";
 import { getPlannerStepCurriculum } from "@/lib/planner-curriculum";
 import { CAIRO_BAC_EXAM_CALENDAR_NOTICE, getCairoSecondYearBaccalaureateExams } from "@shared/cairo-baccalaureate-exam-calendar";
 import { getSIEStudentVisibleBranches, getSIECheckpointProgressBranches, getSIESubject, matchSIECheckpointTask, normalizeSIECheckpointFrontier } from "@shared/sie-catalog";
+import { formatTime12Hour, getCalendarDaysBetween, getDateKeyInTimeZone } from "@shared/date-time";
 import {
   ArrowLeft, BarChart3, BookOpenText, CalendarDays, Check, CheckCircle2, Clock3,
   Compass, GraduationCap, ListChecks, Loader2, MessageCircle,
@@ -387,15 +388,13 @@ export default function Home() {
   ).length;
   const homeStudyProgress = homeStudySteps.length ? Math.round(homeDoneSteps / homeStudySteps.length * 100) : 0;
   const homeNextStep = getNextOpenPlanStep(homeStudySteps as any[] | undefined);
-  const cairoExamDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
+  const cairoExamDate = getDateKeyInTimeZone(new Date(), "Africa/Cairo");
   const upcomingExams = useMemo(
     () => getCairoSecondYearBaccalaureateExams(profile.data)
       .filter(exam => exam.date >= cairoExamDate),
     [profile.data?.educationSystem, profile.data?.gradeYear, profile.data?.subjectIds, cairoExamDate],
   );
-  const daysUntilExam = (date: string) => Math.max(0, Math.round(
-    (Date.parse(date + "T00:00:00Z") - Date.parse(cairoExamDate + "T00:00:00Z")) / 86_400_000
-  ));
+  const daysUntilExam = (date: string) => Math.max(0, getCalendarDaysBetween(cairoExamDate, date));
   const homeNextStepIndex = homeNextStep ? homeStudySteps.indexOf(homeNextStep) : -1;
   const tasks = summary.data?.tasks ?? [];
   const taskCount = summary.data?.taskStats.total ?? 0;
@@ -416,9 +415,7 @@ export default function Home() {
   const confirmFinishCurrentSession = () => {
     if (session) finishSession.mutate({ sessionId: session.sessionId, markLessonCompleted: markComplete });
   };
-  const finishTimeLabel = new Intl.DateTimeFormat("ar-EG", {
-    timeZone: "Africa/Cairo", hour: "2-digit", minute: "2-digit",
-  }).format(new Date(now));
+  const finishTimeLabel = formatTime12Hour(new Date(now), "ar-EG", "Africa/Cairo");
 
   const welcomeGuide = [
     {
@@ -819,7 +816,11 @@ export default function Home() {
                 <h3 id="sf-home-exam-calendar-title">امتحانات المواد المضافة للمجموع</h3>
                 <p>توزيع نوفمبر المقترح للصف الثاني بكالوريا حسب المواد الموجودة في ملفك.</p>
               </div>
-              <span className="sf-home-exam-calendar-status">جدول مديرية مقترح</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="sf-home-exam-calendar-status">جدول مديرية مقترح</span>
+                <Button type="button" variant="outline" size="sm" className="rounded-full"
+                  onClick={() => setLocation("/planner")}>جهّز خطة مراجعة الشهر</Button>
+              </div>
             </header>
             <div className="sf-home-exam-calendar-track">
               {upcomingExams.map((exam, index) => {
