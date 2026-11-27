@@ -562,11 +562,26 @@ export default function DashboardLayout({ title, description, children, action }
               >
                 {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
               </Button>
-              <span className="sf-topbar-avatar" aria-label={user.name || "ملف الطالب"}>{initial}</span>
+              <button
+                type="button"
+                className="sf-topbar-avatar"
+                onClick={() => navigate("/settings")}
+                aria-label="فتح الملف الشخصي"
+                title="الملف الشخصي"
+              >{initial}</button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="sf-topbar-logout"
+                onClick={() => setShowLogoutConfirm(true)}
+                aria-label="تسجيل الخروج"
+                title="تسجيل الخروج"
+              ><LogOut className="size-4" /></Button>
             </div>
           </motion.header>
 
-          <AnimatePresence mode="wait" initial={false}>
+          <AnimatePresence mode="sync" initial={false}>
             <motion.main
               key={location}
               className={"sf-main sf-main-" + pageKey}
