@@ -46,7 +46,7 @@ describe("Part 1 textbook planning context", () => {
 
 
 describe("Part 1 curriculum mapping and ordering", () => {
-  it("preserves every existing branch ID and branch order", () => {
+  it("keeps the official English branches in their order without non-curriculum enrichment tracks", () => {
     expect(getSIECheckpointBranches("ARB_G2_BAC").map(branch => branch.branchId)).toEqual([
       "ARB_NAHW",
       "ARB_BALAGHA",
@@ -59,10 +59,10 @@ describe("Part 1 curriculum mapping and ordering", () => {
     expect(getSIECheckpointBranches("ENG1_G2_BAC").map(branch => branch.branchId)).toEqual([
       "ENG_VOCABULARY",
       "ENG_GRAMMAR",
-      "ENG_GRE",
       "ENG_TEXTBOOK",
       "ENG_STORY",
     ]);
+    expect(getSIECheckpointBranches("ENG1_G2_BAC").some(branch => branch.branchId === "ENG_GRE")).toBe(false);
     expect(getSIECheckpointBranches("HIS_G2_BAC").map(branch => branch.branchId)).toEqual(["HIS_G2_BAC:FULL"]);
     expect(getSIECheckpointBranches("PROG_AI_G2_BAC").map(branch => branch.branchId)).toEqual(["PROG_AI_G2_BAC:FULL"]);
   });
