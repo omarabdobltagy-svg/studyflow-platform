@@ -3277,7 +3277,7 @@ export const appRouter = router({
               descriptionMatch: {
                 subjectId: input.subjectId,
                 branchId: input.branchId,
-                topics: item.matchedTopics,
+                topics: item.matchedTopics.filter((topic: unknown): topic is string => typeof topic === "string"),
                 verifiedAt: new Date().toISOString(),
               },
             } : {}),
