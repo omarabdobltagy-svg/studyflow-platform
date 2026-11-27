@@ -2689,60 +2689,184 @@ export const appRouter = router({
         const acceptedIds = new Set(Array.isArray(selection.acceptedAlternativeReviewVideoIds)
           ? selection.acceptedAlternativeReviewVideoIds.filter((value: unknown): value is string => typeof value === "string")
           : []);
-        const query = [subject.nameAr, branch.branchTitle, "مراجعة", "البكالوريا المصرية", SIE_CATALOG_META.academicYear].join(" ");
-        const result = await callDataApi("Youtube/search", { query: { gl: "EG", hl: "ar", q: query } }) as {
-          items?: Array<Record<string, unknown>>;
-          videos?: Array<Record<string, unknown>>;
+        const branchNodeIds = new Set(branch.choices.map(choice => choice.nodeId));
+        const matchedBranchTopics = (update: Record<string, any>) => {
+          const topics = Array.isArray(update.contentAnalysis?.topics)
+            ? update.contentAnalysis.topics as Array<Record<string, any>>
+            : [];
+          return [...new Set(topics.flatMap(topic => {
+            if (topic.confidence === "low") return [];
+            const topicText = [
+              topic.titleAr,
+              topic.descriptionAr,
+              ...(Array.isArray(topic.curriculumKeywords) ? topic.curriculumKeywords : []),
+              ...(Array.isArray(topic.branchHints) ? topic.branchHints : []),
+            ].filter(value => typeof value === "string").join(" ");
+            const match = matchSIECheckpointTask([input.subjectId], topicText);
+            return match && branchNodeIds.has(match.nodeId) ? [match.title] : [];
+          }))];
         };
-        const rawItems = Array.isArray(result?.items) ? result.items : Array.isArray(result?.videos) ? result.videos : [];
-        const seen = new Set<string>();
-        const items = rawItems.flatMap(item => {
-          const title = String(item.title ?? item.videoTitle ?? item.name ?? "").trim().slice(0, 240);
-          const channelTitle = String(item.channelTitle ?? item.channel_name ?? item.channel ?? "").trim().slice(0, 160);
-          const rawUrl = String(item.url ?? item.link ?? item.videoUrl ?? "").trim();
-          const videoId = extractVideoId(rawUrl);
-          const description = String(item.description ?? item.snippet ?? "").slice(0, 700);
-          if (!title || !channelTitle || !videoId || seen.has(videoId)) return [];
-          const reviewText = normalize(title + " " + description);
-          if (!/مراجعه|مراجعات|revision|review/.test(reviewText)) return [];
-          const normalizedChannel = normalize(channelTitle);
-          if (normalizedChannel.length < 4) return [];
-          const alternativeTeacher = knownAlternativeTeachers.find(candidate => {
-            const identities = [candidate.nameAr, candidate.brandName]
+
+        // Start with revision material from the student's selected teacher.
+        // A completed analysis must match this exact curriculum branch; otherwise
+        // the video is not presented as a suitable revision recommendation.
+        const savedTeacherUpdates = Array.isArray(selection.teacherPublicUpdates)
+          ? selection.teacherPublicUpdates as Array<Record<string, any>>
+          : [];
+        const storedSelectedTeacherItems = (selectedTeacherId ? savedTeacherUpdates : [])
+          .filter(update => update.teacherId === selectedTeacherId
+            && update.sourceType === "youtube"
+            && update.announcementType === "revision"
+            && typeof update.url === "string"
+            && !/failed/.test(String(update.contentAnalysis?.status ?? "")))
+          .flatMap(update => {
+            const videoId = extractVideoId(String(update.url));
+            if (!videoId) return [];
+            const externalId = "youtube:" + videoId;
+            if (declinedIds.has(externalId)) return [];
+            const matchedTopics = matchedBranchTopics(update);
+            const analysisStatus = String(update.contentAnalysis?.status ?? "pending");
+            if (analysisStatus === "complete" && matchedTopics.length === 0) return [];
+            const teacherName = String(update.teacherName ?? selectedTeacher?.nameAr ?? "مدرسك");
+            return [{
+              externalId,
+              teacherId: String(update.teacherId),
+              teacherName,
+              teacherBrand: selectedTeacher?.brandName ?? teacherName,
+              title: String(update.title ?? "").trim().slice(0, 240),
+              channelTitle: selectedTeacher?.brandName ?? teacherName,
+              url: "https://www.youtube.com/watch?v=" + videoId,
+              publishedAt: String(update.publishedAt ?? ""),
+              description: String(update.description ?? "").slice(0, 700),
+              matchedSignals: matchedTopics.length,
+              matchedTopics,
+              accepted: true,
+              isSelectedTeacher: true,
+              analysisStatus,
+              verificationState: analysisStatus === "complete" ? "content_verified" : "analysis_pending",
+              relevance: analysisStatus === "complete"
+                ? "تم تحليل محتوى الفيديو وربطه بموضوعات متراكمة داخل هذا الفرع."
+                : "هذا فيديو مراجعة من مدرسك المختار؛ جارٍ فحص محتواه قبل إدراجه في الخطة.",
+            }];
+          })
+          .sort((a, b) => Date.parse(b.publishedAt || "") - Date.parse(a.publishedAt || ""))
+          .slice(0, 5);
+        const savedSelectedIds = new Set(storedSelectedTeacherItems.map(item => item.externalId));
+
+        let selectedTeacherItems = storedSelectedTeacherItems;
+        if (selectedTeacher && selectedTeacherItems.length === 0) {
+          const ownQuery = [selectedTeacher.nameAr, subject.nameAr, branch.branchTitle, "مراجعة", "البكالوريا المصرية", SIE_CATALOG_META.academicYear].join(" ");
+          const ownResult = await callDataApi("Youtube/search", { query: { gl: "EG", hl: "ar", q: ownQuery } }) as {
+            items?: Array<Record<string, unknown>>;
+            videos?: Array<Record<string, unknown>>;
+          };
+          const ownRawItems = Array.isArray(ownResult?.items) ? ownResult.items : Array.isArray(ownResult?.videos) ? ownResult.videos : [];
+          selectedTeacherItems = ownRawItems.flatMap(item => {
+            const title = String(item.title ?? item.videoTitle ?? item.name ?? "").trim().slice(0, 240);
+            const channelTitle = String(item.channelTitle ?? item.channel_name ?? item.channel ?? "").trim().slice(0, 160);
+            const rawUrl = String(item.url ?? item.link ?? item.videoUrl ?? "").trim();
+            const videoId = extractVideoId(rawUrl);
+            const description = String(item.description ?? item.snippet ?? "").slice(0, 700);
+            if (!title || !channelTitle || !videoId) return [];
+            const reviewText = normalize(title + " " + description);
+            if (!/مراجعه|مراجعات|revision|review/.test(reviewText)) return [];
+            const normalizedChannel = normalize(channelTitle);
+            const identities = [selectedTeacher.nameAr, selectedTeacher.brandName]
               .map(value => typeof value === "string" ? normalize(value) : "")
-              .filter(identity => identity.length >= 4);
-            return identities.some(identity => normalizedChannel === identity
-              || normalizedChannel.includes(identity)
-              || identity.includes(normalizedChannel));
-          });
-          if (!alternativeTeacher) return [];
-          const externalId = "youtube:" + videoId;
-          if (declinedIds.has(externalId)) return [];
-          seen.add(videoId);
-          const combined = normalize(title + " " + description);
-          const branchTokens = normalizedTokens(branch.branchTitle);
-          const subjectTokens = normalizedTokens(subject.nameAr);
-          const branchMatch = branchTokens.some(token => combined.includes(token));
-          const subjectMatch = subjectTokens.some(token => combined.includes(token));
-          const matchedSignals = Number(branchMatch) + Number(subjectMatch) + 1;
-          return [{
-            externalId,
-            teacherId: alternativeTeacher.teacherId,
-            teacherName: alternativeTeacher.nameAr,
-            teacherBrand: alternativeTeacher.brandName,
-            title,
-            channelTitle,
-            url: "https://www.youtube.com/watch?v=" + videoId,
-            publishedAt: String(item.publishedAt ?? item.published_at ?? ""),
-            description,
-            matchedSignals,
-            accepted: acceptedIds.has(externalId),
-            verificationState: "catalog_teacher_identity_only" as const,
-            relevance: matchedSignals >= 2
-              ? "مدرس بديل معروف للمادة؛ يلزم تحليل محتوى الفيديو قبل ربطه بالمنهج"
-              : "هوية المدرس معروفة، لكن تطابق الفرع غير مؤكد من العنوان؛ سيُفحص محتوى الفيديو بعد موافقتك",
-          }];
-        }).sort((a, b) => Number(b.accepted) - Number(a.accepted) || b.matchedSignals - a.matchedSignals).slice(0, 10);
+              .filter(value => value.length >= 4);
+            if (!identities.some(identity => normalizedChannel === identity
+              || normalizedChannel.includes(identity) || identity.includes(normalizedChannel))) return [];
+            const externalId = "youtube:" + videoId;
+            if (savedSelectedIds.has(externalId) || declinedIds.has(externalId)) return [];
+            const combined = normalize(title + " " + description);
+            const branchMatch = normalizedTokens(branch.branchTitle).some(token => combined.includes(token));
+            const subjectMatch = normalizedTokens(subject.nameAr).some(token => combined.includes(token));
+            return [{
+              externalId,
+              teacherId: selectedTeacher.teacherId,
+              teacherName: selectedTeacher.nameAr,
+              teacherBrand: selectedTeacher.brandName,
+              title,
+              channelTitle,
+              url: "https://www.youtube.com/watch?v=" + videoId,
+              publishedAt: String(item.publishedAt ?? item.published_at ?? ""),
+              description,
+              matchedSignals: Number(branchMatch) + Number(subjectMatch) + 1,
+              matchedTopics: [] as string[],
+              accepted: acceptedIds.has(externalId),
+              isSelectedTeacher: true,
+              analysisStatus: acceptedIds.has(externalId) ? "processing" : "awaiting_consent",
+              verificationState: "selected_teacher_identity_only" as const,
+              relevance: acceptedIds.has(externalId)
+                ? "تمت الموافقة على الفيديو؛ ننتظر تحليل محتواه ومطابقته مع المتراكم."
+                : "هذا الفيديو من قناة مدرسك المختار. وافق على تحليله أولًا؛ لن يُستخدم في الخطة إلا إذا طابق موضوعات متراكمة فعلًا.",
+            }];
+          }).slice(0, 5);
+        }
+
+        let alternativeItems: Array<Record<string, any>> = [];
+        let query = [subject.nameAr, branch.branchTitle, "مراجعة", "البكالوريا المصرية", SIE_CATALOG_META.academicYear].join(" ");
+        // Search other teachers only when the selected teacher has no candidate
+        // for this branch. An unmatched, fully analyzed review is not treated as useful.
+        if (selectedTeacherItems.length === 0) {
+          const result = await callDataApi("Youtube/search", { query: { gl: "EG", hl: "ar", q: query } }) as {
+            items?: Array<Record<string, unknown>>;
+            videos?: Array<Record<string, unknown>>;
+          };
+          const rawItems = Array.isArray(result?.items) ? result.items : Array.isArray(result?.videos) ? result.videos : [];
+          const seen = new Set<string>();
+          alternativeItems = rawItems.flatMap(item => {
+            const title = String(item.title ?? item.videoTitle ?? item.name ?? "").trim().slice(0, 240);
+            const channelTitle = String(item.channelTitle ?? item.channel_name ?? item.channel ?? "").trim().slice(0, 160);
+            const rawUrl = String(item.url ?? item.link ?? item.videoUrl ?? "").trim();
+            const videoId = extractVideoId(rawUrl);
+            const description = String(item.description ?? item.snippet ?? "").slice(0, 700);
+            if (!title || !channelTitle || !videoId || seen.has(videoId)) return [];
+            const reviewText = normalize(title + " " + description);
+            if (!/مراجعه|مراجعات|revision|review/.test(reviewText)) return [];
+            const normalizedChannel = normalize(channelTitle);
+            if (normalizedChannel.length < 4) return [];
+            const alternativeTeacher = knownAlternativeTeachers.find(candidate => {
+              const identities = [candidate.nameAr, candidate.brandName]
+                .map(value => typeof value === "string" ? normalize(value) : "")
+                .filter(identity => identity.length >= 4);
+              return identities.some(identity => normalizedChannel === identity
+                || normalizedChannel.includes(identity)
+                || identity.includes(normalizedChannel));
+            });
+            if (!alternativeTeacher) return [];
+            const externalId = "youtube:" + videoId;
+            if (declinedIds.has(externalId)) return [];
+            seen.add(videoId);
+            const combined = normalize(title + " " + description);
+            const branchTokens = normalizedTokens(branch.branchTitle);
+            const subjectTokens = normalizedTokens(subject.nameAr);
+            const branchMatch = branchTokens.some(token => combined.includes(token));
+            const subjectMatch = subjectTokens.some(token => combined.includes(token));
+            const matchedSignals = Number(branchMatch) + Number(subjectMatch) + 1;
+            return [{
+              externalId,
+              teacherId: alternativeTeacher.teacherId,
+              teacherName: alternativeTeacher.nameAr,
+              teacherBrand: alternativeTeacher.brandName,
+              title,
+              channelTitle,
+              url: "https://www.youtube.com/watch?v=" + videoId,
+              publishedAt: String(item.publishedAt ?? item.published_at ?? ""),
+              description,
+              matchedSignals,
+              matchedTopics: [] as string[],
+              accepted: acceptedIds.has(externalId),
+              isSelectedTeacher: false,
+              analysisStatus: acceptedIds.has(externalId) ? "processing" : "awaiting_consent",
+              verificationState: "catalog_teacher_identity_only" as const,
+              relevance: matchedSignals >= 2
+                ? "مدرس بديل معروف للمادة؛ يلزم تحليل محتوى الفيديو قبل ربطه بالمنهج"
+                : "هوية المدرس معروفة، لكن تطابق الفرع غير مؤكد من العنوان؛ سيُفحص محتوى الفيديو بعد موافقتك",
+            }];
+          }).sort((a, b) => Number(b.accepted) - Number(a.accepted) || b.matchedSignals - a.matchedSignals).slice(0, 10);
+        }
+        const items = selectedTeacherItems.length > 0 ? selectedTeacherItems : alternativeItems;
         const latestSearchProfile = await getStudentProfile(ctx.user.id);
         if (latestSearchProfile) {
           const latestSearchSelection = (latestSearchProfile.selection ?? {}) as Record<string, any>;
@@ -2751,7 +2875,7 @@ export const appRouter = router({
             : [];
           const savedAt = new Date().toISOString();
           const nextPending = [
-            ...items.map(item => ({ ...item, subjectId: input.subjectId, branchId: input.branchId, searchedAt: savedAt })),
+            ...items.filter(item => !item.accepted).map(item => ({ ...item, subjectId: input.subjectId, branchId: input.branchId, searchedAt: savedAt })),
             ...previousPending.filter(candidate =>
               !items.some(item => item.externalId === candidate.externalId)
               && Date.now() - Date.parse(String(candidate.searchedAt ?? "")) < 7 * 24 * 60 * 60 * 1_000
@@ -2762,16 +2886,20 @@ export const appRouter = router({
             pendingAlternativeReviewCandidates: nextPending,
           });
         }
-        await logStudentActivity(ctx.user.id, "learning.review_search", "curriculum_branch", input.branchId, "تم البحث عن مراجعات بديلة لمدرس المادة", {
-          subjectId: input.subjectId,
-          selectedTeacherId: selectedTeacherId ?? null,
-          resultCount: items.length,
-        });
+        await logStudentActivity(ctx.user.id, "learning.review_search", "curriculum_branch", input.branchId,
+          selectedTeacherItems.length > 0 ? "تم عرض مراجعات المدرس المختار" : "تم البحث عن مراجعات بديلة لمدرس المادة", {
+            subjectId: input.subjectId,
+            selectedTeacherId: selectedTeacherId ?? null,
+            resultCount: items.length,
+            source: selectedTeacherItems.length > 0 ? "selected_teacher" : "alternative_teacher",
+          });
         return {
           query, subject: subject.nameAr, branch: branch.branchTitle,
           selectedTeacher: selectedTeacher?.nameAr ?? null,
           source: "YouTube", items,
-          note: "هوية المدرس مطابقة لدليل المدرسين، لكن هذا لا يثبت أن الفيديو يغطي الفرع. لا يدخل الفيديو في الخطة إلا بعد موافقتك، ثم تحليل محتواه ومطابقة موضوعاته مع المنهج الرسمي.",
+          note: selectedTeacherItems.length > 0
+            ? "نعرض مراجعات مدرسك المختار أولًا. الفيديوهات غير المحللة لا تدخل الخطة؛ تُدرج فقط بعد مطابقة محتواها مع دروس متراكمة فعلًا. عند عدم وجود مراجعة مناسبة من مدرسك، ننتقل إلى مدرس بديل للمادة."
+            : "لم تظهر مراجعة مناسبة من مدرسك المختار لهذا الفرع؛ لذلك بحثنا لدى مدرسين آخرين للمادة. هوية المدرس البديل وحدها لا تكفي، ولن يدخل الفيديو الخطة إلا بعد موافقتك وتحليل محتواه ومطابقته مع المنهج والمتراكم.",
         };
       }),
     acceptAlternativeReview: protectedProcedure
@@ -2827,9 +2955,8 @@ export const appRouter = router({
           throw new TRPCError({ code: "BAD_REQUEST", message: "اسم قناة الفيديو لا يطابق المدرس المسجل في دليل المنصة." });
         }
         const selectedTeacherId = selection.teacherChoices?.[input.subjectId] || profile.teacherSelections?.[input.subjectId];
-        if (selectedTeacherId === teacherId) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "هذا هو مدرسك المحدد بالفعل، وليس مراجعة بديلة." });
-        }
+        // The consent flow also supports a revision video from the selected teacher
+        // when it was discovered on YouTube rather than through the monitored feed.
         const externalIdFromUrl = (() => {
           try {
             const parsed = new URL(url);
