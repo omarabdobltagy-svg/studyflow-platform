@@ -356,6 +356,13 @@ export default function Home() {
   }, [profile.data?.selection]);
 
   const plan = dailyPlan.data?.plan;
+  const homeStudySteps = plan?.steps ?? [];
+  const homeDoneSteps = homeStudySteps.filter((step: any) =>
+    step.plannerTaskStatus === "done" || step.existingTask?.status === "done"
+  ).length;
+  const homeStudyProgress = homeStudySteps.length ? Math.round(homeDoneSteps / homeStudySteps.length * 100) : 0;
+  const homeNextStep = getNextOpenPlanStep(homeStudySteps as any[] | undefined);
+  const homeNextStepIndex = homeNextStep ? homeStudySteps.indexOf(homeNextStep) : -1;
   const tasks = summary.data?.tasks ?? [];
   const taskCount = summary.data?.taskStats.total ?? 0;
   const completed = summary.data?.taskStats.completed ?? 0;
@@ -645,25 +652,76 @@ export default function Home() {
           </section>
         </div>
 
-        <section className="sf-daily-plan-card overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4 sm:px-6">
-            <div><p className="text-xs font-semibold text-muted-foreground">تخطيط تلقائي</p><h3 className="mt-1 text-lg font-bold">{plan?.title ?? "خطة المذاكرة"}</h3></div>
-            <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setLocation("/planner")}>تفاصيل الخطة <ArrowLeft className="size-4" /></Button>
-          </div>
+        <section className="sf-daily-plan-card sf-home-study-map">
+          <header className="sf-home-study-map-header">
+            <div className="sf-home-study-map-title">
+              <span>مساحة اليوم · مسار التنفيذ</span>
+              <h3>خريطة مذاكرة اليوم</h3>
+              <p>{plan?.title || "خطواتك الدراسية مرتبة في مسار واحد واضح"}</p>
+            </div>
+            <Button variant="outline" size="sm" className="sf-home-study-map-open" onClick={() => setLocation("/planner")}>
+              الخريطة الكاملة <ArrowLeft className="size-4" />
+            </Button>
+          </header>
           {dailyPlan.isLoading ? (
-            <div className="space-y-3 p-5"><div className="h-4 w-2/3 animate-pulse rounded bg-muted" /><div className="h-4 w-full animate-pulse rounded bg-muted" /></div>
+            <div className="sf-home-study-map-loading" aria-busy="true">
+              <div /><div /><div />
+            </div>
           ) : plan ? (
-            <div className="p-5 sm:p-6">
-              <p className="max-w-3xl text-sm leading-7 text-muted-foreground">{plan.summary}</p>
-              <div className="mt-5 grid gap-3 md:grid-cols-3">
-                {plan.steps.slice(0, 3).map((step: any, index: number) => (
-                  <article key={index} className="rounded-2xl border border-border/75 bg-background p-4">
-                    <div className="flex items-center justify-between gap-2"><Badge variant="secondary" className="max-w-[70%] truncate">{step.category}</Badge></div>
-                    <h4 className="mt-3 font-semibold leading-6">{step.title}</h4>
-                    <p className="mt-1 line-clamp-2 text-xs leading-6 text-muted-foreground">{step.detail}</p>
-                  </article>
-                ))}
+            <div className="sf-home-study-map-body">
+              <div className="sf-home-study-map-summary">
+                <p>{plan.summary}</p>
+                <div className="sf-home-study-map-progress">
+                  <div className="sf-home-study-map-progress-copy">
+                    <span>تقدم تنفيذ الخطة</span>
+                    <strong>{homeDoneSteps.toLocaleString("ar-EG")} <small>من {homeStudySteps.length.toLocaleString("ar-EG")}</small></strong>
+                  </div>
+                  <b>{homeStudyProgress.toLocaleString("ar-EG")}%</b>
+                </div>
+                <Progress value={homeStudyProgress} className="sf-home-study-map-progress-rail" />
               </div>
+              {homeStudySteps.length ? (
+                <div className="sf-home-study-path" aria-label="تسلسل خطوات المذاكرة اليوم">
+                  {homeStudySteps.slice(0, 6).map((step: any, index: number) => {
+                    const isDone = step.plannerTaskStatus === "done" || step.existingTask?.status === "done";
+                    const isNext = index === homeNextStepIndex;
+                    return (
+                      <article key={step.plannerTaskId ?? step.existingTask?.id ?? step.sourceStepIndex ?? index}
+                        className={"sf-home-study-step " + (isDone ? "is-done" : isNext ? "is-next" : "is-upcoming")}
+                        data-testid={"home-study-step-" + index}>
+                        <div className="sf-home-study-step-marker" aria-hidden="true">
+                          {isDone ? <CheckCircle2 className="size-4" /> : <span>{(index + 1).toLocaleString("ar-EG")}</span>}
+                        </div>
+                        <div className="sf-home-study-step-content">
+                          <div className="sf-home-study-step-meta">
+                            <Badge variant="secondary">{step.category || "خطوة دراسية"}</Badge>
+                            {typeof step.minutes === "number" && step.minutes > 0 && <span><Clock3 className="size-3.5" />{step.minutes.toLocaleString("ar-EG")} دقيقة</span>}
+                            {step.day && <span>{step.day}</span>}
+                            {isDone ? <strong>مكتملة</strong> : isNext ? <strong>ابدأ من هنا</strong> : <span>قادمة</span>}
+                          </div>
+                          <h4>{step.title}</h4>
+                          <p>{step.detail}</p>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="sf-home-study-map-empty">
+                  <CheckCircle2 className="size-8" />
+                  <strong>الخطة جاهزة، لكن مفيش خطوات ظاهرة لليوم حاليًا.</strong>
+                  <span>افتح الخطة الكاملة لمراجعة توزيعك وتحديثه.</span>
+                </div>
+              )}
+              <footer className="sf-home-study-map-footer">
+                <div>
+                  <strong>{homeNextStep ? "الخطوة التالية: " + homeNextStep.title : "أنهيت كل خطوات الخطة الحالية"}</strong>
+                  <span>{homeNextStep ? "ابدأ بالخطوة المحددة، وسيظل باقي المسار مرتبًا أمامك." : "تقدر تراجع المسارات وتحدّث تقدمك من الخريطة الكاملة."}</span>
+                </div>
+                <Button onClick={() => setLocation("/planner")} className="rounded-xl">
+                  افتح خريطة التنفيذ <ArrowLeft className="size-4" />
+                </Button>
+              </footer>
               {dailyPlan.data?.needsRefresh && (
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/20 bg-amber-500/[0.04] px-3 py-2.5">
                   <p className="text-xs leading-5 text-muted-foreground">تغير تقدمك أو مهامك منذ آخر إنشاء للخطة؛ الأولوية القديمة لن تُعرض باعتبارها الحالية.</p>
@@ -675,21 +733,15 @@ export default function Home() {
               )}
             </div>
           ) : (
-            <div className="flex flex-col items-start gap-3 p-5 sm:p-6">
-              <p className="max-w-2xl text-sm leading-7 text-muted-foreground">
-                {profile.data?.subjectIds?.length
-                  ? "لا توجد خطة معتمدة حاليًا. افتح خطة المذاكرة لتكوين المقترح ومراجعته؛ بعد اعتماده ستظهر خطواته ومهامه هنا."
-                  : "أكمل المواد ومواعيد المحاضرات في ملفك الدراسي؛ بعدها ستتكوّن خطة المذاكرة تلقائيًا عند دخولك."}
-              </p>
-              {profile.data?.subjectIds?.length ? (
-                <Button onClick={() => setLocation("/planner")} variant="outline" className="rounded-xl">
-                  إنشاء خطة المذاكرة <ArrowLeft className="size-4" />
-                </Button>
-              ) : (
-                <Button onClick={() => setLocation("/settings/academic")} variant="outline" className="rounded-xl">
-                  إكمال الملف الدراسي <ArrowLeft className="size-4" />
-                </Button>
-              )}
+            <div className="sf-home-study-map-empty">
+              <Sparkles className="size-8" />
+              <strong>جهّز خريطة مذاكرتك</strong>
+              <p>{profile.data?.subjectIds?.length
+                ? "أنشئ خطة المذاكرة وراجع توزيع الخطوات قبل البدء."
+                : "أكمل المواد ومواعيد المحاضرات في ملفك الدراسي؛ بعدها نقدر نبني خريطة مذاكرتك."}</p>
+              <Button onClick={() => setLocation(profile.data?.subjectIds?.length ? "/planner" : "/settings/academic")} variant="outline" className="rounded-xl">
+                {profile.data?.subjectIds?.length ? "إنشاء خطة المذاكرة" : "إكمال الملف الدراسي"} <ArrowLeft className="size-4" />
+              </Button>
             </div>
           )}
         </section>
