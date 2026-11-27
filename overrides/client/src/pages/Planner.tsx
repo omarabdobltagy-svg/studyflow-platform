@@ -445,12 +445,10 @@ export default function Planner() {
     return { unseen, deferred, unknownBranches, unknownLessons };
   }, [profile.data?.selection, profile.data?.subjectIds, learning.data]);
   const curriculumLinkedTasks = mappedOpenTasks.filter(item => item.match);
-  const taskProgressConflicts = curriculumLinkedTasks.filter(({ task, match }) => {
+  const taskProgressConflicts = curriculumLinkedTasks.filter(({ match }) => {
     if (!match) return false;
-    const branch = getSIECheckpointProgressBranches(match.subjectId).find(item => item.branchId === match.branchId);
-    const gap = (learning.data as any)?.gapByBranch?.[match.subjectId]?.[match.branchId];
-    const index = branch?.choices.findIndex(choice => choice.nodeId === match.nodeId) ?? -1;
-    return index >= 0 && typeof gap?.studentPosition === "number" && index < gap.studentPosition;
+    const lessonState = (learning.data as any)?.lessonStateByBranch?.[match.subjectId]?.[match.branchId]?.byNode?.[match.nodeId];
+    return lessonState === "studied";
   });
   const isPreflightReady = !profile.isLoading && !learning.isLoading && !tasksQuery.isLoading
     && !profile.isError && !learning.isError && !tasksQuery.isError;
@@ -1060,7 +1058,7 @@ export default function Planner() {
           <div className="sf-sp-panel">
             <section className="sf-sp-section-card" data-scroll-reveal>
               <div className="sf-sp-section-heading"><div><span className="sf-sp-eyebrow">قائمة العمل الفعلية</span><h2>مهام مفتوحة تؤثر على ترتيب المذاكرة</h2></div><a href="/tasks" className="sf-sp-text-action">إدارة كل المهام <ArrowUpRight className="size-4" /></a></div>
-              {taskProgressConflicts.length > 0 && <div className="sf-sp-conflict"><strong>تحتاج مراجعة حالة المنهج</strong><p>هناك {taskProgressConflicts.length.toLocaleString("ar-EG")} مهمة مرتبطة بموضع يظهر مكتملًا بالفعل في تقدم المنهج. إكمال المهمة لا يغيّر تقدم المنهج تلقائيًا.</p><a href="/curriculum">راجع خريطة المنهج</a></div>}
+              {taskProgressConflicts.length > 0 && <div className="sf-sp-conflict sf-sp-ai-reconcile"><div><strong>المساعد الذكي بيراجع ارتباط المهام بالدروس</strong><p>رُصدت {taskProgressConflicts.length.toLocaleString("ar-EG")} مهمة مفتوحة مرتبطة بدرس سجلت أنك ذاكرته وفهمته. عند المراجعة، يعيد المخطط ترتيب مهامه ويحذف الخطوات القديمة التابعة لخطته فقط. الواجبات المستقلة والمهام الشخصية لن تُغلق لمجرد اكتمال الدرس.</p></div><Button type="button" size="sm" variant="outline" disabled={ensureDaily.isPending} onClick={() => ensureDaily.mutate({ forceRebuild: true })}>{ensureDaily.isPending ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />} {ensureDaily.isPending ? "المساعد بيراجع..." : "خلّي المساعد يراجع المهام"}</Button></div>}
               {tasksQuery.isLoading ? <div className="sf-sp-skeletons"><span /><span /><span /></div> : mappedOpenTasks.length ? (
                 <div className="sf-sp-task-list">
                   {mappedOpenTasks.map(({task,match}) => (
@@ -1281,7 +1279,7 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
 
       <div className="sf-sp-board-metrics">
         <article><span>إجمالي الخطوات</span><strong>{plan.steps.length.toLocaleString("ar-EG")}</strong></article>
-        <article><span>الخطوات المكتملة</span><strong>{completedCount.toLocaleString("ar-EG")}</strong></article>
+        <article><span>المهام المنفذة</span><strong>{completedCount.toLocaleString("ar-EG")}</strong></article>
         <article><span>المتراكم المؤكد المدرج / الإجمالي</span><strong>{backlogCoverageLabel}</strong></article>
         <article><span>نقاط المنهج المرتبطة</span><strong>{coveredCurriculumCount.toLocaleString("ar-EG")}</strong></article>
         <article><span>فيديوهات مراجعة مطابقة</span><strong>{plannedReviewCount.toLocaleString("ar-EG")}</strong></article>
@@ -1344,7 +1342,7 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
             <span><i className="is-learning" /> مذاكرة وشرح</span>
             <span><i className="is-review" /> مراجعة مؤجلة</span>
             <span><i className="is-obligation" /> التزام مسجل</span>
-            <span><i className="is-done" /> مكتمل</span>
+            <span><i className="is-done" /> مهمة منتهية</span>
           </div>
           {mapLanes.length ? (
             <div className="sf-sp-flow-lanes">
@@ -1375,7 +1373,7 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
                           <div className="sf-sp-flow-node-card">
                             <div className="sf-sp-flow-node-topline">
                               <span>{step.day || "اليوم غير محدد"}</span>
-                              <span>{isCurrentStep ? "الخطوة التالية" : isDone ? "مكتملة" : isReview || isDeferred ? "مراجعة" : step.existingTask ? "التزام" : "مذاكرة"}</span>
+                              <span>{isCurrentStep ? "الخطوة التالية" : isDone ? "المهمة منتهية" : isReview || isDeferred ? "مراجعة" : step.existingTask ? "التزام" : "مذاكرة"}</span>
                               {step.minutes > 0 && <span>{step.minutes.toLocaleString("ar-EG")} دقيقة</span>}
                             </div>
                             <button
@@ -1533,7 +1531,7 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
                             {step.difficulty && <span>{difficultyLabel[step.difficulty] || "غير محدد"}</span>}
                             {step.existingTask && <span>التزام مسجل</span>}
                             {step.scheduleState === "deferred" && <span>مؤجلة للدورة القادمة</span>}
-                            {isDone && <span>مكتملة</span>}
+                            {isDone && <span>المهمة منتهية</span>}
                             {(formatDate(step.existingTask?.dueAt) || step.day) && <span>يوم التنفيذ: {formatDate(step.existingTask?.dueAt) || step.day}</span>}
                             {step.minutes > 0 && <span>المدة: {step.minutes.toLocaleString("ar-EG")} دقيقة</span>}
                           </div>
