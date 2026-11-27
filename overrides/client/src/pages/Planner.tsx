@@ -45,6 +45,7 @@ type PlannerTeacherSession = {
   dateLabel: string;
   time: string;
   sortDate: string;
+  dateOffsetDays: number;
 };
 
 function getPlannerTeacherSessions(profile?: {
@@ -84,6 +85,9 @@ function getPlannerTeacherSessions(profile?: {
       const date = new Date(base);
       date.setUTCDate(date.getUTCDate() + offset);
       const sortDate = date.toISOString().slice(0, 10);
+      const sessionDate = new Date(sortDate + "T12:00:00.000Z");
+      const todayDate = new Date(today + "T12:00:00.000Z");
+      const dateOffsetDays = Math.max(0, Math.round((sessionDate.getTime() - todayDate.getTime()) / 86_400_000));
       sessions.push({
         key: subjectId + "-" + slot.dayOfWeek + "-" + slot.startTime + "-" + sortDate,
         subjectId,
@@ -94,6 +98,7 @@ function getPlannerTeacherSessions(profile?: {
         }).format(date),
         time: slot.startTime,
         sortDate,
+        dateOffsetDays,
       });
     }
   }
@@ -1289,12 +1294,12 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
       {teacherSessions.length > 0 && (
         <section className="sf-sp-teacher-schedule" aria-label="مواعيد الحصص القادمة">
           <header>
-            <div><span>المواعيد القادمة</span><h3>الحصة التالية وما يسبقها من متراكم</h3></div>
+            <div><span>المواعيد القادمة</span><h3>الحصص القادمة والمتراكم المرتبط بها</h3></div>
             <small>موعد البداية المسجل فقط</small>
           </header>
           <div className="sf-sp-teacher-session-list">
             {teacherSessions.map(session => {
-              const preparationSteps = getTeacherSessionPreparationSteps(plan.steps, session.subjectId, subjectIds, 2);
+              const preparationSteps = getTeacherSessionPreparationSteps(plan.steps, session.subjectId, subjectIds, 2, session.dateOffsetDays);
               return (
                 <article key={session.key} className="sf-sp-teacher-session-card">
                   <div className="sf-sp-teacher-session-main">
@@ -1302,7 +1307,7 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
                     <div className="sf-sp-teacher-session-copy"><strong>{session.teacherName}</strong><span>{session.subjectName}</span></div>
                   </div>
                   <div className="sf-sp-session-preparation">
-                    <span className="sf-sp-session-preparation-label">التحضير من بياناتك الحالية</span>
+                    <span className="sf-sp-session-preparation-label">متراكم المادة حتى يوم الحصة</span>
                     {preparationSteps.length > 0 ? (
                       <div className="sf-sp-session-preparation-list">
                         {preparationSteps.map(step => {
@@ -1328,7 +1333,7 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
               );
             })}
           </div>
-          <p>المساعد يربط موعد الحصة بالمهام المفتوحة المسجلة للمادة، ويعرضها كتحضير سابق للحصة. لا يفترض مدة المحاضرة أو وقت انتهائها.</p>
+          <p>تظهر هنا المهام المفتوحة للمادة التي تقع في الخطة حتى يوم الحصة. لا يفترض النظام وقت تنفيذ المهمة داخل اليوم، ولا مدة المحاضرة أو وقت انتهائها.</p>
         </section>
       )}
       {plan.executionStrategy && (
