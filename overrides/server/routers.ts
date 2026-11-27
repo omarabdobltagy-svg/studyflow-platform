@@ -1911,11 +1911,11 @@ export const appRouter = router({
         gradeYear: z.string().trim().min(2).max(60),
       }))
       .query(async ({ input }) => {
-        const teacher = getSIETeacher(teacherId);
+        const teacher = getSIETeacher(input.teacherId);
         if (!teacher || !teacher.subjectIds.includes(input.subjectId)) {
           throw new TRPCError({ code: "NOT_FOUND", message: "المدرس غير مسجل لهذه المادة في دليل StudyFlow." });
         }
-        return getTeacherCourseFactsWithRefresh({ teacherId: teacherId, subjectId: input.subjectId, educationSystem: input.systemId, gradeYear: input.gradeYear });
+        return getTeacherCourseFactsWithRefresh({ teacherId: input.teacherId, subjectId: input.subjectId, educationSystem: input.systemId, gradeYear: input.gradeYear });
       }),
   }),
 
@@ -1983,7 +1983,7 @@ export const appRouter = router({
         const systemId = selection.systemId === "EG_GENERAL_SECONDARY" || profile.educationSystem === "general_secondary"
           ? "EG_GENERAL_SECONDARY"
           : "EG_BACCALAUREATE";
-        const teacherId = teacherId && teacherId !== "__SKIP__" ? teacherId : null;
+        const teacherId = input.teacherId && input.teacherId !== "__SKIP__" ? input.teacherId : null;
         const teacher = teacherId ? getSIETeacher(teacherId) : undefined;
         if (teacherId) {
           const eligible = getSIETeachersForSubject(input.subjectId, systemId);
@@ -2650,7 +2650,7 @@ export const appRouter = router({
           throw new TRPCError({ code: "BAD_REQUEST", message: "فرع المنهج غير موجود في الفهرس الحالي." });
         }
         const selection = (profile.selection ?? {}) as Record<string, any>;
-        const selectedTeacherId = teacherId || selection.teacherChoices?.[input.subjectId] || profile.teacherSelections?.[input.subjectId];
+        const selectedTeacherId = input.teacherId || selection.teacherChoices?.[input.subjectId] || profile.teacherSelections?.[input.subjectId];
         const selectedTeacher = selectedTeacherId ? getSIETeacher(selectedTeacherId) : undefined;
         if (selectedTeacher && !selectedTeacher.subjectIds.includes(input.subjectId)) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "المدرس المحدد لا يرتبط بهذه المادة." });
@@ -3008,7 +3008,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const result = await createTask(ctx.user.id, input);
         await logStudentActivity(ctx.user.id, "task.created", "task", null, "أُضيفت مهمة جديدة", {
-          title: title, category: input.category ?? "عام", priority: input.priority ?? "medium", dueAt: input.dueAt?.toISOString() ?? null,
+          title: input.title, category: input.category ?? "عام", priority: input.priority ?? "medium", dueAt: input.dueAt?.toISOString() ?? null,
         });
         queueDailyPlanReconciliation(ctx.user.id);
         return result;
@@ -3069,7 +3069,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const result = await updateTask(ctx.user.id, input.id, input);
         await logStudentActivity(ctx.user.id, "task.updated", "task", input.id, "تم تعديل مهمة", {
-          title: title, category: input.category, priority: input.priority, dueAt: input.dueAt?.toISOString() ?? null,
+          title: input.title, category: input.category, priority: input.priority, dueAt: input.dueAt?.toISOString() ?? null,
         });
         queueDailyPlanReconciliation(ctx.user.id);
         return result;
@@ -3623,8 +3623,8 @@ export const appRouter = router({
         const existingSubjectRecord = courseProgress[input.subjectId] ?? {};
         const existingBranchRecord = branch ? existingSubjectRecord.branches?.[branch.branchId] ?? {} : {};
         const courseMode = input.courseMode ?? selection.courseModes?.[input.subjectId] ?? existingSubjectRecord.courseMode ?? "online";
-        const teacherId = teacherId !== undefined
-          ? teacherId
+        const teacherId = input.teacherId !== undefined
+          ? input.teacherId
           : selection.teacherChoices?.[input.subjectId] ?? profile.teacherSelections?.[input.subjectId] ?? null;
         const chosenTeacher = teacherId && teacherId !== "__SKIP__" ? getSIETeacher(teacherId) : undefined;
         if (teacherId && teacherId !== "__SKIP__") {
@@ -3634,7 +3634,7 @@ export const appRouter = router({
         }
         const savedCustomTeacherName = selection.customTeacherNames?.[input.subjectId] ?? existingBranchRecord.teacherName ?? existingSubjectRecord.teacherName ?? "";
         const teacherName = input.teacherName?.trim()
-          ?? (teacherId === null ? "" : savedCustomTeacherName || chosenTeacher?.nameAr || "");
+          ?? (input.teacherId === null ? "" : savedCustomTeacherName || chosenTeacher?.nameAr || "");
         if (input.teacherTeachingFrontierId !== "__UNKNOWN__" && !teacherName.trim() && !chosenTeacher) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "اكتب اسم المدرس أو اختره قبل تسجيل موضع شرحه." });
         }
@@ -3705,7 +3705,7 @@ export const appRouter = router({
         const nextCustomTeacherNames = { ...((latestSelection.customTeacherNames ?? {}) as Record<string, string>) };
         if (!chosenTeacher && teacherName.trim()) nextCustomTeacherNames[input.subjectId] = teacherName.trim();
         else delete nextCustomTeacherNames[input.subjectId];
-        if (teacherId !== undefined) {
+        if (input.teacherId !== undefined) {
           const chosenTeacher = teacherId && teacherId !== "__SKIP__" ? getSIETeacher(teacherId) : undefined;
           const previousTeacherState = nextTeacherStates[input.subjectId] ?? {};
           const sameTeacher = previousTeacherState.teacherId === teacherId;
@@ -3731,7 +3731,7 @@ export const appRouter = router({
         }
         await updateStudentProfileSelection(ctx.user.id, {
           ...latestSelection,
-          ...(teacherId !== undefined ? {
+          ...(input.teacherId !== undefined ? {
             teacherChoices: nextTeacherChoices,
             teacherProgressState: nextTeacherStates,
           } : {}),
@@ -4037,7 +4037,7 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         const result = await createCalendarEvent(ctx.user.id, input);
-        await logStudentActivity(ctx.user.id, "calendar.event_created", "calendar_event", null, "أُضيف موعد إلى التقويم", { title: title, startAt: input.startAt.toISOString() });
+        await logStudentActivity(ctx.user.id, "calendar.event_created", "calendar_event", null, "أُضيف موعد إلى التقويم", { title: input.title, startAt: input.startAt.toISOString() });
         queueDailyPlanReconciliation(ctx.user.id);
         return result;
       }),
@@ -4045,7 +4045,7 @@ export const appRouter = router({
       .input(z.object({ id: z.number().int().positive(), title: z.string().trim().min(1).max(180), type: z.enum(["event", "study", "goal"]), startAt: z.coerce.date(), endAt: dateInput, allDay: z.boolean(), color: z.string().trim().min(1).max(20) }))
       .mutation(async ({ ctx, input }) => {
         const result = await updateCalendarEvent(ctx.user.id, input.id, input);
-        await logStudentActivity(ctx.user.id, "calendar.event_updated", "calendar_event", input.id, "تم تعديل موعد في التقويم", { title: title, startAt: input.startAt.toISOString() });
+        await logStudentActivity(ctx.user.id, "calendar.event_updated", "calendar_event", input.id, "تم تعديل موعد في التقويم", { title: input.title, startAt: input.startAt.toISOString() });
         queueDailyPlanReconciliation(ctx.user.id);
         return result;
       }),
