@@ -1464,8 +1464,7 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
           </section>
         )) : <div className="sf-sp-empty-inline">{filter === "done" ? "لا توجد خطوات مكتملة في هذا العرض." : filter === "open" ? "لا توجد خطوات متبقية." : "لا توجد خطوات ضمن الفلتر الحالي."}</div>}
       </div>
-
-      ) : null}
+      )}
 
       {editable ? (
         <footer className="sf-sp-board-footer">
