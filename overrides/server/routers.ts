@@ -2832,9 +2832,18 @@ export const appRouter = router({
           ? updates
           : [acceptedUpdate, ...updates].slice(0, 60);
         const acceptedVideoIds = [...new Set([...accepted, input.externalId])].slice(-120);
+        const acceptedContexts = latestSelection.acceptedAlternativeReviewContext
+          && typeof latestSelection.acceptedAlternativeReviewContext === "object"
+          && !Array.isArray(latestSelection.acceptedAlternativeReviewContext)
+          ? latestSelection.acceptedAlternativeReviewContext as Record<string, { subjectId?: string; branchId?: string }>
+          : {};
         await updateStudentProfileSelection(ctx.user.id, {
           ...latestSelection,
           acceptedAlternativeReviewVideoIds: acceptedVideoIds,
+          acceptedAlternativeReviewContext: {
+            ...acceptedContexts,
+            [input.externalId]: { subjectId: input.subjectId, branchId: input.branchId, acceptedAt: new Date().toISOString() },
+          },
           teacherPublicUpdates: nextUpdates,
         });
         await recordStudentActivityEvent({
