@@ -199,7 +199,8 @@ async function processTeacherVideoAnalysis(userId: number, externalId: string, a
       status: "processing",
       interactionId,
       model,
-      startedAt: new Date().toISOString(),
+      startedAt: existing?.startedAt || new Date().toISOString(),
+      retryCount: Math.max(0, Math.trunc(Number(existing?.retryCount) || 0)),
     });
     if (activityId) updateAIActivity(userId, activityId, "تحليل موضوعات المراجعة", "بدأ تحليل الفيديو؛ سيحوّل الشرح إلى موضوعات فعلية بدل تقسيمه إلى فترات زمنية ثابتة.");
   }
