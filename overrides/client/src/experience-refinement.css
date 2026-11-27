@@ -4125,3 +4125,22 @@ body[data-studyflow-sections-open="true"] .sf-hub-root {
 .sf-sp-flow-study-method li b{color:var(--foreground);font-size:9px}
 .sf-sp-flow-study-method li p{margin:0;color:var(--muted-foreground);font-size:9px;line-height:1.8}
 .sf-sp-flow-study-method>small{padding-top:8px;border-top:1px solid var(--border);color:var(--muted-foreground);font-size:9px;line-height:1.8}
+
+
+/* Cross-workspace interaction polish: restrained elevation, crisp focus, touch-safe behavior. */
+.sf-shell-v3 .sf-main :is(.app-card,.sf-progress-card,.sf-daily-plan-card,.sf-map-metric,.sf-map-branch-card){transition:border-color .2s ease,box-shadow .22s ease,transform .22s ease}
+@media(hover:hover) and (prefers-reduced-motion:no-preference){
+  .sf-shell-v3 .sf-main :is(.app-card,.sf-progress-card,.sf-map-metric,.sf-map-branch-card):hover{border-color:color-mix(in srgb,var(--primary) 28%,var(--border));box-shadow:0 16px 36px -32px color-mix(in srgb,var(--primary) 40%,transparent)}
+  .sf-shell-v3 .sf-main :is(button,[role=button],a).sf-interactive:hover{transform:translateY(-1px)}
+}
+.sf-shell-v3 .sf-main :is(button,a,select,input,textarea,[tabindex]):focus-visible{outline:2px solid color-mix(in srgb,var(--primary) 78%,white);outline-offset:3px}
+.sf-shell-v3 .sf-main :is(.app-card,.sf-progress-card){border-radius:20px}
+.sf-shell-v3 .sf-main :is(.app-card h2,.app-card h3,.sf-progress-card h2,.sf-progress-card h3){letter-spacing:-.018em}
+.sf-shell-v3 .sf-main :is(input,select,textarea){transition:border-color .18s ease,box-shadow .18s ease,background .18s ease}
+.sf-shell-v3 .sf-main :is(input,select,textarea):focus{border-color:color-mix(in srgb,var(--primary) 55%,var(--input));box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 10%,transparent)}
+@media(max-width:700px){
+  .sf-shell-v3 .sf-main :is(.app-card,.sf-progress-card){border-radius:17px}
+}
+@media(prefers-reduced-motion:reduce){
+  .sf-shell-v3 .sf-main :is(.app-card,.sf-progress-card,.sf-daily-plan-card,.sf-map-metric,.sf-map-branch-card,input,select,textarea){transition:none!important}
+}
