@@ -18,6 +18,8 @@ export type PlannerScheduleSettings = {
   daysPerWeek: 5 | 6 | 7;
   horizonDays: 7 | 14;
   maxSessionMinutes?: number;
+  /** Keeps hard/large lesson blocks on their own study day. */
+  isolateHeavySteps?: boolean;
 };
 
 export type ScheduledPlanStep<T> = T & {
@@ -49,6 +51,17 @@ export type PlannerQualityReport = {
   warnings: string[];
   stats: PlannerScheduleStats;
 };
+
+/** Leaves a small daily recovery buffer instead of filling every available minute. */
+export function getDailyPlanningCapacity(dailyMinutes: number, reservePercent = 15): number {
+  if (!Number.isInteger(dailyMinutes) || dailyMinutes < 20 || dailyMinutes > 600) {
+    throw new Error("dailyMinutes must be an integer between 20 and 600.");
+  }
+  if (!Number.isInteger(reservePercent) || reservePercent < 0 || reservePercent > 40) {
+    throw new Error("reservePercent must be an integer between 0 and 40.");
+  }
+  return Math.max(20, Math.floor(dailyMinutes * (100 - reservePercent) / 100));
+}
 
 export function getAvailableStudyDays(settings: Pick<PlannerScheduleSettings, "horizonDays" | "daysPerWeek">): number {
   const weeks = Math.floor(settings.horizonDays / 7);
@@ -102,6 +115,12 @@ export function schedulePlanSteps<T extends {
 
   steps.forEach((step, sourceStepIndex) => {
     const sourceTitle = step.title.trim();
+    const metadata = step as T & { difficulty?: string; lessonSize?: string };
+    const isolateHeavyStep = settings.isolateHeavySteps === true
+      && (metadata.difficulty === "hard" || metadata.lessonSize === "large");
+    if (isolateHeavyStep && usedMinutes > 0 && studyDayIndex < availableStudyDays) {
+      moveToNextDay();
+    }
     const totalMinutes = Math.max(5, Math.min(480, Math.round(step.minutes)));
     let remaining = totalMinutes;
     const sourceParts: Array<{
@@ -162,6 +181,10 @@ export function schedulePlanSteps<T extends {
         ...(firstPart ? {} : { existingTask: undefined, curriculumNodeIds: [] }),
       });
     });
+
+    if (isolateHeavyStep && sourceParts.length > 0 && studyDayIndex < availableStudyDays) {
+      moveToNextDay();
+    }
 
     if (hasDeferredRemainder) {
       deferredMinutes += remaining;

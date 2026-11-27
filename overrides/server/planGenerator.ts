@@ -5,7 +5,13 @@ import { getDateKeyInTimeZone } from "@shared/date-time";
 import { invokeLLM, invokeNvidiaLLM } from "./_core/llm";
 import { isPrimaryProviderFallbackEligible } from "./_core/llmFallback";
 import { updateAIActivity } from "./aiActivity";
-import { getPlannerLearningStatePriority } from "./plannerEngine";
+import {
+  evaluatePlanQuality,
+  getDailyPlanningCapacity,
+  getPlannerLearningStatePriority,
+  schedulePlanSteps,
+} from "./plannerEngine";
+import { getCalendarDaysBetween } from "@shared/date-time";
 import { getStudentProfile, listTasks, saveAiPlan } from "./db";
 import { formatTextbookEvidence, getCurriculumBranchPriorityGuidance, orderPlanStepsByCurriculumDependencies, retrieveTextbookEvidence } from "./textbook-retrieval";
 import { buildExamBlueprintContext, SECOND_YEAR_BAC_EXAM_WINDOW_2026_2027 } from "./exam-blueprints";
@@ -2446,84 +2452,104 @@ export async function generatePersonalPlan(
   let scheduleDay = 1;
   const totalPlannedMinutes = plan.steps.reduce((sum, step) => sum + step.minutes, 0);
   if (planScope === "daily") {
-    const pace = constraints.pace ?? "balanced";
-    const dailyTopicCapacity = pace === "relaxed" ? 1 : pace === "intensive" ? 3 : 2;
     const weeklyDays = constraints.daysPerWeek ?? 6;
+    const horizonDays = constraints.horizonDays ?? 7;
     const startDate = constraints.startDate ?? getDateKeyInTimeZone(new Date(), "Africa/Cairo");
     const start = new Date(startDate + "T12:00:00.000Z");
     const formatStudyDate = (date: Date) => new Intl.DateTimeFormat("ar-EG", {
       weekday: "long", day: "numeric", month: "long", timeZone: "Africa/Cairo",
     }).format(date);
-    let studyDayIndex = 0;
-    let itemsOnDay = 0;
-    let dayHasHeavyTopic = false;
-    const datedSteps = plan.steps.map((step, index) => {
-      const isHeavy = step.lessonSize === "large" || step.difficulty === "hard";
+    const dailyCapacity = getDailyPlanningCapacity(dailyMinutes, 15);
+    const maxSessionMinutes = Math.min(90, dailyCapacity);
+    const movableSteps: typeof plan.steps = [];
+    const movableSourceIndexes: number[] = [];
+    const fixedSteps: Array<typeof plan.steps[number] & {
+      day: string;
+      minutes: number;
+      scheduleState: "scheduled";
+      dayIndex: number;
+      dateOffsetDays: number;
+      sourceStepIndex: number;
+      segmentIndex: number;
+      segmentCount: number;
+    }> = [];
+
+    plan.steps.forEach((step, sourceStepIndex) => {
       const existingDate = step.existingTask?.dueAt ? new Date(step.existingTask.dueAt) : null;
-      const existingOffset = existingDate && Number.isFinite(existingDate.getTime())
-        ? Math.max(0, Math.round((Date.UTC(existingDate.getUTCFullYear(), existingDate.getUTCMonth(), existingDate.getUTCDate())
-          - Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate())) / 86_400_000))
-        : null;
-      if (existingOffset !== null) {
+      if (existingDate && Number.isFinite(existingDate.getTime())) {
+        const existingDateKey = getDateKeyInTimeZone(existingDate, "Africa/Cairo");
+        const existingOffset = Math.max(0, getCalendarDaysBetween(startDate, existingDateKey));
         const dueDate = new Date(start);
         dueDate.setUTCDate(dueDate.getUTCDate() + existingOffset);
-        const studyDay = Math.max(1, Math.floor(existingOffset / 7) * weeklyDays + Math.min(weeklyDays, existingOffset % 7 + 1));
-        return {
+        const studyDay = Math.max(1, Math.floor(existingOffset / 7) * weeklyDays
+          + Math.min(weeklyDays, existingOffset % 7 + 1));
+        fixedSteps.push({
           ...step,
           day: formatStudyDate(dueDate),
           minutes: 0,
-          scheduleState: "scheduled" as const,
+          scheduleState: "scheduled",
           dayIndex: studyDay,
           dateOffsetDays: existingOffset,
-          sourceStepIndex: index,
-          segmentIndex: undefined,
-          segmentCount: undefined,
+          sourceStepIndex,
+          segmentIndex: 1,
+          segmentCount: 1,
+        });
+      } else {
+        movableSteps.push(step);
+        movableSourceIndexes.push(sourceStepIndex);
+      }
+    });
+
+    const capacitySettings = {
+      dailyMinutes: dailyCapacity,
+      daysPerWeek: weeklyDays,
+      horizonDays,
+      maxSessionMinutes,
+      isolateHeavySteps: true,
+    } as const;
+    const allocation = schedulePlanSteps(movableSteps, capacitySettings);
+    const allocatedSteps = allocation.steps.map(step => {
+      const sourceStepIndex = movableSourceIndexes[step.sourceStepIndex] ?? step.sourceStepIndex;
+      if (step.scheduleState === "deferred" || step.dateOffsetDays === null) {
+        return {
+          ...step,
+          day: "بعد الفترة المحددة",
+          scheduleNote: step.scheduleNote || "لم تتسع نافذة الخطة لهذه المهمة دون تجاوز وقتك اليومي؛ تم الاحتفاظ بها بدل تكديس الجدول.",
+          sourceStepIndex,
         };
       }
-
-      if (isHeavy) {
-        if (itemsOnDay > 0) {
-          studyDayIndex += 1;
-          itemsOnDay = 0;
-          dayHasHeavyTopic = false;
-        }
-      } else if (itemsOnDay >= dailyTopicCapacity || dayHasHeavyTopic) {
-        studyDayIndex += 1;
-        itemsOnDay = 0;
-        dayHasHeavyTopic = false;
-      }
-
-      const calendarOffset = studyDayIndex + Math.floor(studyDayIndex / weeklyDays) * (7 - weeklyDays);
       const dueDate = new Date(start);
-      dueDate.setUTCDate(dueDate.getUTCDate() + calendarOffset);
-      itemsOnDay += 1;
-      if (isHeavy) dayHasHeavyTopic = true;
-      const assignedStudyDay = studyDayIndex + 1;
-      if (itemsOnDay >= dailyTopicCapacity || dayHasHeavyTopic) {
-        studyDayIndex += 1;
-        itemsOnDay = 0;
-        dayHasHeavyTopic = false;
-      }
+      dueDate.setUTCDate(dueDate.getUTCDate() + step.dateOffsetDays);
       return {
         ...step,
         day: formatStudyDate(dueDate),
-        // Keep the model estimate or verified revision-segment duration visible to the student.
-        minutes: step.minutes,
-        scheduleState: "scheduled" as const,
-        dayIndex: assignedStudyDay,
-        dateOffsetDays: calendarOffset,
-        scheduleNote: undefined,
-        sourceStepIndex: index,
-        segmentIndex: undefined,
-        segmentCount: undefined,
+        sourceStepIndex,
       };
     });
+    const datedSteps = [...fixedSteps, ...allocatedSteps].sort((left, right) =>
+      left.sourceStepIndex - right.sourceStepIndex || left.segmentIndex - right.segmentIndex
+    );
+    const quality = movableSteps.length
+      ? evaluatePlanQuality(allocation.steps, capacitySettings, allocation.stats)
+      : undefined;
+    const usedStudyDays = Math.max(0, ...datedSteps
+      .filter(step => step.scheduleState === "scheduled")
+      .map(step => step.dayIndex ?? 0));
+    const totalDeferredMinutes = allocation.stats.deferredMinutes;
+    const scheduleSummary = [
+      "التوزيع يحسب مدة كل مهمة بالدقائق، ويترك احتياطيًا يوميًا 15% للطوارئ والتأخير.",
+      "الجلسة الواحدة لا تتجاوز " + maxSessionMinutes + " دقيقة، والموضوعات الصعبة أو الكبيرة تحصل على يوم مستقل.",
+      totalDeferredMinutes > 0
+        ? "يوجد " + totalDeferredMinutes + " دقيقة مؤجلة خارج نافذة " + horizonDays + " أيام؛ لم نضغطها على أيامك الحالية."
+        : "كل المهام الجديدة دخلت نافذة الخطة دون تجاوز السعة اليومية.",
+    ].join(" ");
     plan = {
       ...plan,
       durationLabel: datedSteps.length.toLocaleString("ar-EG") + " خطوة موزعة على "
-        + datedSteps.reduce((max, step) => Math.max(max, step.dayIndex ?? 1), 0).toLocaleString("ar-EG")
-        + " يوم دراسة",
-      quality: undefined,
+        + usedStudyDays.toLocaleString("ar-EG") + " يوم دراسة"
+        + (totalDeferredMinutes > 0 ? " · " + totalDeferredMinutes.toLocaleString("ar-EG") + " دقيقة مؤجلة" : ""),
+      summary: (plan.summary + "\n\n" + scheduleSummary).slice(0, 1_500),
+      quality,
       steps: datedSteps,
     };
   } else {
