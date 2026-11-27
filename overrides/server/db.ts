@@ -1592,9 +1592,49 @@ export async function deleteCalendarEvent(userId: number, eventId: number) {
   if (result[0].affectedRows === 0) throw new Error("الموعد غير موجود أو لا تملك حذفه.");
 }
 
+function getAiPlanDatabaseErrorDetails(error: unknown) {
+  const outer = error && typeof error === "object" ? error as Record<string, unknown> : {};
+  const cause = outer.cause && typeof outer.cause === "object"
+    ? outer.cause as Record<string, unknown>
+    : {};
+  const pick = (...values: unknown[]) => values.find(value =>
+    typeof value === "string" || typeof value === "number"
+  );
+  return {
+    name: String(pick(cause.name, outer.name, "UnknownError")).slice(0, 80),
+    code: String(pick(cause.code, cause.errno, outer.code, outer.errno, "unknown")).slice(0, 80),
+    sqlState: String(pick(cause.sqlState, outer.sqlState, "unknown")).slice(0, 40),
+    message: String(pick(cause.message, outer.message, error) ?? "Unknown database error")
+      .replace(/\\s+/g, " ")
+      .slice(0, 360),
+  };
+}
+
+function logAiPlanPersistenceFailure(
+  operation: "insert" | "update",
+  userId: number,
+  planJson: string,
+  error: unknown,
+  planId?: number,
+) {
+  const details = getAiPlanDatabaseErrorDetails(error);
+  console.error("[StudyFlow DB] AI plan persistence failed", {
+    operation,
+    userId,
+    planId: planId ?? null,
+    payloadBytes: new TextEncoder().encode(planJson).byteLength,
+    ...details,
+  });
+}
+
 export async function saveAiPlan(userId: number, data: { prompt: string; title: string; planJson: string }) {
   const db = await requireDb();
-  await db.insert(aiPlans).values({ userId, prompt: data.prompt, title: data.title, planJson: data.planJson });
+  try {
+    await db.insert(aiPlans).values({ userId, prompt: data.prompt, title: data.title, planJson: data.planJson });
+  } catch (error) {
+    logAiPlanPersistenceFailure("insert", userId, data.planJson, error);
+    throw error;
+  }
 }
 
 export async function listAiPlans(userId: number) {
@@ -1686,10 +1726,15 @@ export async function getLatestAiPlanByPromptPrefix(userId: number, prefix: stri
 
 export async function updateAiPlanContent(userId: number, planId: number, planJson: string) {
   const db = await requireDb();
-  const result = await db.update(aiPlans)
-    .set({ planJson })
-    .where(and(eq(aiPlans.id, planId), eq(aiPlans.userId, userId)));
-  if (result[0].affectedRows === 0) throw new Error("خطة الدراسة المطلوب تحديثها غير موجودة.");
+  try {
+    const result = await db.update(aiPlans)
+      .set({ planJson })
+      .where(and(eq(aiPlans.id, planId), eq(aiPlans.userId, userId)));
+    if (result[0].affectedRows === 0) throw new Error("خطة الدراسة المطلوب تحديثها غير موجودة.");
+  } catch (error) {
+    logAiPlanPersistenceFailure("update", userId, planJson, error, planId);
+    throw error;
+  }
 }
 
 export async function updateAiPlanPrompt(userId: number, planId: number, prompt: string) {
