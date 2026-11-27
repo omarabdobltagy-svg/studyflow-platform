@@ -162,7 +162,7 @@ describe("getTeacherLectureDuration", () => {
   it("supports a lecture that finishes after midnight", () => {
     const result = getTeacherLectureDuration("23:30", "01:00");
     expect(result).toContain("١ ساعة و ٣٠ دقيقة");
-    expect(result).toContain("اليوم التالي");
+    expect(result).toContain("لليوم التالي");
   });
 
   it("does not invent a duration when no end time has been selected", () => {
