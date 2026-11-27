@@ -1080,12 +1080,19 @@ export function applyPlannerCurriculumCoverageGuard(
   return { ...plan, summary: (plan.summary + "\n\n" + coverageNote).slice(0, 1_500), steps };
 }
 
-export function getStudentPlanningFocusWeight(subjectId: string | null | undefined, branchId: string | null | undefined, labelText = ""): number {
+export function getStudentPlanningFocusWeight(
+  subjectId: string | null | undefined,
+  branchId: string | null | undefined,
+  labelText = "",
+  isConfirmedTask = false,
+): number {
   const text = String(labelText ?? "");
+  // Confirmed tasks stay at full priority even when their title names a lower-weight branch.
+  if (isConfirmedTask) return 1;
   // Student preference for near-term scheduling, not an official exam-weight claim.
   const isStory = (subjectId === "ARB_G2_BAC" && branchId === "ARB_LITERATURE")
     || (subjectId === "ENG1_G2_BAC" && branchId === "ENG_STORY");
-  const isGrePractice = /\bGRE\b/i.test(text);
+  const isGrePractice = (branchId ?? "").toUpperCase().includes("GRE") || /\bGRE\b/i.test(text);
   const isTeacherObligation = /واجب|تسليم|امتحان|اختبار|كويز|quiz|homework|assignment|exam|\btest\b|تكليف|ورقة عمل|حل الأسئلة/i.test(text);
   return isTeacherObligation ? 1 : (isStory || isGrePractice ? 0.42 : 1);
 }
@@ -1131,7 +1138,7 @@ export function applyCurriculumPrioritySignals(
     const curriculumLocation = locations[0];
 
     if (!curriculumLocation) {
-      const focusWeight = getStudentPlanningFocusWeight(null, null, [step.title, step.detail, step.category].join(" "));
+      const focusWeight = getStudentPlanningFocusWeight(null, null, [step.title, step.detail, step.category].join(" "), Boolean(step.existingTask));
       const score = prioritySignal(step.priority) * focusWeight;
       return {
         index,
@@ -1189,7 +1196,7 @@ export function applyCurriculumPrioritySignals(
       + 0.10 * coreSignal
       + 0.10 * effortSignal
       + 0.10 * modelUrgency;
-    const focusWeight = getStudentPlanningFocusWeight(subjectId, branchId, [step.title, step.detail, step.category].join(" "));
+    const focusWeight = getStudentPlanningFocusWeight(subjectId, branchId, [step.title, step.detail, step.category].join(" "), Boolean(step.existingTask));
     const score = baseScore * focusWeight;
     const priority: GeneratedPlan["steps"][number]["priority"] = score >= 0.86 ? "critical"
       : score >= 0.70 ? "high"
@@ -1645,6 +1652,7 @@ export function applyDailyPlanDepth(
       match?.subjectId,
       match?.branchId,
       [task.title, task.notes ?? "", task.category].join(" "),
+      true,
     );
     const taskStep = planSchema.shape.steps.element.parse({
       day: "",
