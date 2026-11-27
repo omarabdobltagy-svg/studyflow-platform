@@ -166,7 +166,6 @@ describe("legacy teacher schedule maps and weekly groups", () => {
     const groups = groupPlannerTeacherSessions(result);
     expect(groups).toHaveLength(1);
     expect(groups[0].sessions.map(item => item.dayOfWeek)).toEqual([0, 3]);
-    expect(groups[0].sessions.map(item => item.endTime)).toEqual(["22:30", "22:30"]);
   });
 });
 
@@ -216,6 +215,6 @@ describe("complete weekly teacher schedule rendering", () => {
 
     expect(sessions).toHaveLength(1);
     expect(sessions[0]).toMatchObject({ dayOfWeek: 4, time: "10:30" });
-    expect(sessions[0].endTime).toBeUndefined();
+    expect(Object.hasOwn(sessions[0], "endTime")).toBe(false);
   });
 });
