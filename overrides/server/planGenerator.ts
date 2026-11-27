@@ -204,12 +204,7 @@ const planSchema = z.object({
       title: z.string().trim().min(2).max(160),
       detail: z.string().trim().min(5).max(900),
       curriculumNodeIds: z.array(z.string().trim().min(1).max(120)).max(8).default([]),
-      resourceRecommendation: z.object({
-        title: z.string().trim().min(2).max(240),
-        url: z.string().trim().url().max(1_000).refine(value => value.startsWith("https://")),
-        teacherName: z.string().trim().max(120).optional(),
-        reason: z.string().trim().min(5).max(500),
-      }).optional(),
+      startSeconds: z.number().int().min(0).max(86_400),
     })).max(12).optional(),
     printedPageRange: z.tuple([z.number().int().positive().max(5_000), z.number().int().positive().max(5_000)]).nullish().transform(range => range ?? undefined),
     sourcePages: z.array(z.number().int().positive().max(5_000)).max(20).default([]),
@@ -1613,7 +1608,6 @@ export function applyDailyPlanDepth(
       const topicTitle = String(topic.titleAr || match.title).trim().slice(0, 150);
       const startLabel = formatTopicTime(startSeconds);
       const endLabel = formatTopicTime(endSeconds);
-      const topicUrl = videoUrl + "#t=" + startSeconds;
       const topicDetail = [
         String(topic.descriptionAr || "جزء موضوعي من مراجعة المدرس.").slice(0, 500),
         "هذا الجزء من " + startLabel + " إلى " + endLabel + ".",
@@ -1624,12 +1618,7 @@ export function applyDailyPlanDepth(
         title: subjectName + " — " + match.branchTitle + " — " + topicTitle,
         detail: topicDetail,
         curriculumNodeIds: [match.nodeId],
-        resourceRecommendation: {
-          title: (videoTitle + " — " + topicTitle).slice(0, 240),
-          url: topicUrl,
-          teacherName,
-          reason: "جزء محدد من مراجعة موثقة، ومطابق لدرس مسجل بأنه يحتاج مراجعة.",
-        },
+        startSeconds,
       });
       videoCoveredReviewNodeIds.add(match.nodeId);
       representedNodeIds.add(match.nodeId);
