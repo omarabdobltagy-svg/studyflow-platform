@@ -1,5 +1,6 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
+import { displayBranchTitle } from "@/lib/curriculum-display";
 import { Input } from "@/components/ui/input";
 
 import { trpc } from "@/lib/trpc";
@@ -161,7 +162,9 @@ export default function Study() {
     : undefined;
   const branchDisplayTitle = subjectId === "ARB_G2_BAC" && currentBranchId === "ARB_READING"
     ? "نصوص الوحدة"
-    : currentBranch?.branchTitle || "الفرع الحالي";
+    : currentBranch?.branchTitle
+      ? displayBranchTitle(currentBranch.branchTitle)
+      : "الفرع الحالي";
   const [studentFrontierDrafts, setStudentFrontierDrafts] = useState<Record<string, string>>({});
   const [teacherFrontierDrafts, setTeacherFrontierDrafts] = useState<Record<string, string>>({});
   const [schoolFrontierDrafts, setSchoolFrontierDrafts] = useState<Record<string, string>>({});
@@ -310,8 +313,8 @@ export default function Study() {
         if (nextBranch) {
           const fromLabel = variables.branchId === "ARB_READING"
             ? "نصوص الوحدة"
-            : allBranches[savedBranchIndex]?.branchTitle ?? "الفرع الحالي";
-          const toLabel = nextBranch.branchTitle;
+            : displayBranchTitle(allBranches[savedBranchIndex]?.branchTitle ?? "الفرع الحالي");
+          const toLabel = displayBranchTitle(nextBranch.branchTitle);
           setBranchTransition({ from: fromLabel, to: toLabel });
           setBranchId(nextBranch.branchId);
           toast.success("تم حفظ موضعك — ننتقل الآن إلى " + toLabel + ".");
@@ -337,7 +340,7 @@ export default function Study() {
           setSubjectId(nextTarget.subjectId);
           setBranchId(nextTarget.branchId || "");
           const nextLabel = nextTarget.branchId
-            ? branches.find(item => item.branchId === nextTarget.branchId)?.branchTitle
+            ? displayBranchTitle(branches.find(item => item.branchId === nextTarget.branchId)?.branchTitle ?? "الفرع التالي")
             : getSIESubject(nextTarget.subjectId)?.nameAr;
           toast.success("أنهيت موضوعات هذا الفرع؛ انتقلنا إلى " + (nextLabel || "الموضع التالي") + ".");
           return;
@@ -775,7 +778,7 @@ export default function Study() {
                           <span className={"flex size-6 shrink-0 items-center justify-center rounded-full text-[10px] " + (isComplete ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>
                             {isComplete ? <Check className="size-3.5" /> : index + 1}
                           </span>
-                          <span className="min-w-0 break-words leading-5">{branch.branchTitle}</span>
+                          <span className="min-w-0 break-words leading-5">{displayBranchTitle(branch.branchTitle)}</span>
                         </button>
                       );
                     })}

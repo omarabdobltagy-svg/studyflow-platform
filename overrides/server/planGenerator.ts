@@ -337,7 +337,7 @@ function plannerBranchKey(subjectId: string, branchId: string) {
  * it is complete. Fully completed SQ3R records also count as completed evidence.
  * Only checkpoints after that frontier can be offered as new learning tasks.
  */
-function buildPlannerProgressSnapshot(
+export function buildPlannerProgressSnapshot(
   profile: NonNullable<Awaited<ReturnType<typeof getStudentProfile>>>
 ): PlannerProgressSnapshot {
   const selection = (profile.selection || {}) as Record<string, any>;
@@ -452,7 +452,9 @@ function buildPlannerProgressSnapshot(
         });
         // Existing profiles predate the explicit watched/studied model. Keep their
         // former frontier semantics until a student updates a branch in the new model.
-        const learningState = reportedLearningState === "not_recorded" && lessonStateModelVersion < 1
+        const learningState = reportedLearningState === "not_recorded"
+          && lessonStateModelVersion < 1
+          && studentFrontier !== "__UNKNOWN__"
           ? "not_watched" as const
           : reportedLearningState;
         const item = {

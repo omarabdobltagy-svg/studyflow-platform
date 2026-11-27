@@ -98,7 +98,7 @@ export function displayBranchTitle(value: string): string {
     "GRE — مسار تكميلي": "مسار إثرائي لاختبار اللغة",
     "دروس المفردات داخل الوحدات": "المفردات",
     "دروس القواعد داخل الوحدات": "قواعد اللغة",
-    "المقرر بالكامل": "المقرر بالكامل",
+    "المقرر بالكامل": "الدروس",
   };
   return labels[value] ?? displayCurriculumTitle(value);
 }

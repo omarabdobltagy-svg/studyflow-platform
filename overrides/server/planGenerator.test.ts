@@ -3,12 +3,33 @@ import {
   applyCurriculumPrioritySignals,
   applyPlannerCurriculumCoverageGuard,
   applyPlannerProgressGuard,
+  buildPlannerProgressSnapshot,
   applyTeacherLedPlanningGuard,
   getDailyPlanFeasibilityNote,
   parseGeneratedPlan,
   interleavePlannerItemsBySubject,
 } from "./planGenerator";
 import { getSIECheckpointBranches, getSIECheckpointProgressBranches } from "@shared/sie-catalog";
+
+describe("unknown curriculum position safety", () => {
+  it("does not classify an entire legacy linear subject as accumulated when the student position is unknown", () => {
+    const branch = getSIECheckpointProgressBranches("HIS_G2_BAC")[0];
+    expect(branch.choices.length).toBeGreaterThan(1);
+
+    const snapshot = buildPlannerProgressSnapshot({
+      subjectIds: ["HIS_G2_BAC"],
+      selection: {},
+    } as any);
+    const progress = snapshot.branches.get("HIS_G2_BAC:" + branch.branchId);
+
+    expect(progress?.eligibleChoices).toHaveLength(1);
+    expect(progress?.eligibleChoices[0]).toMatchObject({
+      nodeId: branch.choices[0].nodeId,
+      learningState: "not_recorded",
+    });
+    expect(snapshot.eligibleNodeIds.size).toBe(1);
+  });
+});
 
 describe("daily plan subject coverage", () => {
   it("interleaves curriculum tasks across selected subjects before repeating a subject", () => {
