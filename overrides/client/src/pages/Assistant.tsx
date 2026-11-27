@@ -392,7 +392,7 @@ export default function Assistant() {
                   </>
                 }
               />
-            </div>iv>
+            </div>
           </div>
         </div>
       </section>

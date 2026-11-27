@@ -824,7 +824,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
               <Button type="button" variant="ghost" onClick={previous} disabled={step <= (identityStepRequired ? 0 : 1) || complete.isPending} className="rounded-xl">
                 <ArrowRight className="size-4" /> رجوع
               </Button>
-              {step < activeSteps.length - 1 ? (
+              {step < steps.length - 1 ? (
                 <Button type="button" onClick={next} disabled={!stepValid || complete.isPending} className="rounded-xl bg-primary">
                   التالي <ArrowLeft className="size-4" />
                 </Button>
