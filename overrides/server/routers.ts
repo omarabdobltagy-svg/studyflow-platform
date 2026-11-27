@@ -80,7 +80,8 @@ import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { generatePersonalPlan, getPlanGenerationProgress, markPlanGenerationFailed } from "./planGenerator";
 import { completeAIActivity, failAIActivity, getAIActivitySnapshot, startAIActivity, updateAIActivity } from "./aiActivity";
-import { classifyTeacherPublicUpdate, isHighConfidenceScheduleAnnouncement, isSecondYearBaccalaureateUpdate, parseYoutubeAtomFeed, scanSelectedTeacherSources, selectedTeacherIds } from "./teacher-content-monitor";
+import { classifyTeacherPublicUpdate, isHighConfidenceScheduleAnnouncement, isSecondYearBaccalaureateUpdate, parseYoutubeAtomFeed, scanSelectedTeacherSources, selectedTeacherIds, type TeacherPublicUpdate } from "./teacher-content-monitor";
+import { getTeacherVideoAnalysis, isTeacherVideoAnalysisConfigured, startTeacherVideoAnalysis } from "./teacher-video-analysis";
 import { isDailyPlanStale } from "./planLifecycle";
 import { buildPlannerMemorySnapshot, formatPlannerMemorySnapshot } from "./plannerMemory";
 import { classifyPlannerEventImpact, evaluatePlanQuality, schedulePlanSteps } from "./plannerEngine";
@@ -121,6 +122,146 @@ const dailyPlanDirtyUsers = new Map<number, "local" | "structural">();
 const teacherSourceScanLocks = new Map<number, Promise<boolean>>();
 const TEACHER_SOURCE_SCAN_TRIGGER_COOLDOWN_MS = 60_000;
 const teacherSourceScanLastQueuedAt = new Map<number, number>();
+const teacherVideoAnalysisLocks = new Map<string, Promise<void>>();
+
+function pauseForVideoAnalysis(ms: number) {
+  return new Promise<void>(resolve => setTimeout(resolve, ms));
+}
+
+async function persistTeacherVideoAnalysis(
+  userId: number,
+  externalId: string,
+  contentAnalysis: NonNullable<TeacherPublicUpdate["contentAnalysis"]>,
+) {
+  const latest = await getStudentProfile(userId);
+  if (!latest) return false;
+  const selection = (latest.selection ?? {}) as Record<string, any>;
+  const updates = Array.isArray(selection.teacherPublicUpdates)
+    ? selection.teacherPublicUpdates as TeacherPublicUpdate[]
+    : [];
+  let found = false;
+  const nextUpdates = updates.map(update => {
+    if (update.externalId !== externalId) return update;
+    found = true;
+    return { ...update, contentAnalysis };
+  });
+  if (!found) return false;
+  await updateStudentProfileSelection(userId, {
+    ...selection,
+    teacherPublicUpdates: nextUpdates,
+  });
+  return true;
+}
+
+async function processTeacherVideoAnalysis(userId: number, externalId: string) {
+  if (!isTeacherVideoAnalysisConfigured()) return;
+  const profile = await getStudentProfile(userId);
+  if (!profile) return;
+  const selection = (profile.selection ?? {}) as Record<string, any>;
+  const allowedTeachers = new Set(selectedTeacherIds(profile));
+  const videos = Array.isArray(selection.teacherPublicUpdates)
+    ? selection.teacherPublicUpdates as TeacherPublicUpdate[]
+    : [];
+  const video = videos.find(update =>
+    update.externalId === externalId
+    && update.sourceType === "youtube"
+    && allowedTeachers.has(update.teacherId)
+  );
+  if (!video || !video.url) return;
+  const existing = video.contentAnalysis;
+  if (existing?.status === "complete" || existing?.status === "failed") return;
+
+  let interactionId = existing?.interactionId;
+  let model = existing?.model || process.env.GEMINI_VIDEO_MODEL || "gemini-3.8-flash";
+  if (!interactionId) {
+    const selectedSubjects = (profile.subjectIds ?? []).map(subjectId => getSIESubject(subjectId)?.nameAr ?? subjectId);
+    const started = await startTeacherVideoAnalysis({
+      url: video.url,
+      videoTitle: video.title,
+      teacherName: video.teacherName,
+      selectedSubjects,
+    });
+    interactionId = started.interactionId;
+    model = started.model;
+    await persistTeacherVideoAnalysis(userId, externalId, {
+      status: "processing",
+      interactionId,
+      model,
+      startedAt: new Date().toISOString(),
+    });
+  }
+
+  // Long-running video understanding happens off the student request path.
+  // If the service restarts, a later source scan resumes polling this interaction ID.
+  for (let attempt = 0; attempt < 150; attempt += 1) {
+    const state = await getTeacherVideoAnalysis(interactionId);
+    if (state.status === "completed") {
+      const saved = await persistTeacherVideoAnalysis(userId, externalId, {
+        status: "complete",
+        interactionId,
+        model: state.model || model,
+        startedAt: existing?.startedAt || new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+        summaryAr: state.analysis.summaryAr,
+        topics: state.analysis.topics,
+        teacherInstructions: state.analysis.teacherInstructions,
+        topicsNotCovered: state.analysis.topicsNotCovered,
+      });
+      if (saved) {
+        await recordStudentActivityEvent({
+          userId,
+          eventType: "teacher.video_analysis_completed",
+          entityType: "teacher_video",
+          summary: "اكتمل تحليل محتوى مراجعة مدرس من المدرسين المختارين",
+          metadata: {
+            externalId,
+            teacherId: video.teacherId,
+            topicCount: state.analysis.topics.length,
+            instructionCount: state.analysis.teacherInstructions.length,
+            provider: "Gemini",
+            model: state.model || model,
+          },
+        });
+        queueDailyPlanReconciliation(userId);
+      }
+      return;
+    }
+    if (state.status === "failed") {
+      await persistTeacherVideoAnalysis(userId, externalId, {
+        status: "failed",
+        interactionId,
+        model: state.model || model,
+        startedAt: existing?.startedAt || new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+        error: state.error,
+      });
+      console.warn("[StudyFlow video analysis] Gemini interaction failed:", state.error);
+      return;
+    }
+    await pauseForVideoAnalysis(5_000);
+  }
+  // Leave it pending. The next teacher source scan will resume polling the same
+  // background interaction rather than submit another copy of the video.
+  console.info("[StudyFlow video analysis] Interaction is still running:", externalId);
+}
+
+function queueTeacherVideoAnalyses(userId: number, updates: TeacherPublicUpdate[]) {
+  if (!isTeacherVideoAnalysisConfigured() || process.env.NODE_ENV === "test") return;
+  for (const update of updates) {
+    if (update.sourceType !== "youtube" || !update.externalId || !update.url) continue;
+    if (update.contentAnalysis?.status === "complete" || update.contentAnalysis?.status === "failed") continue;
+    const lockKey = userId + ":" + update.externalId;
+    if (teacherVideoAnalysisLocks.has(lockKey)) continue;
+    const task = processTeacherVideoAnalysis(userId, update.externalId)
+      .catch(error => {
+        console.warn("[StudyFlow video analysis] Could not analyze teacher video:", error instanceof Error ? error.message.slice(0, 500) : "unknown error");
+      })
+      .finally(() => {
+        if (teacherVideoAnalysisLocks.get(lockKey) === task) teacherVideoAnalysisLocks.delete(lockKey);
+      });
+    teacherVideoAnalysisLocks.set(lockKey, task);
+  }
+}
 
 function markDailyPlanDirty(userId: number, impact: "local" | "structural") {
   const previous = dailyPlanDirtyUsers.get(userId);
@@ -207,7 +348,10 @@ async function scanTeacherSourcesForStudent(userId: number): Promise<boolean> {
       const nextScanState = { ...previousScanState, ...result.scanState };
       const scanStateChanged = JSON.stringify(previousScanState) !== JSON.stringify(nextScanState);
       const staleUpdatesRemoved = previousUpdates.length !== rawPreviousUpdates.length;
-      if (!newUpdates.length && !scanStateChanged && !staleUpdatesRemoved) return false;
+      if (!newUpdates.length && !scanStateChanged && !staleUpdatesRemoved) {
+        queueTeacherVideoAnalyses(userId, previousUpdates);
+        return false;
+      }
 
       const freshCutoff = Date.now() - 30 * 24 * 60 * 60 * 1_000;
       const mergedUpdates = [...newUpdates, ...previousUpdates]
@@ -222,6 +366,7 @@ async function scanTeacherSourcesForStudent(userId: number): Promise<boolean> {
         teacherPublicUpdates: mergedUpdates,
         teacherPublicScanState: nextScanState,
       });
+      queueTeacherVideoAnalyses(userId, mergedUpdates as TeacherPublicUpdate[]);
       if (newUpdates.length) {
         await recordStudentActivityEvent({
           userId,
@@ -306,6 +451,7 @@ export async function ingestYoutubeWebSubFeed(teacherId: string, xml: string) {
         teacherPublicUpdates: mergedUpdates,
         teacherPublicScanState: nextScanState,
       });
+      queueTeacherVideoAnalyses(profileTarget.userId, mergedUpdates as TeacherPublicUpdate[]);
       await recordStudentActivityEvent({
         userId: profileTarget.userId,
         eventType: "teacher.public_update_detected",
