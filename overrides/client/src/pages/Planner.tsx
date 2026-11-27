@@ -105,6 +105,34 @@ type PlanView = {
   reviewQuestion: string;
   taskSync?: { parentGoalId: number; stageCount: number; taskCount: number; routineId?: number | null };
 };
+
+type PlannerAssistantPatch = {
+  title?: string;
+  summary?: string;
+  updates: Array<{
+    index: number;
+    changes: Partial<Pick<PlanStep, "title" | "detail" | "category" | "priority" | "phaseId">>;
+  }>;
+  removeIndexes: number[];
+  order?: number[];
+};
+
+function applyPlannerAssistantPatch(plan: PlanView, patch: PlannerAssistantPatch): PlanView {
+  const removed = new Set(patch.removeIndexes);
+  const updatedSteps = plan.steps.map((step, index) => {
+    const update = patch.updates.find(item => item.index === index);
+    return update ? { ...step, ...update.changes } : step;
+  });
+  const remaining = plan.steps.map((_, index) => index).filter(index => !removed.has(index));
+  const order = patch.order ?? remaining;
+  return {
+    ...plan,
+    ...(patch.title ? { title: patch.title } : {}),
+    ...(patch.summary ? { summary: patch.summary } : {}),
+    steps: order.map(index => updatedSteps[index]).filter((step): step is PlanStep => Boolean(step)),
+    quality: undefined,
+  };
+}
 const DAILY_SNAPSHOT_PREFIX = "SIE_DAILY_PLAN_V4:";
 const DAILY_PLAN_DRAFT_PREFIX = "SIE_DAILY_PLAN_DRAFT_V1:";
 const ANNUAL_PLAN_PREFIX = "SIE_ANNUAL_PLAN_V1:";
@@ -1058,15 +1086,21 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
         <footer className="sf-sp-approved-footer"><CheckCircle2 className="size-4" /><span>هذه الخطة معتمدة، والمهام مرتبطة بقائمة عملك. تعديل المصدر يتم من المهام أو من تقدم المنهج.</span>{plan.taskSync && <strong>{plan.taskSync.taskCount.toLocaleString("ar-EG")} مهمة مرتبطة</strong>}</footer>
       )}
 
-      <details className="sf-sp-plan-extra"><summary>ملخص إضافي ومساعد الخطة</summary><p>{displayArabicText(plan.summary,"خطة مذاكرة مرتبة حسب بيانات ملفك الدراسي.")}</p>{plan.habits.length > 0 && <div className="sf-sp-habits">{plan.habits.map((habit,index)=><article key={habit.title+index}><strong>{displayArabicText(habit.title,"عادة دراسية")}</strong><small>{displayArabicText(habit.cue,"استخدمها لدعم الاستمرارية في المذاكرة.")}</small></article>)}</div>}<PlanAssistantChat plan={plan} subjectIds={subjectIds} /></details>
+      <details className="sf-sp-plan-extra"><summary>ملخص إضافي ومساعد الخطة</summary><p>{displayArabicText(plan.summary,"خطة مذاكرة مرتبة حسب بيانات ملفك الدراسي.")}</p>{plan.habits.length > 0 && <div className="sf-sp-habits">{plan.habits.map((habit,index)=><article key={habit.title+index}><strong>{displayArabicText(habit.title,"عادة دراسية")}</strong><small>{displayArabicText(habit.cue,"استخدمها لدعم الاستمرارية في المذاكرة.")}</small></article>)}</div>}<PlanAssistantChat plan={plan} subjectIds={subjectIds} editable={editable} onChange={onChange} /></details>
     </section>
   );
 }
 
 
-function PlanAssistantChat({ plan, subjectIds }: { plan: PlanView; subjectIds: string[] }) {
+function PlanAssistantChat({ plan, subjectIds, editable, onChange }: {
+  plan: PlanView;
+  subjectIds: string[];
+  editable: boolean;
+  onChange: (next: PlanView) => void;
+}) {
   const [messages, setMessages] = useState<Array<{ role: "user" | "assistant"; content: string }>>([]);
   const [draft, setDraft] = useState("");
+  const [webSearchAvailable, setWebSearchAvailable] = useState<boolean | null>(null);
   const context = useMemo(() => [
     "السياق: المستخدم يتحدث من صفحة خطة المذاكرة في StudyFlow.",
     "أجب دائمًا بالعربية المصرية الواضحة، ولا تستخدم عناوين إنجليزية في الشرح.",
@@ -1079,7 +1113,14 @@ function PlanAssistantChat({ plan, subjectIds }: { plan: PlanView; subjectIds: s
   ].join("\n").slice(0, 7_500), [plan, subjectIds]);
 
   const chat = trpc.ai.chat.useMutation({
-    onSuccess: result => setMessages(current => [...current, { role: "assistant" as const, content: result.content }].slice(-20)),
+    onSuccess: result => {
+      setMessages(current => [...current, { role: "assistant" as const, content: result.content }].slice(-20));
+      setWebSearchAvailable(result.webSearchAvailable ?? false);
+      if (result.planPatch && editable) {
+        onChange(applyPlannerAssistantPatch(plan, result.planPatch));
+        toast.success("تم تطبيق التعديل على مسودة الخطة. اضغط «اعتماد الخطة» لتثبيته في مهامك.");
+      }
+    },
     onError: error => toast.error(error.message || "تعذّر الوصول إلى مساعد الخطة."),
   });
 
@@ -1089,7 +1130,26 @@ function PlanAssistantChat({ plan, subjectIds }: { plan: PlanView; subjectIds: s
     const nextMessages = [...messages, { role: "user" as const, content }].slice(-20);
     setMessages(nextMessages);
     setDraft("");
-    chat.mutate({ messages: nextMessages, memory: "", context });
+    chat.mutate({
+      messages: nextMessages,
+      memory: "",
+      context,
+      ...(editable ? {
+        planner: {
+          title: plan.title,
+          summary: plan.summary,
+          steps: plan.steps.map((step, index) => ({
+            title: displayPlanStepTitle(step, subjectIds),
+            detail: displayPlanStepDetail(step, subjectIds),
+            category: displayPlanStepCategory(step, subjectIds),
+            priority: step.priority,
+            phaseId: step.phaseId,
+            completed: step.plannerTaskStatus === "done" || step.existingTask?.status === "done",
+            linkedTask: Boolean(step.existingTask || step.plannerTaskId),
+          })),
+        },
+      } : {}),
+    });
   };
 
   return (
@@ -1102,14 +1162,21 @@ function PlanAssistantChat({ plan, subjectIds }: { plan: PlanView; subjectIds: s
             <p className="mt-1 text-xs leading-5 text-muted-foreground">اسأله عن ترتيب الأيام أو وقت أي خطوة أو اطلب اقتراحًا لتعديل الخطة.</p>
           </div>
         </div>
-        <span className="rounded-full border border-border bg-background px-3 py-1.5 text-[10px] text-muted-foreground">مرتبط بالخطة الحالية</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-full border border-border bg-background px-3 py-1.5 text-[10px] text-muted-foreground">{editable ? "تحرير المسودة متاح" : "الخطة المعتمدة — وضع القراءة"}</span>
+          <span className="rounded-full border border-border bg-background px-3 py-1.5 text-[10px] text-muted-foreground">
+            {webSearchAvailable === null ? "البحث الخارجي عند الحاجة" : webSearchAvailable ? "بحث Composio متاح" : "البحث الخارجي غير مهيأ"}
+          </span>
+        </div>
       </header>
       <div className="grid gap-3 p-3 sm:p-4">
         <div className="max-h-[360px] min-h-24 space-y-3 overflow-y-auto rounded-xl bg-muted/15 p-3" aria-live="polite">
           {!messages.length && (
             <div className="flex min-h-20 items-center gap-3 text-sm text-muted-foreground">
               <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><BrainCircuit className="size-4" /></span>
-              <p>أنا شايف تفاصيل الخطة الحالية. اسألني مثلاً: ليه حطيت الدرس ده في اليوم ده؟ أو اقترح توزيعًا أخف.</p>
+              <p>{editable
+                ? "أنا شايف تفاصيل الخطة. اطلب تعديل ترتيب الخطوات أو أولوية مهمة أو تفاصيلها، وسأطبّق التغيير على المسودة قبل اعتمادها."
+                : "أنا شايف تفاصيل الخطة المعتمدة. اسأل عن سبب الترتيب أو اطلب اقتراحًا؛ التعديل الفعلي يتطلب إنشاء مسودة جديدة."}</p>
             </div>
           )}
           {messages.map((message, index) => (
@@ -1143,7 +1210,9 @@ function PlanAssistantChat({ plan, subjectIds }: { plan: PlanView; subjectIds: s
             <Send className="size-4" /><span className="hidden sm:inline">إرسال</span>
           </Button>
         </div>
-        <p className="px-1 text-[10px] text-muted-foreground">المساعد يقترح ويشرح؛ تعديل المهام أو ترتيبها يتم من أدوات الخطة نفسها قبل الاعتماد.</p>
+        <p className="px-1 text-[10px] text-muted-foreground">{editable
+          ? "يمكن للمساعد تعديل المسودة وترتيب الخطوات الموجودة؛ لا يغيّر المهام المكتملة أو المرتبطة بسجل فعلي. لا تُحدّث قائمة مهامك إلا بعد اعتماد الخطة."
+          : "المساعد يشرح الخطة المعتمدة ويقترح البدائل، لكنه لا يغيّر المهام الفعلية من وضع القراءة."}</p>
       </div>
     </section>
   );
