@@ -10,7 +10,6 @@ import {
   getSIECheckpointProgressOptions,
   getSIECheckpointUnits,
   getSIESubject,
-  getSIETeacher,
   normalizeSIECheckpointFrontier,
 } from "@shared/sie-catalog";
 import {
@@ -61,6 +60,10 @@ export default function Study() {
   const allBranches = useMemo(() => getSIECheckpointProgressBranches(subjectId), [subjectId]);
   const branches = useMemo(() => getSIEStudentVisibleBranches(subjectId), [subjectId]);
   const units = useMemo(() => getSIECheckpointUnits(subjectId), [subjectId]);
+  const curriculumLessonCount = useMemo(
+    () => units.reduce((total, unit) => total + unit.lessonCount, 0),
+    [units],
+  );
   const [branchTransition, setBranchTransition] = useState<{ from: string; to: string } | null>(null);
   const [reviewCandidates, setReviewCandidates] = useState<Array<{
     externalId: string;
@@ -528,20 +531,13 @@ export default function Study() {
               {subjectSearch && <button type="button" aria-label="مسح البحث" onClick={() => setSubjectSearch("")} className="absolute left-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground hover:bg-muted"><X className="size-3.5" /></button>}
             </div>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {visibleSubjects.map(id => { const active = id === subjectId; return <motion.button key={id} type="button" aria-pressed={active} onClick={() => { setSubjectId(id); setBranchId(""); }} whileTap={{ scale: 0.98 }}
+              {visibleSubjects.map(id => { const active = id === subjectId; return <motion.button key={id} type="button" aria-pressed={active} onClick={() => { setSubjectId(id); setBranchId(""); setStudyViewMode("units"); setBranchTransition(null); }} whileTap={{ scale: 0.98 }}
                 className={"min-h-12 rounded-xl border px-3 py-3 text-sm font-semibold transition " + (active ? "border-primary bg-primary/10 text-foreground ring-2 ring-primary/15" : "border-border bg-background text-muted-foreground hover:border-primary/35")}>{getSIESubject(id)?.nameAr || id}</motion.button>; })}
             </div>
             {!visibleSubjects.length && <p className="rounded-xl bg-muted/30 p-4 text-center text-sm text-muted-foreground">لا توجد مادة مطابقة لبحثك.</p>}
           </div>
         </article>
       </section>
-
-      {selectedTeacherId || teacherReferenceNameBase ? (
-        <div className="sf-study-teacher-summary" role="status">
-          <span className="sf-study-teacher-summary-mark"><BookOpenText className="size-4" /></span>
-          <span><strong>{selectedTeacherId ? "المدرس المسجل" : "المدرس المضاف إلى ملفك"}</strong><small>{(selectedTeacherId ? getSIETeacher(selectedTeacherId)?.nameAr : null) || teacherReferenceNameBase || selectedTeacherId}</small></span>
-        </div>
-      ) : null}
 
       <AnimatePresence>
         {branchTransition && subjectId === "ARB_G2_BAC" && (
@@ -575,16 +571,36 @@ export default function Study() {
               <h2 className="mt-1 text-xl font-bold">ابدأ من الوحدة، أو افتح الدروس</h2>
               <p className="mt-1 text-sm leading-6 text-muted-foreground">{subjectId === "ENG1_G2_BAC" ? "كل الوحدات العشر داخل فرع Units، وداخل كل وحدة دروس Vocabulary وGrammar بأرقامها، ثم موضوعات الكتاب." : "ابدأ بالوحدات الرسمية من الكتاب. فروع التعبير والإملاء والأدب والقصة تظهر كمسارات كورس المدرس بشكل مستقل. تقدر تسجل اكتمال وحدة أو تضغط «إظهار باقي الدروس» للتفصيل."}</p>
             </div>
-            <div className="inline-flex rounded-xl border border-border bg-muted/40 p-1">
-              <button type="button" onClick={() => setStudyViewMode("units")} aria-pressed={studyViewMode === "units"}
-                className={"rounded-lg px-4 py-2 text-xs font-bold transition " + (studyViewMode === "units" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>الوحدات</button>
-              <button type="button" onClick={() => setStudyViewMode("lessons")} aria-pressed={studyViewMode === "lessons"}
-                className={"rounded-lg px-4 py-2 text-xs font-bold transition " + (studyViewMode === "lessons" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>إظهار باقي الدروس</button>
-            </div>
+            <div className="sf-study-view-tabs" role="tablist" aria-label="عرض المنهج">
+              <button
+                type="button"
+                role="tab"
+                data-testid="study-view-units"
+                aria-selected={studyViewMode === "units"}
+                aria-controls="sf-study-units-panel"
+                onClick={() => { setBranchTransition(null); setStudyViewMode("units"); }}
+                className={"sf-study-view-tab " + (studyViewMode === "units" ? "is-active" : "")}
+              >
+                <span>الوحدات</span>
+                <span className="sf-study-view-count">{units.length.toLocaleString("ar-EG")}</span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                data-testid="study-view-lessons"
+                aria-selected={studyViewMode === "lessons"}
+                aria-controls="sf-study-lessons-panel"
+                onClick={() => { setBranchTransition(null); setStudyViewMode("lessons"); }}
+                className={"sf-study-view-tab " + (studyViewMode === "lessons" ? "is-active" : "")}
+              >
+                <span>الدروس</span>
+                <span className="sf-study-view-count">{curriculumLessonCount.toLocaleString("ar-EG")}</span>
+              </button>
+            </div>>
           </div>
         </header>
         {studyViewMode === "units" ? (
-          <div className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5 xl:grid-cols-3">
+          <div id="sf-study-units-panel" role="tabpanel" aria-label="وحدات المنهج" className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5 xl:grid-cols-3">
             {units.map((unit, unitIndex) => {
               const unitChoices = unit.branches.flatMap(unitBranch => unitBranch.choices.map(choice => ({
                 ...choice,
@@ -626,12 +642,15 @@ export default function Study() {
               const frontierComplete = totalTopics > 0 && reachedTopics === totalTopics;
               const percent = totalTopics ? Math.round(completedTopics / totalTopics * 100) : 0;
               return (
-                <article key={unit.unitId} className={"sf-study-unit-card group relative overflow-hidden rounded-2xl border p-4 transition-all duration-300 " + (complete ? "border-primary/30 bg-primary/[0.045]" : "border-border/75 bg-card hover:-translate-y-1 hover:border-primary/35 hover:shadow-xl")}>
+                <article key={unit.unitId} data-testid={"study-unit-" + unit.unitId} className={"sf-study-unit-card group relative overflow-hidden rounded-2xl border p-4 transition-all duration-300 " + (complete ? "border-primary/30 bg-primary/[0.045]" : "border-border/75 bg-card hover:-translate-y-1 hover:border-primary/35 hover:shadow-xl")}>
                   <div className="pointer-events-none absolute -left-14 -top-14 size-36 rounded-full bg-primary/10 blur-3xl transition-opacity group-hover:opacity-100" />
                   <div className="relative">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="text-[10px] font-bold tracking-[.12em] text-primary">{unit.isOfficialUnit ? "وحدة الكتاب الرسمي" : unit.unitId.startsWith("TOPICS_ARB_") ? "كورس المدرس" : "مسار إضافي"}</p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-[10px] font-bold tracking-[.12em] text-primary">{unit.isOfficialUnit ? "وحدة الكتاب الرسمي" : unit.unitId.startsWith("TOPICS_ARB_") ? "مسار إضافي" : "مسار مهاري"}</p>
+                          <span className="sf-study-unit-count">{unit.lessonCount.toLocaleString("ar-EG")} درس</span>
+                        </div>
                         <h3 className="mt-1 font-bold leading-7">{unit.title}</h3>
                       </div>
                       <span className={"flex size-9 shrink-0 items-center justify-center rounded-xl " + (complete ? "bg-primary text-primary-foreground" : "bg-secondary text-primary")}>
@@ -723,7 +742,7 @@ export default function Study() {
                       <p className="mt-2 text-[10px] text-muted-foreground">{notRecordedTopics} درس لم تحدد حالة مذاكرته بعد.</p>
                     )}
                     <div className="mt-4 grid grid-cols-2 gap-2">
-                      <Button type="button" variant="outline" className="rounded-xl text-xs" onClick={() => openUnitLessons(unit)}>فتح الدروس</Button>
+                      <Button type="button" data-testid={"study-open-unit-" + unit.unitId} variant="outline" className="rounded-xl text-xs" onClick={() => openUnitLessons(unit)}>عرض الدروس</Button>
                       <Button type="button" className="rounded-xl text-xs" disabled={frontierComplete || saveUnitFrontier.isPending}
                         onClick={() => void completeUnit(unit)}>
                         {frontierComplete ? "وصلت لنهاية الشرح" : saveUnitFrontier.isPending ? "جارٍ الحفظ…" : "سجّل وصولك لنهاية الشرح"}
@@ -736,9 +755,9 @@ export default function Study() {
             {!units.length && <p className="col-span-full rounded-xl bg-muted/30 p-4 text-center text-sm text-muted-foreground">لم يتم ربط وحدات معتمدة لهذه المادة حتى الآن.</p>}
           </div>
         ) : (
-          <div className="flex flex-wrap items-center justify-between gap-3 p-4 sm:p-5">
+          <div id="sf-study-lessons-panel" role="tabpanel" aria-label="دروس المنهج" className="flex flex-wrap items-center justify-between gap-3 p-4 sm:p-5">
             <p className="text-xs leading-6 text-muted-foreground">عرض الدروس التفصيلية. اختيار آخر درس مكتمل يحدّث الموضوع التالي عليك مباشرةً.</p>
-            <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => setStudyViewMode("units")}>العودة إلى الوحدات</Button>
+            <Button type="button" data-testid="study-back-to-units" variant="outline" size="sm" className="rounded-xl" onClick={() => { setBranchTransition(null); setStudyViewMode("units"); }}>العودة إلى الوحدات</Button>
           </div>
         )}
       </section>
@@ -810,7 +829,7 @@ export default function Study() {
                         && savedPosition === branch.choices[branch.choices.length - 1]?.nodeId;
                       const active = branch.branchId === currentBranchId;
                       return (
-                        <button key={branch.branchId} type="button" aria-pressed={active} aria-current={active ? "step" : undefined}
+                        <button key={branch.branchId} type="button" data-testid={"study-branch-" + branch.branchId} aria-pressed={active} aria-current={active ? "step" : undefined}
                           onClick={() => {
                             setBranchTransition(null);
                             setBranchId(branch.branchId);
@@ -1027,7 +1046,7 @@ export default function Study() {
                           const pending = updateLessonLearningState.isPending
                             && updateLessonLearningState.variables?.nodeId === choice.nodeId;
                           return (
-                            <article key={choice.nodeId} className={"sf-lesson-state-row flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:gap-4 sm:px-4 " + (isFrontier ? "is-frontier" : "") + (state === "not_watched" ? " is-missed" : "")}>
+                            <article key={choice.nodeId} data-testid={"study-lesson-" + choice.nodeId} className={"sf-lesson-state-row flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:gap-4 sm:px-4 " + (isFrontier ? "is-frontier" : "") + (state === "not_watched" ? " is-missed" : "")}>
                               <div className="flex min-w-0 items-center gap-3 sm:flex-1">
                                 <span className={"sf-lesson-state-marker flex size-8 shrink-0 items-center justify-center rounded-xl border text-xs font-bold " + (state === "not_recorded" || state === "not_watched" ? "border-border bg-muted text-muted-foreground" : isFrontier ? "border-primary/40 bg-primary/15 text-primary" : "border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300")}>
                                   {state === "not_recorded" ? "؟" : state === "not_watched" ? <X className="size-3.5" /> : <Check className="size-4" />}
