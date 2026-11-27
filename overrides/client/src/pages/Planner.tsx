@@ -1125,6 +1125,7 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
 }) {
   const [editing, setEditing] = useState<{ index: number; title: string; detail: string } | null>(null);
   const [filter, setFilter] = useState<"all" | "open" | "done">("all");
+  const [viewMode, setViewMode] = useState<"map" | "list">("map");
   const completedCount = plan.steps.filter(step => step.plannerTaskStatus === "done" || step.existingTask?.status === "done").length;
     const subjectCount = new Set(plan.steps.map(step => getPlanStepCurriculum(step, subjectIds)?.subjectId).filter(Boolean)).size;
   const confirmedTaskCount = plan.steps.filter(step => Boolean(step.existingTask)).length;
@@ -1161,6 +1162,43 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
       ? step.plannerTaskStatus === "done" || step.existingTask?.status === "done"
       : step.plannerTaskStatus !== "done" && step.existingTask?.status !== "done")),
   })).filter(group => group.items.length > 0);
+
+  const mapLaneMap = new Map<string, {
+    key: string;
+    title: string;
+    subjectId?: string;
+    branch?: string;
+    items: Array<{ step: PlanStep; index: number; curriculum: ReturnType<typeof getPlanStepCurriculum> }>;
+  }>();
+  plan.steps.forEach((step, index) => {
+    const isDone = step.plannerTaskStatus === "done" || step.existingTask?.status === "done";
+    if (filter === "done" && !isDone) return;
+    if (filter === "open" && isDone) return;
+    const curriculum = getPlanStepCurriculum(step, subjectIds);
+    const laneKey = curriculum
+      ? curriculum.subjectId + "::" + (curriculum.branch || "الدروس")
+      : "__GENERAL_TASKS__";
+    const title = curriculum
+      ? curriculum.subject + (curriculum.branch ? " · " + curriculum.branch : "")
+      : "التزامات ومهام أخرى";
+    if (!mapLaneMap.has(laneKey)) {
+      mapLaneMap.set(laneKey, {
+        key: laneKey,
+        title,
+        subjectId: curriculum?.subjectId,
+        branch: curriculum?.branch,
+        items: [],
+      });
+    }
+    mapLaneMap.get(laneKey)!.items.push({ step, index, curriculum });
+  });
+  const mapLanes = [...mapLaneMap.values()].sort((left, right) => {
+    if (left.key === "__GENERAL_TASKS__") return 1;
+    if (right.key === "__GENERAL_TASKS__") return -1;
+    const leftSubject = left.subjectId ? subjectIds.indexOf(left.subjectId) : Number.MAX_SAFE_INTEGER;
+    const rightSubject = right.subjectId ? subjectIds.indexOf(right.subjectId) : Number.MAX_SAFE_INTEGER;
+    return leftSubject - rightSubject || (left.branch || "").localeCompare(right.branch || "", "ar");
+  });
   const saveEdit = () => {
     if (!editing) return;
     onChange({
@@ -1230,13 +1268,122 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
         </section>
       )}
 
-      <div className="sf-sp-board-toolbar">
-        <div><h3>خطوات المذاكرة</h3><p>كل خطوة مرتبطة بيوم تنفيذ محدد، ويتغير عدد الأجزاء حسب إيقاعك الدراسي.</p></div>
-        <div className="sf-sp-filter-group" role="group" aria-label="تصفية مهام الخطة">
-          {([["all","الكل"],["open","المتبقي"],["done","المكتمل"]] as const).map(([key,label]) => <button type="button" key={key} aria-pressed={filter===key} onClick={()=>setFilter(key)}>{label}</button>)}
+      <div className="sf-sp-board-toolbar sf-sp-map-toolbar">
+        <div>
+          <h3>خريطة تنفيذ الخطة</h3>
+          <p>كل مادة وفرع له مساره، والعُقد مرتبطة حسب ترتيب التنفيذ حتى نقطة النهاية.</p>
+        </div>
+        <div className="sf-sp-map-controls">
+          <div className="sf-sp-filter-group" role="group" aria-label="تصفية مهام الخطة">
+            {([["all","الكل"],["open","المتبقي"],["done","المكتمل"]] as const).map(([key,label]) => (
+              <button type="button" key={key} aria-pressed={filter===key} onClick={()=>setFilter(key)}>{label}</button>
+            ))}
+          </div>
+          <div className="sf-sp-view-group" role="group" aria-label="طريقة عرض الخطة">
+            <button type="button" aria-pressed={viewMode==="map"} onClick={()=>setViewMode("map")}>الخريطة</button>
+            <button type="button" aria-pressed={viewMode==="list"} onClick={()=>setViewMode("list")}>القائمة</button>
+          </div>
         </div>
       </div>
 
+      {viewMode === "map" ? (
+        <div className="sf-sp-flow-map" dir="rtl">
+          <div className="sf-sp-flow-origin">
+            <span className="sf-sp-flow-origin-kicker">نقطة البداية</span>
+            <strong>موضعك الدراسي الحالي</strong>
+            <small>{mapLanes.length.toLocaleString("ar-EG")} مسارات تنفيذ · {plan.steps.length.toLocaleString("ar-EG")} خطوة في الخطة</small>
+          </div>
+          {mapLanes.length ? (
+            <div className="sf-sp-flow-lanes">
+              {mapLanes.map(lane => (
+                <section className="sf-sp-flow-lane" key={lane.key}>
+                  <header className="sf-sp-flow-lane-header">
+                    <span className="sf-sp-flow-lane-port" />
+                    <div>
+                      <small>{lane.subjectId ? "مسار مادة" : "مسار التزامات"}</small>
+                      <h4>{lane.title}</h4>
+                    </div>
+                    <strong>{lane.items.length.toLocaleString("ar-EG")} عقدة</strong>
+                  </header>
+                  <div className="sf-sp-flow-track">
+                    {lane.items.map(({step,index,curriculum}, laneIndex) => {
+                      const isDone = step.plannerTaskStatus === "done" || step.existingTask?.status === "done";
+                      const isReview = Boolean(step.resourceRecommendation && /مراجعة|review|revision/i.test(step.resourceRecommendation.reason || ""));
+                      const isDeferred = step.phaseId === "review_later" || step.scheduleState === "deferred";
+                      const nodeState = isDone ? "is-done" : isReview || isDeferred ? "is-review" : step.existingTask ? "is-obligation" : "is-learning";
+                      const titleText = displayPlanStepTitle(step, subjectIds);
+                      const detailText = displayPlanStepDetail(step, subjectIds);
+                      const stageTitles = ["معاينة الدرس", "تحديد المطلوب", "القراءة والفهم", "الاسترجاع من الذاكرة", "المراجعة والتثبيت"];
+                      return (
+                        <article key={step.plannerTaskId ?? step.existingTask?.id ?? step.sourceStepIndex ?? index} className={"sf-sp-flow-node " + nodeState}>
+                          <span className="sf-sp-flow-node-index">{isDone ? <CheckCircle2 className="size-4" /> : (laneIndex + 1).toLocaleString("ar-EG")}</span>
+                          <div className="sf-sp-flow-node-card">
+                            <div className="sf-sp-flow-node-topline">
+                              <span>{step.day || "اليوم غير محدد"}</span>
+                              <span>{isDone ? "مكتملة" : isReview || isDeferred ? "مراجعة" : step.existingTask ? "التزام" : "مذاكرة"}</span>
+                              {step.minutes > 0 && <span>{step.minutes.toLocaleString("ar-EG")} دقيقة</span>}
+                            </div>
+                            <h5>{titleText}</h5>
+                            {curriculum?.branch && curriculum.branch !== "الدروس" && <small className="sf-sp-flow-node-branch">{curriculum.branch}</small>}
+                            <details className="sf-sp-flow-node-details">
+                              <summary>تفاصيل هذه الخطوة</summary>
+                              <p>{detailText}</p>
+                              {step.sourceTitle && <small>عنوان المنهج: {displayCurriculumTitle(step.sourceTitle)}</small>}
+                              {step.scheduleNote && <small>{displayArabicText(step.scheduleNote,"تم تأجيل هذه الخطوة للدورة التالية.")}</small>}
+                              {step.studyMethod && (
+                                <div className="sf-sp-flow-study-method">
+                                  <strong>طريقة المذاكرة — {step.studyMethod.stages.length} مراحل</strong>
+                                  <ol>
+                                    {step.studyMethod.stages.map((stage,stageIndex) => (
+                                      <li key={stageIndex}>
+                                        <b>{(stageIndex + 1).toLocaleString("ar-EG")}. {displayArabicText(stage.title,stageTitles[stageIndex] ?? "مرحلة المذاكرة")}</b>
+                                        <p>{displayArabicText(stage.instruction,"نفّذ هذه المرحلة من مصدر المادة، ثم حدّث تقدمك.")}</p>
+                                      </li>
+                                    ))}
+                                  </ol>
+                                  <small>متى تكتمل؟ {displayArabicText(step.studyMethod.completionCriteria,"بعد تنفيذ المراحل وتسجيل تقدمك.")}</small>
+                                </div>
+                              )}
+                              {step.priorityReason && <p>{displayArabicText(step.priorityReason,"تم اختيارها حسب موضعك الدراسي.")}</p>}
+                              {step.resourceRecommendation && <a className="sf-sp-resource-link" href={step.resourceRecommendation.url} target="_blank" rel="noreferrer">{isReview ? "افتح المراجعة المطابقة للدرس" : "افتح شرح المدرس المقترح"} <ArrowUpRight className="size-3.5" /></a>}
+                            </details>
+                            {editing?.index === index ? (
+                              <div className="sf-sp-step-editor">
+                                <label><span>عنوان المهمة</span><input value={editing.title} onChange={event => setEditing(current => current ? {...current,title:event.target.value} : current)} /></label>
+                                <label><span>تفاصيل التنفيذ</span><textarea rows={3} value={editing.detail} onChange={event => setEditing(current => current ? {...current,detail:event.target.value} : current)} /></label>
+                                <div>
+                                  <Button type="button" variant="ghost" size="sm" onClick={()=>setEditing(null)}>إلغاء</Button>
+                                  <Button type="button" size="sm" onClick={saveEdit}>حفظ التعديل</Button>
+                                </div>
+                              </div>
+                            ) : editable && (
+                              <div className="sf-sp-step-actions">
+                                <Button type="button" size="sm" variant="ghost" onClick={()=>setEditing({index,title:step.title,detail:step.detail})}>تعديل</Button>
+                                <Button type="button" size="sm" variant="ghost" disabled={index===0} onClick={()=>onMoveStep(index,-1)}><ArrowUp className="size-3.5" />لأعلى</Button>
+                                <Button type="button" size="sm" variant="ghost" disabled={index===plan.steps.length-1} onClick={()=>onMoveStep(index,1)}><ArrowDown className="size-3.5" />لأسفل</Button>
+                                <Button type="button" size="sm" variant="ghost" className="text-destructive" disabled={plan.steps.length<=1} onClick={()=>onRemoveStep(index)}><X className="size-3.5" />حذف</Button>
+                              </div>
+                            )}
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                </section>
+              ))}
+            </div>
+          ) : (
+            <div className="sf-sp-empty-inline">{filter === "done" ? "لا توجد خطوات مكتملة." : filter === "open" ? "لا توجد خطوات متبقية." : "لا توجد خطوات في الخطة بعد."}</div>
+          )}
+          {mapLanes.length > 0 && (
+            <div className="sf-sp-flow-finish">
+              <span>نقطة النهاية</span>
+              <strong>تحديث موضعك وإعادة ترتيب المسارات</strong>
+              <small>بعد إنجاز العقدة، يتقدم المسار وتُعاد أولوية الخطوات المتبقية.</small>
+            </div>
+          )}
+        </div>
+      ) : (
       <div className="sf-sp-day-groups sf-sp-phase-groups">
         {visibleGroups.length ? visibleGroups.map(group => (
           <section className="sf-sp-day-group sf-sp-phase-group" key={group.key}>
@@ -1317,6 +1464,8 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
           </section>
         )) : <div className="sf-sp-empty-inline">{filter === "done" ? "لا توجد خطوات مكتملة في هذا العرض." : filter === "open" ? "لا توجد خطوات متبقية." : "لا توجد خطوات ضمن الفلتر الحالي."}</div>}
       </div>
+
+      ) : null}
 
       {editable ? (
         <footer className="sf-sp-board-footer">
