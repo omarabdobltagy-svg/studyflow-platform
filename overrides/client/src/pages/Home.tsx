@@ -329,8 +329,6 @@ export default function Home() {
     : dailyPlan.data?.plan
       ? dailyPlanPriority
       : taskPriority ?? nextTopicInTaskBranch ?? priority;
-  const completedTaskProgressConflicts = mappedOpenTasks.filter(item => item.isAlreadyCompleted);
-
   const teacherScheduleAnnouncements = useMemo(() => {
     const selection = (profile.data?.selection ?? {}) as Record<string, any>;
     const updates = Array.isArray(selection.teacherPublicUpdates) ? selection.teacherPublicUpdates : [];
@@ -462,19 +460,6 @@ export default function Home() {
         {summary.isError && <QueryErrorNotice onRetry={() => void summary.refetch()} label="تعذّر تحميل مهامك. أعد المحاولة؛ بياناتك لم تُحذف." />}
         {learning.isError && <QueryErrorNotice onRetry={() => void learning.refetch()} label="تعذّر تحميل تقدم المنهج. يمكنك متابعة مهامك أثناء إعادة المحاولة." />}
         {dailyPlan.isError && <QueryErrorNotice onRetry={() => void dailyPlan.refetch()} label="تعذّر تحميل خطة اليوم." />}
-        {completedTaskProgressConflicts.length > 0 && (
-          <section className="rounded-2xl border border-amber-500/25 bg-amber-500/[0.045] p-4">
-            <h3 className="text-sm font-bold">فيه مهام مرتبطة بموضوعات مسجلة كمكتملة</h3>
-            <p className="mt-1 text-xs leading-6 text-muted-foreground">المهمة المفتوحة لا تعني أن الموضوع مكتمل، وموضع التقدم لا يتغير بمجرد وجود مهمة. راجع الموضع أو حالة المهمة حتى لا تتعارض البيانات.</p>
-            <div className="mt-2 space-y-1">
-              {completedTaskProgressConflicts.slice(0,3).map(item => (
-                <p key={item.task.id} className="text-xs">{item.task.title} — {item.match.title}</p>
-              ))}
-            </div>
-            <Button variant="outline" size="sm" className="mt-3 rounded-lg" onClick={() => setLocation("/study")}>مراجعة مواضع التقدم</Button>
-          </section>
-        )}
-
         {session && (
           <section className="overflow-hidden rounded-3xl border border-primary/30 bg-primary/5">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-primary/15 px-5 py-4 sm:px-6">
