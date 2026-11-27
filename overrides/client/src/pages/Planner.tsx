@@ -1160,41 +1160,57 @@ export default function Planner() {
 
 
 function PlanLoading({ progress }: { progress: GenerationProgress | null }) {
-  const stages: Array<{ id: GenerationProgress["currentStage"]; title: string }> = [
-    { id: "profile", title: "قراءة ملف الطالب والتقدم المسجل" },
-    { id: "curriculum", title: "تحميل خريطة الكتب والفروع والمتطلبات" },
-    { id: "model", title: "تحليل الأولويات وتكوين المسودة" },
-    { id: "validation", title: "مراجعة المسودة والقواعد المعتمدة" },
-    { id: "saving", title: "حفظ المسودة للمراجعة" },
+  const stages: Array<{ id: GenerationProgress["currentStage"]; title: string; detail: string }> = [
+    { id: "profile", title: "مراجعة ملفك وتقدمك", detail: "قراءة المواد المختارة وآخر موضع مؤكد لكل فرع وما أنجزته بالفعل." },
+    { id: "curriculum", title: "مطابقة خريطة المنهج", detail: "ربط المهام بالدروس والوحدات، واستبعاد الخطوات التي لم تعد مؤهلة." },
+    { id: "model", title: "اتخاذ قرارات التوزيع", detail: "موازنة المتراكم مع الدروس القادمة ومواعيد المدرسين وأولوياتك." },
+    { id: "validation", title: "فحص الخطة وقواعدها", detail: "مراجعة عدم تكرار المهام، وعدم إعادة درس مكتمل أو اختراع واجب ومحتوى." },
+    { id: "saving", title: "حفظ الخطة وربط المهام", detail: "تحديث شجرة المهام مع الحفاظ على العمل المنجز والالتزامات الحقيقية." },
   ];
+  const completedCount = stages.filter(stage => progress?.completedStages.includes(stage.id)).length;
+  const currentIndex = stages.findIndex(stage => stage.id === progress?.currentStage);
+  const updatedLabel = progress?.updatedAt
+    ? new Intl.DateTimeFormat("ar-EG", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date(progress.updatedAt))
+    : null;
   return (
-    <section className="app-card rounded-2xl p-5 sm:p-6" role="status" aria-live="polite">
-      <div className="flex items-center gap-3">
-        <span className="flex size-11 items-center justify-center rounded-xl bg-secondary text-primary"><Sparkles className="size-5 animate-pulse" /></span>
+    <section className="sf-plan-loading" role="status" aria-live="polite" aria-label="مراحل بناء خطة المذاكرة">
+      <header className="sf-plan-loading-heading">
+        <span className="sf-plan-loading-mark"><Sparkles className="size-5" /></span>
         <div>
-          <h3 className="font-bold">بنجهّز مسودة خطتك</h3>
-          <p className="mt-1 text-sm text-muted-foreground">{progress?.detail || "نراجع ملفك الدراسي والمهام وتقدم المنهج قبل ترتيب الأولويات."}</p>
+          <p>محرك التخطيط الذكي</p>
+          <h3>بنكوّن خطة مبنية على بياناتك</h3>
+          <span>{progress?.detail || "نراجع ملفك الدراسي والمهام وتقدم المنهج قبل ترتيب الأولويات."}</span>
         </div>
-        <Loader2 className="mr-auto size-5 animate-spin text-primary" />
+        <Loader2 className="sf-plan-loading-spinner size-5" />
+      </header>
+      <div className="sf-plan-loading-summary">
+        <strong>{completedCount.toLocaleString("ar-EG")} من {stages.length.toLocaleString("ar-EG")} مراحل مكتملة</strong>
+        {updatedLabel && <span>آخر تحديث {updatedLabel}</span>}
       </div>
-      <ol className="mt-5 space-y-2">
+      <ol className="sf-plan-loading-stages">
         {stages.map((stage, index) => {
           const done = progress?.completedStages.includes(stage.id) ?? false;
           const current = progress?.status === "running" && progress.currentStage === stage.id;
+          const pending = !done && !current;
           return (
-            <li key={stage.id} className={"flex items-center gap-3 rounded-xl border px-3 py-3 " + (current
-              ? "border-primary/40 bg-primary/5"
-              : done ? "border-emerald-500/20 bg-emerald-500/5" : "border-border/60 bg-muted/10")}>
-              <span className="flex size-7 shrink-0 items-center justify-center rounded-full border border-border/70 text-xs">
-                {done ? <CheckCircle2 className="size-4 text-emerald-600" /> : current ? <Loader2 className="size-4 animate-spin text-primary" /> : index + 1}
+            <li key={stage.id} className={current ? "is-current" : done ? "is-done" : "is-pending"}>
+              <span className="sf-plan-loading-index">
+                {done ? <CheckCircle2 className="size-4" /> : current ? <Loader2 className="size-4 animate-spin" /> : (index + 1).toLocaleString("ar-EG")}
               </span>
-              <span className={"text-sm " + (current || done ? "font-semibold" : "text-muted-foreground")}>{stage.title}</span>
-              {current && <span className="mr-auto text-[11px] font-medium text-primary">جارٍ الآن</span>}
-              {done && <span className="mr-auto text-[11px] text-emerald-700">اكتملت</span>}
+              <div className="sf-plan-loading-stage-copy">
+                <strong>{stage.title}</strong>
+                <p>{stage.detail}</p>
+              </div>
+              <span className="sf-plan-loading-state">{done ? "اكتملت" : current ? "جارٍ الآن" : "في الانتظار"}</span>
             </li>
           );
         })}
       </ol>
+      <footer className="sf-plan-loading-footer">
+        {currentIndex >= 0
+          ? "المرحلة الحالية: " + stages[currentIndex].title
+          : "يبدأ التنفيذ بعد اكتمال قراءة بيانات الخطة."}
+      </footer>
     </section>
   );
 }
