@@ -12,10 +12,16 @@ import {
   getSIESubject,
   normalizeSIECheckpointFrontier,
 } from "@shared/sie-catalog";
-import { calculateLearningGap, getNextLearningTarget } from "@shared/sie-learning-progress";
+import {
+  calculateLearningGap,
+  getNextLearningTarget,
+  mergeLegacyLinearBranchProgress,
+  selectLegacyLinearFrontier,
+} from "@shared/sie-learning-progress";
 import {
   getEffectiveStudentLessonState,
   getStudentLessonStateLabel,
+  isStudentLessonState,
   summarizeStudentLessonStates,
   type StudentLessonState,
 } from "@shared/sie-lesson-state";
@@ -27,6 +33,7 @@ import { AnimatePresence, motion } from "framer-motion";
 export default function Study() {
   const utils = trpc.useUtils();
   const profile = trpc.studentProfile.get.useQuery();
+  const learning = trpc.learning.get.useQuery();
   const initialStudyParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
   const [subjectId, setSubjectId] = useState(initialStudyParams?.get("subject") || "");
   const [branchId, setBranchId] = useState(initialStudyParams?.get("branch") || "");
@@ -39,6 +46,8 @@ export default function Study() {
   const courseProgressMap = (selection.learningCourseProgress || {}) as Record<string, any>;
   const currentCourseProgress = courseProgressMap[subjectId] || {};
   const branchProgressMap = (currentCourseProgress.branches || {}) as Record<string, Record<string, any>>;
+  const lessonStateByBranch = ((learning.data as any)?.lessonStateByBranch?.[subjectId] ?? {}) as Record<string, { byNode?: Record<string, unknown> }>;
+  const learningGapByBranch = ((learning.data as any)?.gapByBranch?.[subjectId] ?? {}) as Record<string, { studentPosition?: number | null }>;
   const savedTeacherId = ((selection.teacherChoices || {}) as Record<string, string>)[subjectId]
     || (profile.data?.teacherSelections || {})[subjectId];
   const selectedTeacherId = savedTeacherId && savedTeacherId !== "__SKIP__" ? savedTeacherId : undefined;
@@ -117,39 +126,29 @@ export default function Study() {
   const currentBranchPointLabel = currentBranch?.branchType === "official_section" ? "موضوع" : "درس";
   const isLinearSubject = subjectId === "HIS_G2_BAC" || subjectId === "PROG_AI_G2_BAC";
   const legacyLinearRecords = isLinearSubject ? Object.values(branchProgressMap) : [];
-  const legacyFrontierFromRecords = (field: string, teacherOnly = false) => {
-    const candidates = legacyLinearRecords
-      .filter(record => Object.prototype.hasOwnProperty.call(record, field))
-      .filter(record => !teacherOnly || (
-        selectedTeacherId
-          ? (!record.teacherId || record.teacherId === selectedTeacherId)
-          : teacherReferenceNameBase
-            ? (!record.teacherName || record.teacherName === teacherReferenceNameBase)
-            : true
-      ))
-      .map(record => {
-        const value = record[field] as string;
-        const rank = value === "__UNKNOWN__" ? -2
-          : value === "__NOT_STARTED__" ? -1
-            : branchChoices.findIndex(choice => choice.nodeId === value);
-        return { value, rank };
-      })
-      .filter(item => item.rank >= -2)
-      .sort((left, right) => left.rank - right.rank);
-    return candidates.length ? candidates[candidates.length - 1].value : undefined;
-  };
-  const legacyLinearProgress = {
-    ...(legacyFrontierFromRecords("lastCompletedLessonId") !== undefined
-      ? { lastCompletedLessonId: legacyFrontierFromRecords("lastCompletedLessonId") } : {}),
-    ...(legacyFrontierFromRecords("teacherTeachingFrontierId", true) !== undefined
-      ? { teacherTeachingFrontierId: legacyFrontierFromRecords("teacherTeachingFrontierId", true) } : {}),
-    ...(legacyFrontierFromRecords("schoolClassFrontierId") !== undefined
-      ? { schoolClassFrontierId: legacyFrontierFromRecords("schoolClassFrontierId") } : {}),
+  const legacyLinearProgress = isLinearSubject ? {
+    ...(selectLegacyLinearFrontier(branchChoices, legacyLinearRecords, "lastCompletedLessonId")
+      ? { lastCompletedLessonId: selectLegacyLinearFrontier(branchChoices, legacyLinearRecords, "lastCompletedLessonId") } : {}),
+    ...(selectLegacyLinearFrontier(branchChoices, legacyLinearRecords, "teacherTeachingFrontierId", {
+      teacherOnly: true,
+      teacherId: selectedTeacherId ?? null,
+      teacherName: teacherReferenceNameBase,
+    }) ? {
+      teacherTeachingFrontierId: selectLegacyLinearFrontier(branchChoices, legacyLinearRecords, "teacherTeachingFrontierId", {
+        teacherOnly: true,
+        teacherId: selectedTeacherId ?? null,
+        teacherName: teacherReferenceNameBase,
+      }),
+    } : {}),
+    ...(selectLegacyLinearFrontier(branchChoices, legacyLinearRecords, "schoolClassFrontierId")
+      ? { schoolClassFrontierId: selectLegacyLinearFrontier(branchChoices, legacyLinearRecords, "schoolClassFrontierId") } : {}),
     ...(selectedTeacherId ? { teacherId: selectedTeacherId } : {}),
     ...(teacherReferenceNameBase ? { teacherName: teacherReferenceNameBase } : {}),
-  };
+  } : {};
   const currentBranchProgress = currentBranchId
-    ? branchProgressMap[currentBranchId] || legacyLinearProgress
+    ? isLinearSubject
+      ? mergeLegacyLinearBranchProgress(branchChoices, branchProgressMap[currentBranchId] ?? {}, legacyLinearProgress)
+      : branchProgressMap[currentBranchId] || {}
     : {};
   const subjectIndex = Math.max(0, subjects.indexOf(subjectId));
   const isEnglishSkillBranch = subjectId === "ENG1_G2_BAC"
@@ -405,10 +404,10 @@ export default function Study() {
       const nextUnit = currentUnitIndex >= 0 ? units[currentUnitIndex + 1] : undefined;
       if (nextUnit) {
         openUnitLessons(nextUnit);
-        toast.success("تم إكمال " + unit.title + " — انتقلنا إلى " + nextUnit.title + " مباشرةً.");
+        toast.success("تم تسجيل وصول الشرح إلى نهاية " + unit.title + " — انتقلنا إلى " + nextUnit.title + ".");
       } else {
         setStudyViewMode("units");
-        toast.success("تم تسجيل إكمال " + unit.title + ". انتهيت من الوحدات المفهرسة لهذه المادة.");
+        toast.success("تم تسجيل وصولك لنهاية شرح " + unit.title + ". راجع حالة المذاكرة لكل درس على حدة.");
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "تعذّر تسجيل إكمال الوحدة.");
@@ -584,21 +583,29 @@ export default function Study() {
                 .filter(choice => choice.lessonType === "topic")
                 .sort((left, right) => String(left.lessonNumber || "").localeCompare(String(right.lessonNumber || ""), "en", { numeric: true }));
               const unitBranchState = unit.branches.map(unitBranch => {
+                const states = lessonStateByBranch[unitBranch.branchId]?.byNode ?? {};
                 const branch = allBranches.find(item => item.branchId === unitBranch.branchId);
-                const saved = branchProgressMap[unitBranch.branchId]?.lastCompletedLessonId;
-                const normalized = typeof saved === "string" && branch
-                  ? normalizeSIECheckpointFrontier(subjectId, unitBranch.branchId, saved)
-                  : "__UNKNOWN__";
-                const savedIndex = normalized === "__NOT_STARTED__" ? -1 : branch?.choices.findIndex(item => item.nodeId === normalized) ?? -1;
-                const completed = unitBranch.choices.filter(choice => {
+                const studentPosition = learningGapByBranch[unitBranch.branchId]?.studentPosition;
+                const studied = unitBranch.choices.filter(choice => states[choice.nodeId] === "studied").length;
+                const watchedOnly = unitBranch.choices.filter(choice => states[choice.nodeId] === "watched_only").length;
+                const needsReview = unitBranch.choices.filter(choice => states[choice.nodeId] === "needs_review").length;
+                const notWatched = unitBranch.choices.filter(choice => states[choice.nodeId] === "not_watched").length;
+                const notRecorded = unitBranch.choices.filter(choice => !isStudentLessonState(states[choice.nodeId]) || states[choice.nodeId] === "not_recorded").length;
+                const reached = unitBranch.choices.filter(choice => {
                   const index = branch?.choices.findIndex(item => item.nodeId === choice.nodeId) ?? -1;
-                  return index >= 0 && savedIndex >= index;
+                  return index >= 0 && typeof studentPosition === "number" && index < studentPosition;
                 }).length;
-                return { branchId: unitBranch.branchId, branchTitle: unitBranch.branchTitle, completed, total: unitBranch.choices.length };
+                return { branchId: unitBranch.branchId, branchTitle: unitBranch.branchTitle, studied, watchedOnly, needsReview, notWatched, notRecorded, reached, total: unitBranch.choices.length };
               });
               const totalTopics = unitBranchState.reduce((sum, item) => sum + item.total, 0);
-              const completedTopics = unitBranchState.reduce((sum, item) => sum + item.completed, 0);
+              const completedTopics = unitBranchState.reduce((sum, item) => sum + item.studied, 0);
+              const reachedTopics = unitBranchState.reduce((sum, item) => sum + item.reached, 0);
+              const needsReviewTopics = unitBranchState.reduce((sum, item) => sum + item.needsReview, 0);
+              const watchedOnlyTopics = unitBranchState.reduce((sum, item) => sum + item.watchedOnly, 0);
+              const notWatchedTopics = unitBranchState.reduce((sum, item) => sum + item.notWatched, 0);
+              const notRecordedTopics = unitBranchState.reduce((sum, item) => sum + item.notRecorded, 0);
               const complete = totalTopics > 0 && completedTopics === totalTopics;
+              const frontierComplete = totalTopics > 0 && reachedTopics === totalTopics;
               const percent = totalTopics ? Math.round(completedTopics / totalTopics * 100) : 0;
               return (
                 <article key={unit.unitId} className={"sf-study-unit-card group relative overflow-hidden rounded-2xl border p-4 transition-all duration-300 " + (complete ? "border-primary/30 bg-primary/[0.045]" : "border-border/75 bg-card hover:-translate-y-1 hover:border-primary/35 hover:shadow-xl")}>
@@ -614,11 +621,16 @@ export default function Study() {
                       </span>
                     </div>
                     <div className="mt-4 flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">{completedTopics} من {totalTopics} {subjectId === "ENG1_G2_BAC" ? "درس / موضوع" : "موضوع"}</span>
+                      <span className="text-muted-foreground">{completedTopics} من {totalTopics} ذاكرته وفهمته</span>
                       <span className="font-bold text-primary">{percent}٪</span>
                     </div>
                     <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
                       <motion.div className="h-full rounded-full bg-primary" initial={false} animate={{ width: percent + "%" }} transition={{ duration: .55, ease: "easeOut" }} />
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-muted-foreground">
+                      <span>وصل الشرح إلى {reachedTopics} / {totalTopics}</span>
+                      {watchedOnlyTopics > 0 && <span>شاهدها دون مذاكرة: {watchedOnlyTopics}</span>}
+                      {needsReviewTopics > 0 && <span className="text-amber-700 dark:text-amber-300">تحتاج مراجعة: {needsReviewTopics}</span>}
                     </div>
                     {subjectId === "ENG1_G2_BAC" && unit.isOfficialUnit ? (
                       <div className="sf-english-unit-map mt-4 rounded-2xl border border-border/70 bg-background/70 p-3.5" data-english-unit={unit.unitNumber}>
@@ -680,11 +692,19 @@ export default function Study() {
                         {unitBranchState.map(item => <span key={item.branchId} className="rounded-lg border border-border/70 bg-background/70 px-2 py-1 text-[10px] text-muted-foreground">{item.branchTitle}</span>)}
                       </div>
                     )}
+                    {needsReviewTopics > 0 && (
+                      <div className="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-3 py-2 text-[11px] leading-5 text-amber-800 dark:text-amber-200">
+                        {needsReviewTopics} درس ذاكرته من قبل لكنه يحتاج مراجعة؛ لا يُحتسب مكتملًا نهائيًا.
+                      </div>
+                    )}
+                    {notRecordedTopics > 0 && (
+                      <p className="mt-2 text-[10px] text-muted-foreground">{notRecordedTopics} درس لم تحدد حالة مذاكرته بعد.</p>
+                    )}
                     <div className="mt-4 grid grid-cols-2 gap-2">
                       <Button type="button" variant="outline" className="rounded-xl text-xs" onClick={() => openUnitLessons(unit)}>فتح الدروس</Button>
-                      <Button type="button" className="rounded-xl text-xs" disabled={complete || saveUnitFrontier.isPending}
+                      <Button type="button" className="rounded-xl text-xs" disabled={frontierComplete || saveUnitFrontier.isPending}
                         onClick={() => void completeUnit(unit)}>
-                        {complete ? "مكتملة" : saveUnitFrontier.isPending ? "جارٍ الحفظ…" : "أنهيت الوحدة"}
+                        {frontierComplete ? "وصلت لنهاية الشرح" : saveUnitFrontier.isPending ? "جارٍ الحفظ…" : "سجّل وصولك لنهاية الشرح"}
                       </Button>
                     </div>
                   </div>

@@ -19,6 +19,91 @@ export type LearningGapResult = {
   status: "calculated" | "student_position_missing" | "reference_missing";
 };
 
+export type LegacyLinearFrontierField =
+  | "lastCompletedLessonId"
+  | "teacherTeachingFrontierId"
+  | "schoolClassFrontierId";
+
+export type LegacyTeacherIdentity = {
+  teacherOnly?: boolean;
+  teacherId?: string | null;
+  teacherName?: string | null;
+};
+
+/**
+ * Resolve one legacy linear-course frontier against the current flattened
+ * curriculum. Invalid/cross-branch IDs are ignored, and teacher-owned values
+ * are never borrowed from a different selected teacher.
+ */
+export function selectLegacyLinearFrontier(
+  choices: Array<{ nodeId: string }>,
+  records: Array<Record<string, any>>,
+  field: LegacyLinearFrontierField,
+  identity: LegacyTeacherIdentity = {},
+): string | undefined {
+  const selectedTeacherId = String(identity.teacherId ?? "").trim();
+  const selectedTeacherName = String(identity.teacherName ?? "").trim().toLocaleLowerCase("en");
+  const belongsToSelectedTeacher = (record: Record<string, any>) => {
+    if (!identity.teacherOnly) return true;
+    const recordTeacherId = String(record.teacherId ?? "").trim();
+    const recordTeacherName = String(record.teacherName ?? "").trim().toLocaleLowerCase("en");
+    if (selectedTeacherId) {
+      if (recordTeacherId && recordTeacherId !== selectedTeacherId) return false;
+      if (!recordTeacherId && selectedTeacherName && recordTeacherName && recordTeacherName !== selectedTeacherName) return false;
+      return true;
+    }
+    if (selectedTeacherName) {
+      if (recordTeacherId) return false;
+      return !recordTeacherName || recordTeacherName === selectedTeacherName;
+    }
+    // With no teacher selected, only truly unassigned legacy rows are safe.
+    return !recordTeacherId && !recordTeacherName;
+  };
+  const candidates = records
+    .filter(belongsToSelectedTeacher)
+    .map(record => record[field])
+    .filter((value): value is string =>
+      value === "__NOT_STARTED__"
+      || (typeof value === "string" && choices.some(choice => choice.nodeId === value))
+    );
+  const rank = (value: string) => value === "__NOT_STARTED__"
+    ? -1
+    : choices.findIndex(choice => choice.nodeId === value);
+  return candidates.sort((left, right) => rank(left) - rank(right)).at(-1);
+}
+
+/**
+ * Merge a consolidated History/Programming progress row with legacy unit rows
+ * field by field. A partial new row must not erase legacy student/teacher
+ * positions; a deliberately confirmed unknown remains authoritative.
+ */
+export function mergeLegacyLinearBranchProgress(
+  choices: Array<{ nodeId: string }>,
+  current: Record<string, any> = {},
+  legacy: Record<string, any> = {},
+): Record<string, any> {
+  const resolve = (
+    field: LegacyLinearFrontierField,
+    confirmationField: "studentFrontierConfirmedAt" | "teacherFrontierConfirmedAt" | "schoolFrontierConfirmedAt",
+  ) => {
+    const currentValue = current[field];
+    if (currentValue === "__UNKNOWN__" && current[confirmationField]) return "__UNKNOWN__";
+    if (currentValue === "__NOT_STARTED__" || choices.some(choice => choice.nodeId === currentValue)) return currentValue;
+    const legacyValue = legacy[field];
+    if (legacyValue === "__UNKNOWN__" && legacy[confirmationField]) return "__UNKNOWN__";
+    if (legacyValue === "__NOT_STARTED__" || choices.some(choice => choice.nodeId === legacyValue)) return legacyValue;
+    return "__UNKNOWN__";
+  };
+
+  return {
+    ...legacy,
+    ...current,
+    lastCompletedLessonId: resolve("lastCompletedLessonId", "studentFrontierConfirmedAt"),
+    teacherTeachingFrontierId: resolve("teacherTeachingFrontierId", "teacherFrontierConfirmedAt"),
+    schoolClassFrontierId: resolve("schoolClassFrontierId", "schoolFrontierConfirmedAt"),
+  };
+}
+
 const NOT_STARTED = "__NOT_STARTED__";
 const UNKNOWN_VALUES = new Set(["", "__UNKNOWN__", "__DEFERRED__", "__NONE__"]);
 

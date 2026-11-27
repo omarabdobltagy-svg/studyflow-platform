@@ -3,6 +3,7 @@ import CurriculumProgressScene, { type SceneBranch } from "@/components/Curricul
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { displayBranchTitle, displayCurriculumTitle } from "@/lib/curriculum-display";
+import { isStudentLessonState, type StudentLessonState } from "@shared/sie-lesson-state";
 import {
   getSIEStudentVisibleBranches,
   getSIECheckpointProgressOptions,
@@ -33,6 +34,7 @@ type BranchView = {
   branchType: string;
   pointLabel: string;
   choices: SIECheckpointChoice[];
+  lessonStates: Record<string, StudentLessonState>;
   gap: LearningGap | null;
   nextLesson: SIECheckpointChoice | null;
   minutesPerLesson: number | null;
@@ -73,10 +75,16 @@ export default function CurriculumMap() {
   const subjectProgress = (learning.data?.courseProgress?.[subjectId] ?? {}) as Record<string, any>;
   const branchProgress = (subjectProgress.branches ?? {}) as Record<string, Record<string, any>>;
   const subjectGaps = ((learning.data as any)?.gapByBranch?.[subjectId] ?? {}) as Record<string, LearningGap>;
+  const lessonStateRecords = ((learning.data as any)?.lessonStateByBranch?.[subjectId] ?? {}) as Record<string, { byNode?: Record<string, unknown> }>;
 
   const branchViews: BranchView[] = useMemo(() => branches.map(branch => {
     const gap = subjectGaps[branch.branchId] ?? null;
     const saved = branchProgress[branch.branchId] ?? {};
+    const rawStates = lessonStateRecords[branch.branchId]?.byNode ?? {};
+    const lessonStates = Object.fromEntries(branch.choices.map(choice => [
+      choice.nodeId,
+      isStudentLessonState(rawStates[choice.nodeId]) ? rawStates[choice.nodeId] : "not_recorded",
+    ])) as Record<string, StudentLessonState>;
     const nextIndex = gap?.studentPosition;
     const nextLesson = typeof nextIndex === "number" && nextIndex >= 0 && nextIndex < branch.choices.length
       ? branch.choices[nextIndex]
@@ -87,6 +95,7 @@ export default function CurriculumMap() {
       branchType: branch.branchType,
       pointLabel: branch.branchType === "official_section" ? "موضوع" : "درس",
       choices: branch.choices,
+      lessonStates,
       gap,
       nextLesson,
       minutesPerLesson: Number.isFinite(Number(saved.estimatedMinutesPerLesson))
@@ -95,7 +104,7 @@ export default function CurriculumMap() {
           ? Number(subjectProgress.estimatedMinutesPerLesson)
           : null,
     };
-  }), [branches, subjectGaps, branchProgress, subjectProgress]);
+  }), [branches, subjectGaps, branchProgress, subjectProgress, lessonStateRecords]);
 
   const sceneBranches: SceneBranch[] = useMemo(() => branchViews.map(branch => ({
     branchId: branch.branchId,
@@ -104,17 +113,15 @@ export default function CurriculumMap() {
       const gap = branch.gap;
       const studentPosition = gap?.studentPosition ?? null;
       const referencePosition = gap?.referencePosition ?? null;
-      let state: "completed" | "gap" | "next" | "future" | "unmapped" = "unmapped";
-      if (studentPosition !== null) {
-        if (index < studentPosition) state = "completed";
-        else if (referencePosition !== null && index < referencePosition) state = "gap";
-        else if (index === studentPosition) state = "next";
-        else state = "future";
-      } else if (referencePosition !== null && index < referencePosition) {
-        state = "unmapped";
-      } else {
-        state = "future";
-      }
+      const lessonState = branch.lessonStates[choice.nodeId] ?? "not_recorded";
+      const insideTeacherRange = referencePosition !== null && index < referencePosition;
+      let state: SceneBranch["nodes"][number]["state"] = "future";
+      if (lessonState === "studied") state = "completed";
+      else if (lessonState === "needs_review") state = "review";
+      else if (lessonState === "watched_only") state = "watched";
+      else if (lessonState === "not_watched" && insideTeacherRange) state = "gap";
+      else if (lessonState === "not_recorded" && insideTeacherRange) state = "unmapped";
+      else if (index === studentPosition) state = "next";
       return { nodeId: choice.nodeId, title: displayCurriculumTitle(choice.title), state };
     }),
   })), [branchViews]);
@@ -208,10 +215,12 @@ export default function CurriculumMap() {
           </div>
           <CurriculumProgressScene branches={sceneBranches} onSelectBranch={selectBranch} />
           <div className="sf-map-legend">
-            <span><i className="is-complete" />أتممته</span>
-            <span><i className="is-gap" />داخل الفجوة المرجعية</span>
-            <span><i className="is-next" />الخطوة التالية</span>
-            <span><i className="is-future" />لم يحن بعد</span>
+            <span><i className="is-complete" />ذاكرته وفهمته</span>
+            <span><i className="is-watched" />شاهدت شرحه</span>
+            <span><i className="is-review" />يحتاج مراجعة</span>
+            <span><i className="is-gap" />فاتك داخل شرح المدرس</span>
+            <span><i className="is-unmapped" />حالته غير مسجلة</span>
+            <span><i className="is-next" />التالي</span>
           </div>
         </section>
       )}
@@ -246,11 +255,12 @@ export default function CurriculumMap() {
           <div className="grid gap-3 xl:grid-cols-2">
             {branchViews.map(branch => {
               const gap = branch.gap;
-              const completedCount = gap?.studentPosition !== null && gap?.studentPosition !== undefined
-                ? Math.max(0, Math.min(branch.choices.length, gap.studentPosition))
-                : null;
-              const progress = completedCount !== null
-                ? Math.round((completedCount / Math.max(1, branch.choices.length)) * 100)
+              const completedCount = branch.choices.filter(choice => branch.lessonStates[choice.nodeId] === "studied").length;
+              const watchedOnlyCount = branch.choices.filter(choice => branch.lessonStates[choice.nodeId] === "watched_only").length;
+              const reviewCount = branch.choices.filter(choice => branch.lessonStates[choice.nodeId] === "needs_review").length;
+              const unknownCount = branch.choices.filter(choice => branch.lessonStates[choice.nodeId] === "not_recorded").length;
+              const progress = branch.choices.length
+                ? Math.round((completedCount / branch.choices.length) * 100)
                 : null;
               const referenceProgress = gap?.referencePosition !== null && gap?.referencePosition !== undefined
                 ? Math.round((Math.max(0, Math.min(branch.choices.length, gap.referencePosition)) / Math.max(1, branch.choices.length)) * 100)
@@ -272,15 +282,22 @@ export default function CurriculumMap() {
                       {referenceProgress !== null && <b style={{ width: referenceProgress + "%" }} />}
                       <i style={{ width: progress === null ? "0%" : progress + "%" }} />
                     </div>
-                    <span>{progress === null ? "لم يُسجل التقدم بعد" : completedCount + " من " + branch.choices.length + " نقاط مكتملة · " + progress + "%"}</span>
+                    <span>{progress === null ? "لا توجد نقاط مفهرسة" : completedCount + " من " + branch.choices.length + " ذاكرها وفهمها · " + progress + "%"}</span>
+                    <small className="block mt-1 text-muted-foreground">وصل شرحك إلى {gap?.studentPosition ?? "موضع غير محدد"} نقطة من {branch.choices.length}</small>
                   </div>
                   <div className="sf-map-branch-steps" role="list" aria-label="التسلسل التفصيلي للدروس">
                     {branch.choices.map((choice, index) => {
-                      const isCompleted = completedCount !== null && index < completedCount;
-                      const isNext = completedCount !== null && index === completedCount;
-                      const isBehindTeacher = completedCount !== null && gap?.referencePosition !== null && gap?.referencePosition !== undefined
-                        && index >= completedCount && index < gap.referencePosition;
-                      const state = isCompleted ? "completed" : isBehindTeacher ? "gap" : isNext ? "next" : completedCount === null ? "untracked" : "future";
+                      const lessonState = branch.lessonStates[choice.nodeId] ?? "not_recorded";
+                      const isCompleted = lessonState === "studied";
+                      const isNeedsReview = lessonState === "needs_review";
+                      const isWatchedOnly = lessonState === "watched_only";
+                      const insideTeacherRange = gap?.referencePosition !== null && gap?.referencePosition !== undefined && index < gap.referencePosition;
+                      const isBehindTeacher = lessonState === "not_watched" && insideTeacherRange;
+                      const isUnmapped = lessonState === "not_recorded" && insideTeacherRange;
+                      const isNext = !isCompleted && !isNeedsReview && !isWatchedOnly && !isBehindTeacher && !isUnmapped
+                        && typeof gap?.studentPosition === "number" && index === gap.studentPosition;
+                      const state = isCompleted ? "completed" : isNeedsReview ? "review" : isWatchedOnly ? "watched"
+                        : isBehindTeacher ? "gap" : isUnmapped ? "unmapped" : isNext ? "next" : "future";
                       const stepLabel = branch.pointLabel === "موضوع" ? "الموضوع" : "الدرس";
                       const localizedTitle = displayCurriculumTitle(choice.title);
                       const localizedUnit = displayCurriculumTitle(choice.unitTitle);
@@ -297,13 +314,13 @@ export default function CurriculumMap() {
                           <b>{localizedTitle}</b>
                           {localizedTitle !== choice.title && <small className="sf-map-step-original" dir="ltr">{choice.title}</small>}
                           {choice.unitTitle && <small className="sf-map-step-unit">{choice.unitNumber ? "الوحدة " + choice.unitNumber + " · " : ""}{localizedUnit}</small>}
-                          <em>{isCompleted ? "مكتمل" : isBehindTeacher ? (isNext ? "ابدأ الآن · متأخر" : "ضمن فجوة المدرس") : isNext ? "التالي" : completedCount === null ? "لم يُسجل التقدم" : "لاحقًا"}</em>
+                          <em>{isCompleted ? "ذاكرته وفهمته" : isNeedsReview ? "يحتاج مراجعة" : isWatchedOnly ? "شاهد الشرح فقط" : isBehindTeacher ? "فاتك داخل شرح المدرس" : isUnmapped ? "حالة المذاكرة غير مسجلة" : isNext ? "التالي" : "لاحقًا"}</em>
                         </button>
                       );
                     })}
                   </div>
                   <div className="sf-map-branch-details">
-                    <p>آخر نقطة لك: <b>{gap?.studentFrontierTitle || (gap?.studentPosition === 0 ? "لم تبدأ بعد" : "غير محدد")}</b></p>
+                    <p>آخر درس وصلت له في الشرح: <b>{gap?.studentFrontierTitle || (gap?.studentPosition === 0 ? "لم تبدأ بعد" : "غير محدد")}</b></p>
                     <p>مرجع التدريس: <b>{gap?.referenceFrontierTitle || (gap?.referencePosition === 0 ? "لم يبدأ بعد" : "غير متاح")}</b><small>{gap?.referenceSource === "teacher" ? "المدرس" : gap?.referenceSource === "school" ? "الفصل" : "لا يوجد مرجع موثق"}</small></p>
                     <p>وقت دراسة الموضوع المتوقع: <b>{branch.minutesPerLesson === null ? "غير محدد" : branch.minutesPerLesson + " دقيقة"}</b></p>
                   </div>

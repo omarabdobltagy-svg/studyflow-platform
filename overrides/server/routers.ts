@@ -6,7 +6,7 @@ import { SignJWT } from "jose";
 import { TRPCError } from "@trpc/server";
 import { COOKIE_NAME } from "@shared/const";
 import { SIE_CATALOG_META, SIE_SYSTEMS, SIE_TEACHERS, SIE_SUBJECTS, getSIEEducationSystem, getSIESubject, getSIETeacher, getSIETeachersForSubject, getSIETrack, getSIECheckpointChoices, getSIECheckpointBranches, normalizeSIECheckpointFrontier, getSIECheckpointProgressBranches, matchSIECheckpointTask, validateSIESubjectSelection } from "@shared/sie-catalog";
-import { calculateLearningGap } from "@shared/sie-learning-progress";
+import { calculateLearningGap, selectLegacyLinearFrontier } from "@shared/sie-learning-progress";
 import {
   addChapter,
   addLibraryAttachment,
@@ -3288,26 +3288,12 @@ export const appRouter = router({
           };
           const legacyLinear = subjectId === "HIS_G2_BAC" || subjectId === "PROG_AI_G2_BAC";
           const legacyRecords = legacyLinear ? Object.values(branchRecords) as Array<Record<string, any>> : [];
-          const pickLegacyFrontier = (field: "lastCompletedLessonId" | "teacherTeachingFrontierId" | "schoolClassFrontierId", teacherOnly = false) => {
-            const candidates = legacyRecords
-              .filter(record => !teacherOnly || (selectedTeacherId !== "__SKIP__"
-                ? (!record.teacherId || record.teacherId === selectedTeacherId)
-                : selectedTeacherName
-                  ? (!record.teacherName || record.teacherName === selectedTeacherName)
-                  : true))
-              .map(record => record[field])
-              .filter(value => value === "__UNKNOWN__" || belongsToBranch(value));
-            const positioned = candidates
-              .filter(value => value !== "__UNKNOWN__")
-              .sort((left, right) => {
-                const leftNormalized = normalizeSIECheckpointFrontier(subjectId, branch.branchId, left);
-                const rightNormalized = normalizeSIECheckpointFrontier(subjectId, branch.branchId, right);
-                const leftIndex = left === "__NOT_STARTED__" ? -1 : branchChoices.findIndex(choice => choice.nodeId === leftNormalized);
-                const rightIndex = right === "__NOT_STARTED__" ? -1 : branchChoices.findIndex(choice => choice.nodeId === rightNormalized);
-                return leftIndex - rightIndex;
-              });
-            return positioned.length ? positioned[positioned.length - 1] : candidates.length ? "__UNKNOWN__" : undefined;
-          };
+          const pickLegacyFrontier = (field: "lastCompletedLessonId" | "teacherTeachingFrontierId" | "schoolClassFrontierId", teacherOnly = false) =>
+            selectLegacyLinearFrontier(branchChoices, legacyRecords, field, {
+              teacherOnly,
+              teacherId: selectedTeacherId !== "__SKIP__" ? selectedTeacherId : null,
+              teacherName: selectedTeacherName,
+            });
           const savedStudentFrontierValue = saved.lastCompletedLessonId;
           const savedStudentFrontier = belongsToBranch(savedStudentFrontierValue)
             ? savedStudentFrontierValue
@@ -3368,13 +3354,21 @@ export const appRouter = router({
           const gap = gapByBranch[subjectId]?.[branch.branchId];
           const frontier = gap?.studentFrontierId ?? "__UNKNOWN__";
           const lessonStates = (saved.lessonStates ?? {}) as Record<string, { state?: StudentLessonState }>;
-          const states = branch.choices.map(choice => getEffectiveStudentLessonState({
-            choices: branch.choices,
-            nodeId: choice.nodeId,
-            studentFrontierId: frontier,
-            lessonStateModelVersion: Number(saved.lessonStateModelVersion ?? 0),
-            saved: lessonStates[choice.nodeId],
-          }));
+          const states = branch.choices.map(choice => {
+            const savedState = lessonStates[choice.nodeId];
+            const sq3rRecord = sq3rProgress[subjectId]?.[choice.nodeId];
+            const completedBySq3r = Array.isArray(sq3rRecord?.completedSteps)
+              && new Set(sq3rRecord.completedSteps).size === 5;
+            if (isStudentLessonState(savedState?.state)) return savedState.state;
+            if (completedBySq3r) return "studied" as const;
+            return getEffectiveStudentLessonState({
+              choices: branch.choices,
+              nodeId: choice.nodeId,
+              studentFrontierId: frontier,
+              lessonStateModelVersion: Number(saved.lessonStateModelVersion ?? 0),
+              saved: savedState,
+            });
+          });
           const referencePosition = typeof gap?.referencePosition === "number" ? gap.referencePosition : null;
           const teacherCoveredStates = referencePosition === null ? [] : states.slice(0, referencePosition);
           return [branch.branchId, {
