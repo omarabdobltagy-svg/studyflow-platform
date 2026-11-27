@@ -9,6 +9,7 @@ import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
 import { getNextOpenPlanStep } from "@/lib/plan-actions";
 import { getPlannerStepCurriculum } from "@/lib/planner-curriculum";
+import { CAIRO_BAC_EXAM_CALENDAR_NOTICE, getCairoSecondYearBaccalaureateExams } from "@shared/cairo-baccalaureate-exam-calendar";
 import { getSIEStudentVisibleBranches, getSIECheckpointProgressBranches, getSIESubject, matchSIECheckpointTask, normalizeSIECheckpointFrontier } from "@shared/sie-catalog";
 import {
   ArrowLeft, BarChart3, BookOpenText, CalendarDays, Check, CheckCircle2, Clock3,
@@ -381,6 +382,15 @@ export default function Home() {
   ).length;
   const homeStudyProgress = homeStudySteps.length ? Math.round(homeDoneSteps / homeStudySteps.length * 100) : 0;
   const homeNextStep = getNextOpenPlanStep(homeStudySteps as any[] | undefined);
+  const cairoExamDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
+  const upcomingExams = useMemo(
+    () => getCairoSecondYearBaccalaureateExams(profile.data)
+      .filter(exam => exam.date >= cairoExamDate),
+    [profile.data?.educationSystem, profile.data?.gradeYear, profile.data?.subjectIds, cairoExamDate],
+  );
+  const daysUntilExam = (date: string) => Math.max(0, Math.round(
+    (Date.parse(date + "T00:00:00Z") - Date.parse(cairoExamDate + "T00:00:00Z")) / 86_400_000
+  ));
   const homeNextStepIndex = homeNextStep ? homeStudySteps.indexOf(homeNextStep) : -1;
   const tasks = summary.data?.tasks ?? [];
   const taskCount = summary.data?.taskStats.total ?? 0;
@@ -795,6 +805,47 @@ export default function Home() {
             </div>
           )}
         </section>
+
+        {upcomingExams.length > 0 && (
+          <section className="sf-home-exam-calendar" aria-labelledby="sf-home-exam-calendar-title">
+            <header className="sf-home-exam-calendar-header">
+              <div>
+                <span className="sf-sp-eyebrow">المتابعة الامتحانية · القاهرة</span>
+                <h3 id="sf-home-exam-calendar-title">امتحانات المواد المضافة للمجموع</h3>
+                <p>توزيع نوفمبر المقترح للصف الثاني بكالوريا حسب المواد الموجودة في ملفك.</p>
+              </div>
+              <span className="sf-home-exam-calendar-status">جدول مديرية مقترح</span>
+            </header>
+            <div className="sf-home-exam-calendar-track">
+              {upcomingExams.map((exam, index) => {
+                const days = daysUntilExam(exam.date);
+                const dateLabel = new Intl.DateTimeFormat("ar-EG", {
+                  day: "numeric", month: "long", timeZone: "Africa/Cairo",
+                }).format(new Date(exam.date + "T12:00:00Z"));
+                return (
+                  <article key={exam.subjectId} className="sf-home-exam-item">
+                    <div className="sf-home-exam-item-date">
+                      <span>{exam.dayName}</span>
+                      <strong>{dateLabel}</strong>
+                    </div>
+                    <div className="sf-home-exam-item-subject">
+                      <span className="sf-home-exam-index">{(index + 1).toLocaleString("ar-EG")}</span>
+                      <b>{exam.subjectName}</b>
+                      <small>{exam.category === "specialization" ? "مادة تخصصية حسب مسارك" : "مادة أساسية مضافة للمجموع"}</small>
+                    </div>
+                    <span className="sf-home-exam-countdown">
+                      {days === 0 ? "اليوم" : days === 1 ? "غدًا" : "بعد " + days.toLocaleString("ar-EG") + " يوم"}
+                    </span>
+                  </article>
+                );
+              })}
+            </div>
+            <footer className="sf-home-exam-calendar-footer">
+              <p>استبعدنا الثقافة المالية والتربية الرياضية من مسار الاستعداد للمجموع. هذه مواعيد مديرية القاهرة المقترحة وليست تأكيدًا لجدول المدرسة.</p>
+              <small>{CAIRO_BAC_EXAM_CALENDAR_NOTICE.schoolName}: لم نعثر على إعلان مدرسي موثّق يؤكد المواعيد نفسها حتى الآن.</small>
+            </footer>
+          </section>
+        )}
 
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,.85fr)]">
           <section className="rounded-3xl border border-border bg-card shadow-sm">
