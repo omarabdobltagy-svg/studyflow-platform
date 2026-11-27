@@ -1366,6 +1366,7 @@ function SearchableFrontierPicker({
   onPrevious?: () => void; onNext?: () => void;
   previousDisabled?: boolean; nextDisabled?: boolean;
 }) {
+  const reduceMotion = useReducedMotion();
   const [query, setQuery] = useState("");
   const [showAllOptions, setShowAllOptions] = useState(false);
   const optionsIdentity = options.length + "::" + (options[0]?.value ?? "") + "::" + (options[options.length - 1]?.value ?? "");
