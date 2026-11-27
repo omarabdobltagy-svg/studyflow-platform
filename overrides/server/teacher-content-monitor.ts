@@ -37,11 +37,13 @@ export type TeacherVideoInstruction = {
 };
 
 export type TeacherVideoContentAnalysis = {
-  status: "processing" | "complete" | "failed";
+  status: "processing" | "retry_wait" | "complete" | "failed";
   interactionId?: string;
   model?: string;
   startedAt?: string;
   completedAt?: string;
+  retryCount?: number;
+  nextRetryAt?: string;
   error?: string;
   summaryAr?: string;
   topics?: TeacherVideoTopicSegment[];
