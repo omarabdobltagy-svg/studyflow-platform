@@ -44,21 +44,39 @@ const queryClient = new QueryClient({
   },
 });
 
+const queryErrorToastIds = new Map<string, string>();
+const queryErrorToastId = (queryKey: readonly unknown[]) => "studyflow-query:" + JSON.stringify(queryKey);
+
 const showQueryError = (error: unknown, queryKey: readonly unknown[]) => {
   if (error instanceof TRPCClientError && error.message === UNAUTHED_ERR_MSG) return;
-  toast.error("تعذّر تحميل البيانات الآن.", {
-    description: "تحقق من اتصالك ثم أعد المحاولة.",
+  const id = queryErrorToastId(queryKey);
+  if (!queryErrorToastIds.has(id)) queryErrorToastIds.set(id, id);
+  toast.error("تعذّر تحميل جزء من البيانات.", {
+    id,
+    duration: 9_000,
+    dismissible: true,
+    description: "لم نحذف تقدمك. جرّب إعادة المحاولة؛ ولو استمر الخطأ سنعرضه بوضوح بدل اختفائه سريعًا.",
     action: {
       label: "إعادة المحاولة",
-      onClick: () => void queryClient.refetchQueries({ queryKey }),
+      onClick: () => void queryClient.refetchQueries({ queryKey, exact: true }),
     },
   });
 };
 
 queryClient.getQueryCache().subscribe(event => {
   if (event.type === "updated" && event.action.type === "error") {
+    // A stable toast id prevents the same background query from flooding the UI.
     showQueryError(event.query.state.error, event.query.queryKey);
     console.error("[API Query Error]", event.query.state.error);
+  }
+  if (event.type === "updated" && event.action.type === "success") {
+    // Remove a transient error as soon as the same query succeeds again.
+    const id = queryErrorToastId(event.query.queryKey);
+    if (queryErrorToastIds.delete(id)) toast.dismiss(id);
+  }
+  if (event.type === "removed") {
+    const id = queryErrorToastId(event.query.queryKey);
+    if (queryErrorToastIds.delete(id)) toast.dismiss(id);
   }
 });
 
