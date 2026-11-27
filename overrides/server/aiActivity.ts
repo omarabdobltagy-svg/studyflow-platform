@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-export type AIActivityKind = "assistant" | "planner" | "daily_plan";
+export type AIActivityKind = "assistant" | "planner" | "daily_plan" | "teacher_monitor";
 export type AIActivityStatus = "running" | "complete" | "failed";
 export type AIActivityEventStatus = "active" | "complete" | "failed";
 
