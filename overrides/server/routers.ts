@@ -3095,13 +3095,16 @@ export const appRouter = router({
               description,
               matchedSignals: Number(branchMatch) + Number(subjectMatch) + 1,
               matchedTopics: [] as string[],
-              accepted: acceptedIds.has(externalId),
+              // Selecting this teacher already authorizes StudyFlow to inspect
+              // public revision material from the teacher's verified channel.
+              // Videos from alternative teachers still require explicit acceptance.
+              accepted: true,
               isSelectedTeacher: true,
-              analysisStatus: acceptedIds.has(externalId) ? "processing" : "awaiting_consent",
+              analysisStatus: isTeacherVideoAnalysisConfigured() ? "processing" : "analysis_unavailable",
               verificationState: "selected_teacher_identity_only" as const,
-              relevance: acceptedIds.has(externalId)
-                ? "تمت الموافقة على الفيديو؛ ننتظر تحليل محتواه ومطابقته مع المتراكم."
-                : "هذا الفيديو من قناة مدرسك المختار. وافق على تحليله أولًا؛ لن يُستخدم في الخطة إلا إذا طابق موضوعات متراكمة فعلًا.",
+              relevance: isTeacherVideoAnalysisConfigured()
+                ? "هذا الفيديو من قناة مدرسك المختار؛ بدأ StudyFlow تحليل محتواه تلقائيًا، ولن يربطه بالخطة إلا بعد مطابقته مع المنهج."
+                : "تم التحقق من قناة مدرسك، لكن تحليل محتوى الفيديو يحتاج إعداد Gemini في خدمة Preview.",
             }];
           }).slice(0, 5);
         }
@@ -3181,6 +3184,32 @@ export const appRouter = router({
             || Date.parse(b.publishedAt || "") - Date.parse(a.publishedAt || "")
           )
           .slice(0, 12);
+
+        // The student has already selected and linked this teacher. Save
+        // revision videos discovered on the teacher's identity-verified channel
+        // and let the existing Gemini worker inspect them in the background.
+        // Alternative-teacher videos remain pending until the student accepts
+        // that specific source.
+        const automaticTeacherRevisionUpdates: TeacherPublicUpdate[] = selectedTeacherItems
+          .filter(item => item.isSelectedTeacher
+            && item.accepted
+            && item.verificationState === "selected_teacher_identity_only")
+          .map(item => ({
+            externalId: item.externalId,
+            teacherId: item.teacherId,
+            teacherName: item.teacherName,
+            sourceType: "youtube",
+            title: item.title,
+            description: item.description,
+            url: item.url,
+            publishedAt: item.publishedAt && Number.isFinite(Date.parse(item.publishedAt))
+              ? new Date(item.publishedAt).toISOString()
+              : new Date().toISOString(),
+            observedAt: new Date().toISOString(),
+            announcementType: "revision",
+            confidence: "medium",
+          }));
+
         const latestSearchProfile = await getStudentProfile(ctx.user.id);
         if (latestSearchProfile) {
           const latestSearchSelection = (latestSearchProfile.selection ?? {}) as Record<string, any>;
@@ -3195,10 +3224,25 @@ export const appRouter = router({
               && Date.now() - Date.parse(String(candidate.searchedAt ?? "")) < 7 * 24 * 60 * 60 * 1_000
             ),
           ].slice(0, 50);
+          const previousTeacherUpdates = Array.isArray(latestSearchSelection.teacherPublicUpdates)
+            ? latestSearchSelection.teacherPublicUpdates as TeacherPublicUpdate[]
+            : [];
+          const automaticIds = new Set(automaticTeacherRevisionUpdates.map(update => update.externalId));
+          const nextTeacherUpdates = [
+            ...automaticTeacherRevisionUpdates.filter(update => !previousTeacherUpdates.some(saved => saved.externalId === update.externalId)),
+            ...previousTeacherUpdates,
+          ].slice(0, 60);
           await updateStudentProfileSelection(ctx.user.id, {
             ...latestSearchSelection,
+            teacherPublicUpdates: nextTeacherUpdates,
             pendingAlternativeReviewCandidates: nextPending,
           });
+          if (automaticTeacherRevisionUpdates.length && isTeacherVideoAnalysisConfigured()) {
+            queueTeacherVideoAnalyses(
+              ctx.user.id,
+              nextTeacherUpdates.filter(update => automaticIds.has(update.externalId)),
+            );
+          }
         }
         const hasVerifiedContentMatch = items.some(item => item.verificationState === "content_verified");
         const hasAlternativeCandidate = items.some(item => !item.isSelectedTeacher);
@@ -3220,7 +3264,7 @@ export const appRouter = router({
             ? "تعذّر الوصول إلى البحث الخارجي الآن. تظل مراجعات الفيديو المحفوظة وتحليلها متاحة؛ جرّب البحث لاحقًا."
             : hasVerifiedContentMatch
               ? "رتّبنا النتائج حسب مطابقة محتوى الفيديو للدروس المتراكمة، وليس حسب اسم المدرس فقط. قد يظهر فيديو من مدرس آخر إذا كان شرحه أقرب لما تحتاجه. الفيديو غير المحلل لا يدخل الخطة."
-              : "جمعنا المرشحين من مدرسك المختار ومدرسين آخرين مسجلين للمادة. هذه مرشحات أولية فقط؛ وافق على فحص الفيديو أولًا، ولن يُربط بالخطة إلا بعد أن يطابق تحليل محتواه فرع المنهج ودروسك المتراكمة.",
+              : "فيديوهات مدرسك المختار تُفحص تلقائيًا من قناته المعروفة، ولا تدخل الخطة إلا بعد تحليل محتواها ومطابقتها مع دروسك المتراكمة. مراجعات المدرسين البدلاء تظل مرشحات منفصلة وتتطلب موافقتك قبل تحليلها أو ربطها.",
         };
       }),
     acceptAlternativeReview: protectedProcedure
