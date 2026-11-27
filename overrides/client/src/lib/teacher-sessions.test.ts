@@ -156,12 +156,12 @@ describe("teacher lecture time ranges", () => {
 
 describe("getTeacherLectureDuration", () => {
   it("calculates lecture duration from start and end", () => {
-    expect(getTeacherLectureDuration("09:00", "10:30")).toContain("1 ساعة و 30 دقيقة");
+    expect(getTeacherLectureDuration("09:00", "10:30")).toContain("١ ساعة و ٣٠ دقيقة");
   });
 
   it("supports a lecture that finishes after midnight", () => {
     const result = getTeacherLectureDuration("23:30", "01:00");
-    expect(result).toContain("1 ساعة و 30 دقيقة");
+    expect(result).toContain("١ ساعة و ٣٠ دقيقة");
     expect(result).toContain("اليوم التالي");
   });
 
