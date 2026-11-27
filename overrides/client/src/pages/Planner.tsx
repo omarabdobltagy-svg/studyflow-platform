@@ -611,6 +611,7 @@ export default function Planner() {
   const openTaskRows = taskRows.filter(task => task.status !== "done");
   const overdueTaskRows = openTaskRows.filter(task => task.dueAt && new Date(task.dueAt).getTime() < Date.now());
   const todayTaskRows = openTaskRows.filter(task => task.dueAt && new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date(task.dueAt)) === todayCairo);
+  const curriculumGapCount = progressPreview.reduce((sum, item) => sum + (typeof item.gapCount === "number" ? item.gapCount : 0), 0);
   const planSubjectCount = plan
     ? new Set(plan.steps.map(step => getPlanStepCurriculum(step, profile.data?.subjectIds ?? [])?.subjectId).filter(Boolean)).size
     : 0;

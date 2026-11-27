@@ -1357,7 +1357,7 @@ const plannerAssistantContextSchema = z.object({
     detail: z.string().trim().max(1_200),
     category: z.string().trim().max(80),
     priority: z.enum(["critical", "high", "medium", "low"]).optional(),
-    phaseId: z.enum(["backlog", "teacher_sync", "steady"]).optional(),
+    phaseId: z.enum(["backlog", "teacher_sync", "steady", "review_later"]).optional(),
     completed: z.boolean().default(false),
     linkedTask: z.boolean().default(false),
   })).max(240),
@@ -1382,7 +1382,7 @@ const plannerAssistantPatchSchema = z.object({
     detail: z.string().trim().min(5).max(1_200).optional(),
     category: z.string().trim().min(2).max(80).optional(),
     priority: z.enum(["critical", "high", "medium", "low"]).optional(),
-    phaseId: z.enum(["backlog", "teacher_sync", "steady"]).optional(),
+    phaseId: z.enum(["backlog", "teacher_sync", "steady", "review_later"]).optional(),
   }).strict()).max(60).optional(),
   removeIndexes: z.array(z.number().int().nonnegative()).max(60).optional(),
   order: z.array(z.number().int().nonnegative()).max(240).optional(),
@@ -1398,7 +1398,7 @@ type NormalizedPlannerAssistantPatch = {
       detail?: string;
       category?: string;
       priority?: "critical" | "high" | "medium" | "low";
-      phaseId?: "backlog" | "teacher_sync" | "steady";
+      phaseId?: "backlog" | "teacher_sync" | "steady" | "review_later";
     };
   }>;
   removeIndexes: number[];
