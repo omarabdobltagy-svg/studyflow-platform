@@ -28,7 +28,7 @@ import {
 import { BookOpenText, Check, ChevronLeft, ChevronRight, Loader2, Search, Sparkles, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 
 function youtubeThumbnailId(externalId: string) {
   const id = externalId.replace(/^youtube:/, "");
@@ -36,6 +36,7 @@ function youtubeThumbnailId(externalId: string) {
 }
 
 export default function Study() {
+  const reduceMotion = useReducedMotion();
   const utils = trpc.useUtils();
   const profile = trpc.studentProfile.get.useQuery(undefined, {
     refetchInterval: query => {
@@ -636,7 +637,7 @@ export default function Study() {
               {subjectSearch && <button type="button" aria-label="مسح البحث" onClick={() => setSubjectSearch("")} className="absolute left-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground hover:bg-muted"><X className="size-3.5" /></button>}
             </div>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {visibleSubjects.map(id => { const active = id === subjectId; return <motion.button key={id} type="button" data-testid={"study-subject-" + id} aria-pressed={active} onClick={() => { setSubjectId(id); setBranchId(""); setStudyViewMode("units"); setBranchTransition(null); }} whileTap={{ scale: 0.98 }}
+              {visibleSubjects.map(id => { const active = id === subjectId; return <motion.button key={id} type="button" data-testid={"study-subject-" + id} aria-pressed={active} onClick={() => { setSubjectId(id); setBranchId(""); setStudyViewMode("units"); setBranchTransition(null); }} whileTap={reduceMotion ? undefined : { scale: 0.98 }}
                 className={"min-h-12 rounded-xl border px-3 py-3 text-sm font-semibold transition " + (active ? "border-primary bg-primary/10 text-foreground ring-2 ring-primary/15" : "border-border bg-background text-muted-foreground hover:border-primary/35")}>{getSIESubject(id)?.nameAr || id}</motion.button>; })}
             </div>
             {!visibleSubjects.length && <p className="rounded-xl bg-muted/30 p-4 text-center text-sm text-muted-foreground">لا توجد مادة مطابقة لبحثك.</p>}
@@ -648,14 +649,14 @@ export default function Study() {
         {branchTransition && (
           <motion.div
             key={branchTransition.to}
-            initial={{ opacity: 0, y: -12, scale: .97, filter: "blur(5px)" }}
+            initial={reduceMotion ? false : { opacity: 0, y: -12, scale: .97, filter: "blur(5px)" }}
             animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
-            exit={{ opacity: 0, y: -8, scale: .985, filter: "blur(4px)" }}
-            transition={{ duration: .42, ease: [.22, 1, .36, 1] }}
+            exit={reduceMotion ? undefined : { opacity: 0, y: -8, scale: .985, filter: "blur(4px)" }}
+            transition={reduceMotion ? { duration: 0 } : { duration: .42, ease: [.22, 1, .36, 1] }}
             className="relative mb-4 overflow-hidden rounded-2xl border border-primary/25 bg-primary/[0.045] p-4 text-foreground shadow-sm"
           >
             <div className="relative flex items-center gap-3">
-              <motion.span initial={{ rotate: -30, scale: .65 }} animate={{ rotate: 0, scale: 1 }} transition={{ type: "spring", stiffness: 240, damping: 16 }}
+              <motion.span initial={reduceMotion ? false : { rotate: -30, scale: .65 }} animate={{ rotate: 0, scale: 1 }} transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 240, damping: 16 }}
                 className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Check className="size-5" /></motion.span>
               <div className="min-w-0 flex-1">
                 <p className="text-[10px] font-bold tracking-[.12em] text-primary">تم حفظ موضعك بنجاح</p>
@@ -1116,10 +1117,10 @@ export default function Study() {
                           role="status"
                           aria-live="polite"
                           aria-atomic="true"
-                          initial={{ opacity: 0, y: 12, scale: .985 }}
+                          initial={reduceMotion ? false : { opacity: 0, y: 12, scale: .985 }}
                           animate={{ opacity: 1, y: 0, scale: 1 }}
-                          exit={{ opacity: 0, y: -8, scale: .985 }}
-                          transition={{ type: "spring", stiffness: 260, damping: 24 }}
+                          exit={reduceMotion ? undefined : { opacity: 0, y: -8, scale: .985 }}
+                          transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 260, damping: 24 }}
                         >
                           <span className="sf-progress-coach-kicker"><Sparkles className="size-3.5" /> أول إعداد لتقدمك</span>
                           <strong>عندك موضعان منفصلان — اختار كل واحد بدقة</strong>
@@ -1404,10 +1405,10 @@ function SearchableFrontierPicker({
         {visibleOptions.map(option => {
           const selected = value === option.value;
           return <motion.button key={option.value} type="button" data-testid={testId ? testId + "-option-" + option.value : undefined} data-selected={selected ? "true" : "false"} aria-pressed={selected} disabled={disabled}
-            layout
-            whileTap={{ scale: 0.975 }}
-            animate={{ scale: selected ? 1.012 : 1 }}
-            transition={{ type: "spring", stiffness: 380, damping: 25 }}
+            layout={!reduceMotion}
+            whileTap={reduceMotion ? undefined : { scale: 0.975 }}
+            animate={reduceMotion ? undefined : { scale: selected ? 1.012 : 1 }}
+            transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 380, damping: 25 }}
             onClick={() => onChange(option.value)}
             className={"flex min-h-14 min-w-0 items-center justify-between gap-2 rounded-xl border px-3 py-3 text-right transition disabled:cursor-not-allowed disabled:opacity-50 " + (selected ? "is-selected border-primary bg-primary/10 text-foreground ring-2 ring-primary/10" : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground")}>
             <span className="min-w-0"><span className="block break-words text-sm font-semibold leading-5">{option.label}</span>

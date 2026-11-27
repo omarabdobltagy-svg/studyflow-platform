@@ -15,7 +15,6 @@ import {
   getSIESubject,
   getSIESubjectsForTrack,
   getSIETeachersForSubject,
-  getSIEStudentVisibleBranches,
   getSIETrack,
   getSIETracks,
   type SIESystemId,
@@ -33,7 +32,7 @@ import {
   ShieldCheck,
   X,
 } from "lucide-react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useLocation, type RouteComponentProps } from "wouter";
@@ -140,6 +139,7 @@ function buildScheduleTime(hourText: string, minuteText: string, period: "am" | 
 }
 
 export default function Onboarding({ editMode = false }: Partial<RouteComponentProps> & { editMode?: boolean }) {
+  const reduceMotion = useReducedMotion();
   const [, setLocation] = useLocation();
   const auth = trpc.auth.me.useQuery(undefined, { retry: false });
   const profile = trpc.studentProfile.get.useQuery(undefined, { enabled: Boolean(auth.data) });
@@ -723,10 +723,10 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                         role="status"
                         aria-live="polite"
                         aria-atomic="true"
-                        initial={{ opacity: 0, y: -10, scale: .985 }}
+                        initial={reduceMotion ? false : { opacity: 0, y: -10, scale: .985 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: -8, scale: .985 }}
-                        transition={{ type: "spring", stiffness: 280, damping: 25 }}
+                        exit={reduceMotion ? undefined : { opacity: 0, y: -8, scale: .985 }}
+                        transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 280, damping: 25 }}
                       >
                         <span className="sf-setup-coach-step">
                           {setupCoachStage === "teacher" ? "١ / ٤"
