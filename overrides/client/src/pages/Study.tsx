@@ -10,6 +10,8 @@ import {
   getSIECheckpointProgressOptions,
   getSIECheckpointUnits,
   getSIESubject,
+  getSIETeacher,
+  getSIETeachersForSubject,
   normalizeSIECheckpointFrontier,
 } from "@shared/sie-catalog";
 import {
@@ -57,6 +59,22 @@ export default function Study() {
   const persistedCourseMode = savedCourseModes[subjectId] || currentCourseProgress.courseMode || "online";
   const [courseModeOverrides, setCourseModeOverrides] = useState<Record<string, "center" | "online">>({});
   const courseMode = courseModeOverrides[subjectId] ?? persistedCourseMode;
+  const teacherSystemId = selection.systemId === "EG_GENERAL_SECONDARY" || profile.data?.educationSystem === "general_secondary"
+    ? "EG_GENERAL_SECONDARY" as const
+    : "EG_BACCALAUREATE" as const;
+  const teacherOptions = useMemo(
+    () => getSIETeachersForSubject(subjectId, teacherSystemId),
+    [subjectId, teacherSystemId],
+  );
+  const [editingCustomTeacher, setEditingCustomTeacher] = useState(false);
+  const [customTeacherDraft, setCustomTeacherDraft] = useState(teacherReferenceNameBase);
+  useEffect(() => {
+    setCustomTeacherDraft(teacherReferenceNameBase);
+    setEditingCustomTeacher(false);
+  }, [subjectId, teacherReferenceNameBase]);
+  const selectedTeacherLabel = selectedTeacherId
+    ? getSIETeacher(selectedTeacherId)?.nameAr ?? selectedTeacherId
+    : teacherReferenceNameBase || "لم تحدد مدرسًا لهذه المادة";
   const allBranches = useMemo(() => getSIECheckpointProgressBranches(subjectId), [subjectId]);
   const branches = useMemo(() => getSIEStudentVisibleBranches(subjectId), [subjectId]);
   const units = useMemo(() => getSIECheckpointUnits(subjectId), [subjectId]);
@@ -355,14 +373,22 @@ export default function Study() {
     onError: error => toast.error(error.message || "تعذّر حفظ موضع المنهج."),
   });
   const updateLessonLearningState = trpc.learning.updateLessonLearningState.useMutation({
-    onSuccess: async (_result, variables) => {
+    onSuccess: async (result, variables) => {
       await Promise.all([
         utils.studentProfile.get.invalidate(),
         utils.learning.get.invalidate(),
         utils.plans.currentDaily.invalidate(),
         utils.dashboard.summary.invalidate(),
+        utils.ai.inbox.invalidate(),
       ]);
-      toast.success("تم تحديث حالة الدرس؛ الخطة هتراعي إنك شاهدته أو ذاكرته فعلًا.");
+      const reconciliation = result.taskReconciliation;
+      if (reconciliation?.questionsCreated > 0) {
+        toast.info("المساعد عنده سؤال بخصوص مهمة مرتبطة بالدرس. افتح جرس الرسائل أعلى المنصة.");
+      } else if (reconciliation?.resolvedCount > 0) {
+        toast.success("تم تحديث حالة الدرس، والمساعد أغلق " + reconciliation.resolvedCount + " مهمة مذاكرة قديمة مرتبطة به.");
+      } else {
+        toast.success("تم تحديث حالة الدرس؛ الخطة هتراعي إنك شاهدته أو ذاكرته فعلًا.");
+      }
     },
     onError: error => toast.error(error.message || "تعذّر تحديث حالة الدرس."),
   });
@@ -427,14 +453,46 @@ export default function Study() {
 
   const updateTeacherSelection = trpc.studentProfile.updateTeacherSelection.useMutation({
     onSuccess: async () => {
-      await Promise.all([utils.studentProfile.get.invalidate(), utils.learning.get.invalidate()]);
-      toast.success("تم حفظ طريقة الدراسة.");
+      await Promise.all([
+        utils.studentProfile.get.invalidate(),
+        utils.learning.get.invalidate(),
+        utils.plans.currentDaily.invalidate(),
+        utils.ai.inbox.invalidate(),
+      ]);
+      toast.success("تم حفظ اختيار المدرس وطريقة المتابعة.");
     },
     onError: error => {
       setCourseModeOverrides(current => { const next = { ...current }; delete next[subjectId]; return next; });
       toast.error(error.message || "تعذّر حفظ طريقة الدراسة.");
     },
   });
+  const changeSelectedTeacher = (value: string) => {
+    if (!subjectId || updateTeacherSelection.isPending) return;
+    if (value === "__CUSTOM__") {
+      setEditingCustomTeacher(true);
+      setCustomTeacherDraft(teacherReferenceNameBase);
+      return;
+    }
+    setEditingCustomTeacher(false);
+    setCustomTeacherDraft("");
+    updateTeacherSelection.mutate({
+      subjectId,
+      courseMode,
+      teacherId: value === "__SKIP__" ? null : value,
+      teacherName: "",
+    });
+  };
+  const saveCustomTeacher = () => {
+    const name = customTeacherDraft.trim();
+    if (!name) return toast.error("اكتب اسم المدرس أولًا.");
+    updateTeacherSelection.mutate({
+      subjectId,
+      courseMode,
+      teacherId: null,
+      teacherName: name,
+    });
+    setEditingCustomTeacher(false);
+  };
   const changeCourseMode = (nextMode: "center" | "online") => {
     if (!subjectId || updateTeacherSelection.isPending || nextMode === courseMode) return;
     setCourseModeOverrides(current => ({ ...current, [subjectId]: nextMode }));
@@ -520,6 +578,47 @@ export default function Study() {
             {!visibleSubjects.length && <p className="rounded-xl bg-muted/30 p-4 text-center text-sm text-muted-foreground">لا توجد مادة مطابقة لبحثك.</p>}
           </div>
         </article>
+      </section>
+
+      <section className="sf-study-teacher-panel app-card">
+        <div className="sf-study-teacher-heading">
+          <div className="sf-study-teacher-mark"><BookOpenText className="size-5" /></div>
+          <div className="min-w-0">
+            <p className="sf-study-eyebrow">مدرس المادة</p>
+            <h2>متابعة شرح {subjectName}</h2>
+            <p>اختيار المدرس هنا يضبط متابعة الشرح والمصادر الخاصة بالمادة فقط، ولا يغير تقدمك المسجل.</p>
+          </div>
+          <span className="sf-study-teacher-current">{selectedTeacherLabel}</span>
+        </div>
+        <div className="sf-study-teacher-controls">
+          <label className="sf-study-teacher-field">
+            <span>المدرس الذي تتابعه</span>
+            <select
+              value={selectedTeacherId ?? (teacherReferenceNameBase ? "__CUSTOM__" : "__SKIP__")}
+              disabled={updateTeacherSelection.isPending}
+              onChange={event => changeSelectedTeacher(event.target.value)}
+            >
+              <option value="__SKIP__">لم أحدد مدرسًا بعد</option>
+              {teacherOptions.map(teacher => <option key={teacher.teacherId} value={teacher.teacherId}>{teacher.nameAr}</option>)}
+              <option value="__CUSTOM__">مدرس آخر — اكتب اسمه</option>
+            </select>
+          </label>
+          {(editingCustomTeacher || (!selectedTeacherId && Boolean(teacherReferenceNameBase))) && (
+            <div className="sf-study-custom-teacher">
+              <label className="sf-study-teacher-field">
+                <span>اسم المدرس</span>
+                <Input value={customTeacherDraft} onChange={event => setCustomTeacherDraft(event.target.value)}
+                  maxLength={120} placeholder="اكتب اسم المدرس" />
+              </label>
+              <Button type="button" size="sm" disabled={updateTeacherSelection.isPending || !customTeacherDraft.trim()}
+                onClick={saveCustomTeacher}>حفظ الاسم</Button>
+            </div>
+          )}
+        </div>
+        <div className="sf-study-teacher-foot">
+          <span>{selectedTeacherId || teacherReferenceNameBase ? "المدرس مرتبط بهذه المادة في ملفك الدراسي." : "تقدر تكمل تسجيل تقدمك حتى قبل اختيار مدرس."}</span>
+          {updateTeacherSelection.isPending && <span>جارٍ الحفظ…</span>}
+        </div>
       </section>
 
       <AnimatePresence>
