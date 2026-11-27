@@ -394,6 +394,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
         (form.teacherSchedules[subject.subjectId] ?? []).map(slot => ({
           dayOfWeek: slot.dayOfWeek,
           startTime: slot.startTime,
+          ...(slot.endTime ? { endTime: slot.endTime } : {}),
         })),
       ])),
       teacherScheduleUnfixedSubjectIds: selectedSubjects

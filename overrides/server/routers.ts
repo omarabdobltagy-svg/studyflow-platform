@@ -2396,6 +2396,7 @@ export const appRouter = router({
         teacherSchedules: z.record(z.string(), z.array(z.object({
           dayOfWeek: z.number().int().min(0).max(6),
           startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+          endTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
         })).max(14)).default({}),
         teacherScheduleUnfixedSubjectIds: z.array(z.string().trim().min(1).max(120)).max(20).default([]),
         teacherFrontierReports: z.record(z.string(), z.string().trim().min(1).max(120)).default({}),

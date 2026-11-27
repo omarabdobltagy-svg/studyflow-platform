@@ -10,7 +10,6 @@ type ChatMessage = { role: "user" | "assistant"; content: string };
 type AssistantTextAttachment = { id: string; name: string; content: string; size: number };
 type ChatThread = { id: string; title: string; messages: ChatMessage[]; updatedAt: number };
 const STORAGE_KEY = "studyflow.assistant.conversations.v2";
-const SELECTED_KEY = "studyflow.assistant.selected.v2";
 const suggestions = [
   "اشرح لي درسًا من منهج المادة التي أدرسها خطوة بخطوة.",
   "وضّح لي فكرة في آخر درس وصلت إليه، واربطها بشرح المدرس.",
@@ -72,11 +71,9 @@ function updateThreadMessage(
 }
 
 export default function Assistant() {
-  const [threads, setThreads] = useState<ChatThread[]>(loadThreads);
-  const [selectedId, setSelectedId] = useState(() => {
-    if (typeof window === "undefined") return "";
-    return window.localStorage.getItem(SELECTED_KEY) || "";
-  });
+  const [entryThread] = useState<ChatThread>(() => newThread());
+  const [threads, setThreads] = useState<ChatThread[]>(() => [entryThread, ...loadThreads()].slice(0, 30));
+  const [selectedId, setSelectedId] = useState(entryThread.id);
   const [streamingThreadId, setStreamingThreadId] = useState<string | null>(null);
   const [pendingAttachments, setPendingAttachments] = useState<AssistantTextAttachment[]>([]);
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
@@ -107,7 +104,6 @@ export default function Assistant() {
   useEffect(() => {
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(threads.slice(0, 30)));
-      if (activeThread?.id) window.localStorage.setItem(SELECTED_KEY, activeThread.id);
     } catch {
       toast.error("تعذّر حفظ المحادثات على هذا الجهاز.");
     }

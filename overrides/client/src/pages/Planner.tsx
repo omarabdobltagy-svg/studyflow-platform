@@ -4,7 +4,7 @@ import QueryErrorNotice from "@/components/QueryErrorNotice";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { getNextOpenPlanStep } from "@/lib/plan-actions";
-import { getPlannerTeacherSessions, type PlannerTeacherSession } from "@/lib/teacher-sessions";
+import { getPlannerTeacherSessions, groupPlannerTeacherSessions, type PlannerTeacherSession } from "@/lib/teacher-sessions";
 import { buildPlannerCurriculumLanes, getPlannerStepCurriculum as getPlanStepCurriculum, getTeacherSessionPreparationSteps } from "@/lib/planner-curriculum";
 import { ENGLISH_CURRICULUM_LABELS, displayBranchTitle, displayCurriculumTitle } from "@/lib/curriculum-display";
 import {
@@ -300,7 +300,7 @@ export default function Planner() {
   });
   const upcomingTeacherSessions = useMemo(
     () => getPlannerTeacherSessions(profile.data),
-    [profile.data?.selection, profile.data?.subjectIds, profile.data?.teacherSelections],
+    [profile.data?.selection, profile.data?.subjectIds, profile.data?.teacherSelections, profile.data?.teacherSchedules],
   );
   const learning = trpc.learning.get.useQuery(undefined, { staleTime: 15_000 });
   const tasksQuery = trpc.tasks.list.useQuery(undefined, { staleTime: 15_000 });
@@ -1213,13 +1213,7 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
     );
     return firstOpen >= 0 ? firstOpen : plan.steps.length > 0 ? 0 : null;
   });
-  useEffect(() => {
-    if (viewMode !== "map" || selectedMapStepIndex === null) return;
-    const frame = window.requestAnimationFrame(() => {
-      document.getElementById("sf-sp-flow-selection-panel")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [selectedMapStepIndex, viewMode]);
+  const teacherSessionGroups = useMemo(() => groupPlannerTeacherSessions(teacherSessions), [teacherSessions]);
   const completedCount = plan.steps.filter(step => step.plannerTaskStatus === "done" || step.existingTask?.status === "done").length;
     const subjectCount = new Set(plan.steps.map(step => getPlanStepCurriculum(step, subjectIds)?.subjectId).filter(Boolean)).size;
   const confirmedTaskCount = plan.steps.filter(step => Boolean(step.existingTask)).length;
@@ -1330,27 +1324,35 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
         <article><span>التزامات مسجلة</span><strong>{confirmedTaskCount.toLocaleString("ar-EG")}</strong></article>
       </div>
 
-      {teacherSessions.length > 0 && (
-        <section className="sf-sp-teacher-schedule" aria-label="مواعيد الحصص القادمة">
+      {teacherSessionGroups.length > 0 && (
+        <section className="sf-sp-teacher-schedule" aria-label="مواعيد المدرسين الأسبوعية">
           <header>
-            <div><span>الجدول الأسبوعي</span><h3>كل مواعيد المدرسين القادمة</h3></div>
-            <small>{teacherSessions.length.toLocaleString("ar-EG")} موعدًا قادمًا</small>
+            <div><span>الجدول الأسبوعي</span><h3>كل مواعيد كل مدرس</h3></div>
+            <small>{teacherSessions.length.toLocaleString("ar-EG")} مواعيد · {teacherSessionGroups.length.toLocaleString("ar-EG")} مدرسين</small>
           </header>
           <div className="sf-sp-teacher-session-list">
-            {teacherSessions.map(session => {
-              const preparationSteps = getTeacherSessionPreparationSteps(plan.steps, session.subjectId, subjectIds, 2, session.dateOffsetDays);
+            {teacherSessionGroups.map(group => {
+              const nearestSession = group.sessions[0];
+              const preparationSteps = getTeacherSessionPreparationSteps(plan.steps, group.subjectId, subjectIds, 2, nearestSession?.dateOffsetDays ?? 0);
               return (
-                <article key={session.key} className="sf-sp-teacher-session-card">
+                <article key={group.key} data-testid={"planner-teacher-schedule-" + group.subjectId} className="sf-sp-teacher-session-card">
                   <div className="sf-sp-teacher-session-main">
-                    <div className="sf-sp-teacher-session-time">
-                      <strong>{displayTime12Hour(session.time)}</strong>
-                      {session.endTime && <small className="sf-sp-teacher-session-end">حتى {displayTime12Hour(session.endTime)}</small>}
-                      <span>{session.dateLabel}</span>
+                    <div className="sf-sp-teacher-session-copy">
+                      <strong>{group.teacherName}</strong>
+                      <span>{group.subjectName} · {group.sessions.length.toLocaleString("ar-EG")} مواعيد أسبوعية</span>
                     </div>
-                    <div className="sf-sp-teacher-session-copy"><strong>{session.teacherName}</strong><span>{session.subjectName}</span></div>
+                  </div>
+                  <div className="sf-sp-teacher-session-slots" aria-label={"كل مواعيد " + group.teacherName}>
+                    {group.sessions.map(session => (
+                      <div key={session.key} className="sf-sp-teacher-session-slot" data-testid={"planner-teacher-slot-" + group.subjectId + "-" + session.dayOfWeek}>
+                        <span>{new Intl.DateTimeFormat("ar-EG", { timeZone: "Africa/Cairo", weekday: "long" }).format(new Date(session.sortDate + "T12:00:00.000Z"))}</span>
+                        <strong>{displayTime12Hour(session.time)}</strong>
+                        {session.endTime && <small>حتى {displayTime12Hour(session.endTime)}</small>}
+                      </div>
+                    ))}
                   </div>
                   <div className="sf-sp-session-preparation">
-                    <span className="sf-sp-session-preparation-label">متراكم المادة حتى يوم الحصة</span>
+                    <span className="sf-sp-session-preparation-label">التحضير قبل أقرب موعد</span>
                     {preparationSteps.length > 0 ? (
                       <div className="sf-sp-session-preparation-list">
                         {preparationSteps.map(step => {
@@ -1377,9 +1379,9 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
               );
             })}
           </div>
-          <p>تظهر هنا المهام المفتوحة للمادة التي تقع في الخطة حتى يوم الحصة. لا يفترض النظام وقت تنفيذ المهمة داخل اليوم، ولا مدة المحاضرة أو وقت انتهائها.</p>
         </section>
       )}
+
       {plan.executionStrategy && (
         <section className="sf-sp-plan-rationale">
           <span className="sf-sp-eyebrow">ترتيب التنفيذ</span>

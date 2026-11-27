@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getPlannerTeacherSessions, getTeacherLectureDuration, mergeSuggestedTeacherScheduleSlots } from "./teacher-sessions";
+import { getPlannerTeacherSessions, getTeacherLectureDuration, groupPlannerTeacherSessions, mergeSuggestedTeacherScheduleSlots } from "./teacher-sessions";
 
 describe("getPlannerTeacherSessions", () => {
   it("keeps both default weekly sessions for one teacher", () => {
@@ -175,5 +175,39 @@ describe("getTeacherLectureDuration", () => {
 
   it("rejects malformed time values", () => {
     expect(getTeacherLectureDuration("29:00", "30:00")).toBeNull();
+  });
+});
+
+
+describe("legacy teacher schedule maps and weekly groups", () => {
+  it("uses profile-level schedule slots when selection has no entries", () => {
+    const profile = {
+      subjectIds: ["ENG1_G2_BAC"],
+      teacherSelections: { ENG1_G2_BAC: "T_EN_MAHMOUD_RADWAN" },
+      selection: { teacherChoices: { ENG1_G2_BAC: "T_EN_MAHMOUD_RADWAN" }, teacherSchedules: {} },
+      teacherSchedules: { ENG1_G2_BAC: [
+        { dayOfWeek: 0, startTime: "21:00" },
+        { dayOfWeek: 3, startTime: "21:00" },
+      ] },
+    };
+    const result = getPlannerTeacherSessions(profile, new Date("2026-11-27T12:00:00.000Z"));
+    expect(result).toHaveLength(2);
+    expect(result.map(item => item.dayOfWeek)).toEqual([0, 3]);
+  });
+
+  it("groups both Sunday and Wednesday appointments for the same teacher", () => {
+    const result = getPlannerTeacherSessions({
+      subjectIds: ["ENG1_G2_BAC"],
+      selection: { teacherChoices: { ENG1_G2_BAC: "T_EN_MAHMOUD_RADWAN" }, teacherSchedules: {
+        ENG1_G2_BAC: [
+          { dayOfWeek: 0, startTime: "21:00", endTime: "22:30" },
+          { dayOfWeek: 3, startTime: "21:00", endTime: "22:30" },
+        ],
+      } },
+    }, new Date("2026-11-27T12:00:00.000Z"));
+    const groups = groupPlannerTeacherSessions(result);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].sessions.map(item => item.dayOfWeek)).toEqual([0, 3]);
+    expect(groups[0].sessions.map(item => item.endTime)).toEqual(["22:30", "22:30"]);
   });
 });

@@ -56,19 +56,23 @@ export type PlannerTeacherSession = {
   endTime?: string;
   sortDate: string;
   dateOffsetDays: number;
+  dayOfWeek: number;
 };
 
 export function getPlannerTeacherSessions(profile?: {
   subjectIds?: string[];
   teacherSelections?: Record<string, string>;
   selection?: unknown;
+  teacherSchedules?: Record<string, TeacherScheduleSlot[]>;
 } | null, now = new Date()): PlannerTeacherSession[] {
   if (!profile?.subjectIds?.length) return [];
   const rawSelection = profile.selection ?? {};
   const selection = (typeof rawSelection === "string"
     ? (() => { try { return JSON.parse(rawSelection) as Record<string, any>; } catch { return {}; } })()
     : rawSelection) as Record<string, any>;
-  const schedules = (selection.teacherSchedules ?? (profile as any).teacherSchedules ?? {}) as Record<string, TeacherScheduleSlot[]>;
+  const rootSchedules = profile.teacherSchedules ?? {};
+  const selectedSchedules = (selection.teacherSchedules ?? {}) as Record<string, TeacherScheduleSlot[]>;
+  const schedules = { ...rootSchedules, ...selectedSchedules };
   const teacherChoices = {
     ...((profile.teacherSelections ?? {}) as Record<string, string>),
     ...((selection.teacherChoices ?? {}) as Record<string, string>),
@@ -123,8 +127,36 @@ export function getPlannerTeacherSessions(profile?: {
         ...(slot.endTime ? { endTime: slot.endTime } : {}),
         sortDate,
         dateOffsetDays,
+        dayOfWeek: slot.dayOfWeek,
       });
     }
   }
   return sessions.sort((a, b) => a.sortDate.localeCompare(b.sortDate) || a.time.localeCompare(b.time));
+}
+
+
+export type PlannerTeacherSessionGroup = {
+  key: string;
+  subjectId: string;
+  subjectName: string;
+  teacherName: string;
+  sessions: PlannerTeacherSession[];
+};
+
+export function groupPlannerTeacherSessions(sessions: PlannerTeacherSession[]): PlannerTeacherSessionGroup[] {
+  const groups = new Map<string, PlannerTeacherSessionGroup>();
+  for (const session of sessions) {
+    const key = session.subjectId + "::" + session.teacherName;
+    const group = groups.get(key);
+    if (group) group.sessions.push(session);
+    else groups.set(key, {
+      key, subjectId: session.subjectId, subjectName: session.subjectName,
+      teacherName: session.teacherName, sessions: [session],
+    });
+  }
+  return [...groups.values()].map(group => ({
+    ...group,
+    sessions: group.sessions.slice().sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.time.localeCompare(b.time)),
+  })).sort((a, b) => a.sessions[0].sortDate.localeCompare(b.sessions[0].sortDate)
+    || a.sessions[0].time.localeCompare(b.sessions[0].time));
 }
