@@ -216,10 +216,15 @@ function displayPlanStepTitle(step: PlanStep, subjectIds: string[]): string {
         + (curriculum.unitTitle ? " — " + curriculum.unitTitle : "")
       : curriculum.unitTitle || "القصة المقررة";
     const lessonKind = curriculum.lessonType === "story" ? "Chapter" : "Lesson";
+    const officialSequence = String(curriculum.lessonNumber);
+    const unitSequenceMatch = officialSequence.match(/^\\d+\\.(\\d+)$/);
+    const lessonLabel = unitSequenceMatch && curriculum.unitNumber
+      ? lessonKind + " " + unitSequenceMatch[1] + " (" + officialSequence + ")"
+      : lessonKind + " " + officialSequence;
     const segment = step.segmentIndex && step.segmentCount && step.segmentCount > 1
       ? " — الجزء " + step.segmentIndex.toLocaleString("ar-EG") + " من " + step.segmentCount.toLocaleString("ar-EG")
       : "";
-    return [unitLabel, lessonKind + " " + curriculum.lessonNumber, curriculum.lesson]
+    return [unitLabel, lessonLabel, curriculum.lesson]
       .filter(Boolean).join(" · ") + segment;
   }
 
