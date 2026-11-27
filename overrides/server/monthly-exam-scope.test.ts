@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { getSIECheckpointProgressBranches } from "./sie-catalog";
-import { buildMonthlyExamCoveredScope } from "./monthly-exam-scope";
+import { getSIECheckpointProgressBranches } from "@shared/sie-catalog";
+import { buildMonthlyExamCoveredScope } from "@shared/monthly-exam-scope";
 
 describe("monthly exam covered-content scope", () => {
   it("uses only lessons up to the explicitly saved teacher frontier", () => {
