@@ -958,24 +958,10 @@ export default function Planner() {
                   <span className="sf-plan-generation-inline-mark"><Loader2 className="size-4 animate-spin" /></span>
                   <div><strong>نعيد ترتيب خريطة مذاكرتك الآن</strong><p>الصف: {SIE_CATALOG_META.gradeYear} · يتم تحديث التوزيع في الخلفية.</p></div>
                 </div>
-                {showGenerationDetails ? (
-                  <PlanLoading
-                    progress={generationProgress.data ?? null}
-                    gradeLabel={SIE_CATALOG_META.gradeYear}
-                    onHide={() => {
-                      setGenerationDetailsHiddenForRun(true);
-                      setShowGenerationDetails(false);
-                    }}
-                  />
-                ) : (
-                  <PlanGenerationInlineStatus
-                    progress={generationProgress.data ?? null}
-                    onShow={() => {
-                      setGenerationDetailsHiddenForRun(false);
-                      setShowGenerationDetails(true);
-                    }}
-                  />
-                )}
+                <PlanLoading
+                  progress={generationProgress.data ?? null}
+                  gradeLabel={SIE_CATALOG_META.gradeYear}
+                />
               </section>
             ) : planNeedsRefresh && approved ? (
               <section className="sf-sp-generation-in-distribution" role="status" aria-live="polite">
