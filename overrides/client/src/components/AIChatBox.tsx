@@ -132,54 +132,48 @@ export function AIChatBox({
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const recognitionRef = useRef<any>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const inputAreaRef = useRef<HTMLFormElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const shouldFollowScrollRef = useRef(true);
 
   // Filter out system messages
   const displayMessages = messages.filter((msg) => msg.role !== "system");
 
-  // Calculate min-height for last assistant message to push user message to top
-  const [minHeightForLastMessage, setMinHeightForLastMessage] = useState(0);
+  const getScrollViewport = () => scrollAreaRef.current?.querySelector(
+    '[data-radix-scroll-area-viewport]'
+  ) as HTMLDivElement | null;
+
+  const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
+    const viewport = getScrollViewport();
+    if (!viewport) return;
+    requestAnimationFrame(() => {
+      viewport.scrollTo({ top: viewport.scrollHeight, behavior });
+    });
+  };
+
+  // Track whether the student is following the newest answer. Token updates
+  // never pull the viewport down after the student has intentionally scrolled up.
+  useEffect(() => {
+    const viewport = getScrollViewport();
+    if (!viewport) return;
+    const updateFollowState = () => {
+      const remaining = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+      shouldFollowScrollRef.current = remaining < 120;
+    };
+    viewport.addEventListener("scroll", updateFollowState, { passive: true });
+    updateFollowState();
+    return () => viewport.removeEventListener("scroll", updateFollowState);
+  }, [displayMessages.length]);
 
   useEffect(() => {
-    if (containerRef.current && inputAreaRef.current) {
-      const containerHeight = containerRef.current.offsetHeight;
-      const inputHeight = inputAreaRef.current.offsetHeight;
-      const scrollAreaHeight = containerHeight - inputHeight;
-
-      // Reserve space for:
-      // - padding (p-4 = 32px top+bottom)
-      // - user message: 40px (item height) + 16px (margin-top from space-y-4) = 56px
-      // Note: margin-bottom is not counted because it naturally pushes the assistant message down
-      const userMessageReservedHeight = 56;
-      const calculatedHeight = scrollAreaHeight - 32 - userMessageReservedHeight;
-
-      setMinHeightForLastMessage(Math.max(0, calculatedHeight));
-    }
-  }, []);
-
-  // Scroll to bottom helper function with smooth animation
-  const scrollToBottom = () => {
-    const viewport = scrollAreaRef.current?.querySelector(
-      '[data-radix-scroll-area-viewport]'
-    ) as HTMLDivElement;
-
-    if (viewport) {
-      requestAnimationFrame(() => {
-        viewport.scrollTo({
-          top: viewport.scrollHeight,
-          behavior: 'smooth'
-        });
-      });
-    }
-  };
+    if (shouldFollowScrollRef.current) scrollToBottom("auto");
+  }, [messages, isLoading]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmedInput = input.trim();
     if (!trimmedInput || isLoading) return;
 
+    shouldFollowScrollRef.current = true;
     onSendMessage(trimmedInput);
     setInput("");
 
@@ -229,7 +223,6 @@ export function AIChatBox({
 
   return (
     <div
-      ref={containerRef}
       className={cn(
         "ai-chat-shell flex flex-col overflow-hidden rounded-[1.35rem] border border-primary/10 bg-card text-card-foreground shadow-[0_24px_70px_-35px_rgba(45,37,92,.6)]",
         className
@@ -251,7 +244,10 @@ export function AIChatBox({
                   {suggestedPrompts.map((prompt, index) => (
                     <button
                       key={index}
-                      onClick={() => onSendMessage(prompt)}
+                      onClick={() => {
+                        shouldFollowScrollRef.current = true;
+                        onSendMessage(prompt);
+                      }}
                       disabled={isLoading}
                       className="rounded-lg border border-border bg-card px-4 py-2 text-sm transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
                     >
@@ -266,10 +262,8 @@ export function AIChatBox({
           <ScrollArea className="h-full">
             <div className="flex flex-col space-y-4 p-4">
               {displayMessages.map((message, index) => {
-                // Apply min-height to last message only if NOT loading (when loading, the loading indicator gets it)
                 const isLastMessage = index === displayMessages.length - 1;
-                const shouldApplyMinHeight =
-                  isLastMessage && !isLoading && minHeightForLastMessage > 0;
+                const isStreamingAssistant = isLoading && isLastMessage && message.role === "assistant";
 
                 return (
                   <div
@@ -280,11 +274,6 @@ export function AIChatBox({
                         ? "justify-end items-start"
                         : "justify-start items-start"
                     )}
-                    style={
-                      shouldApplyMinHeight
-                        ? { minHeight: `${minHeightForLastMessage}px` }
-                        : undefined
-                    }
                   >
                     {message.role === "assistant" && (
                       <div className="size-8 shrink-0 mt-1 rounded-full bg-primary/10 flex items-center justify-center">
@@ -301,8 +290,15 @@ export function AIChatBox({
                       )}
                     >
                       {message.role === "assistant" ? (
-                        <div className="prose prose-sm dark:prose-invert max-w-none">
-                          <Streamdown>{message.content}</Streamdown>
+                        <div className="sf-ai-stream-message">
+                          {message.content ? (
+                            <div className="prose prose-sm dark:prose-invert max-w-none">
+                              <Streamdown>{message.content}</Streamdown>
+                            </div>
+                          ) : isStreamingAssistant ? (
+                            <span className="sf-ai-stream-empty" role="status">المساعد بيكتب الرد الآن<span className="sf-ai-stream-dots" aria-hidden="true"><i /><i /><i /></span></span>
+                          ) : null}
+                          {isStreamingAssistant && Boolean(message.content) && <span className="sf-ai-stream-cursor" aria-hidden="true" />}
                         </div>
                       ) : (
                         <p className="whitespace-pre-wrap text-sm">
@@ -320,23 +316,6 @@ export function AIChatBox({
                 );
               })}
 
-              {isLoading && (
-                <div
-                  className="flex items-start gap-3"
-                  style={
-                    minHeightForLastMessage > 0
-                      ? { minHeight: `${minHeightForLastMessage}px` }
-                      : undefined
-                  }
-                >
-                  <div className="size-8 shrink-0 mt-1 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Sparkles className="size-4 text-primary" />
-                  </div>
-                  <div className="rounded-lg bg-muted px-4 py-2.5">
-                    <Loader2 className="size-4 animate-spin text-muted-foreground" />
-                  </div>
-                </div>
-              )}
             </div>
           </ScrollArea>
         )}
@@ -344,7 +323,6 @@ export function AIChatBox({
 
       {/* Input Area */}
       <form
-        ref={inputAreaRef}
         onSubmit={handleSubmit}
         className="flex flex-col gap-2 border-t bg-background/50 p-3 sm:p-4"
       >
