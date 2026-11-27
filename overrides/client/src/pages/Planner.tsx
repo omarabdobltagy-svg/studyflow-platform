@@ -183,15 +183,26 @@ function getPlanStepCurriculum(step: PlanStep, subjectIds: string[]) {
       subject: getSIESubject(subjectId)?.nameAr ?? "مادة دراسية",
       branch: displayBranchTitle(branch.branchTitle),
       lesson: displayCurriculumTitle(choice.title),
+      unitNumber: choice.unitNumber,
+      unitTitle: choice.unitTitle,
+      lessonNumber: choice.lessonNumber,
+      lessonType: choice.lessonType,
     };
   }
   const match = matchSIECheckpointTask(subjectIds, [step.title, step.detail, step.category].join(" "));
   if (match) {
+    const choice = getSIECheckpointProgressBranches(match.subjectId)
+      .flatMap(branch => branch.choices)
+      .find(item => item.nodeId === match.nodeId);
     return {
       subjectId: match.subjectId,
       subject: getSIESubject(match.subjectId)?.nameAr ?? "مادة دراسية",
       branch: displayBranchTitle(match.branchTitle),
       lesson: displayCurriculumTitle(match.title),
+      unitNumber: choice?.unitNumber,
+      unitTitle: choice?.unitTitle,
+      lessonNumber: choice?.lessonNumber,
+      lessonType: choice?.lessonType,
     };
   }
   return null;
@@ -199,6 +210,19 @@ function getPlanStepCurriculum(step: PlanStep, subjectIds: string[]) {
 
 function displayPlanStepTitle(step: PlanStep, subjectIds: string[]): string {
   const curriculum = getPlanStepCurriculum(step, subjectIds);
+  if (curriculum?.subjectId === "ENG1_G2_BAC" && curriculum.lessonNumber) {
+    const unitLabel = curriculum.unitNumber
+      ? "الوحدة " + curriculum.unitNumber.toLocaleString("ar-EG")
+        + (curriculum.unitTitle ? " — " + curriculum.unitTitle : "")
+      : curriculum.unitTitle || "القصة المقررة";
+    const lessonKind = curriculum.lessonType === "story" ? "Chapter" : "Lesson";
+    const segment = step.segmentIndex && step.segmentCount && step.segmentCount > 1
+      ? " — الجزء " + step.segmentIndex.toLocaleString("ar-EG") + " من " + step.segmentCount.toLocaleString("ar-EG")
+      : "";
+    return [unitLabel, lessonKind + " " + curriculum.lessonNumber, curriculum.lesson]
+      .filter(Boolean).join(" · ") + segment;
+  }
+
   const hasLatinText = /[A-Za-z]{3,}/.test(String(step.title ?? ""));
   if (curriculum && hasLatinText) {
     const segment = step.segmentIndex && step.segmentCount && step.segmentCount > 1
@@ -1099,6 +1123,10 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
   const completedCount = plan.steps.filter(step => step.plannerTaskStatus === "done" || step.existingTask?.status === "done").length;
     const subjectCount = new Set(plan.steps.map(step => getPlanStepCurriculum(step, subjectIds)?.subjectId).filter(Boolean)).size;
   const confirmedTaskCount = plan.steps.filter(step => Boolean(step.existingTask)).length;
+  const coveredCurriculumCount = new Set(plan.steps.flatMap(step => step.curriculumNodeIds ?? [])).size;
+  const plannedReviewCount = plan.steps.filter(step =>
+    Boolean(step.resourceRecommendation && /مراجعة|review|revision/i.test(step.resourceRecommendation.reason || ""))
+  ).length;
   const phaseLabels: Record<string,string> = {
     backlog: "التزامات مفتوحة",
     teacher_sync: "شرح قبل الحصة",
@@ -1162,7 +1190,8 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
       <div className="sf-sp-board-metrics">
         <article><span>إجمالي الخطوات</span><strong>{plan.steps.length.toLocaleString("ar-EG")}</strong></article>
         <article><span>الخطوات المكتملة</span><strong>{completedCount.toLocaleString("ar-EG")}</strong></article>
-        <article><span>المواد الممثلة</span><strong>{subjectCount.toLocaleString("ar-EG")}</strong></article>
+        <article><span>نقاط المنهج المغطاة</span><strong>{coveredCurriculumCount.toLocaleString("ar-EG")}</strong></article>
+        <article><span>فيديوهات مراجعة مناسبة</span><strong>{plannedReviewCount.toLocaleString("ar-EG")}</strong></article>
         <article><span>التزامات مسجلة</span><strong>{confirmedTaskCount.toLocaleString("ar-EG")}</strong></article>
       </div>
 
@@ -1233,6 +1262,7 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
                             {step.scheduleState === "deferred" && <span>مؤجلة للدورة القادمة</span>}
                             {isDone && <span>مكتملة</span>}
                             {(formatDate(step.existingTask?.dueAt) || step.day) && <span>يوم التنفيذ: {formatDate(step.existingTask?.dueAt) || step.day}</span>}
+                            {step.minutes > 0 && <span>المدة: {step.minutes.toLocaleString("ar-EG")} دقيقة</span>}
                           </div>
                           <h4>{titleText}</h4>
                           {!curriculum && <small className="sf-sp-source-title">{displayPlanStepCategory(step, subjectIds)}</small>}
@@ -1260,7 +1290,7 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
                             </details>
                           )}
                           {step.priorityReason && <details className="sf-sp-step-extra"><summary>لماذا ظهرت هذه الخطوة في الخطة؟</summary><p>{displayArabicText(step.priorityReason,"تم اختيارها حسب ترتيب تقدمك والالتزامات المسجلة.")}</p></details>}
-                          {step.resourceRecommendation && <a className="sf-sp-resource-link" href={step.resourceRecommendation.url} target="_blank" rel="noreferrer">افتح شرح المدرس المقترح <ArrowUpRight className="size-3.5" /></a>}
+                          {step.resourceRecommendation && <a className="sf-sp-resource-link" href={step.resourceRecommendation.url} target="_blank" rel="noreferrer">{/مراجعة|review|revision/i.test(step.resourceRecommendation.reason || "") ? "شاهد جزء المراجعة المقترح" : "افتح شرح المدرس المقترح"} <ArrowUpRight className="size-3.5" /></a>}
                           {editable && (
                             <div className="sf-sp-step-actions">
                               <Button type="button" size="sm" variant="ghost" onClick={()=>setEditing({index,title:step.title,detail:step.detail})}>تعديل</Button>
