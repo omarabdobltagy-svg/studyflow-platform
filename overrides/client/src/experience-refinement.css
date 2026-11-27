@@ -1091,3 +1091,88 @@ body[data-studyflow-sections-open="true"] .sf-hub-root {
 @media(prefers-reduced-motion:reduce) {
   .sf-sp-pace-choice { transition:none !important; }
 }
+
+
+/* Unified icon semantics: neutral by default, lime only for the active destination. */
+.sf-shell-v3 .sf-nav-list .sf-nav-item .sf-nav-icon,
+.sf-shell-v3 .sf-mobile-sheet .sf-nav-item .sf-nav-icon {
+  color: rgba(222, 231, 207, .72) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  filter: none !important;
+  transition: color .18s ease, opacity .18s ease;
+}
+.sf-shell-v3 .sf-nav-list .sf-nav-item:hover .sf-nav-icon,
+.sf-shell-v3 .sf-mobile-sheet .sf-nav-item:hover .sf-nav-icon {
+  color: #F5F7EF !important;
+}
+.sf-shell-v3 .sf-nav-list .sf-nav-item.is-active .sf-nav-icon,
+.sf-shell-v3 .sf-mobile-sheet .sf-nav-item.is-active .sf-nav-icon {
+  color: #C9ED62 !important;
+  background: transparent !important;
+}
+.sf-shell-v3 .sf-desktop-dock .sf-dock-icon {
+  color: rgba(222, 231, 207, .72) !important;
+}
+.sf-shell-v3 .sf-desktop-dock .sf-dock-item:hover .sf-dock-icon {
+  color: #F5F7EF !important;
+}
+.sf-shell-v3 .sf-desktop-dock .sf-dock-item.is-active .sf-dock-icon,
+.sf-shell-v3 .sf-mobile-dock-item.is-active svg {
+  color: #C9ED62 !important;
+}
+.sf-shell-v3 .sf-mobile-dock-item svg {
+  color: rgba(222, 231, 207, .72) !important;
+}
+.sf-shell-v3 .sf-nav-indicator {
+  color: transparent !important;
+  background: #C9ED62 !important;
+}
+
+/* Study plan as a connected execution path rather than disconnected task tiles. */
+.sf-sp-day-items {
+  position: relative;
+  isolation: isolate;
+}
+.sf-sp-day-items::before {
+  position: absolute;
+  z-index: 0;
+  content: "";
+  inset-block: 30px 30px;
+  inset-inline-start: 29px;
+  width: 1px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--primary) 58%, transparent),
+    color-mix(in srgb, var(--primary) 18%, transparent)
+  );
+  pointer-events: none;
+}
+.sf-sp-plan-step {
+  position: relative;
+  z-index: 1;
+  align-items: start;
+  transition: background-color .18s ease;
+}
+.sf-sp-plan-step:hover {
+  background: color-mix(in srgb, var(--primary) 3.5%, transparent);
+}
+.sf-sp-step-index {
+  position: relative;
+  z-index: 2;
+  border-radius: 999px !important;
+  background: var(--background);
+  box-shadow: 0 0 0 4px var(--background);
+}
+.sf-sp-plan-step.is-done .sf-sp-step-index {
+  background: color-mix(in srgb, #72977a 10%, var(--background));
+}
+.sf-sp-board-metrics {
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+}
+@media (max-width: 640px) {
+  .sf-sp-day-items::before { inset-inline-start: 26px; }
+  .sf-sp-phase-group .sf-sp-plan-step { grid-template-columns: 28px minmax(0, 1fr); gap: 10px; padding: 13px 12px; }
+  .sf-sp-step-index { width: 28px; height: 28px; }
+  .sf-sp-board-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
