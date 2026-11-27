@@ -2641,50 +2641,240 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         const profile = await getStudentProfile(ctx.user.id);
-        if (!profile || !profile.subjectIds.includes(input.subjectId)) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "اختر مادة موجودة في ملفك الدراسي." });
+        if (!profile || profile.educationSystem !== "baccalaureate" || !profile.subjectIds.includes(input.subjectId)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "هذه المادة غير موجودة في ملف البكالوريا." });
         }
         const subject = getSIESubject(input.subjectId);
         const branch = getSIECheckpointBranches(input.subjectId).find(item => item.branchId === input.branchId);
-        if (!subject || !branch) throw new TRPCError({ code: "BAD_REQUEST", message: "فرع المنهج غير موجود في الفهرس الحالي." });
+        if (!subject || !branch || !/_G2_BAC$/.test(input.subjectId)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "فرع المنهج غير موجود في الفهرس الحالي." });
+        }
         const selection = (profile.selection ?? {}) as Record<string, any>;
-        const teacherId = input.teacherId || selection.teacherChoices?.[input.subjectId] || profile.teacherSelections?.[input.subjectId];
-        const teacher = teacherId ? getSIETeacher(teacherId) : undefined;
-        if (teacher && !teacher.subjectIds.includes(input.subjectId)) {
+        const selectedTeacherId = input.teacherId || selection.teacherChoices?.[input.subjectId] || profile.teacherSelections?.[input.subjectId];
+        const selectedTeacher = selectedTeacherId ? getSIETeacher(selectedTeacherId) : undefined;
+        if (selectedTeacher && !selectedTeacher.subjectIds.includes(input.subjectId)) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "المدرس المحدد لا يرتبط بهذه المادة." });
         }
-        const query = [teacher?.nameAr, subject.nameAr, branch.branchTitle, "مراجعة", "البكالوريا المصرية", SIE_CATALOG_META.academicYear].filter(Boolean).join(" ");
+        const normalize = (value: string) => value.normalize("NFKC")
+          .toLocaleLowerCase("ar")
+          .replace(/[أإآٱ]/g, "ا")
+          .replace(/ة/g, "ه")
+          .replace(/ى/g, "ي")
+          .replace(/[ً-ٰٟـ]/g, "")
+          .replace(/[^\p{L}\p{N}]+/gu, " ")
+          .trim();
+        const normalizedTokens = (value: string) => normalize(value).split(/\s+/).filter(token => token.length >= 2);
+        const extractVideoId = (rawUrl: string): string | null => {
+          try {
+            const parsed = new URL(rawUrl);
+            if (parsed.protocol !== "https:") return null;
+            const host = parsed.hostname.toLowerCase();
+            if (host === "youtu.be" || host === "www.youtu.be") {
+              const id = parsed.pathname.replace(/^\/+/, "").split("/")[0];
+              return /^[A-Za-z0-9_-]{6,20}$/.test(id) ? id : null;
+            }
+            if (!["youtube.com", "www.youtube.com", "m.youtube.com", "www.youtube-nocookie.com"].includes(host)) return null;
+            const id = parsed.searchParams.get("v")
+              || parsed.pathname.match(/^\/(?:shorts|embed)\/([A-Za-z0-9_-]{6,20})/)?.[1];
+            return id && /^[A-Za-z0-9_-]{6,20}$/.test(id) ? id : null;
+          } catch {
+            return null;
+          }
+        };
+        const knownAlternativeTeachers = getSIETeachersForSubject(input.subjectId, "EG_BACCALAUREATE")
+          .filter(candidate => candidate.teacherId !== selectedTeacherId);
+        const declinedIds = new Set(Array.isArray(selection.declinedAlternativeReviewVideoIds)
+          ? selection.declinedAlternativeReviewVideoIds.filter((value: unknown): value is string => typeof value === "string")
+          : []);
+        const acceptedIds = new Set(Array.isArray(selection.acceptedAlternativeReviewVideoIds)
+          ? selection.acceptedAlternativeReviewVideoIds.filter((value: unknown): value is string => typeof value === "string")
+          : []);
+        const query = [subject.nameAr, branch.branchTitle, "مراجعة", "البكالوريا المصرية", SIE_CATALOG_META.academicYear].join(" ");
         const result = await callDataApi("Youtube/search", { query: { gl: "EG", hl: "ar", q: query } }) as {
           items?: Array<Record<string, unknown>>;
           videos?: Array<Record<string, unknown>>;
         };
         const rawItems = Array.isArray(result?.items) ? result.items : Array.isArray(result?.videos) ? result.videos : [];
+        const seen = new Set<string>();
         const items = rawItems.flatMap(item => {
-          const title = String(item.title ?? item.videoTitle ?? item.name ?? "").trim();
-          const channelTitle = String(item.channelTitle ?? item.channel_name ?? item.channel ?? "").trim();
-          const url = String(item.url ?? item.link ?? item.videoUrl ?? "").trim();
-          if (!title || !/^https:\/\/(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)/i.test(url)) return [];
-          const haystack = (title + " " + channelTitle).toLocaleLowerCase();
-          const teacherMatch = teacher ? haystack.includes(teacher.nameAr.toLocaleLowerCase()) : false;
-          const branchMatch = haystack.includes(branch.branchTitle.toLocaleLowerCase());
-          const subjectMatch = haystack.includes(subject.nameAr.toLocaleLowerCase());
-          const matchedSignals = Number(teacherMatch) + Number(branchMatch) + Number(subjectMatch);
+          const title = String(item.title ?? item.videoTitle ?? item.name ?? "").trim().slice(0, 240);
+          const channelTitle = String(item.channelTitle ?? item.channel_name ?? item.channel ?? "").trim().slice(0, 160);
+          const rawUrl = String(item.url ?? item.link ?? item.videoUrl ?? "").trim();
+          const videoId = extractVideoId(rawUrl);
+          const description = String(item.description ?? item.snippet ?? "").slice(0, 700);
+          if (!title || !channelTitle || !videoId || seen.has(videoId)) return [];
+          const reviewText = normalize(title + " " + description);
+          if (!/مراجعه|مراجعات|revision|review/.test(reviewText)) return [];
+          const normalizedChannel = normalize(channelTitle);
+          const alternativeTeacher = knownAlternativeTeachers.find(candidate => {
+            const identities = [candidate.nameAr, candidate.brandName].map(normalize).filter(Boolean);
+            return identities.some(identity => normalizedChannel === identity
+              || normalizedChannel.includes(identity)
+              || identity.includes(normalizedChannel));
+          });
+          if (!alternativeTeacher) return [];
+          const externalId = "youtube:" + videoId;
+          if (declinedIds.has(externalId)) return [];
+          seen.add(videoId);
+          const combined = normalize(title + " " + description);
+          const branchTokens = normalizedTokens(branch.branchTitle);
+          const subjectTokens = normalizedTokens(subject.nameAr);
+          const branchMatch = branchTokens.some(token => combined.includes(token));
+          const subjectMatch = subjectTokens.some(token => combined.includes(token));
+          const matchedSignals = Number(branchMatch) + Number(subjectMatch) + 1;
           return [{
-            title, channelTitle: channelTitle || "قناة غير محددة", url,
+            externalId,
+            teacherId: alternativeTeacher.teacherId,
+            teacherName: alternativeTeacher.nameAr,
+            teacherBrand: alternativeTeacher.brandName,
+            title,
+            channelTitle,
+            url: "https://www.youtube.com/watch?v=" + videoId,
             publishedAt: String(item.publishedAt ?? item.published_at ?? ""),
-            description: String(item.description ?? item.snippet ?? "").slice(0, 500),
+            description,
             matchedSignals,
-            relevance: matchedSignals >= 2 ? "مرتبط بدرجة جيدة بعنوان البحث" : matchedSignals === 1 ? "تطابق جزئي؛ راجع محتوى الفيديو" : "تحتاج لمراجعة يدوية قبل الاعتماد",
+            accepted: acceptedIds.has(externalId),
+            verificationState: "catalog_teacher_identity_only" as const,
+            relevance: matchedSignals >= 2
+              ? "مدرس بديل معروف للمادة؛ يلزم تحليل محتوى الفيديو قبل ربطه بالمنهج"
+              : "هوية المدرس معروفة، لكن تطابق الفرع غير مؤكد من العنوان؛ سيُفحص محتوى الفيديو بعد موافقتك",
           }];
-        }).sort((a,b) => b.matchedSignals - a.matchedSignals).slice(0, 8);
-        await logStudentActivity(ctx.user.id, "learning.review_search", "curriculum_branch", input.branchId, "تم البحث عن مراجعات للفرع الدراسي", {
-          subjectId: input.subjectId, teacherId: teacherId ?? null, resultCount: items.length,
+        }).sort((a, b) => Number(b.accepted) - Number(a.accepted) || b.matchedSignals - a.matchedSignals).slice(0, 10);
+        await logStudentActivity(ctx.user.id, "learning.review_search", "curriculum_branch", input.branchId, "تم البحث عن مراجعات بديلة لمدرس المادة", {
+          subjectId: input.subjectId,
+          selectedTeacherId: selectedTeacherId ?? null,
+          resultCount: items.length,
         });
         return {
-          query, subject: subject.nameAr, branch: branch.branchTitle, teacher: teacher?.nameAr ?? null,
+          query, subject: subject.nameAr, branch: branch.branchTitle,
+          selectedTeacher: selectedTeacher?.nameAr ?? null,
           source: "YouTube", items,
-          note: "هذه نتائج بحث وليست اعتمادًا رسميًا لمحتوى المدرس أو ترتيبًا مضمونًا للمراجعة. افتح الفيديو وتأكد من مطابقته للمنهج والفرع.",
+          note: "هوية المدرس مطابقة لدليل المدرسين، لكن هذا لا يثبت أن الفيديو يغطي الفرع. لا يدخل الفيديو في الخطة إلا بعد موافقتك، ثم تحليل محتواه ومطابقة موضوعاته مع المنهج الرسمي.",
         };
+      }),
+    acceptAlternativeReview: protectedProcedure
+      .input(z.object({
+        subjectId: z.string().trim().min(1).max(80),
+        branchId: z.string().trim().min(1).max(120),
+        teacherId: z.string().trim().min(1).max(80),
+        externalId: z.string().regex(/^youtube:[A-Za-z0-9_-]{6,20}$/),
+        title: z.string().trim().min(3).max(240),
+        url: z.string().url().max(500),
+        description: z.string().max(700).optional(),
+        publishedAt: z.string().max(80).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const profile = await getStudentProfile(ctx.user.id);
+        if (!profile || profile.educationSystem !== "baccalaureate" || !profile.subjectIds.includes(input.subjectId)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "هذه المادة غير موجودة في ملف البكالوريا." });
+        }
+        const branch = getSIECheckpointBranches(input.subjectId).find(item => item.branchId === input.branchId);
+        const teacher = getSIETeacher(input.teacherId);
+        if (!branch || !teacher || !teacher.subjectIds.includes(input.subjectId)
+          || !teacher.systemCourseVerification?.EG_BACCALAUREATE
+          || teacher.systemCourseVerification.EG_BACCALAUREATE === "not_verified_for_2026_2027") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "المدرس أو الفرع غير معتمد لهذه المادة." });
+        }
+        const selection = (profile.selection ?? {}) as Record<string, any>;
+        const selectedTeacherId = selection.teacherChoices?.[input.subjectId] || profile.teacherSelections?.[input.subjectId];
+        if (selectedTeacherId === input.teacherId) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "هذا هو مدرسك المحدد بالفعل، وليس مراجعة بديلة." });
+        }
+        const externalIdFromUrl = (() => {
+          try {
+            const parsed = new URL(input.url);
+            if (parsed.protocol !== "https:") return null;
+            if (parsed.hostname === "youtu.be" || parsed.hostname === "www.youtu.be") return parsed.pathname.replace(/^\/+/, "").split("/")[0];
+            if (!["youtube.com", "www.youtube.com", "m.youtube.com", "www.youtube-nocookie.com"].includes(parsed.hostname.toLowerCase())) return null;
+            return parsed.searchParams.get("v") || parsed.pathname.match(/^\/(?:shorts|embed)\/([A-Za-z0-9_-]{6,20})/)?.[1] || null;
+          } catch { return null; }
+        })();
+        const expectedExternalId = externalIdFromUrl && /^[A-Za-z0-9_-]{6,20}$/.test(externalIdFromUrl)
+          ? "youtube:" + externalIdFromUrl : "";
+        if (!expectedExternalId || expectedExternalId !== input.externalId) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "رابط الفيديو لا يطابق معرف الفيديو." });
+        }
+        const latestProfile = await getStudentProfile(ctx.user.id);
+        if (!latestProfile) throw new TRPCError({ code: "NOT_FOUND", message: "ملف الطالب غير موجود." });
+        const latestSelection = (latestProfile.selection ?? {}) as Record<string, any>;
+        const accepted = Array.isArray(latestSelection.acceptedAlternativeReviewVideoIds)
+          ? latestSelection.acceptedAlternativeReviewVideoIds.filter((value: unknown): value is string => typeof value === "string")
+          : [];
+        const declined = Array.isArray(latestSelection.declinedAlternativeReviewVideoIds)
+          ? latestSelection.declinedAlternativeReviewVideoIds.filter((value: unknown): value is string => typeof value === "string")
+          : [];
+        if (declined.includes(input.externalId)) {
+          throw new TRPCError({ code: "CONFLICT", message: "سبق أن رفضت هذا الفيديو." });
+        }
+        const updates = Array.isArray(latestSelection.teacherPublicUpdates)
+          ? latestSelection.teacherPublicUpdates as TeacherPublicUpdate[]
+          : [];
+        const existingUpdate = updates.find(update => update.externalId === input.externalId);
+        if (existingUpdate && existingUpdate.teacherId !== input.teacherId) {
+          throw new TRPCError({ code: "CONFLICT", message: "معرّف الفيديو مرتبط بمصدر آخر بالفعل." });
+        }
+        const publishedDate = input.publishedAt && Number.isFinite(Date.parse(input.publishedAt))
+          ? new Date(input.publishedAt).toISOString() : new Date().toISOString();
+        const acceptedUpdate: TeacherPublicUpdate = existingUpdate ?? {
+          externalId: input.externalId,
+          teacherId: input.teacherId,
+          teacherName: teacher.nameAr,
+          sourceType: "youtube",
+          title: input.title,
+          description: input.description ?? "",
+          url: "https://www.youtube.com/watch?v=" + externalIdFromUrl,
+          publishedAt: publishedDate,
+          observedAt: new Date().toISOString(),
+          announcementType: "revision",
+          confidence: "medium",
+        };
+        const nextUpdates = existingUpdate
+          ? updates
+          : [acceptedUpdate, ...updates].slice(0, 60);
+        const acceptedVideoIds = [...new Set([...accepted, input.externalId])].slice(-120);
+        await updateStudentProfileSelection(ctx.user.id, {
+          ...latestSelection,
+          acceptedAlternativeReviewVideoIds: acceptedVideoIds,
+          teacherPublicUpdates: nextUpdates,
+        });
+        await recordStudentActivityEvent({
+          userId: ctx.user.id,
+          eventType: "teacher.alternative_review_accepted",
+          entityType: "teacher_video",
+          summary: "وافق الطالب على تحليل مراجعة من مدرس بديل",
+          metadata: { externalId: input.externalId, teacherId: input.teacherId, subjectId: input.subjectId, branchId: input.branchId },
+        });
+        if (isTeacherVideoAnalysisConfigured()) queueTeacherVideoAnalyses(ctx.user.id, [acceptedUpdate]);
+        return {
+          success: true,
+          analysisQueued: isTeacherVideoAnalysisConfigured(),
+          message: isTeacherVideoAnalysisConfigured()
+            ? "تم قبول الفيديو. سيُحلّل محتواه ثم لن تُضاف إلا الموضوعات المطابقة لفهرس منهجك."
+            : "تم قبول الفيديو، لكن تحليل الفيديو غير مفعّل حاليًا. لن يدخل أي موضوع في الخطة قبل إتمام التحليل.",
+        };
+      }),
+    declineAlternativeReview: protectedProcedure
+      .input(z.object({
+        externalId: z.string().regex(/^youtube:[A-Za-z0-9_-]{6,20}$/),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const profile = await getStudentProfile(ctx.user.id);
+        if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "ملف الطالب غير موجود." });
+        const selection = (profile.selection ?? {}) as Record<string, any>;
+        const accepted = Array.isArray(selection.acceptedAlternativeReviewVideoIds)
+          ? selection.acceptedAlternativeReviewVideoIds as string[] : [];
+        if (accepted.includes(input.externalId)) {
+          throw new TRPCError({ code: "CONFLICT", message: "هذا الفيديو مقبول بالفعل؛ لا يمكن رفضه دون إزالة القبول أولًا." });
+        }
+        const declined = Array.isArray(selection.declinedAlternativeReviewVideoIds)
+          ? selection.declinedAlternativeReviewVideoIds.filter((value: unknown): value is string => typeof value === "string")
+          : [];
+        await updateStudentProfileSelection(ctx.user.id, {
+          ...selection,
+          declinedAlternativeReviewVideoIds: [...new Set([...declined, input.externalId])].slice(-120),
+        });
+        await logStudentActivity(ctx.user.id, "learning.alternative_review_declined", "teacher_video", input.externalId, "رفض الطالب مراجعة من مدرس بديل");
+        return { success: true };
       }),
     research: protectedProcedure
       .input(z.object({ subject: z.string().trim().min(2).max(80), track: z.string().trim().min(1).max(100) }))
