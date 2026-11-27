@@ -3270,3 +3270,117 @@ body[data-studyflow-sections-open="true"] .sf-hub-root {
   .sf-study-unit-card { padding: 13px !important; border-radius: 17px !important; }
   .sf-study-unit-card .sf-english-lesson-row { align-items: flex-start; }
 }
+
+
+/* Curriculum-aware planner map: unit header, branch chips and clear lesson metadata. */
+.sf-sp-flow-lane-heading {
+  display: grid;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+.sf-sp-flow-lane-heading > small {
+  color: var(--primary);
+  font-size: 9px;
+  font-weight: 850;
+}
+.sf-sp-flow-lane-heading h4 {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.7;
+}
+.sf-sp-flow-lane-branches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 3px;
+}
+.sf-sp-flow-lane-branches span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 3px 7px;
+  border: 1px solid color-mix(in srgb, var(--primary) 20%, var(--border));
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--primary) 5%, var(--card));
+  color: var(--muted-foreground);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+.sf-sp-flow-node-topline .is-current-step {
+  border-color: color-mix(in srgb, var(--primary) 50%, var(--border));
+  background: color-mix(in srgb, var(--primary) 12%, var(--card));
+  color: var(--primary);
+}
+.sf-sp-flow-node-card { min-width: 0; }
+.sf-sp-flow-node-select h5 { overflow-wrap: anywhere; }
+.sf-sp-flow-node-select:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+  border-radius: 8px;
+}
+@media (max-width: 640px) {
+  .sf-sp-flow-lane-header { align-items: flex-start; }
+  .sf-sp-flow-lane-header > strong { white-space: nowrap; }
+  .sf-sp-flow-lane-branches span { font-size: 8px; }
+  .sf-sp-flow-node-topline { gap: 5px; }
+}
+.sf-sp-teacher-session-list { grid-template-columns: minmax(0,1fr); }
+.sf-sp-teacher-session-card { display: grid !important; gap: 11px !important; }
+.sf-sp-teacher-session-main { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.sf-sp-session-preparation {
+  display: grid;
+  gap: 7px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.sf-sp-session-preparation-label {
+  color: var(--primary);
+  font-size: 9px;
+  font-weight: 850;
+}
+.sf-sp-session-preparation > p {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 10px;
+  line-height: 1.85;
+}
+.sf-sp-session-preparation-list { display: grid; gap: 6px; }
+.sf-sp-session-preparation-list button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--background) 60%, var(--card));
+  text-align: right;
+  transition: border-color .16s ease, background .16s ease;
+}
+.sf-sp-session-preparation-list button:hover {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+  background: color-mix(in srgb, var(--primary) 5%, var(--card));
+}
+.sf-sp-session-preparation-list button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.sf-sp-session-preparation-list button > span {
+  min-width: 0;
+  color: var(--foreground);
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.sf-sp-session-preparation-list button > small {
+  flex: 0 0 auto;
+  color: var(--muted-foreground);
+  font-size: 9px;
+}
