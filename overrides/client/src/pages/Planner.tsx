@@ -902,7 +902,7 @@ function PlanLoading({ progress }: { progress: GenerationProgress | null }) {
 
 function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, onApprove, onAddStep, onRemoveStep, onMoveStep, approving, approved }: {
   plan: PlanView; subjectIds: string[]; title: string; studentName?: string; editable: boolean;
-  onChange: (next: PlanView) => void; onApprove: () => void; onAddStep: () => void;
+  onChange: (next: PlanView) => void; onApprove: (nextPlan?: PlanView) => void; onAddStep: () => void;
   onRemoveStep: (index: number) => void; onMoveStep: (index: number, direction: -1 | 1) => void;
   approving: boolean; approved: boolean;
 }) {
@@ -1089,23 +1089,25 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
       {editable ? (
         <footer className="sf-sp-board-footer">
           <Button type="button" variant="outline" onClick={onAddStep}><Plus className="size-4" />أضف خطوة</Button>
-          <div><small>سيعاد فحص ترتيب الخطة عند اعتمادها. لن تُنشأ مواعيد أو واجبات غير مسجلة.</small><Button type="button" onClick={onApprove} disabled={approving || !plan.steps.length || !plan.title.trim()}>{approving ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}اعتماد الخطة وإضافة المهام</Button></div>
+          <div><small>سيعاد فحص ترتيب الخطة عند اعتمادها. لن تُنشأ مواعيد أو واجبات غير مسجلة.</small><Button type="button" onClick={() => onApprove(plan)} disabled={approving || !plan.steps.length || !plan.title.trim()}>{approving ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}اعتماد الخطة وإضافة المهام</Button></div>
         </footer>
       ) : (
         <footer className="sf-sp-approved-footer"><CheckCircle2 className="size-4" /><span>هذه الخطة معتمدة، والمهام مرتبطة بقائمة عملك. تعديل المصدر يتم من المهام أو من تقدم المنهج.</span>{plan.taskSync && <strong>{plan.taskSync.taskCount.toLocaleString("ar-EG")} مهمة مرتبطة</strong>}</footer>
       )}
 
-      <details className="sf-sp-plan-extra"><summary>ملخص إضافي ومساعد الخطة</summary><p>{displayArabicText(plan.summary,"خطة مذاكرة مرتبة حسب بيانات ملفك الدراسي.")}</p>{plan.habits.length > 0 && <div className="sf-sp-habits">{plan.habits.map((habit,index)=><article key={habit.title+index}><strong>{displayArabicText(habit.title,"عادة دراسية")}</strong><small>{displayArabicText(habit.cue,"استخدمها لدعم الاستمرارية في المذاكرة.")}</small></article>)}</div>}<PlanAssistantChat plan={plan} subjectIds={subjectIds} editable={true} onChange={onChange} /></details>
+      <details className="sf-sp-plan-extra"><summary>ملخص إضافي ومساعد الخطة</summary><p>{displayArabicText(plan.summary,"خطة مذاكرة مرتبة حسب بيانات ملفك الدراسي.")}</p>{plan.habits.length > 0 && <div className="sf-sp-habits">{plan.habits.map((habit,index)=><article key={habit.title+index}><strong>{displayArabicText(habit.title,"عادة دراسية")}</strong><small>{displayArabicText(habit.cue,"استخدمها لدعم الاستمرارية في المذاكرة.")}</small></article>)}</div>}<PlanAssistantChat plan={plan} subjectIds={subjectIds} editable={true} onChange={onChange} onApprove={onApprove} approving={approving} /></details>
     </section>
   );
 }
 
 
-function PlanAssistantChat({ plan, subjectIds, editable, onChange }: {
+function PlanAssistantChat({ plan, subjectIds, editable, onChange, onApprove, approving }: {
   plan: PlanView;
   subjectIds: string[];
   editable: boolean;
   onChange: (next: PlanView) => void;
+  onApprove: (nextPlan?: PlanView) => void;
+  approving: boolean;
 }) {
   const [messages, setMessages] = useState<Array<{ role: "user" | "assistant"; content: string }>>([]);
   const [draft, setDraft] = useState("");
@@ -1126,8 +1128,10 @@ function PlanAssistantChat({ plan, subjectIds, editable, onChange }: {
       setMessages(current => [...current, { role: "assistant" as const, content: result.content }].slice(-20));
       setWebSearchAvailable(result.webSearchAvailable ?? false);
       if (result.planPatch && editable) {
-        onChange(applyPlannerAssistantPatch(plan, result.planPatch));
-        toast.success("تم تطبيق التعديل على مسودة الخطة. اضغط «اعتماد الخطة» لتثبيته في مهامك.");
+        const updatedPlan = applyPlannerAssistantPatch(plan, result.planPatch);
+        onChange(updatedPlan);
+        onApprove(updatedPlan);
+        toast("المساعد طبّق التغيير على الخطة ويزامن المهام الآن.");
       }
     },
     onError: error => toast.error(error.message || "تعذّر الوصول إلى مساعد الخطة."),
@@ -1174,7 +1178,7 @@ function PlanAssistantChat({ plan, subjectIds, editable, onChange }: {
         <div className="flex flex-wrap items-center gap-2">
           <span className="rounded-full border border-border bg-background px-3 py-1.5 text-[10px] text-muted-foreground">{editable ? "تحرير المسودة متاح" : "الخطة المعتمدة — وضع القراءة"}</span>
           <span className="rounded-full border border-border bg-background px-3 py-1.5 text-[10px] text-muted-foreground">
-            {webSearchAvailable === null ? "البحث الخارجي عند الحاجة" : webSearchAvailable ? "بحث Composio متاح" : "البحث الخارجي غير مهيأ"}
+            {webSearchAvailable === null ? "البحث المباشر غير مفعّل" : webSearchAvailable ? "بحث مباشر متاح" : "البحث المباشر غير مفعّل"}
           </span>
         </div>
       </header>
@@ -1215,13 +1219,13 @@ function PlanAssistantChat({ plan, subjectIds, editable, onChange }: {
             aria-label="اكتب رسالة لمساعد الخطة"
             className="min-h-12 max-h-32 min-w-0 flex-1 resize-y rounded-xl border border-border bg-background px-3 py-2.5 text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground focus:border-primary/60"
           />
-          <Button type="button" onClick={sendMessage} disabled={!draft.trim() || chat.isPending} className="h-12 shrink-0 rounded-xl px-4">
+          <Button type="button" onClick={sendMessage} disabled={!draft.trim() || chat.isPending || approving} className="h-12 shrink-0 rounded-xl px-4">
             <Send className="size-4" /><span className="hidden sm:inline">إرسال</span>
           </Button>
         </div>
         <p className="px-1 text-[10px] text-muted-foreground">{editable
-          ? "يمكن للمساعد تعديل المسودة وترتيب الخطوات الموجودة؛ لا يغيّر المهام المكتملة أو المرتبطة بسجل فعلي. لا تُحدّث قائمة مهامك إلا بعد اعتماد الخطة."
-          : "المساعد يشرح الخطة المعتمدة ويقترح البدائل، لكنه لا يغيّر المهام الفعلية من وضع القراءة."}</p>
+          ? "المساعد يقدر يعدّل الخطوات الموجودة ويزامن التغييرات فورًا. المهام المكتملة والواجبات الأصلية المحفوظة محمية من التعديل أو الحذف."
+          : "المساعد يشرح الخطة ويقترح البدائل؛ لا يغيّر المهام الفعلية من وضع القراءة."}</p>
       </div>
     </section>
   );
