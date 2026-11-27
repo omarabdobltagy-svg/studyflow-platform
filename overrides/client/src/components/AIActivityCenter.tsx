@@ -70,7 +70,7 @@ export default function AIActivityCenter() {
   }, [current?.id, current?.status]);
 
   const orderedEvents = useMemo(
-    () => current?.events.slice(-6) ?? [],
+    () => current?.events.slice(-8) ?? [],
     [current?.events],
   );
 
@@ -78,6 +78,12 @@ export default function AIActivityCenter() {
 
   const isRunning = current.status === "running";
   const isFailed = current.status === "failed";
+  const elapsedSeconds = Math.max(0, Math.floor(((current.completedAt ?? now) - current.startedAt) / 1_000));
+  const elapsedLabel = elapsedSeconds >= 60
+    ? Math.floor(elapsedSeconds / 60).toLocaleString("ar-EG") + " د " + (elapsedSeconds % 60).toLocaleString("ar-EG") + " ث"
+    : elapsedSeconds.toLocaleString("ar-EG") + " ث";
+  const completedEventCount = current.events.filter(event => event.status === "complete").length;
+  const eventCount = current.events.length;
 
   return (
     <AnimatePresence>
@@ -119,6 +125,10 @@ export default function AIActivityCenter() {
             </button>
           </header>
 
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 px-3.5 py-2 text-[10px] text-muted-foreground">
+            <span>{completedEventCount.toLocaleString("ar-EG")} من {eventCount.toLocaleString("ar-EG")} خطوات مسجلة مكتملة</span>
+            <span>المدة: {elapsedLabel}</span>
+          </div>
           {isRunning && (
             <div className="h-1 w-full overflow-hidden bg-muted" role="progressbar" aria-label="جاري تنفيذ الطلب" aria-valuetext="مؤشر انتظار غير محدد؛ لا توجد نسبة إنجاز دقيقة">
               <motion.div
@@ -140,11 +150,9 @@ export default function AIActivityCenter() {
                 className="overflow-hidden"
               >
                 <div className="border-t border-border/70 bg-muted/20 px-4 py-3">
-                  <div className="mb-2 flex items-center justify-between">
-                    <span className="text-[11px] font-semibold text-muted-foreground">خطوات التنفيذ</span>
-                    {active.length > 1 && (
-                      <span className="text-[10px] text-muted-foreground">عمليات نشطة أخرى: {active.length - 1}</span>
-                    )}
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-semibold text-foreground">سجل مراحل التنفيذ</span>
+                    <span className="text-[10px] text-muted-foreground">{orderedEvents.length.toLocaleString("ar-EG")} أحداث أخيرة</span>
                   </div>
                   <ol className="space-y-2">
                     {orderedEvents.map((event, index) => (
