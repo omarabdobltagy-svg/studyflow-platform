@@ -965,7 +965,7 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
     review_later: "مذاكرة ومراجعة بعد استكمال المنهج",
     deferred: "خطوات مؤجلة للدورة القادمة",
   };
-  const phaseOrder = ["backlog", "teacher_sync", "steady", "review_later", "deferred"];
+  const phaseOrder = ["teacher_sync", "steady", "backlog", "review_later", "deferred"];
   const grouped = new Map<string, Array<{step: PlanStep; index: number}>>();
   plan.steps.forEach((step,index) => {
     const key = step.scheduleState === "deferred"
