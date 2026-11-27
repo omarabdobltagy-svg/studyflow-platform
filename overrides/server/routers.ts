@@ -98,6 +98,8 @@ import { createReminderCron, getReminderPreferences, listReminderNotifications, 
 import { getTeacherCourseFactsWithRefresh } from "./teacher-course-research";
 import { getEffectiveStudentLessonState, summarizeStudentLessonStates, STUDENT_LESSON_STATES, isStudentLessonState, type StudentLessonState } from "@shared/sie-lesson-state";
 import { getDueTeacherClassFollowups, buildTeacherClassFollowupKey, type TeacherClassFollowupRecord } from "./teacherClassFollowups";
+import { isStudyFlowManagedGoal, taskLooksLikeTeacherObligation, getRootGoalForTask } from "./proactiveTaskReconciliation";
+
 
 
 type DailyPlanResult = {
@@ -1195,29 +1197,6 @@ function queueDailyPlanReconciliation(
 
 
 type AIInboxAction = "mark_done" | "keep_open";
-
-function getRootGoalForTask(goalId: number | null, goalsById: Map<number, any>) {
-  let current = goalId ? goalsById.get(goalId) : undefined;
-  const seen = new Set<number>();
-  while (current?.parentGoalId && !seen.has(Number(current.id))) {
-    seen.add(Number(current.id));
-    current = goalsById.get(Number(current.parentGoalId));
-  }
-  return current;
-}
-
-function isStudyFlowManagedGoal(goal: any): boolean {
-  if (!goal) return false;
-  const category = String(goal.category ?? "").trim();
-  const title = String(goal.title ?? "").trim();
-  return ["خطة مذاكرة", "خطة يومية", "خطة ذكية", "خطة تدريبية"].includes(category)
-    || ["خطة المذاكرة", "خطة StudyFlow اليومية", "خطة StudyFlow الذكية الحالية"].includes(title);
-}
-
-function taskLooksLikeTeacherObligation(task: any): boolean {
-  const text = [task.title, task.notes, task.category].filter(Boolean).join(" ").toLocaleLowerCase("ar");
-  return /واجب|تسليم|امتحان|اختبار|كويز|quiz|homework|assignment|exam|\btest\b|تكليف|ورقة عمل|حل الأسئلة/.test(text);
-}
 
 /**
  * Resolves only explicit curriculum/task conflicts. AI-owned study reminders can
