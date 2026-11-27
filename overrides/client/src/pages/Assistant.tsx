@@ -316,69 +316,6 @@ export default function Assistant() {
               </div>
             </div>
             <div className="sf-assistant-chat-panel">
-              <div className="sf-assistant-attachments-bar">
-                <div className="sf-assistant-attachments-actions">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="sf-assistant-attach-button"
-                    onClick={() => attachmentInputRef.current?.click()}
-                    disabled={activeIsStreaming || pendingAttachments.length >= 3}
-                  ><Paperclip className="size-4" /> إرفاق ملف نصي</Button>
-                  <input
-                    ref={attachmentInputRef}
-                    type="file"
-                    hidden
-                    multiple
-                    accept=".txt,.md,.csv,.json,.html,.css,.js,.ts,.tsx,.jsx,text/plain,text/markdown,text/csv,application/json,text/html,text/css"
-                    onChange={async event => {
-                      const selected = Array.from(event.currentTarget.files ?? []);
-                      event.currentTarget.value = "";
-                      const supported = /\.(txt|md|csv|json|html|css|js|ts|tsx|jsx)$/i;
-                      const additions: AssistantTextAttachment[] = [];
-                      for (const file of selected.slice(0, 3 - pendingAttachments.length)) {
-                        if (!supported.test(file.name)) {
-                          toast.error(file.name + " غير مدعوم حاليًا. استخدم TXT أو MD أو CSV أو JSON أو HTML أو ملفات الكود.");
-                          continue;
-                        }
-                        if (file.size > 1_500_000) {
-                          toast.error(file.name + " أكبر من الحد المسموح (1.5 MB).");
-                          continue;
-                        }
-                        try {
-                          const content = await file.text();
-                          if (!content.trim()) {
-                            toast.error(file.name + " لا يحتوي على نص قابل للقراءة.");
-                            continue;
-                          }
-                          additions.push({
-                            id: file.name + "-" + file.lastModified + "-" + Math.random().toString(36).slice(2, 7),
-                            name: file.name,
-                            content: content.slice(0, 7_000),
-                            size: file.size,
-                          });
-                        } catch {
-                          toast.error("تعذرت قراءة الملف " + file.name + ".");
-                        }
-                      }
-                      if (additions.length) setPendingAttachments(current => [...current, ...additions].slice(0, 3));
-                    }}
-                  />
-                </div>
-                <span className="sf-assistant-attachment-hint">TXT · MD · CSV · JSON · HTML · ملفات الكود · حتى 1.5 MB للملف</span>
-              </div>
-              {pendingAttachments.length > 0 && (
-                <div className="sf-assistant-attachment-list" aria-label="الملفات المرفقة">
-                  {pendingAttachments.map(file => (
-                    <span className="sf-assistant-attachment-chip" key={file.id}>
-                      <FileText className="size-4" />
-                      <span>{file.name}</span>
-                      <button type="button" onClick={() => setPendingAttachments(current => current.filter(item => item.id !== file.id))} aria-label={"إزالة " + file.name}><X className="size-3.5" /></button>
-                    </span>
-                  ))}
-                </div>
-              )}
               <AIChatBox
                 key={activeThread?.id}
                 messages={activeThread?.messages || []}
@@ -388,8 +325,74 @@ export default function Assistant() {
                 placeholder="اسأل عن درس أو مفهوم في منهجك..."
                 emptyStateMessage="ابدأ بسؤال عن درس أو مفهوم، أو اطلب توضيحًا لشرح المدرس."
                 suggestedPrompts={suggestions}
+                inputAccessory={pendingAttachments.length > 0 ? (
+                  <div className="sf-assistant-attachment-list w-full" aria-label="الملفات المرفقة">
+                    {pendingAttachments.map(file => (
+                      <span className="sf-assistant-attachment-chip" key={file.id}>
+                        <FileText className="size-4" />
+                        <span>{file.name}</span>
+                        <button type="button" onClick={() => setPendingAttachments(current => current.filter(item => item.id !== file.id))} aria-label={"إزالة " + file.name}><X className="size-3.5" /></button>
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+                inputActions={
+                  <>
+                    <input
+                      ref={attachmentInputRef}
+                      type="file"
+                      hidden
+                      multiple
+                      accept=".txt,.md,.csv,.json,.html,.css,.js,.ts,.tsx,.jsx,text/plain,text/markdown,text/csv,application/json,text/html,text/css"
+                      onChange={async event => {
+                        const selected = Array.from(event.currentTarget.files ?? []);
+                        event.currentTarget.value = "";
+                        const supported = /\.(txt|md|csv|json|html|css|js|ts|tsx|jsx)$/i;
+                        const additions: AssistantTextAttachment[] = [];
+                        for (const file of selected.slice(0, 3 - pendingAttachments.length)) {
+                          if (!supported.test(file.name)) {
+                            toast.error(file.name + " غير مدعوم حاليًا. استخدم TXT أو MD أو CSV أو JSON أو HTML أو ملفات الكود.");
+                            continue;
+                          }
+                          if (file.size > 1_500_000) {
+                            toast.error(file.name + " أكبر من الحد المسموح (1.5 MB).");
+                            continue;
+                          }
+                          try {
+                            const content = await file.text();
+                            if (!content.trim()) {
+                              toast.error(file.name + " لا يحتوي على نص قابل للقراءة.");
+                              continue;
+                            }
+                            additions.push({
+                              id: file.name + "-" + file.lastModified + "-" + Math.random().toString(36).slice(2, 7),
+                              name: file.name,
+                              content: content.slice(0, 7_000),
+                              size: file.size,
+                            });
+                          } catch {
+                            toast.error("تعذرت قراءة الملف " + file.name + ".");
+                          }
+                        }
+                        if (additions.length) setPendingAttachments(current => [...current, ...additions].slice(0, 3));
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => attachmentInputRef.current?.click()}
+                      disabled={activeIsStreaming || pendingAttachments.length >= 3}
+                      aria-label="إرفاق ملف نصي"
+                      title="إرفاق ملف نصي"
+                      className="h-[38px] w-[38px] shrink-0 rounded-xl"
+                    >
+                      <Paperclip className="size-4" />
+                    </Button>
+                  </>
+                }
               />
-            </div>
+            </div>iv>
           </div>
         </div>
       </section>

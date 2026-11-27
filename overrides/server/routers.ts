@@ -1985,6 +1985,7 @@ export const appRouter = router({
     register: publicProcedure
       .input(z.object({
         name: z.string().trim().min(2).max(80),
+        phone: z.string().trim().regex(/^\+[1-9]\d{7,14}$/, "رقم الهاتف يجب أن يكون بالصيغة الدولية."),
         username: z.string().trim().min(3).max(32).regex(/^[A-Za-z0-9._-]+$/, "اسم المستخدم يقبل الحروف الإنجليزية والأرقام والنقطة والشرطة فقط."),
         password: z.string().min(10).max(160),
       }))
@@ -1999,7 +2000,7 @@ export const appRouter = router({
         }
         let user;
         try {
-          user = await createLocalAuthUser({ username, name: input.name, passwordHash: hashLocalPassword(input.password) });
+          user = await createLocalAuthUser({ username, name: input.name, phone: input.phone, passwordHash: hashLocalPassword(input.password) });
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           if (/ER_DUP_ENTRY|duplicate/i.test(message)) throw new TRPCError({ code: "CONFLICT", message: "اسم المستخدم مستخدم بالفعل. اختر اسمًا آخر." });

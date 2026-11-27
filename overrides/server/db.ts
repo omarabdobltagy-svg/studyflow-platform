@@ -230,7 +230,7 @@ export async function getUserByUsername(username: string) {
   return result[0];
 }
 
-export async function createLocalAuthUser(input: { username: string; name: string; passwordHash: string }) {
+export async function createLocalAuthUser(input: { username: string; name: string; phone?: string; passwordHash: string }) {
   const db = await requireDb();
   const openId = "studyflow-user-" + randomUUID();
   await db.insert(users).values({
@@ -238,6 +238,7 @@ export async function createLocalAuthUser(input: { username: string; name: strin
     username: input.username.trim().toLowerCase(),
     passwordHash: input.passwordHash,
     name: input.name.trim(),
+    phone: input.phone?.trim() || null,
     loginMethod: "local",
     role: "user",
     lastSignedIn: new Date(),

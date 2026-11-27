@@ -77,6 +77,21 @@ type DashboardLayoutProps = {
   action?: ReactNode;
 };
 
+function normalizeAccountPhone(value: string) {
+  const trimmed = value.trim();
+  const digits = trimmed.replace(/\D/g, "");
+  if (!digits) return "";
+  if (trimmed.startsWith("+")) return "+" + digits;
+  if (digits.startsWith("0020")) return "+" + digits.slice(2);
+  if (digits.startsWith("20")) return "+" + digits;
+  if (digits.startsWith("0")) return "+20" + digits.slice(1);
+  return "+" + digits;
+}
+
+function isValidAccountPhone(value: string) {
+  return /^\+[1-9]\d{7,14}$/.test(normalizeAccountPhone(value));
+}
+
 export default function DashboardLayout({ title, description, children, action }: DashboardLayoutProps) {
   const { user, loading, logout, error: authError, refresh: refreshAuth } = useAuth();
   const trpcUtils = trpc.useUtils();
@@ -84,6 +99,7 @@ export default function DashboardLayout({ title, description, children, action }
   const [loginPassword, setLoginPassword] = useState("");
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [registerName, setRegisterName] = useState("");
+  const [registerPhone, setRegisterPhone] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [authFormError, setAuthFormError] = useState("");
   const loginMutation = trpc.auth.login.useMutation({
@@ -366,16 +382,25 @@ export default function DashboardLayout({ title, description, children, action }
             <form onSubmit={(event) => {
               event.preventDefault(); setAuthFormError("");
               if (authMode === "register") {
+                if (registerName.trim().length < 2) { setAuthFormError("اكتب اسمك الكامل أولًا."); return; }
+                if (!isValidAccountPhone(registerPhone)) { setAuthFormError("أدخل رقم هاتف صحيحًا مع كود الدولة."); return; }
                 if (loginPassword.length < 10) { setAuthFormError("كلمة المرور يجب ألا تقل عن 10 أحرف."); return; }
                 if (loginPassword !== confirmPassword) { setAuthFormError("كلمتا المرور غير متطابقتين."); return; }
-                registerMutation.mutate({ name: registerName, username: loginUsername, password: loginPassword }); return;
+                registerMutation.mutate({ name: registerName.trim(), phone: normalizeAccountPhone(registerPhone), username: loginUsername, password: loginPassword }); return;
               }
               loginMutation.mutate({ username: loginUsername, password: loginPassword });
             }} className="sf-login-form">
-              {authMode === "register" && <div className="space-y-2">
-                <Label htmlFor="studyflow-register-name">الاسم الظاهر</Label>
-                <Input id="studyflow-register-name" value={registerName} onChange={event => setRegisterName(event.target.value)} autoComplete="name" placeholder="اكتب اسمك" required maxLength={80} className="sf-auth-input" />
-              </div>}
+              {authMode === "register" && <>
+                <div className="space-y-2">
+                  <Label htmlFor="studyflow-register-name">اسمك الكامل</Label>
+                  <Input id="studyflow-register-name" value={registerName} onChange={event => setRegisterName(event.target.value)} autoComplete="name" placeholder="اكتب اسمك الكامل" required minLength={2} maxLength={80} className="sf-auth-input" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="studyflow-register-phone">رقم الهاتف</Label>
+                  <Input id="studyflow-register-phone" value={registerPhone} onChange={event => setRegisterPhone(event.target.value)} autoComplete="tel" inputMode="tel" type="tel" placeholder="01xxxxxxxxx أو +20xxxxxxxxxx" required className="sf-auth-input" />
+                  <p className="text-xs leading-6 text-muted-foreground">سيُحفظ رقمك مع الحساب ويُستخدم تلقائيًا في ملفك الدراسي؛ لن نطلب إدخاله مرة أخرى بعد التسجيل.</p>
+                </div>
+              </>}
               <div className="space-y-2">
                 <Label htmlFor="studyflow-username">اسم المستخدم</Label>
                 <Input id="studyflow-username" value={loginUsername} onChange={event => setLoginUsername(event.target.value)} autoComplete="username" placeholder="مثال: omar_2026" required minLength={3} maxLength={32} pattern="[A-Za-z0-9._-]{3,32}" title="استخدم أحرفًا إنجليزية أو أرقامًا أو نقطة أو شرطة سفلية." dir="ltr" className="sf-auth-input text-left" />

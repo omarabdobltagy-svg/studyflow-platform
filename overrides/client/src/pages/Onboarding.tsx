@@ -127,7 +127,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
     onError: error => toast.error(error.message || "تعذر حفظ بيانات الحساب."),
   });
 
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(editMode ? 0 : 1);
   const [subjectSetupIndex, setSubjectSetupIndex] = useState(0);
   const [expandedCheckpointChoices, setExpandedCheckpointChoices] = useState<Record<string, number>>({});
   const [refreshCheckpointMode, setRefreshCheckpointMode] = useState(false);
@@ -153,7 +153,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
     const saved = (profile.data as any)?.selection ?? null;
     setForm(current => ({
       ...current,
-      studentName: current.studentName || (profile.data as any)?.studentName || "",
+      studentName: current.studentName || (profile.data as any)?.studentName || auth.data?.name || "",
       phone: current.phone || auth.data?.phone || "",
       systemId: current.systemId || saved?.systemId || "",
       trackId: current.trackId || saved?.trackId || "",
@@ -177,6 +177,11 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
     }));
   }, [auth.data, profile.data]);
 
+  const hasAccountIdentity = Boolean(auth.data?.name?.trim() && isValidPhone(auth.data?.phone ?? ""));
+  useEffect(() => {
+    if (!editMode && auth.isSuccess) setStep(hasAccountIdentity ? 1 : 0);
+  }, [editMode, auth.isSuccess, hasAccountIdentity]);
+
   const system = SIE_SYSTEMS.find(item => item.systemId === form.systemId);
   const tracks = form.systemId ? getSIETracks(form.systemId) : [];
   const track = form.trackId ? getSIETrack(form.trackId) : undefined;
@@ -193,7 +198,10 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
     ];
   }, [track, fixedSubjects, firstElectiveGroup, form.electiveSubjectId]);
 
-  const activeSteps = steps;
+  const identityStepRequired = editMode || !hasAccountIdentity;
+  const activeSteps = identityStepRequired ? steps : steps.slice(1);
+  const progressStep = identityStepRequired ? step + 1 : step;
+  const activeStepIndex = progressStep - 1;
   const currentSetupSubject = selectedSubjects[subjectSetupIndex] ?? selectedSubjects[0];
   const currentSetupSubjectId = currentSetupSubject?.subjectId ?? "";
   const setupTeacherOptions = currentSetupSubjectId && form.systemId ? getSIETeachersForSubject(currentSetupSubjectId, form.systemId) : [];
@@ -267,12 +275,12 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
       else save();
       return;
     }
-    setStep(current => Math.min(activeSteps.length - 1, current + 1));
+    setStep(current => Math.min(steps.length - 1, current + 1));
   };
 
   const previous = () => {
     if (step === 4 && subjectSetupIndex > 0) { setSubjectSetupIndex(index => Math.max(0, index - 1)); return; }
-    setStep(current => Math.max(0, current - 1));
+    setStep(current => Math.max(identityStepRequired ? 0 : 1, current - 1));
   };
 
   const chooseSystem = (systemId: SIESystemId) => {
@@ -371,7 +379,9 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                 <p className="eyebrow text-primary-foreground/65">STUDENT SETUP · {SIE_CATALOG_META.academicYear}</p>
                 <h1 className="mt-2 text-2xl font-bold sm:text-3xl">{editMode ? "اختياراتك الدراسية." : "خلّينا نضبط مسارك."}</h1>
                 <p className="mt-2 max-w-2xl text-sm leading-7 text-primary-foreground/75">
-                  الاسم ورقم الهاتف فقط كمدخلات. باقي الإعداد يتم بالاختيار من النظام والمسار والمواد والمدرسين المتاحين في قاعدة البيانات.
+                  {identityStepRequired
+                    ? "بياناتك الأساسية لربط الحساب بالمسار الدراسي. بعد حفظها لن تحتاج إلى إدخالها مرة أخرى."
+                    : "بيانات الاسم ورقم الهاتف محفوظة في حسابك بالفعل. أكمل إعداد مسارك وموادك ومدرسيك."}
                 </p>
               </div>
               <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-white/10">
@@ -380,19 +390,19 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
             </div>
             <div className="relative mt-7 flex items-center justify-between gap-3 text-xs text-primary-foreground/75">
               <span>{editMode ? "تعديل ملفك الدراسي" : "إعداد حسابك الدراسي"}</span>
-              <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1 font-bold tabular-nums">الخطوة {step + 1} من {activeSteps.length}</span>
+              <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1 font-bold tabular-nums">الخطوة {progressStep} من {activeSteps.length}</span>
             </div>
-            <Progress value={((step + 1) / activeSteps.length) * 100} className="relative mt-3 h-2 bg-white/15 [&>div]:bg-amber-300" />
+            <Progress value={(progressStep / activeSteps.length) * 100} className="relative mt-3 h-2 bg-white/15 [&>div]:bg-amber-300" />
             <div className="relative mt-3 flex justify-between gap-2 text-[10px] text-primary-foreground/60 sm:text-xs">
               {activeSteps.map((label, index) => (
-                <span key={label} className={index <= step ? "font-bold text-white" : ""}>{label}</span>
+                <span key={label} className={index <= activeStepIndex ? "font-bold text-white" : ""}>{label}</span>
               ))}
             </div>
           </section>
 
           <section className="app-card mt-5 overflow-hidden">
             <header className="border-b border-border/70 bg-muted/20 px-5 py-5 sm:px-7">
-              <p className="eyebrow">الخطوة {step + 1} من {activeSteps.length}</p>
+              <p className="eyebrow">الخطوة {progressStep} من {activeSteps.length}</p>
               <h2 className="mt-1 text-xl font-bold">{steps[step]}</h2>
             </header>
 
@@ -811,7 +821,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
             </div>
 
             <footer className="flex flex-col-reverse gap-3 border-t border-border/70 bg-muted/15 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
-              <Button type="button" variant="ghost" onClick={previous} disabled={step === 0 || complete.isPending} className="rounded-xl">
+              <Button type="button" variant="ghost" onClick={previous} disabled={step <= (identityStepRequired ? 0 : 1) || complete.isPending} className="rounded-xl">
                 <ArrowRight className="size-4" /> رجوع
               </Button>
               {step < activeSteps.length - 1 ? (
