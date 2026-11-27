@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { getSIESubject, matchSIECheckpointTask } from "@shared/sie-catalog";
 import { displayBranchTitle, displayCurriculumTitle } from "@/lib/curriculum-display";
 import { CalendarDays, Check, Circle, Pencil, Plus, Search, Tag, Trash2, X } from "lucide-react";
+import { createPortal } from "react-dom";
 import { FormEvent, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -144,9 +145,9 @@ export default function Tasks() {
       )}
       {isFormOpen && <TaskForm goals={goalsQuery.data || []} onClose={() => setFormOpen(false)} onSubmit={data => createTask.mutate(data)} loading={createTask.isPending} />}
       {editingTaskId !== null && tasksQuery.data?.find(task => task.id === editingTaskId) ? <TaskEditForm task={tasksQuery.data.find(task => task.id === editingTaskId)!} goals={goalsQuery.data || []} onClose={() => setEditingTaskId(null)} onSubmit={data => updateTask.mutate({ id: editingTaskId, ...data })} onDelete={() => { if (window.confirm("هل تريد حذف هذه المهمة؟")) deleteTask.mutate({ id: editingTaskId }); }} loading={updateTask.isPending} /> : null}
-      {selectedTask && selectedTaskPresentation && editingTaskId === null && (
-        <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/55 p-0 backdrop-blur-sm sm:items-center sm:p-4" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setSelectedTaskId(null); }}>
-          <section role="dialog" aria-modal="true" aria-labelledby="sf-task-detail-title" className="max-h-[88dvh] w-full max-w-2xl overflow-y-auto rounded-t-3xl border border-border bg-card shadow-2xl sm:rounded-3xl">
+      {selectedTask && selectedTaskPresentation && editingTaskId === null && typeof document !== "undefined" ? createPortal((
+        <div className="sf-task-detail-overlay" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setSelectedTaskId(null); }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="sf-task-detail-title" className="sf-task-detail-dialog" tabIndex={-1}>
             <header className="sticky top-0 flex items-start justify-between gap-3 border-b border-border/70 bg-card/95 p-5 backdrop-blur">
               <div className="min-w-0">
                 <p className="eyebrow">تفاصيل المهمة</p>
@@ -174,7 +175,7 @@ export default function Tasks() {
             </div>
           </section>
         </div>
-      )}
+      ), document.body) : null}
       {reportingTaskId!==null&&<section className="app-card mb-5 border-primary/20 p-5">
         <div className="flex items-start justify-between gap-3"><div><p className="eyebrow">تغذية راجعة للمخطط الذكي</p><h2 className="mt-1 font-bold">ليه ما كملتش المهمة؟</h2><p className="mt-1 text-xs leading-6 text-muted-foreground">إجابتك هتساعد النظام يقلل الحمل أو يغيّر ترتيب المهام بدل ما يكرر نفس الخطة.</p></div><Button type="button" variant="ghost" size="icon" onClick={()=>setReportingTaskId(null)} aria-label="إغلاق"><X className="size-4"/></Button></div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
