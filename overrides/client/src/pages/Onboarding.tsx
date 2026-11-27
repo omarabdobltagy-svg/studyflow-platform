@@ -481,7 +481,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
           onOpenStudy={() => setLocation("/study")}
         />
       ) : (
-        <div className="sf-onboarding-shell mx-auto max-w-4xl">
+        <div dir="rtl" className="sf-onboarding-shell mx-auto max-w-4xl">
           <section className="sf-onboarding-hero relative overflow-hidden rounded-[2rem] bg-primary p-6 text-primary-foreground shadow-xl sm:p-9">
             <div className="pointer-events-none absolute -left-10 -top-16 size-56 rounded-full bg-white/10 blur-3xl" />
             <div className="relative flex items-start justify-between gap-4">
@@ -503,14 +503,14 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
               <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1 font-bold tabular-nums">الخطوة {progressStep} من {activeSteps.length}</span>
             </div>
             <Progress value={(progressStep / activeSteps.length) * 100} className="relative mt-3 h-2 bg-white/15 [&>div]:bg-amber-300" />
-            <div className="relative mt-3 flex justify-between gap-2 text-[10px] text-primary-foreground/60 sm:text-xs">
+            <div className="sf-onboarding-progress-steps relative mt-3 flex justify-between gap-2 text-[10px] text-primary-foreground/60 sm:text-xs">
               {activeSteps.map((label, index) => (
                 <span key={label} className={index <= activeStepIndex ? "font-bold text-white" : ""}>{label}</span>
               ))}
             </div>
           </section>
 
-          <section className="sf-onboarding-panel app-card mt-5 overflow-hidden">
+          <section dir="rtl" className="sf-onboarding-panel app-card mt-5 overflow-hidden">
             <header className="border-b border-border/70 bg-muted/20 px-5 py-5 sm:px-7">
               <p className="eyebrow">الخطوة {progressStep} من {activeSteps.length}</p>
               <h2 className="mt-1 text-xl font-bold">{steps[step]}</h2>
@@ -624,7 +624,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
               )}
 
               {step === 4 && track && (
-                <div className="space-y-5">
+                <div className="sf-onboarding-subjects-step space-y-5">
                   <div className="rounded-2xl border border-border bg-muted/20 p-4">
                     <p className="text-sm font-semibold">{system?.nameAr} · {track.nameAr}</p>
                     <p className="mt-1 text-xs leading-6 text-muted-foreground">
@@ -637,7 +637,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                   </div>
 
                   {track.fixedSubjectIds ? (
-                    <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="sf-onboarding-subject-grid grid gap-3 sm:grid-cols-2">
                       {fixedSubjects.map(subject => (
                         <div key={subject.subjectId} className="rounded-2xl border border-border bg-card p-4">
                           <p className="font-semibold">{subject.nameAr}</p>
@@ -651,7 +651,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                     <>
                       <div>
                         <p className="mb-3 text-sm font-semibold">{track.trackId === "BAC_ARTS_HUM" ? "المواد الأساسية والمادة التخصصية المقررة" : "المواد الأساسية المضافة تلقائيًا"}</p>
-                        <div className="grid gap-3 sm:grid-cols-3">
+                        <div className="sf-onboarding-subject-grid grid gap-3 sm:grid-cols-3">
                           {track.requiredSubjectIds.map(id => {
                             const subject = getSIESubject(id);
                             if (!subject) return null;
@@ -666,7 +666,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                       {firstElectiveGroup.length > 0 && (
                         <div>
                           <p className="mb-3 text-sm font-semibold">{firstElectiveGroup.length === 1 ? "المادة التخصصية لهذا المسار" : "اختر مادة تخصصية واحدة"}</p>
-                          <div className="grid gap-3 sm:grid-cols-2">
+                          <div className="sf-onboarding-elective-grid grid gap-3 sm:grid-cols-2">
                             {firstElectiveGroup.map(subject => (
                               <ChoiceCard
                                 key={subject.subjectId}
