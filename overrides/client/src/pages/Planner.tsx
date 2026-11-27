@@ -308,7 +308,8 @@ export default function Planner() {
     enabled: !profile.isLoading && !profile.isError && Boolean(profile.data?.subjectIds?.length),
     staleTime: 15_000,
     refetchOnWindowFocus: false,
-    refetchInterval: query => query.state.data?.plan ? 15_000 : query.state.data?.needsRefresh ? 30_000 : false,
+    // Poll quickly while the durable server-side reconciliation worker rebuilds a stale plan.
+    refetchInterval: query => query.state.data?.needsRefresh ? 900 : query.state.data?.plan ? 15_000 : false,
   });
 
   const progressPreview = useMemo(() => {
@@ -522,6 +523,7 @@ export default function Planner() {
   });
   const isPlanGenerationRunning = ensureDaily.isPending
     || backgroundPlanRunning
+    || Boolean(activeDailyPlan.data?.needsRefresh)
     || generationProgress.data?.status === "running";
 
   useEffect(() => {
@@ -770,7 +772,6 @@ export default function Planner() {
               <span className={"sf-sp-status " + (approved ? "is-active" : plan ? "is-draft" : "is-empty")}>
                 {approved ? "خطة معتمدة" : plan ? "مسودة للمراجعة" : "لم تُنشأ خطة بعد"}
               </span>
-              {planNeedsRefresh && approved && <span className="sf-sp-update-note">توجد بيانات جديدة تحتاج إلى إعادة ترتيب</span>}
             </div>
             <h1>خطة واضحة. خطوة وراء خطوة.</h1>
             <p>StudyFlow يربط المنهج وتقدمك الفعلي والمهام المسجلة وجدول المدرس، ثم يرتب لك الخطوة التالية. لا نعتبر الدرس مكتملًا لمجرد ظهوره في الخطة.</p>
@@ -977,10 +978,24 @@ export default function Planner() {
                 )}
               </section>
             ) : planNeedsRefresh && approved ? (
-              <section className="sf-sp-empty" role="status" aria-live="polite">
-                <h2>الخريطة تحتاج إلى إعادة ترتيب</h2>
-                <p>وصلت بيانات جديدة عن تقدمك أو مواعيدك. ابدأ تحديث الخطة حتى يعكس التوزيع أولوياتك الحالية.</p>
-                <Button type="button" onClick={runGeneration}>إعادة ترتيب الخطة</Button>
+              <section className="sf-sp-generation-in-distribution" role="status" aria-live="polite">
+                <div className="sf-sp-generation-context">
+                  <span className="sf-plan-generation-inline-mark"><Loader2 className="size-4 animate-spin" /></span>
+                  <div>
+                    <strong>StudyFlow يعيد ترتيب خريطتك تلقائيًا</strong>
+                    <p>اكتشفنا تحديثًا في بياناتك، وبدأ محرك التخطيط مزامنة التقدم والمهام ومواعيد المدرسين دون أي إجراء منك.</p>
+                  </div>
+                </div>
+                {generationProgress.data?.status === "running" ? (
+                  <PlanLoading progress={generationProgress.data} gradeLabel={SIE_CATALOG_META.gradeYear} />
+                ) : (
+                  <div className="sf-auto-replan-stages" aria-label="مراحل إعادة الترتيب">
+                    <span className="is-done"><CheckCircle2 className="size-4" />رصد التغيير</span>
+                    <span className="is-active"><Loader2 className="size-4 animate-spin" />إرسال التحديث لمحرك التخطيط</span>
+                    <span>مطابقة المنهج والمهام</span>
+                    <span>تحديث الخريطة تلقائيًا</span>
+                  </div>
+                )}
               </section>
             ) : activeDailyPlan.isLoading || history.isLoading ? (
               <section className="sf-sp-empty" role="status" aria-live="polite">
