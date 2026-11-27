@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getPlannerTeacherSessions, mergeSuggestedTeacherScheduleSlots } from "./teacher-sessions";
+import { getPlannerTeacherSessions, getTeacherLectureDuration, mergeSuggestedTeacherScheduleSlots } from "./teacher-sessions";
 
 describe("getPlannerTeacherSessions", () => {
   it("keeps both default weekly sessions for one teacher", () => {
@@ -150,5 +150,30 @@ describe("teacher lecture time ranges", () => {
     const sessions = getPlannerTeacherSessions(profile, new Date("2026-11-27T12:00:00.000Z"));
     expect(sessions.find(item => item.sortDate === "2026-11-29")).toMatchObject({ time: "21:00" });
     expect(sessions.find(item => item.sortDate === "2026-11-29")?.endTime).toBeUndefined();
+  });
+});
+
+
+describe("getTeacherLectureDuration", () => {
+  it("calculates lecture duration from start and end", () => {
+    expect(getTeacherLectureDuration("09:00", "10:30")).toContain("1 ساعة و 30 دقيقة");
+  });
+
+  it("supports a lecture that finishes after midnight", () => {
+    const result = getTeacherLectureDuration("23:30", "01:00");
+    expect(result).toContain("1 ساعة و 30 دقيقة");
+    expect(result).toContain("اليوم التالي");
+  });
+
+  it("does not invent a duration when no end time has been selected", () => {
+    expect(getTeacherLectureDuration("09:00")).toBeNull();
+  });
+
+  it("warns when start and end times are identical", () => {
+    expect(getTeacherLectureDuration("09:00", "09:00")).toBe("وقت النهاية لازم يختلف عن البداية");
+  });
+
+  it("rejects malformed time values", () => {
+    expect(getTeacherLectureDuration("29:00", "30:00")).toBeNull();
   });
 });

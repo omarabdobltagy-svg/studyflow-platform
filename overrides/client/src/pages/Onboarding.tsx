@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
-import { mergeSuggestedTeacherScheduleSlots } from "@/lib/teacher-sessions";
+import { getTeacherLectureDuration, mergeSuggestedTeacherScheduleSlots } from "@/lib/teacher-sessions";
 import {
   SIE_CATALOG_META,
   SIE_SYSTEMS,
@@ -41,18 +41,6 @@ type TeacherChoiceMap = Record<string, string>;
 type TeacherScheduleSlot = { dayOfWeek: number; startTime: string; endTime?: string };
 type TeacherScheduleMap = Record<string, TeacherScheduleSlot[]>;
 
-function getTeacherLectureDuration(startTime: string, endTime?: string): string | null {
-  if (!endTime || !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(startTime) || !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(endTime)) return null;
-  const toMinutes = (value: string) => Number(value.slice(0, 2)) * 60 + Number(value.slice(3, 5));
-  const start = toMinutes(startTime);
-  const end = toMinutes(endTime);
-  const total = (end - start + 1440) % 1440;
-  if (!total) return "وقت النهاية لازم يختلف عن البداية";
-  const hours = Math.floor(total / 60);
-  const minutes = total % 60;
-  const parts = [hours ? hours.toLocaleString("ar-EG") + " ساعة" : "", minutes ? minutes.toLocaleString("ar-EG") + " دقيقة" : ""].filter(Boolean);
-  return "مدة المحاضرة " + parts.join(" و ") + (end <= start ? " · تمتد لليوم التالي" : "");
-}
 type CustomTeacherProfile = { nameAr: string; brandName: string; sourceUrl: string; availableModes: Array<"center" | "online">; confidence: "low" | "medium" | "high"; evidence: Array<{ title: string; url: string; source: string }>; notes?: string };
 type TeacherRequirementState = "yes" | "no" | "varies" | "unknown";
 const WEEK_DAYS = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];

@@ -2,10 +2,29 @@ import { getSIESubject, getSIETeacher } from "@shared/sie-catalog";
 
 export type TeacherScheduleSlot = { dayOfWeek: number; startTime: string; endTime?: string };
 
+const isValidClockTime = (value: unknown): value is string =>
+  typeof value === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+
 const isValidTeacherScheduleSlot = (slot: Partial<TeacherScheduleSlot>): slot is TeacherScheduleSlot =>
   Number.isInteger(slot.dayOfWeek) && Number(slot.dayOfWeek) >= 0 && Number(slot.dayOfWeek) <= 6
-  && typeof slot.startTime === "string" && /^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(slot.startTime)
-  && (slot.endTime === undefined || slot.endTime === "" || (typeof slot.endTime === "string" && /^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(slot.endTime)));
+  && isValidClockTime(slot.startTime);
+
+/** Present a compact Arabic duration while supporting sessions that end after midnight. */
+export function getTeacherLectureDuration(startTime: string, endTime?: string): string | null {
+  if (!isValidClockTime(startTime) || !isValidClockTime(endTime)) return null;
+  const toMinutes = (value: string) => Number(value.slice(0, 2)) * 60 + Number(value.slice(3, 5));
+  const start = toMinutes(startTime);
+  const end = toMinutes(endTime);
+  const total = (end - start + 1440) % 1440;
+  if (!total) return "وقت النهاية لازم يختلف عن البداية";
+  const hours = Math.floor(total / 60);
+  const minutes = total % 60;
+  const parts = [
+    hours ? hours.toLocaleString("ar-EG") + " ساعة" : "",
+    minutes ? minutes.toLocaleString("ar-EG") + " دقيقة" : "",
+  ].filter(Boolean);
+  return "مدة المحاضرة " + parts.join(" و ") + (end <= start ? " · تمتد لليوم التالي" : "");
+}
 
 /** Fill missing default weekdays without overriding a time the student has changed. */
 export function mergeSuggestedTeacherScheduleSlots(
@@ -16,7 +35,7 @@ export function mergeSuggestedTeacherScheduleSlots(
     .map(slot => ({
       dayOfWeek: slot.dayOfWeek,
       startTime: slot.startTime,
-      ...(slot.endTime ? { endTime: slot.endTime } : {}),
+      ...(isValidClockTime(slot.endTime) ? { endTime: slot.endTime } : {}),
     }));
   const occupiedDays = new Set(merged.map(slot => slot.dayOfWeek));
   for (const slot of Array.isArray(suggested) ? suggested : []) {
