@@ -103,7 +103,7 @@ type PlanView = {
   memorySnapshot?: Record<string, any>;
   // Export component compatibility only; deliberately blank so no AI self-test is created.
   reviewQuestion: string;
-  taskSync?: { parentGoalId: number; stageCount: number; taskCount: number; routineId?: number | null };
+  taskSync?: { parentGoalId?: number; stageCount: number; taskCount: number; routineId?: number | null };
 };
 
 type PlannerAssistantPatch = {
@@ -353,7 +353,6 @@ export default function Planner() {
         steps: Array.isArray(result.plan.steps) ? result.plan.steps : [],
         reviewQuestion: "",
         taskSync: {
-          parentGoalId: 0,
           stageCount: result.taskCount,
           taskCount: result.taskCount,
         },
@@ -513,10 +512,12 @@ export default function Planner() {
     updatePlan({
       ...plan,
       steps: [...plan.steps, {
-        day: `اليوم ${plan.steps.length + 1}`,
+        day: "موعد غير محدد",
         title: "مهمة جديدة",
-        detail: "اكتب ما الذي تريد إنجازه في هذه الجلسة.",
+        detail: "اكتب ما الذي تريد إنجازه في هذه المهمة.",
         minutes: 0,
+        dateOffsetDays: Math.max(0, ...plan.steps.map(step => step.dateOffsetDays ?? 0)) + 1,
+        dayIndex: plan.steps.length + 1,
         category: "دراسة",
         priority: "medium",
         difficulty: "unknown",
@@ -539,7 +540,7 @@ export default function Planner() {
           day: step.day || `اليوم ${index + 1}`,
         })),
       },
-      schedule: { startDate: todayCairo, dailyMinutes, daysPerWeek: 6, horizonDays: 7, mode: "flexible" },
+      schedule: { startDate: todayCairo, dailyMinutes, daysPerWeek: 6, horizonDays: 7, mode: "topic" },
     });
   };
 
