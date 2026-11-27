@@ -47,8 +47,17 @@ const queryClient = new QueryClient({
 const queryErrorToastIds = new Map<string, string>();
 const queryErrorToastId = (queryKey: readonly unknown[]) => "studyflow-query:" + JSON.stringify(queryKey);
 
+const isExpectedAuthFailure = (error: unknown) => {
+  if (!(error instanceof TRPCClientError)) return false;
+  return error.message === UNAUTHED_ERR_MSG
+    || error.data?.code === "UNAUTHORIZED"
+    || error.data?.httpStatus === 401;
+};
+
 const showQueryError = (error: unknown, queryKey: readonly unknown[]) => {
-  if (error instanceof TRPCClientError && error.message === UNAUTHED_ERR_MSG) return;
+  // Protected queries can resolve with 401 while the session is being checked.
+  // This is an expected anonymous state, not a recoverable application failure.
+  if (isExpectedAuthFailure(error)) return;
   const id = queryErrorToastId(queryKey);
   if (!queryErrorToastIds.has(id)) queryErrorToastIds.set(id, id);
   toast.error("تعذّر تحميل جزء من البيانات.", {
@@ -67,7 +76,9 @@ queryClient.getQueryCache().subscribe(event => {
   if (event.type === "updated" && event.action.type === "error") {
     // A stable toast id prevents the same background query from flooding the UI.
     showQueryError(event.query.state.error, event.query.queryKey);
-    console.error("[API Query Error]", event.query.state.error);
+    if (!isExpectedAuthFailure(event.query.state.error)) {
+      console.error("[API Query Error]", event.query.state.error);
+    }
   }
   if (event.type === "updated" && event.action.type === "success") {
     // Remove a transient error as soon as the same query succeeds again.
