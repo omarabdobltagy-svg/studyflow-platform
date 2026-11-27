@@ -49,7 +49,7 @@ function getPlannerTeacherSessions(profile?: {
   subjectIds?: string[];
   teacherSelections?: Record<string, string>;
   selection?: unknown;
-}): PlannerTeacherSession[] {
+} | null): PlannerTeacherSession[] {
   if (!profile?.subjectIds?.length) return [];
   const selection = (profile.selection ?? {}) as Record<string, any>;
   const schedules = (selection.teacherSchedules ?? {}) as Record<string, Array<{ dayOfWeek: number; startTime: string }>>;
