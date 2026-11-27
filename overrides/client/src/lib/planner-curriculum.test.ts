@@ -21,9 +21,11 @@ describe("planner curriculum map hierarchy", () => {
     const lanes = buildPlannerCurriculumLanes(entries, ["ARB_G2_BAC"]);
 
     expect(lanes).toHaveLength(2);
-    expect(lanes[0].title).toContain("الوحدة 1");
+    expect(lanes[0].title).toContain("الوحدة");
+    expect(lanes[0].unitNumber).toBe(1);
     expect(lanes[0].items).toHaveLength(anotherBranchChoice ? 2 : 1);
-    expect(lanes[1].title).toContain("الوحدة 2");
+    expect(lanes[1].title).toContain("الوحدة");
+    expect(lanes[1].unitNumber).toBe(2);
   });
 
   it("preserves English unit, lesson number and Vocabulary/Grammar branch labels", () => {
@@ -45,7 +47,8 @@ describe("planner curriculum map hierarchy", () => {
       { index: 1, step: { curriculumNodeIds: [grammar!.nodeId], title: grammar!.title } },
     ], ["ENG1_G2_BAC"]);
     expect(lanes).toHaveLength(1);
-    expect(lanes[0].title).toContain("الوحدة 1");
+    expect(lanes[0].title).toContain("الوحدة");
+    expect(lanes[0].unitNumber).toBe(1);
     expect(lanes[0].branchLabels.length).toBeGreaterThan(1);
   });
 
