@@ -2759,6 +2759,7 @@ export const appRouter = router({
         teacherId: z.string().trim().min(1).max(80),
         externalId: z.string().regex(/^youtube:[A-Za-z0-9_-]{6,20}$/),
         title: z.string().trim().min(3).max(240),
+        channelTitle: z.string().trim().min(2).max(160),
         url: z.string().url().max(500),
         description: z.string().max(700).optional(),
         publishedAt: z.string().max(80).optional(),
@@ -2774,6 +2775,21 @@ export const appRouter = router({
           || !teacher.systemCourseVerification?.EG_BACCALAUREATE
           || teacher.systemCourseVerification.EG_BACCALAUREATE === "not_verified_for_2026_2027") {
           throw new TRPCError({ code: "BAD_REQUEST", message: "المدرس أو الفرع غير معتمد لهذه المادة." });
+        }
+        const normalizeIdentity = (value: string) => value.normalize("NFKC")
+          .toLocaleLowerCase("ar")
+          .replace(/[أإآٱ]/g, "ا")
+          .replace(/ة/g, "ه")
+          .replace(/ى/g, "ي")
+          .replace(/[ً-ٰٟـ]/g, "")
+          .replace(/[^\p{L}\p{N}]+/gu, " ")
+          .trim();
+        const channelIdentity = normalizeIdentity(input.channelTitle);
+        const catalogIdentities = [teacher.nameAr, teacher.brandName]
+          .map(normalizeIdentity).filter(Boolean);
+        if (!catalogIdentities.some(identity => channelIdentity === identity
+          || channelIdentity.includes(identity) || identity.includes(channelIdentity))) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "اسم قناة الفيديو لا يطابق المدرس المسجل في دليل المنصة." });
         }
         const selection = (profile.selection ?? {}) as Record<string, any>;
         const selectedTeacherId = selection.teacherChoices?.[input.subjectId] || profile.teacherSelections?.[input.subjectId];
