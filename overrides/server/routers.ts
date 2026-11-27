@@ -1585,6 +1585,7 @@ export async function runAssistantChat(
             ],
             model: process.env.AI_MODEL || undefined,
             maxTokens: 2_800,
+            ...(input.planner ? { response_format: { type: "json_object" as const } } : {}),
           };
           response = onToken
             ? await invokeLLMWithNvidiaFallbackStream(llmParams, onToken)
