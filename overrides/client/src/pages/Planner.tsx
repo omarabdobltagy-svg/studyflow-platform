@@ -463,7 +463,7 @@ export default function Planner() {
 
   useEffect(() => {
     const waitingForActivePlan = Boolean(profile.data?.subjectIds?.length) && activeDailyPlan.isLoading;
-    if (history.isLoading || history.isError || waitingForActivePlan || historyInitialized.current) return;
+    if (profile.isLoading || profile.isError || history.isLoading || history.isError || waitingForActivePlan || historyInitialized.current) return;
     historyInitialized.current = true;
 
     // The current active plan is not a deletable history draft. Load it from the
