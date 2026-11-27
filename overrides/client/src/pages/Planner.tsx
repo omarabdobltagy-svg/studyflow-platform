@@ -244,8 +244,10 @@ function displayPlanStepTitle(step: PlanStep, subjectIds: string[]): string {
   const curriculum = getPlanStepCurriculum(step, subjectIds);
   if (curriculum) {
     const unitLabel = curriculum.unitNumber
-      ? "الوحدة " + curriculum.unitNumber.toLocaleString("ar-EG") + (curriculum.unitTitle ? " — " + curriculum.unitTitle : "")
-      : curriculum.unitTitle || curriculum.branch;
+      ? "الوحدة " + curriculum.unitNumber.toLocaleString("ar-EG") + (curriculum.unitTitle ? " — " + displayCurriculumTitle(curriculum.unitTitle) : "")
+      : curriculum.unitTitle
+        ? (curriculum.lessonType === "story" ? "القصة المقررة · " : "") + displayCurriculumTitle(curriculum.unitTitle)
+        : curriculum.branch;
     const lessonSequence = curriculum.lessonNumber
       ? (curriculum.lessonType === "story" ? "الفصل " : "الدرس ") + curriculum.lessonNumber
       : curriculum.courseSequenceNumber
@@ -1401,7 +1403,7 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
                   <header className="sf-sp-flow-lane-header">
                     <span className="sf-sp-flow-lane-port" />
                     <div className="sf-sp-flow-lane-heading">
-                      <small>{lane.subjectId ? lane.unitNumber ? "وحدة من المنهج" : "مسار مهاري / كورس" : "التزامات ومهام"}</small>
+                      <small>{lane.subjectId ? lane.isOfficialUnit ? "وحدة من الكتاب" : lane.unitNumber ? "مجموعة دروس" : "مسار إضافي" : "التزامات ومهام"}</small>
                       <h4>{lane.title}</h4>
                       {lane.branchLabels.length > 0 && (
                         <div className="sf-sp-flow-lane-branches" aria-label="فروع الوحدة">
