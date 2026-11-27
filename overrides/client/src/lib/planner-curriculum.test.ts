@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getSIECheckpointUnits } from "@shared/sie-catalog";
-import { buildPlannerCurriculumLanes, getPlannerStepCurriculum } from "./planner-curriculum";
+import { buildPlannerCurriculumLanes, getPlannerStepCurriculum, getTeacherSessionPreparationSteps } from "./planner-curriculum";
 
 describe("planner curriculum map hierarchy", () => {
   it("groups Arabic lessons by their real textbook unit, not one flat subject branch", () => {
@@ -59,6 +59,58 @@ describe("planner curriculum map hierarchy", () => {
     expect(lanes).toHaveLength(1);
     expect(lanes[0].isOfficialUnit).toBe(false);
     expect(lanes[0].title).toContain(course.title);
+  });
+
+
+  it("links a scheduled English class to existing unfinished backlog, without inventing future topics", () => {
+    const grammar = getSIECheckpointUnits("ENG1_G2_BAC")
+      .flatMap(unit => unit.branches)
+      .find(branch => branch.branchId === "ENG_GRAMMAR")!;
+    const choice = grammar.choices[0];
+    const steps = [
+      {
+        title: "واجب جرامر مسجل",
+        detail: "راجع ملاحظات المدرس المسجلة.",
+        category: "واجب",
+        phaseId: "backlog",
+        existingTask: { id: 41, status: "todo" as const },
+        curriculumNodeIds: [choice.nodeId],
+      },
+      {
+        title: "مهمة مكتملة",
+        detail: "تم إنهاؤها.",
+        category: "واجب",
+        phaseId: "backlog",
+        plannerTaskStatus: "done" as const,
+        existingTask: { id: 42, status: "done" as const },
+        curriculumNodeIds: [choice.nodeId],
+      },
+      {
+        title: "موضوع لا يعرفه النظام بعد",
+        detail: "لا يوجد عنوان موثوق للمحاضرة القادمة.",
+        category: "موعد حصة",
+        phaseId: "teacher_sync",
+      },
+    ];
+
+    const preparation = getTeacherSessionPreparationSteps(steps, "ENG1_G2_BAC", ["ENG1_G2_BAC"]);
+    expect(preparation).toHaveLength(1);
+    expect(preparation[0].title).toBe("واجب جرامر مسجل");
+  });
+
+  it("does not attach another subject's backlog to the current teacher session", () => {
+    const arabic = getSIECheckpointUnits("ARB_G2_BAC")
+      .flatMap(unit => unit.branches)
+      .find(branch => branch.choices.length > 0)!;
+    const choice = arabic.choices[0];
+    const steps = [{
+      title: choice.title,
+      detail: "تفاصيل",
+      category: "تراكم",
+      existingTask: { id: 50, status: "todo" as const },
+      curriculumNodeIds: [choice.nodeId],
+    }];
+    expect(getTeacherSessionPreparationSteps(steps, "ENG1_G2_BAC", ["ARB_G2_BAC", "ENG1_G2_BAC"])).toHaveLength(0);
   });
 
   it("retains a separate general lane for manual tasks without a curriculum match", () => {
