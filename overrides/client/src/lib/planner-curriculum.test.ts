@@ -75,6 +75,7 @@ describe("planner curriculum map hierarchy", () => {
         phaseId: "backlog",
         existingTask: { id: 41, status: "todo" as const },
         curriculumNodeIds: [choice.nodeId],
+        dateOffsetDays: 1,
       },
       {
         title: "مهمة مكتملة",
@@ -84,6 +85,7 @@ describe("planner curriculum map hierarchy", () => {
         plannerTaskStatus: "done" as const,
         existingTask: { id: 42, status: "done" as const },
         curriculumNodeIds: [choice.nodeId],
+        dateOffsetDays: 0,
       },
       {
         title: "موضوع لا يعرفه النظام بعد",
@@ -91,9 +93,18 @@ describe("planner curriculum map hierarchy", () => {
         category: "موعد حصة",
         phaseId: "teacher_sync",
       },
+      {
+        title: "واجب لاحق للحصة",
+        detail: "موعده بعد المحاضرة.",
+        category: "واجب",
+        phaseId: "backlog",
+        existingTask: { id: 43, status: "todo" as const },
+        curriculumNodeIds: [choice.nodeId],
+        dateOffsetDays: 5,
+      },
     ];
 
-    const preparation = getTeacherSessionPreparationSteps(steps, "ENG1_G2_BAC", ["ENG1_G2_BAC"]);
+    const preparation = getTeacherSessionPreparationSteps(steps, "ENG1_G2_BAC", ["ENG1_G2_BAC"], 2, 2);
     expect(preparation).toHaveLength(1);
     expect(preparation[0].title).toBe("واجب جرامر مسجل");
   });
