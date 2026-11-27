@@ -1799,3 +1799,253 @@ body[data-studyflow-sections-open="true"] .sf-hub-root {
 @media (max-width: 640px) {
   .sf-sp-flow-legend { justify-content: flex-start; gap: 7px 11px; }
 }
+
+
+/* Study planner map refinement — one navigation-aligned palette. */
+.sf-sp-flow-map {
+  width: 100%;
+  min-width: 0;
+  padding: clamp(14px, 2.5vw, 26px);
+  border: 1px solid color-mix(in srgb, #A7B09E 22%, var(--border));
+  border-radius: 24px;
+  background:
+    radial-gradient(ellipse at 50% 0%, color-mix(in srgb, #C9ED62 7%, transparent), transparent 48%),
+    linear-gradient(180deg, color-mix(in srgb, var(--card) 96%, #10130f), var(--background));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.025), 0 18px 50px -42px rgba(0,0,0,.75);
+}
+.sf-sp-flow-origin {
+  width: min(100%, 520px);
+  padding: 16px 20px;
+  border: 1px solid color-mix(in srgb, #C9ED62 34%, var(--border));
+  border-radius: 18px;
+  background: color-mix(in srgb, #C9ED62 7%, var(--card));
+  text-align: center;
+}
+.sf-sp-flow-origin-kicker,
+.sf-sp-flow-finish > span {
+  color: #C9ED62;
+  letter-spacing: .04em;
+}
+.sf-sp-flow-origin strong,
+.sf-sp-flow-lane-header h4,
+.sf-sp-flow-finish strong {
+  color: var(--foreground);
+}
+.sf-sp-flow-origin small,
+.sf-sp-flow-finish small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted-foreground);
+  line-height: 1.75;
+}
+.sf-sp-flow-legend {
+  gap: 9px 16px;
+  padding: 20px 0 8px;
+}
+.sf-sp-flow-legend span {
+  padding: 6px 9px;
+  border: 1px solid color-mix(in srgb, #A7B09E 18%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in srgb, #A7B09E 5%, var(--card));
+  color: var(--muted-foreground);
+  font-size: 10px;
+}
+.sf-sp-flow-legend i,
+.sf-sp-flow-legend i.is-review,
+.sf-sp-flow-legend i.is-obligation,
+.sf-sp-flow-legend i.is-done {
+  width: 8px;
+  height: 8px;
+  border-color: #A7B09E;
+  background: #A7B09E;
+}
+.sf-sp-flow-legend i.is-learning { border-color: #A7B09E; background: #A7B09E; }
+.sf-sp-flow-legend i.is-review { border-color: #A7B09E; background: #A7B09E; }
+.sf-sp-flow-legend i.is-obligation { border-color: #A7B09E; background: #A7B09E; }
+.sf-sp-flow-legend i.is-done { border-color: #A7B09E; background: #A7B09E; }
+.sf-sp-flow-lanes {
+  width: 100%;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 285px), 1fr));
+  align-items: stretch;
+  gap: 14px;
+  padding-top: 24px;
+}
+.sf-sp-flow-lane {
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid color-mix(in srgb, #A7B09E 20%, var(--border));
+  border-radius: 19px;
+  background: color-mix(in srgb, var(--card) 94%, #A7B09E 6%);
+  box-shadow: 0 10px 26px -26px rgba(0,0,0,.7);
+}
+.sf-sp-flow-lane::before,
+.sf-sp-flow-lanes::before {
+  opacity: .55;
+  background: color-mix(in srgb, #A7B09E 50%, transparent);
+}
+.sf-sp-flow-lane-header {
+  min-width: 0;
+  gap: 10px;
+  padding: 3px 2px 12px;
+  border-bottom: 1px solid color-mix(in srgb, #A7B09E 16%, var(--border));
+}
+.sf-sp-flow-lane-header > div { min-width: 0; }
+.sf-sp-flow-lane-header h4 {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.sf-sp-flow-lane-header strong {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border: 1px solid color-mix(in srgb, #A7B09E 20%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, #A7B09E 7%, var(--background));
+  color: #A7B09E;
+  font-size: 9px;
+}
+.sf-sp-flow-track { gap: 12px; padding: 14px 0 2px; }
+.sf-sp-flow-track::before {
+  inset-inline-start: 14px;
+  background: color-mix(in srgb, #A7B09E 36%, transparent);
+}
+.sf-sp-flow-node {
+  grid-template-columns: 30px minmax(0, 1fr);
+  align-items: start;
+  gap: 9px;
+}
+.sf-sp-flow-node-index {
+  width: 29px;
+  height: 29px;
+  border: 1px solid color-mix(in srgb, #A7B09E 35%, var(--border));
+  border-radius: 10px;
+  background: color-mix(in srgb, #A7B09E 8%, var(--card));
+  color: #A7B09E;
+  font-size: 10px;
+  font-weight: 850;
+}
+.sf-sp-flow-node-card {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, #A7B09E 22%, var(--border));
+  border-inline-start: 2px solid #A7B09E;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--card) 97%, #A7B09E 3%);
+  box-shadow: 0 8px 24px -25px rgba(0,0,0,.8);
+  transition: border-color .18s ease, background .18s ease, transform .18s ease;
+}
+.sf-sp-flow-node-card:hover { transform: translateY(-1px); }
+.sf-sp-flow-node.is-learning .sf-sp-flow-node-card,
+.sf-sp-flow-node.is-review .sf-sp-flow-node-card,
+.sf-sp-flow-node.is-obligation .sf-sp-flow-node-card,
+.sf-sp-flow-node.is-done .sf-sp-flow-node-card {
+  border-inline-start-color: #A7B09E;
+}
+.sf-sp-flow-node.is-done .sf-sp-flow-node-index {
+  border-color: #A7B09E;
+  background: color-mix(in srgb, #A7B09E 12%, var(--card));
+  color: #A7B09E;
+}
+.sf-sp-flow-node-topline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.sf-sp-flow-node-topline span {
+  max-width: 100%;
+  padding: 4px 7px;
+  border: 1px solid color-mix(in srgb, #A7B09E 18%, var(--border));
+  border-radius: 7px;
+  background: color-mix(in srgb, #A7B09E 6%, var(--background));
+  color: #A7B09E;
+  font-size: 9px;
+  line-height: 1.4;
+}
+.sf-sp-flow-node-topline span:nth-child(2) {
+  color: var(--muted-foreground);
+  background: color-mix(in srgb, #A7B09E 5%, var(--background));
+}
+.sf-sp-flow-node-branch {
+  display: block;
+  margin-top: 7px;
+  color: var(--muted-foreground);
+  font-size: 10px;
+}
+.sf-sp-flow-node.is-next .sf-sp-flow-node-index {
+  border: 2px solid #C9ED62;
+  background: color-mix(in srgb, #C9ED62 13%, var(--card));
+  color: #C9ED62;
+  box-shadow: 0 0 0 4px color-mix(in srgb, #C9ED62 10%, transparent);
+}
+.sf-sp-flow-node.is-next .sf-sp-flow-node-card,
+.sf-sp-flow-node-card:has(.sf-sp-flow-node-select[aria-pressed="true"]) {
+  border-color: color-mix(in srgb, #C9ED62 58%, var(--border));
+  background: color-mix(in srgb, #C9ED62 5%, var(--card));
+  box-shadow: 0 0 0 1px color-mix(in srgb, #C9ED62 12%, transparent), 0 14px 32px -28px rgba(0,0,0,.9);
+}
+.sf-sp-flow-node.is-next .sf-sp-flow-node-topline span:nth-child(2) {
+  border-color: color-mix(in srgb, #C9ED62 28%, var(--border));
+  color: #C9ED62;
+  background: color-mix(in srgb, #C9ED62 10%, var(--background));
+}
+.sf-sp-flow-selection {
+  border-color: color-mix(in srgb, #C9ED62 32%, var(--border));
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, #C9ED62 7%, transparent), transparent 42%),
+    var(--card);
+}
+.sf-sp-flow-selection > header span { color: #C9ED62; }
+.sf-sp-flow-selection-meta span {
+  border-color: color-mix(in srgb, #A7B09E 18%, var(--border));
+  background: color-mix(in srgb, #A7B09E 5%, var(--background));
+}
+.sf-sp-board-status,
+.sf-sp-status,
+.sf-sp-count {
+  border-color: color-mix(in srgb, #A7B09E 24%, var(--border));
+}
+.sf-sp-ai-reconcile {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.sf-sp-ai-reconcile > div { min-width: 0; flex: 1 1 260px; }
+.sf-sp-ai-reconcile p { margin-top: 5px; line-height: 1.8; }
+.sf-english-lesson-row-stacked { align-items: center; }
+.sf-english-lesson-copy {
+  display: grid;
+  gap: 3px;
+  text-align: right;
+}
+.sf-english-lesson-sequence {
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.5;
+  direction: ltr;
+  text-align: right;
+}
+.sf-english-lesson-name {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.sf-english-lesson-type {
+  border: 1px solid color-mix(in srgb, #A7B09E 20%, var(--border));
+  background: color-mix(in srgb, #A7B09E 7%, var(--secondary));
+  color: #A7B09E;
+}
+@media (max-width: 640px) {
+  .sf-sp-flow-map { padding: 12px; border-radius: 18px; }
+  .sf-sp-flow-lanes { grid-template-columns: minmax(0, 1fr); gap: 11px; padding-top: 18px; }
+  .sf-sp-flow-lane { padding: 11px; border-radius: 15px; }
+  .sf-sp-flow-node-card { padding: 10px; }
+  .sf-sp-flow-origin { padding: 13px 12px; }
+  .sf-sp-ai-reconcile { align-items: stretch; }
+  .sf-sp-ai-reconcile > button { width: 100%; }
+  .sf-english-lesson-row-stacked { align-items: flex-start; }
+}
