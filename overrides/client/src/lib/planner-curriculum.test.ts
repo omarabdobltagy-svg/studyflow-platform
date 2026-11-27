@@ -49,6 +49,23 @@ describe("planner curriculum map hierarchy", () => {
     expect(lanes[0].branchLabels.length).toBeGreaterThan(1);
   });
 
+  it("preserves linear unit/chapter sequences for History and Programming", () => {
+    for (const subjectId of ["HIS_G2_BAC", "PROG_AI_G2_BAC"]) {
+      const units = getSIECheckpointUnits(subjectId).filter(unit => unit.lessonCount > 0);
+      expect(units.length).toBeGreaterThan(1);
+      const entries = units.slice(0, 2).map((unit, index) => {
+        const choice = unit.branches.flatMap(branch => branch.choices)[0];
+        expect(choice).toBeDefined();
+        return { index, step: { title: choice.title, curriculumNodeIds: [choice.nodeId] } };
+      });
+      const lanes = buildPlannerCurriculumLanes(entries, [subjectId]);
+      expect(lanes).toHaveLength(2);
+      expect(lanes[0].unitId).not.toBe(lanes[1].unitId);
+      expect(lanes[0].items[0].curriculum?.lesson).toBeTruthy();
+      expect(lanes[1].items[0].curriculum?.lesson).toBeTruthy();
+    }
+  });
+
   it("keeps teacher-course streams outside official textbook units as separate lanes", () => {
     const units = getSIECheckpointUnits("ARB_G2_BAC");
     const course = units.find(unit => !unit.isOfficialUnit && unit.lessonCount > 0)!;
