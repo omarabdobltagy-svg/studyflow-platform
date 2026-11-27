@@ -31,7 +31,7 @@ export type AIActivitySnapshot = {
 };
 
 const MAX_RECORDS_PER_USER = 6;
-const MAX_EVENTS_PER_RECORD = 12;
+const MAX_EVENTS_PER_RECORD = 16;
 const ACTIVE_STALE_AFTER_MS = 15 * 60 * 1000;
 const COMPLETED_RETENTION_MS = 45 * 1000;
 
