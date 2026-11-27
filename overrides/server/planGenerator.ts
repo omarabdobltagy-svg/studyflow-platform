@@ -1641,6 +1641,11 @@ export function applyDailyPlanDepth(
     const dueAt = task.dueAt instanceof Date && !Number.isNaN(task.dueAt.getTime())
       ? task.dueAt.toISOString()
       : null;
+    const taskFocusWeight = getStudentPlanningFocusWeight(
+      match?.subjectId,
+      match?.branchId,
+      [task.title, task.notes ?? "", task.category].join(" "),
+    );
     const taskStep = planSchema.shape.steps.element.parse({
       day: "",
       title: task.title,
@@ -1651,7 +1656,7 @@ export function applyDailyPlanDepth(
       category: task.category || "التزامات قائمة",
       curriculumNodeIds: linkedNodeId ? [linkedNodeId] : [],
       existingTask: { id: task.id, title: task.title, status: task.status, confidence: "exact", dueAt },
-      priority: task.priority,
+      priority: taskFocusWeight < 1 ? "low" : task.priority,
       difficulty: "unknown",
       lessonSize: "unknown",
       difficultyBasis: "unknown",
@@ -1693,9 +1698,12 @@ export function applyDailyPlanDepth(
     });
   }
 
-  // Interleave subjects only within the same learning-state priority.
+  // Interleave subjects within the same learning-state priority, then apply
+  // the student's lower near-term weight to story and GRE practice branches.
   nextChoices.sort((left, right) =>
     getPlannerLearningStatePriority(left.learningState) - getPlannerLearningStatePriority(right.learningState)
+    || getStudentPlanningFocusWeight(right.subjectId, right.branchId, right.title)
+      - getStudentPlanningFocusWeight(left.subjectId, left.branchId, left.title)
     || (profile.subjectIds ?? []).indexOf(left.subjectId) - (profile.subjectIds ?? []).indexOf(right.subjectId)
     || left.curriculumIndex - right.curriculumIndex
     || Number(right.isNext) - Number(left.isNext)
@@ -1705,9 +1713,10 @@ export function applyDailyPlanDepth(
     const subjectName = getSIESubject(item.subjectId)?.nameAr ?? item.subjectId;
     const hasTeacherSchedule = Array.isArray(teacherSchedules[item.subjectId]) && teacherSchedules[item.subjectId].length > 0;
     const isReviewLater = item.learningState === "watched_only" || item.learningState === "needs_review";
+    const focusWeight = getStudentPlanningFocusWeight(item.subjectId, item.branchId, item.title);
     const phaseId = isReviewLater
       ? "review_later" as const
-      : item.teacherSelected && hasTeacherSchedule ? "teacher_sync" as const : "steady" as const;
+      : item.teacherSelected && hasTeacherSchedule && focusWeight >= 1 ? "teacher_sync" as const : "steady" as const;
     const detail = item.learningState === "not_watched"
       ? "لم تشاهد شرح هذا الدرس بعد. ابدأ بمشاهدة شرح المدرس لهذا الدرس، ثم ذاكره من المصدر وسجّل تقدمك. لذلك يتقدم هذا الدرس على أي مراجعة لدرس سبق مشاهدة شرحه."
       : item.learningState === "watched_only"
@@ -1722,8 +1731,12 @@ export function applyDailyPlanDepth(
       minutes: 0,
       category: subjectName + " · " + item.branchTitle,
       curriculumNodeIds: [item.nodeId],
-      priority: item.learningState === "not_watched" ? "high"
-        : isReviewLater ? "low" : item.isNext ? "high" : "medium",
+      priority: isReviewLater || focusWeight < 1 ? "low"
+        : item.learningState === "not_watched" || item.isNext ? "high" : "medium",
+      priorityScore: Math.round((item.learningState === "not_watched" ? 80 : item.isNext ? 70 : 55) * focusWeight),
+      priorityReason: focusWeight < 1
+        ? "محتوى ضمن المنهج، لكن وزنه اليومي منخفض حسب تفضيلك؛ سيظل ضمن التغطية طويلة المدى."
+        : "ترتيب الدرس مبني على حالة الشرح والفجوة مع موضع المدرس.",
       difficulty: "unknown",
       lessonSize: "unknown",
       difficultyBasis: "unknown",
@@ -1775,10 +1788,16 @@ export function applyDailyPlanDepth(
     if (lesson.learningState === "not_watched") {
       const hasSchedule = Array.isArray(teacherSchedules[lesson.subjectId]) && teacherSchedules[lesson.subjectId].length > 0;
       const hasTeacher = Boolean(teacherChoices[lesson.subjectId] && teacherChoices[lesson.subjectId] !== "__SKIP__");
+      const focusWeight = getStudentPlanningFocusWeight(lesson.subjectId, lesson.branchId, lesson.title);
+      const isNearTermTeacherSync = hasTeacher && hasSchedule && focusWeight >= 1;
       return {
-        ...step, phaseId: hasTeacher && hasSchedule ? "teacher_sync" : "steady",
-        priority: "high", priorityScore: 100,
-        priorityReason: "شرح الدرس لم يُشاهد بعد؛ لذلك يسبق الدروس التي شوهد شرحها وتحتاج مذاكرة أو مراجعة.",
+        ...step,
+        phaseId: isNearTermTeacherSync ? "teacher_sync" : "steady",
+        priority: focusWeight < 1 ? "low" : "high",
+        priorityScore: Math.round(100 * focusWeight),
+        priorityReason: focusWeight < 1
+          ? "شرح هذا الفرع لم يُشاهد بعد، لكنه أقل وزنًا في توزيع الأيام القريبة وفق تفضيلك؛ سيبقى ضمن تغطية المنهج."
+          : "شرح الدرس لم يُشاهد بعد؛ لذلك يتقدم على المراجعات، مع مراعاة موعد المدرس المسجل.",
         detail: "لم تشاهد شرح هذا الدرس بعد. ابدأ بمشاهدة شرح المدرس، ثم ذاكره من المصدر وسجّل تقدمك.",
       };
     }
