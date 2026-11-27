@@ -32,7 +32,7 @@ type ResearchResult = {
 
 type CuratedDeliveryFacts = {
   availableModes: Array<"center" | "online">;
-  confidence: "medium" | "high";
+  confidence: "low" | "medium" | "high";
   evidence: TeacherCourseFactsInput["evidence"];
   verified: boolean;
 };
