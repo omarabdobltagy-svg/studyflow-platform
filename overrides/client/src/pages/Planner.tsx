@@ -1130,6 +1130,12 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
     const subjectCount = new Set(plan.steps.map(step => getPlanStepCurriculum(step, subjectIds)?.subjectId).filter(Boolean)).size;
   const confirmedTaskCount = plan.steps.filter(step => Boolean(step.existingTask)).length;
   const coveredCurriculumCount = new Set(plan.steps.flatMap(step => step.curriculumNodeIds ?? [])).size;
+  const backlogCoverageMatch = /المتراكم الفعلي:\\s*(\\d+)\\s*نقطة مؤكدة؛ أُدرج\\s*(\\d+)/.exec(plan.summary);
+  const backlogExpectedCount = backlogCoverageMatch ? Number(backlogCoverageMatch[1]) : null;
+  const backlogIncludedCount = backlogCoverageMatch ? Number(backlogCoverageMatch[2]) : null;
+  const backlogCoverageLabel = backlogExpectedCount === null || backlogIncludedCount === null
+    ? "غير متاح"
+    : backlogIncludedCount.toLocaleString("ar-EG") + " / " + backlogExpectedCount.toLocaleString("ar-EG");
   const plannedReviewCount = new Set(plan.steps.flatMap(step => {
     const resource = step.resourceRecommendation;
     return resource && /مراجعة|review|revision/i.test(resource.reason || "") && resource.url
@@ -1236,8 +1242,9 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
       <div className="sf-sp-board-metrics">
         <article><span>إجمالي الخطوات</span><strong>{plan.steps.length.toLocaleString("ar-EG")}</strong></article>
         <article><span>الخطوات المكتملة</span><strong>{completedCount.toLocaleString("ar-EG")}</strong></article>
-        <article><span>نقاط المنهج المغطاة</span><strong>{coveredCurriculumCount.toLocaleString("ar-EG")}</strong></article>
-        <article><span>فيديوهات مراجعة مناسبة</span><strong>{plannedReviewCount.toLocaleString("ar-EG")}</strong></article>
+        <article><span>المتراكم المؤكد المدرج / الإجمالي</span><strong>{backlogCoverageLabel}</strong></article>
+        <article><span>نقاط المنهج المرتبطة</span><strong>{coveredCurriculumCount.toLocaleString("ar-EG")}</strong></article>
+        <article><span>فيديوهات مراجعة مطابقة</span><strong>{plannedReviewCount.toLocaleString("ar-EG")}</strong></article>
         <article><span>التزامات مسجلة</span><strong>{confirmedTaskCount.toLocaleString("ar-EG")}</strong></article>
       </div>
 
@@ -1291,7 +1298,7 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
           <div className="sf-sp-flow-origin">
             <span className="sf-sp-flow-origin-kicker">نقطة البداية</span>
             <strong>موضعك الدراسي الحالي</strong>
-            <small>{mapLanes.length.toLocaleString("ar-EG")} مسارات تنفيذ · {plan.steps.length.toLocaleString("ar-EG")} خطوة في الخطة</small>
+            <small>{mapLanes.length.toLocaleString("ar-EG")} مسارات تنفيذ · {plan.steps.length.toLocaleString("ar-EG")} خطوة في الخطة{backlogCoverageLabel !== "غير متاح" ? " · المتراكم المؤكد " + backlogCoverageLabel : ""}</small>
           </div>
           {mapLanes.length ? (
             <div className="sf-sp-flow-lanes">
