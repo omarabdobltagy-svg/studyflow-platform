@@ -1,5 +1,6 @@
 import { getSIESubject, getSIETeacher } from "@shared/sie-catalog";
 
+// endTime is accepted only for older saved profiles; it is intentionally ignored.
 export type TeacherScheduleSlot = { dayOfWeek: number; startTime: string; endTime?: string };
 
 const isValidClockTime = (value: unknown): value is string =>
@@ -8,23 +9,6 @@ const isValidClockTime = (value: unknown): value is string =>
 const isValidTeacherScheduleSlot = (slot: Partial<TeacherScheduleSlot>): slot is TeacherScheduleSlot =>
   Number.isInteger(slot.dayOfWeek) && Number(slot.dayOfWeek) >= 0 && Number(slot.dayOfWeek) <= 6
   && isValidClockTime(slot.startTime);
-
-/** Present a compact Arabic duration while supporting sessions that end after midnight. */
-export function getTeacherLectureDuration(startTime: string, endTime?: string): string | null {
-  if (!isValidClockTime(startTime) || !isValidClockTime(endTime)) return null;
-  const toMinutes = (value: string) => Number(value.slice(0, 2)) * 60 + Number(value.slice(3, 5));
-  const start = toMinutes(startTime);
-  const end = toMinutes(endTime);
-  const total = (end - start + 1440) % 1440;
-  if (!total) return "وقت النهاية لازم يختلف عن البداية";
-  const hours = Math.floor(total / 60);
-  const minutes = total % 60;
-  const parts = [
-    hours ? hours.toLocaleString("ar-EG") + " ساعة" : "",
-    minutes ? minutes.toLocaleString("ar-EG") + " دقيقة" : "",
-  ].filter(Boolean);
-  return "مدة المحاضرة " + parts.join(" و ") + (end <= start ? " · تمتد لليوم التالي" : "");
-}
 
 /** Fill missing default weekdays without overriding a time the student has changed. */
 export function mergeSuggestedTeacherScheduleSlots(
@@ -35,7 +19,6 @@ export function mergeSuggestedTeacherScheduleSlots(
     .map(slot => ({
       dayOfWeek: slot.dayOfWeek,
       startTime: slot.startTime,
-      ...(isValidClockTime(slot.endTime) ? { endTime: slot.endTime } : {}),
     }));
   const occupiedDays = new Set(merged.map(slot => slot.dayOfWeek));
   for (const slot of Array.isArray(suggested) ? suggested : []) {
@@ -53,7 +36,6 @@ export type PlannerTeacherSession = {
   subjectName: string;
   dateLabel: string;
   time: string;
-  endTime?: string;
   sortDate: string;
   dateOffsetDays: number;
   dayOfWeek: number;
@@ -124,7 +106,6 @@ export function getPlannerTeacherSessions(profile?: {
           timeZone: "Africa/Cairo", weekday: "long", day: "numeric", month: "long",
         }).format(date),
         time: slot.startTime,
-        ...(slot.endTime ? { endTime: slot.endTime } : {}),
         sortDate,
         dateOffsetDays,
         dayOfWeek: slot.dayOfWeek,
