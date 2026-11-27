@@ -1579,8 +1579,14 @@ export function applyDailyPlanDepth(
     } catch {
       continue;
     }
-    if (parsedVideoUrl.protocol !== "https:"
-      || !["youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"].includes(parsedVideoUrl.hostname.toLowerCase())) continue;
+    const videoHost = parsedVideoUrl.hostname.toLowerCase();
+    const isYoutubeHost = ["youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"].includes(videoHost);
+    const youtubeVideoId = videoHost === "youtu.be"
+      ? parsedVideoUrl.pathname.split("/").filter(Boolean)[0]
+      : parsedVideoUrl.searchParams.get("v")
+        ?? parsedVideoUrl.pathname.match(/^\/(?:embed|shorts|live)\/([A-Za-z0-9_-]{6,})/)?.[1];
+    if (parsedVideoUrl.protocol !== "https:" || !isYoutubeHost
+      || !youtubeVideoId || !/^[A-Za-z0-9_-]{6,}$/.test(youtubeVideoId)) continue;
     const analysis = video.contentAnalysis as Record<string, any>;
     const topics = Array.isArray(analysis.topics) ? analysis.topics as Array<Record<string, any>> : [];
     const subtasks: NonNullable<GeneratedPlan["steps"][number]["subtasks"]> = [];
@@ -1592,10 +1598,10 @@ export function applyDailyPlanDepth(
       // Only high-confidence, curriculum-matched topics for lessons explicitly marked
       // as needing review can replace generated review-only steps.
       if (topic.confidence !== "high") continue;
-      const startSeconds = Number(topic.startSeconds);
-      const endSeconds = Number(topic.endSeconds);
-      if (!Number.isInteger(startSeconds) || startSeconds < 0 || startSeconds > 86_400
-        || !Number.isInteger(endSeconds) || endSeconds <= startSeconds || endSeconds > 86_400) continue;
+      const startSeconds = topic.startSeconds;
+      const endSeconds = topic.endSeconds;
+      if (typeof startSeconds !== "number" || !Number.isInteger(startSeconds) || startSeconds < 0 || startSeconds > 86_400
+        || typeof endSeconds !== "number" || !Number.isInteger(endSeconds) || endSeconds <= startSeconds || endSeconds > 86_400) continue;
       const matchingText = [
         topic.titleAr,
         topic.descriptionAr,
