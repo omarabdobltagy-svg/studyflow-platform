@@ -1308,13 +1308,28 @@ async function getAIInboxForStudent(userId: number) {
     .slice()
     .reverse()
     .slice(0, 40)
-    .map(event => ({
-      id: event.id,
-      createdAt: event.createdAt,
-      ...(event.metadata ?? {}),
-      read: readIds.has(String(event.id)) || respondedIds.has(String(event.id)),
-      answered: respondedIds.has(String(event.id)),
-    }));
+    .map(event => {
+      const metadata = event.metadata ?? {};
+      const actions = Array.isArray(metadata.actions)
+        ? metadata.actions.flatMap(action => {
+            if (!action || typeof action !== "object") return [];
+            const candidate = action as Record<string, unknown>;
+            if ((candidate.id !== "mark_done" && candidate.id !== "keep_open")
+              || typeof candidate.label !== "string") return [];
+            return [{ id: candidate.id as "mark_done" | "keep_open", label: candidate.label }];
+          })
+        : [];
+      return {
+        id: event.id,
+        createdAt: event.createdAt,
+        title: typeof metadata.title === "string" ? metadata.title : event.summary,
+        message: typeof metadata.message === "string" ? metadata.message : event.summary,
+        taskId: Number(metadata.taskId) || null,
+        actions,
+        read: readIds.has(String(event.id)) || respondedIds.has(String(event.id)),
+        answered: respondedIds.has(String(event.id)),
+      };
+    });
   return { items, unreadCount: items.filter(item => !item.read).length };
 }
 
