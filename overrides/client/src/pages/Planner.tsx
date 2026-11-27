@@ -1069,13 +1069,14 @@ function PlanAssistantChat({ plan, subjectIds }: { plan: PlanView; subjectIds: s
   const [draft, setDraft] = useState("");
   const context = useMemo(() => [
     "السياق: المستخدم يتحدث من صفحة خطة المذاكرة في StudyFlow.",
-    "اسم الخطة: " + plan.title,
-    "ملخص الخطة: " + plan.summary,
+    "أجب دائمًا بالعربية المصرية الواضحة، ولا تستخدم عناوين إنجليزية في الشرح.",
+    "اسم الخطة: " + displayArabicText(plan.title, "خطة المذاكرة"),
+    "ملخص الخطة: " + displayArabicText(plan.summary, "خطة مرتبة حسب التزاماتك وتقدمك الفعلي."),
     "خطوات الخطة الحالية:",
     ...plan.steps.map((step, index) =>
       `${index + 1}. ${displayPlanStepTitle(step, subjectIds)} | ${displayPlanStepCategory(step, subjectIds)} | ${displayPlanStepDetail(step, subjectIds)}${step.priorityReason ? " | سبب الأولوية: " + displayArabicText(step.priorityReason, "تم اختيارها حسب الأولوية المسجلة.") : ""}`
     ),
-  ].join("\n").slice(0, 7_500), [plan]);
+  ].join("\n").slice(0, 7_500), [plan, subjectIds]);
 
   const chat = trpc.ai.chat.useMutation({
     onSuccess: result => setMessages(current => [...current, { role: "assistant" as const, content: result.content }].slice(-20)),
