@@ -338,7 +338,8 @@ function plannerBranchKey(subjectId: string, branchId: string) {
  * Only checkpoints after that frontier can be offered as new learning tasks.
  */
 export function buildPlannerProgressSnapshot(
-  profile: NonNullable<Awaited<ReturnType<typeof getStudentProfile>>>
+  profile: NonNullable<Awaited<ReturnType<typeof getStudentProfile>>>,
+  options: { includeFullCurriculumWhenUnconfirmedUnknown?: boolean } = {},
 ): PlannerProgressSnapshot {
   const selection = (profile.selection || {}) as Record<string, any>;
   const frontiers = (selection.teacherFrontiers || {}) as Record<string, string>;
@@ -429,7 +430,14 @@ export function buildPlannerProgressSnapshot(
       const studentFrontierConfirmed = Boolean(
         saved.studentFrontierConfirmedAt ?? reported.studentFrontierConfirmedAt,
       );
-      const unknownFrontierFallbackNodeId = studentFrontier === "__UNKNOWN__" && !studentFrontierConfirmed
+      const includeUnknownCurriculumForCoverage = Boolean(
+        options.includeFullCurriculumWhenUnconfirmedUnknown
+        && studentFrontier === "__UNKNOWN__"
+        && !studentFrontierConfirmed,
+      );
+      const unknownFrontierFallbackNodeId = studentFrontier === "__UNKNOWN__"
+        && !studentFrontierConfirmed
+        && !includeUnknownCurriculumForCoverage
         ? branch.choices.find(choice => {
             const record = subjectLessonRecords[choice.nodeId];
             const completedBySq3r = Array.isArray(record?.completedSteps)
@@ -454,7 +462,7 @@ export function buildPlannerProgressSnapshot(
         // former frontier semantics until a student updates a branch in the new model.
         const learningState = reportedLearningState === "not_recorded"
           && lessonStateModelVersion < 1
-          && studentFrontier !== "__UNKNOWN__"
+          && (studentFrontier !== "__UNKNOWN__" || studentFrontierConfirmed)
           ? "not_watched" as const
           : reportedLearningState;
         const item = {
@@ -468,7 +476,11 @@ export function buildPlannerProgressSnapshot(
           branchCompleted.push(item);
           completedChoices.push(item);
           completedNodeIds.add(choice.nodeId);
-        } else if (learningState !== "not_recorded" || choice.nodeId === unknownFrontierFallbackNodeId) {
+        } else if (
+          learningState !== "not_recorded"
+          || choice.nodeId === unknownFrontierFallbackNodeId
+          || includeUnknownCurriculumForCoverage
+        ) {
           branchEligible.push(item);
           eligibleNodeIds.add(choice.nodeId);
         }
@@ -1002,7 +1014,12 @@ export function applyPlannerCurriculumCoverageGuard(
   plan: GeneratedPlan,
   profile: NonNullable<Awaited<ReturnType<typeof getStudentProfile>>>,
 ): GeneratedPlan {
-  const snapshot = buildPlannerProgressSnapshot(profile);
+  // Annual coverage intentionally includes the complete official syllabus, even
+  // when the student has not entered a starting position yet. Daily planning keeps
+  // its conservative one-checkpoint confirmation behavior.
+  const snapshot = buildPlannerProgressSnapshot(profile, {
+    includeFullCurriculumWhenUnconfirmedUnknown: true,
+  });
   const seen = new Set<string>();
   const normalizedSteps: GeneratedPlan["steps"] = [];
 
