@@ -506,6 +506,93 @@ export async function upsertTeacherCourseFacts(input: TeacherCourseFactsInput) {
   return getTeacherCourseFacts(input);
 }
 
+export type TeacherDirectoryRecordInput = {
+  teacherName: string;
+  brandName: string;
+  subjectId: string;
+  educationSystem: "EG_BACCALAUREATE" | "EG_GENERAL_SECONDARY";
+  gradeYear: string;
+  sourceUrl: string;
+  availableModes: Array<"center" | "online">;
+  confidence: "low" | "medium" | "high";
+  evidence: Array<{ title: string; url: string; source: string }>;
+  notes?: string;
+};
+
+export function normalizeTeacherDirectoryName(value: string) {
+  return value
+    .normalize("NFKC")
+    .toLocaleLowerCase("ar-EG")
+    .replace(/[أإآٱ]/g, "ا")
+    .replace(/ى/g, "ي")
+    .replace(/[ً-ٟـ]/g, "")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+export async function upsertTeacherDirectoryEntry(input: TeacherDirectoryRecordInput, submittedBy: number) {
+  const database = await requireDb();
+  const normalizedName = normalizeTeacherDirectoryName(input.teacherName);
+  if (!normalizedName) throw new Error("اسم المدرس غير صالح للدليل.");
+
+  const values = {
+    normalizedName,
+    teacherName: input.teacherName.trim().slice(0, 120),
+    brandName: input.brandName.trim().slice(0, 180) || input.teacherName.trim().slice(0, 180),
+    subjectId: input.subjectId,
+    educationSystem: input.educationSystem,
+    gradeYear: input.gradeYear,
+    sourceUrl: input.sourceUrl,
+    availableModesJson: JSON.stringify(input.availableModes),
+    confidence: input.confidence,
+    evidenceJson: JSON.stringify(input.evidence.slice(0, 5)),
+    notes: input.notes?.trim().slice(0, 700) || null,
+    submittedBy,
+  };
+
+  await database.insert(teacherDirectoryEntries).values(values).onDuplicateKeyUpdate({
+    set: {
+      teacherName: values.teacherName,
+      brandName: values.brandName,
+      sourceUrl: values.sourceUrl,
+      availableModesJson: values.availableModesJson,
+      confidence: values.confidence,
+      evidenceJson: values.evidenceJson,
+      notes: values.notes,
+      submittedBy,
+      confirmationCount: sql`${teacherDirectoryEntries.confirmationCount} + 1`,
+      updatedAt: new Date(),
+    },
+  });
+}
+
+export async function listTeacherDirectoryEntries(input: {
+  subjectId: string;
+  educationSystem: "EG_BACCALAUREATE" | "EG_GENERAL_SECONDARY";
+  gradeYear: string;
+}) {
+  const database = await requireDb();
+  const rows = await database.select().from(teacherDirectoryEntries).where(and(
+    eq(teacherDirectoryEntries.subjectId, input.subjectId),
+    eq(teacherDirectoryEntries.educationSystem, input.educationSystem),
+    eq(teacherDirectoryEntries.gradeYear, input.gradeYear),
+  )).orderBy(desc(teacherDirectoryEntries.confirmationCount), desc(teacherDirectoryEntries.updatedAt), asc(teacherDirectoryEntries.teacherName));
+
+  return rows.map(row => ({
+    id: row.id,
+    nameAr: row.teacherName,
+    brandName: row.brandName,
+    sourceUrl: row.sourceUrl,
+    availableModes: parseJson<Array<"center" | "online">>(row.availableModesJson, []),
+    confidence: row.confidence as "low" | "medium" | "high",
+    evidence: parseJson<Array<{ title: string; url: string; source: string }>>(row.evidenceJson, []),
+    notes: row.notes ?? "",
+    confirmationCount: row.confirmationCount,
+    updatedAt: row.updatedAt.toISOString(),
+  }));
+}
+
 export async function listTasks(userId: number) {
   const db = await requireDb();
   return db
