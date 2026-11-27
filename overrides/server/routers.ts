@@ -6,6 +6,7 @@ import { SignJWT } from "jose";
 import { TRPCError } from "@trpc/server";
 import { COOKIE_NAME } from "@shared/const";
 import { SIE_CATALOG_META, SIE_SYSTEMS, SIE_TEACHERS, SIE_SUBJECTS, getSIEEducationSystem, getSIESubject, getSIETeacher, getSIETeachersForSubject, getSIETrack, getSIECheckpointChoices, getSIECheckpointBranches, normalizeSIECheckpointFrontier, getSIECheckpointProgressBranches, matchSIECheckpointTask, validateSIESubjectSelection } from "@shared/sie-catalog";
+import { getCairoSecondYearBaccalaureateExams } from "@shared/cairo-baccalaureate-exam-calendar";
 import { calculateLearningGap, selectLegacyLinearFrontier } from "@shared/sie-learning-progress";
 import {
   addChapter,
@@ -690,6 +691,15 @@ async function buildDailyPlanOperationalContext(userId: number) {
   });
   const nonCompletionReports = recentActivity.filter(event => event.eventType === "task.not_completed").slice(-10).map(event => event.summary);
   const now = new Date();
+  const todayCairo = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(now);
+  const cairoExams = getCairoSecondYearBaccalaureateExams(profile)
+    .filter(exam => exam.date >= todayCairo);
+  const cairoExamContext = cairoExams.map(exam => [
+    exam.date,
+    exam.dayName,
+    exam.subjectName,
+    exam.category === "specialization" ? "مادة تخصصية حسب المسار" : "مادة أساسية مضافة للمجموع",
+  ].join(" — "));
   const horizon = now.getTime() + 14 * 24 * 60 * 60 * 1_000;
   const formatDate = (value: unknown) => {
     if (!value) return "";
@@ -836,6 +846,11 @@ async function buildDailyPlanOperationalContext(userId: number) {
     analyzedTeacherVideos.length ? analyzedTeacherVideos.join("\\n\\n") : "لا توجد تحليلات فيديو مكتملة حتى الآن. لا تستنتج موضوعات الفيديو من العنوان أو مدة الفيديو وحدهما.",
     "الأحداث والمواعيد خلال 14 يومًا:",
     upcomingEvents.length ? upcomingEvents.join("\n") : "لا توجد أحداث قادمة محفوظة.",
+    "الاختبارات القادمة للصف الثاني بكالوريا — القاهرة (جدول المديرية المقترح، وليس تأكيدًا من المدرسة):",
+    cairoExamContext.length
+      ? cairoExamContext.join("\n")
+      : "لا توجد امتحانات مضافة للمجموع من جدول القاهرة ضمن المواد المحددة في ملف الطالب.",
+    "عند ترتيب الاستعداد لهذه الامتحانات، قدّم المواد المضافة للمجموع فقط، واستبعد الثقافة المالية والتربية الرياضية من قائمة امتحانات المجموع. لا تخترع تاريخًا أو مادة تخصصية غير محددة في ملف الطالب.",
     "الأهداف النشطة:",
     activeGoals.length ? activeGoals.join("\n") : "لا توجد أهداف نشطة محفوظة.",
     "الكتب والموارد المتاحة:",
@@ -3018,7 +3033,8 @@ export const appRouter = router({
             const externalId = "youtube:" + videoId;
             if (declinedIds.has(externalId)) return [];
             const matchedTopics = matchedBranchTopics(update);
-            const analysisStatus = String(update.contentAnalysis?.status ?? "pending");
+            const analysisStatus = String(update.contentAnalysis?.status
+              ?? (isTeacherVideoAnalysisConfigured() ? "processing" : "analysis_unavailable"));
             if (analysisStatus === "complete" && matchedTopics.length === 0) return [];
             const teacherName = String(update.teacherName ?? selectedTeacher?.nameAr ?? "مدرسك");
             return [{
@@ -3039,7 +3055,9 @@ export const appRouter = router({
               verificationState: analysisStatus === "complete" ? "content_verified" : "analysis_pending",
               relevance: analysisStatus === "complete"
                 ? "تم تحليل محتوى الفيديو وربطه بموضوعات متراكمة داخل هذا الفرع."
-                : "هذا فيديو مراجعة من مدرسك المختار؛ جارٍ فحص محتواه قبل إدراجه في الخطة.",
+                : analysisStatus === "processing"
+                  ? "هذا فيديو مراجعة من قناة مدرسك المختار؛ يجري تحليل محتواه قبل ربطه بالمنهج."
+                  : "تم العثور على الفيديو من قناة مدرسك، لكن تحليل Gemini غير متاح حاليًا؛ لذلك لن يدخل الخطة قبل إتمام التحليل.",
             }];
           })
           .sort((a, b) => Date.parse(b.publishedAt || "") - Date.parse(a.publishedAt || ""))
