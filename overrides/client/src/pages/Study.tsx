@@ -568,8 +568,8 @@ export default function Study() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-[10px] font-bold tracking-[0.14em] text-primary">اختيار التقدم</p>
-              <h2 className="mt-1 text-xl font-bold">ابدأ من الوحدة، أو افتح الدروس</h2>
-              <p className="mt-1 text-sm leading-6 text-muted-foreground">{subjectId === "ENG1_G2_BAC" ? "كل الوحدات العشر داخل فرع Units، وداخل كل وحدة دروس Vocabulary وGrammar بأرقامها، ثم موضوعات الكتاب." : "ابدأ بالوحدات الرسمية من الكتاب. فروع التعبير والإملاء والأدب والقصة تظهر كمسارات كورس المدرس بشكل مستقل. تقدر تسجل اكتمال وحدة أو تضغط «إظهار باقي الدروس» للتفصيل."}</p>
+              <h2 className="mt-1 text-xl font-bold">تصفّح المنهج حسب الوحدة أو الدرس</h2>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">{subjectId === "ENG1_G2_BAC" ? "الوحدات الرسمية العشر، وداخل كل وحدة دروس المفردات (Vocabulary) والقواعد (Grammar) بأرقامها، ثم موضوعات الكتاب." : "الوحدات الرسمية مرتبة حسب الكتاب، والفروع الإضافية تظهر كمسارات مستقلة. افتح تبويب الدروس للوصول إلى تفاصيل كل درس وتحديث حالته."}</p>
             </div>
             <div className="sf-study-view-tabs" role="tablist" aria-label="عرض المنهج">
               <button
