@@ -36,6 +36,7 @@ import {
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { lazy, Suspense, type ReactNode, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
+import { toast } from "sonner";
 
 type NavigationGroup = {
   label: string;
