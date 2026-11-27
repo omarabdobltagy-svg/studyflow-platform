@@ -1573,6 +1573,14 @@ export function applyDailyPlanDepth(
   for (const video of analyzedVideos) {
     const teacher = getSIETeacher(String(video.teacherId));
     if (!teacher) continue;
+    let parsedVideoUrl: URL;
+    try {
+      parsedVideoUrl = new URL(String(video.url));
+    } catch {
+      continue;
+    }
+    if (parsedVideoUrl.protocol !== "https:"
+      || !["youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"].includes(parsedVideoUrl.hostname.toLowerCase())) continue;
     const analysis = video.contentAnalysis as Record<string, any>;
     const topics = Array.isArray(analysis.topics) ? analysis.topics as Array<Record<string, any>> : [];
     const subtasks: NonNullable<GeneratedPlan["steps"][number]["subtasks"]> = [];
