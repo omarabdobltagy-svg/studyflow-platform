@@ -22,7 +22,7 @@ describe("getPlannerTeacherSessions", () => {
     expect(new Set(sessions.map(session => session.sortDate)).size).toBe(2);
   });
 
-  it("does not truncate when there are more than eight future sessions", () => {
+  it("does not truncate more than eight saved sessions and backfills any missing default weekday", () => {
     const profile = {
       subjectIds: ["ARB_G2_BAC", "ENG1_G2_BAC"],
       teacherSelections: {
@@ -52,7 +52,8 @@ describe("getPlannerTeacherSessions", () => {
       },
     };
     const sessions = getPlannerTeacherSessions(profile, new Date("2026-11-27T12:00:00.000Z"));
-    expect(sessions).toHaveLength(9);
+    // Nine saved slots plus the missing Sunday default for Englishawy.
+    expect(sessions).toHaveLength(10);
   });
 });
 
