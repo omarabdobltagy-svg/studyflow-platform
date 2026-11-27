@@ -3848,26 +3848,12 @@ export const appRouter = router({
         );
         return { success: true, ...result };
       }),
+    // Read-only snapshot endpoint. Plan generation belongs to ensureDaily (mutation),
+    // never to a GET request, so opening/retrying the page cannot unexpectedly write
+    // plan records or synchronize tasks inside a data-loading request.
     currentDaily: protectedProcedure.query(async ({ ctx }) => {
-      let snapshot = await getCurrentDailyPlanForStudent(ctx.user.id);
+      const snapshot = await getCurrentDailyPlanForStudent(ctx.user.id);
       if (snapshot.plan || snapshot.generatedAt) queueTeacherSourceScan(ctx.user.id);
-      // Build the first plan from the live student signals automatically. A user
-      // should not have to ask the AI to make the plan or press Generate.
-      if (!snapshot.plan && !snapshot.generatedAt) {
-        const profile = await getStudentProfile(ctx.user.id);
-        if (profile?.subjectIds?.length) {
-          const result = await ensureDailyPlanForStudent(ctx.user.id, snapshot.dailyMinutes || 120);
-          const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
-          snapshot = {
-            plan: result.plan,
-            generatedAt: result.generatedAt,
-            needsRefresh: false,
-            sourceFingerprint: await getDailyPlanSourceFingerprint(ctx.user.id, snapshot.dailyMinutes || 120, today),
-            dailyMinutes: snapshot.dailyMinutes || 120,
-            taskCount: result.taskCount,
-          };
-        }
-      }
       if (snapshot.needsRefresh && snapshot.dailyMinutes && snapshot.generatedAt) {
         queueDailyPlanEnsure(ctx.user.id, snapshot.dailyMinutes);
       }
