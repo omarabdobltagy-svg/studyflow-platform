@@ -2,11 +2,12 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { AIChatBox } from "@/components/AIChatBox";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
-import { BookOpen, MessageSquare, Plus, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
+import { BookOpen, FileText, MessageSquare, Paperclip, Plus, ShieldCheck, Sparkles, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
+type AssistantTextAttachment = { id: string; name: string; content: string; size: number };
 type ChatThread = { id: string; title: string; messages: ChatMessage[]; updatedAt: number };
 const STORAGE_KEY = "studyflow.assistant.conversations.v2";
 const SELECTED_KEY = "studyflow.assistant.selected.v2";
@@ -77,6 +78,8 @@ export default function Assistant() {
     return window.localStorage.getItem(SELECTED_KEY) || "";
   });
   const [streamingThreadId, setStreamingThreadId] = useState<string | null>(null);
+  const [pendingAttachments, setPendingAttachments] = useState<AssistantTextAttachment[]>([]);
+  const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const activeThread = useMemo(
     () => threads.find(thread => thread.id === selectedId) || threads[0],
     [threads, selectedId],
@@ -140,7 +143,14 @@ export default function Assistant() {
 
     stopCurrentStream(true);
     const threadId = activeThread.id;
-    const userMessage: ChatMessage = { role: "user", content: trimmed };
+    const attachments = pendingAttachments.slice(0, 3);
+    const attachmentContext = attachments.map(file =>
+      "اسم الملف: " + file.name + "\nمحتوى الملف:\n" + file.content
+    ).join("\n\n--- ملف آخر ---\n\n").slice(0, 7_500);
+    const userMessage: ChatMessage = {
+      role: "user",
+      content: trimmed + (attachments.length ? "\n\n📎 مرفقات: " + attachments.map(file => file.name).join("، ") : ""),
+    };
     const requestMessages = [...activeThread.messages, userMessage].slice(-20);
     const visibleMessages = [...activeThread.messages, userMessage, { role: "assistant" as const, content: "" }].slice(-40);
 
@@ -165,6 +175,7 @@ export default function Assistant() {
       .join("\n---\n")
       .slice(0, 2_400);
 
+    if (attachments.length) setPendingAttachments([]);
     const controller = new AbortController();
     abortControllerRef.current = controller;
     streamingThreadRef.current = threadId;
@@ -204,7 +215,11 @@ export default function Assistant() {
           "Content-Type": "application/json",
           Accept: "text/event-stream",
         },
-        body: JSON.stringify({ messages: requestMessages, memory }),
+        body: JSON.stringify({
+          messages: requestMessages,
+          memory,
+          context: attachmentContext || undefined,
+        }),
         signal: controller.signal,
       });
       if (!response.ok) {
@@ -252,7 +267,7 @@ export default function Assistant() {
 
   return (
     <DashboardLayout title="المساعد الدراسي الذكي" description="ذكاء دراسي متصل بسياق مساحتك، وأنشطتك، والمهام والروتين والتقويم والتقدم المنهجي.">
-      <section className="mb-5 overflow-hidden rounded-[1.5rem] border border-border/70 bg-card">
+      <section className="sf-assistant-shell mb-5 overflow-hidden rounded-[1.5rem] border border-border/70 bg-card">
         <div className="flex flex-col gap-4 border-b border-border/70 bg-gradient-to-l from-secondary/75 via-card to-card p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
           <div className="flex items-start gap-3">
             <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg"><Sparkles className="size-5" /></span>
@@ -267,7 +282,7 @@ export default function Assistant() {
           </div>
         </div>
         <div className="grid gap-4 p-3 sm:p-4 lg:grid-cols-[250px_minmax(0,1fr)]">
-          <aside className="flex min-w-0 flex-col rounded-2xl border border-border/70 bg-muted/20 p-3">
+          <aside className="sf-assistant-sidebar flex min-w-0 flex-col rounded-2xl border border-border/70 bg-muted/20 p-3">
             <Button type="button" onClick={createConversation} className="mb-3 h-11 w-full justify-center gap-2 rounded-xl bg-primary">
               <Plus className="size-4" />محادثة جديدة
             </Button>
@@ -289,7 +304,7 @@ export default function Assistant() {
             </div>
             <p className="mt-3 hidden text-[11px] leading-5 text-muted-foreground lg:block">سجل المحادثات محفوظ على هذا المتصفح، وخلاصة دراسية مختارة تُحفظ على حسابك لتخصيص المساعد عبر الجلسات.</p>
           </aside>
-          <div className="min-w-0">
+          <div className="sf-assistant-workspace min-w-0">
             <div className="mb-3 flex items-center justify-between gap-3 px-1">
               <div className="min-w-0">
                 <p className="truncate text-sm font-bold">{activeThread?.title || "محادثة جديدة"}</p>
@@ -300,20 +315,85 @@ export default function Assistant() {
                 <Button type="button" variant="ghost" size="sm" disabled={!activeThread?.messages.length} onClick={deleteConversation} className="gap-2 rounded-xl text-muted-foreground hover:text-destructive"><Trash2 className="size-3.5" />حذف</Button>
               </div>
             </div>
-            <AIChatBox
-              key={activeThread?.id}
-              messages={activeThread?.messages || []}
-              onSendMessage={sendMessage}
-              isLoading={activeIsStreaming}
-              height="min(72vh, 760px)"
-              placeholder="اسأل عن درس أو مفهوم في منهجك..."
-              emptyStateMessage="ابدأ بسؤال عن درس أو مفهوم، أو اطلب توضيحًا لشرح المدرس."
-              suggestedPrompts={suggestions}
-            />
+            <div className="sf-assistant-chat-panel">
+              <div className="sf-assistant-attachments-bar">
+                <div className="sf-assistant-attachments-actions">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="sf-assistant-attach-button"
+                    onClick={() => attachmentInputRef.current?.click()}
+                    disabled={activeIsStreaming || pendingAttachments.length >= 3}
+                  ><Paperclip className="size-4" /> إرفاق ملف نصي</Button>
+                  <input
+                    ref={attachmentInputRef}
+                    type="file"
+                    hidden
+                    multiple
+                    accept=".txt,.md,.csv,.json,.html,.css,.js,.ts,.tsx,.jsx,text/plain,text/markdown,text/csv,application/json,text/html,text/css"
+                    onChange={async event => {
+                      const selected = Array.from(event.currentTarget.files ?? []);
+                      event.currentTarget.value = "";
+                      const supported = /\.(txt|md|csv|json|html|css|js|ts|tsx|jsx)$/i;
+                      const additions: AssistantTextAttachment[] = [];
+                      for (const file of selected.slice(0, 3 - pendingAttachments.length)) {
+                        if (!supported.test(file.name)) {
+                          toast.error(file.name + " غير مدعوم حاليًا. استخدم TXT أو MD أو CSV أو JSON أو HTML أو ملفات الكود.");
+                          continue;
+                        }
+                        if (file.size > 1_500_000) {
+                          toast.error(file.name + " أكبر من الحد المسموح (1.5 MB).");
+                          continue;
+                        }
+                        try {
+                          const content = await file.text();
+                          if (!content.trim()) {
+                            toast.error(file.name + " لا يحتوي على نص قابل للقراءة.");
+                            continue;
+                          }
+                          additions.push({
+                            id: file.name + "-" + file.lastModified + "-" + Math.random().toString(36).slice(2, 7),
+                            name: file.name,
+                            content: content.slice(0, 7_000),
+                            size: file.size,
+                          });
+                        } catch {
+                          toast.error("تعذرت قراءة الملف " + file.name + ".");
+                        }
+                      }
+                      if (additions.length) setPendingAttachments(current => [...current, ...additions].slice(0, 3));
+                    }}
+                  />
+                </div>
+                <span className="sf-assistant-attachment-hint">TXT · MD · CSV · JSON · HTML · ملفات الكود · حتى 1.5 MB للملف</span>
+              </div>
+              {pendingAttachments.length > 0 && (
+                <div className="sf-assistant-attachment-list" aria-label="الملفات المرفقة">
+                  {pendingAttachments.map(file => (
+                    <span className="sf-assistant-attachment-chip" key={file.id}>
+                      <FileText className="size-4" />
+                      <span>{file.name}</span>
+                      <button type="button" onClick={() => setPendingAttachments(current => current.filter(item => item.id !== file.id))} aria-label={"إزالة " + file.name}><X className="size-3.5" /></button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              <AIChatBox
+                key={activeThread?.id}
+                messages={activeThread?.messages || []}
+                onSendMessage={sendMessage}
+                isLoading={activeIsStreaming}
+                height="min(72vh, 760px)"
+                placeholder="اسأل عن درس أو مفهوم في منهجك..."
+                emptyStateMessage="ابدأ بسؤال عن درس أو مفهوم، أو اطلب توضيحًا لشرح المدرس."
+                suggestedPrompts={suggestions}
+              />
+            </div>
           </div>
         </div>
       </section>
-      <p className="px-1 text-xs leading-6 text-muted-foreground">يعتمد الرد على ملفك الدراسي وفهارس المنهج ومواضع المدرسين المتاحة في النظام. فهرسة النص الكامل للكتب المرفوعة وربطه بالبحث المعرفي مرحلة منفصلة؛ لا أعتبر اسم الكتاب وحده دليلًا على أن محتواه أصبح متاحًا للمساعد.</p>
+      <p className="sf-assistant-disclosure px-1 text-xs leading-6 text-muted-foreground">المساعد يستطيع قراءة محتوى الملفات النصية المرفقة هنا. ملفات PDF وWord والصور غير مدعومة في هذا المسار بعد؛ لا تُرسل كأنها قُرئت بالفعل. فهرسة الكتب المرفوعة وربطها ببحث معرفي دائم مرحلة منفصلة.</p>
     </DashboardLayout>
   );
 }
