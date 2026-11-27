@@ -80,7 +80,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { generatePersonalPlan, getPlanGenerationProgress, markPlanGenerationFailed } from "./planGenerator";
 import { completeAIActivity, failAIActivity, getAIActivitySnapshot, startAIActivity, updateAIActivity } from "./aiActivity";
-import { classifyTeacherPublicUpdate, isHighConfidenceScheduleAnnouncement, isSecondYearBaccalaureateUpdate, parseYoutubeAtomFeed, scanSelectedTeacherSources, selectedTeacherIds, type TeacherPublicUpdate } from "./teacher-content-monitor";
+import { classifyTeacherPublicUpdate, isHighConfidenceScheduleAnnouncement, isSecondYearBaccalaureateUpdate, isTeacherVideoUpdateAllowed, parseYoutubeAtomFeed, scanSelectedTeacherSources, selectedTeacherIds, type TeacherPublicUpdate } from "./teacher-content-monitor";
 import { getTeacherVideoAnalysis, isTeacherVideoAnalysisConfigured, startTeacherVideoAnalysis } from "./teacher-video-analysis";
 import { isDailyPlanStale } from "./planLifecycle";
 import { buildPlannerMemorySnapshot, formatPlannerMemorySnapshot } from "./plannerMemory";
@@ -215,7 +215,7 @@ async function processTeacherVideoAnalysis(userId: number, externalId: string, a
   const video = videos.find(update =>
     update.externalId === externalId
     && update.sourceType === "youtube"
-    && allowedTeachers.has(update.teacherId)
+    && isTeacherVideoUpdateAllowed(profile, update)
   );
   if (!video || !video.url) {
     if (activityId) completeAIActivity(userId, activityId, "لم يعد الفيديو ضمن مصادر المدرسين المختارين؛ لم يتم تحليله.");
@@ -455,7 +455,7 @@ async function scanTeacherSourcesForStudent(userId: number, activityId?: string)
         || isHighConfidenceScheduleAnnouncement(update as TeacherPublicUpdate);
       const previousUpdates = rawPreviousUpdates.filter(update =>
         typeof update.teacherId === "string"
-        && allowedTeacherIds.has(update.teacherId)
+        && (allowedTeacherIds.has(update.teacherId) || isTeacherVideoUpdateAllowed(latestProfile, update as TeacherPublicUpdate))
         && relevantUpdate(update)
       );
       const knownIds = new Set(previousUpdates.map(update => String(update.externalId ?? "")).filter(Boolean));
