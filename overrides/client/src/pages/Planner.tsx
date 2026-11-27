@@ -3,6 +3,7 @@ import PlanExportActions from "@/components/PlanExportActions";
 import QueryErrorNotice from "@/components/QueryErrorNotice";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
+import { getNextOpenPlanStep } from "@/lib/plan-actions";
 import { ENGLISH_CURRICULUM_LABELS, displayBranchTitle, displayCurriculumTitle } from "@/lib/curriculum-display";
 import {
   getSIECheckpointProgressBranches,
@@ -296,7 +297,8 @@ export default function Planner() {
   const historyInitialized = useRef(false);
   const initialDailyGenerationStarted = useRef(false);
   const plannerPreferencesInitialized = useRef(false);
-  const [plannerTab, setPlannerTab] = useState<"overview" | "schedule" | "curriculum" | "tasks" | "history">("overview");
+  // Open the execution map first; the overview remains one tap away.
+  const [plannerTab, setPlannerTab] = useState<"overview" | "schedule" | "curriculum" | "tasks" | "history">("schedule");
 
   const history = trpc.plans.list.useQuery();
   const profile = trpc.studentProfile.get.useQuery(undefined, {
@@ -494,6 +496,7 @@ export default function Planner() {
       });
       setApproved(true);
       setLoadedSavedDraft(false);
+      setPlannerTab("schedule");
       await Promise.all([
         utils.plans.currentDaily.invalidate(),
         utils.tasks.list.invalidate(),
@@ -739,7 +742,7 @@ export default function Planner() {
   const planStepCount = plan?.steps.length ?? 0;
   const completedPlanCount = plan?.steps.filter(step => step.plannerTaskStatus === "done" || step.existingTask?.status === "done").length ?? 0;
   const planProgress = planStepCount ? Math.round((completedPlanCount / planStepCount) * 100) : 0;
-  const nextPlanStep = plan?.steps.find(step => step.plannerTaskStatus !== "done" && step.existingTask?.status !== "done") ?? null;
+  const nextPlanStep = getNextOpenPlanStep(plan?.steps);
   const taskRows = tasksQuery.data ?? [];
   const openTaskRows = taskRows.filter(task => task.status !== "done");
   const overdueTaskRows = openTaskRows.filter(task => task.dueAt && new Date(task.dueAt).getTime() < Date.now());
@@ -938,10 +941,20 @@ export default function Planner() {
 
         {plannerTab === "schedule" && (
           <div className="sf-sp-panel" data-scroll-reveal>
-            {plan ? (
+            {activeDailyPlan.isLoading || history.isLoading ? (
+              <section className="sf-sp-empty" role="status" aria-live="polite">
+                <h2>بنحمّل خريطة خطتك</h2>
+                <p>نقرأ آخر نسخة محفوظة ونربط خطواتها بالمواد والفروع وحالة التنفيذ.</p>
+                <div className="sf-sp-skeletons"><span /><span /><span /></div>
+              </section>
+            ) : plan ? (
               <PlanCard plan={plan} subjectIds={profile.data?.subjectIds ?? []} title={approved ? "الخطة المعتمدة" : loadedSavedDraft ? "مسودة محفوظة" : "مقترح للمراجعة"} studentName={profile.data?.studentName} editable={!approved} onChange={updatePlan} onApprove={approveCurrentPlan} onAddStep={addStep} onRemoveStep={removeStep} onMoveStep={moveStep} approving={approvePlan.isPending} approved={approved} />
             ) : (
-              <section className="sf-sp-empty"><h2>لا يوجد توزيع مذاكرة حالي</h2><p>أنشئ مقترحًا أولًا، ثم راجع توزيع المهام حسب الأولوية والمرحلة واعتمده لإضافته إلى قائمتك.</p><Button type="button" onClick={() => setPlannerTab("overview")}>العودة إلى الملخص</Button></section>
+              <section className="sf-sp-empty">
+                <h2>لم تُنشأ خريطة مذاكرة بعد</h2>
+                <p>افتح الملخص لإنشاء خطة من بيانات تقدمك الفعلية، ثم ستظهر الخريطة هنا مباشرة.</p>
+                <Button type="button" onClick={() => setPlannerTab("overview")}>إنشاء خطة المذاكرة</Button>
+              </section>
             )}
           </div>
         )}
