@@ -25,6 +25,8 @@ describe("student-aware near-term curriculum focus", () => {
     expect(getStudentPlanningFocusWeight("ENG1_G2_BAC", "ENG_GRAMMAR", "Grammar")).toBe(1);
     expect(getStudentPlanningFocusWeight("ENG1_G2_BAC", "ENG_VOCABULARY", "Vocabulary")).toBe(1);
     expect(getStudentPlanningFocusWeight(null, null, "GRE Exercises")).toBe(0.42);
+    expect(getStudentPlanningFocusWeight("ENG1_G2_BAC", "ENG_STORY", "The Lost World", true)).toBe(1);
+    expect(getStudentPlanningFocusWeight(null, "ENG_GRE", "مهمة GRE موجودة بالفعل", true)).toBe(1);
   });
 
   it("does not downgrade a confirmed teacher obligation just because it mentions a story or GRE", () => {
