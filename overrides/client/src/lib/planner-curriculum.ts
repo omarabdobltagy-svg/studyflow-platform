@@ -92,16 +92,20 @@ export function getTeacherSessionPreparationSteps<TStep extends CurriculumStepLi
   phaseId?: string;
   existingTask?: { status?: "todo" | "done" };
   plannerTaskStatus?: "todo" | "done";
+  dateOffsetDays?: number | null;
 }>(
   steps: TStep[],
   sessionSubjectId: string,
   subjectIds: string[],
   limit = 2,
+  sessionDateOffsetDays?: number,
 ): TStep[] {
   return steps.filter(step => {
     const completed = step.plannerTaskStatus === "done" || step.existingTask?.status === "done";
     const isBacklog = Boolean(step.existingTask) || step.phaseId === "backlog";
     if (completed || !isBacklog) return false;
+    if (sessionDateOffsetDays !== undefined
+      && (typeof step.dateOffsetDays !== "number" || step.dateOffsetDays > sessionDateOffsetDays)) return false;
     return getPlannerStepCurriculum(step, subjectIds)?.subjectId === sessionSubjectId;
   }).slice(0, Math.max(0, limit));
 }
