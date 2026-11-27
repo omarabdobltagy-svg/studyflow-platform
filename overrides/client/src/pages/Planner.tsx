@@ -951,6 +951,8 @@ export default function Planner() {
                   <Button type="button" onClick={runGeneration}>إعادة بناء خريطة المذاكرة الآن</Button>
                 )}
               </section>
+            ) : ensureDaily.isPending ? (
+              <PlanLoading progress={generationProgress.data ?? null} />
             ) : activeDailyPlan.isLoading || history.isLoading ? (
               <section className="sf-sp-empty" role="status" aria-live="polite">
                 <h2>بنحمّل خريطة خطتك</h2>
