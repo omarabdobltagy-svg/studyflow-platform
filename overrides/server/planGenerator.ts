@@ -1244,9 +1244,13 @@ export function applyVerifiedTeacherResourceRecommendations(
   };
   const byUrl = new Map(allowedUpdates.map(update => [canonicalVideoUrl(String(update.url)), update]));
   const nodeToSubject = new Map<string, string>();
+  const nodeToBranch = new Map<string, string>();
   for (const subjectId of profile.subjectIds || []) {
     for (const branch of getPlanningBranches(subjectId)) {
-      for (const choice of branch.choices) nodeToSubject.set(choice.nodeId, subjectId);
+      for (const choice of branch.choices) {
+        nodeToSubject.set(choice.nodeId, subjectId);
+        nodeToBranch.set(choice.nodeId, branch.branchId);
+      }
     }
   }
   return {
@@ -1258,9 +1262,15 @@ export function applyVerifiedTeacherResourceRecommendations(
         const { resourceRecommendation: _discarded, ...safeStep } = step;
         return safeStep;
       }
-      const matchingSubjectId = step.curriculumNodeIds.map(nodeId => nodeToSubject.get(nodeId)).find(Boolean);
+      const matchingNodeId = step.curriculumNodeIds.find(nodeId => nodeToSubject.has(nodeId));
+      const matchingSubjectId = matchingNodeId ? nodeToSubject.get(matchingNodeId) : undefined;
+      const matchingBranchId = matchingNodeId ? nodeToBranch.get(matchingNodeId) : undefined;
+      const acceptedContext = acceptedAlternativeVideoIds.has(String(source.externalId ?? ""))
+        ? getAcceptedAlternativeReviewContext(profile, String(source.externalId))
+        : undefined;
       const teacher = typeof source.teacherId === "string" ? getSIETeacher(source.teacherId) : undefined;
       if (!matchingSubjectId || !teacher?.subjectIds.includes(matchingSubjectId)
+        || (acceptedContext && (matchingSubjectId !== acceptedContext.subjectId || matchingBranchId !== acceptedContext.branchId))
         || teacher.systemCourseVerification?.EG_BACCALAUREATE === "not_verified_for_2026_2027") {
         const { resourceRecommendation: _discarded, ...safeStep } = step;
         return safeStep;
