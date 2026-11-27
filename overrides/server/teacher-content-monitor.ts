@@ -307,6 +307,24 @@ export function selectedTeacherIds(profile: TeacherMonitoringProfile): string[] 
   return [...new Set(validTeacherIds)];
 }
 
+export function acceptedAlternativeReviewVideoIds(profile: TeacherMonitoringProfile): Set<string> {
+  if (!isSecondYearBaccalaureateProfile(profile)) return new Set();
+  const selection = profile.selection ?? {};
+  const raw = selection.acceptedAlternativeReviewVideoIds;
+  if (!Array.isArray(raw)) return new Set();
+  return new Set(raw.filter((value): value is string =>
+    typeof value === "string" && /^youtube:[A-Za-z0-9_-]{6,20}$/.test(value)
+  ));
+}
+
+export function isTeacherVideoUpdateAllowed(
+  profile: TeacherMonitoringProfile,
+  update: Pick<TeacherPublicUpdate, "teacherId" | "externalId">,
+): boolean {
+  return selectedTeacherIds(profile).includes(update.teacherId)
+    || acceptedAlternativeReviewVideoIds(profile).has(update.externalId);
+}
+
 function configuredFacebookPageIds(): Record<string, string> {
   const raw = process.env.STUDYFLOW_TEACHER_FACEBOOK_PAGES;
   if (!raw) return {};
