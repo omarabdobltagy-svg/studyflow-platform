@@ -359,11 +359,13 @@ export default function Planner() {
         const modelVersion = Number(savedBranch.lessonStateModelVersion ?? 0);
         const gap = gaps[subjectId]?.[branch.branchId];
         const studentPosition = typeof gap?.studentPosition === "number" ? gap.studentPosition : null;
+        const referencePosition = typeof gap?.referencePosition === "number" ? gap.referencePosition : null;
         const studentFrontierId = gap?.studentFrontierId ?? "__UNKNOWN__";
         let branchHasUnknownState = false;
 
         for (const [index, choice] of branch.choices.entries()) {
           const saved = savedLessonStates[choice.nodeId];
+          const hasExplicitState = isStudentLessonState(saved?.state);
           let state: StudentLessonState = getEffectiveStudentLessonState({
             choices: branch.choices,
             nodeId: choice.nodeId,
@@ -371,8 +373,15 @@ export default function Planner() {
             lessonStateModelVersion: modelVersion,
             saved,
           });
-          if (!isStudentLessonState(saved?.state) && studentPosition !== null) {
-            state = index < studentPosition ? "watched_only" : "not_watched";
+          if (!hasExplicitState) {
+            // A lesson is accumulated only inside the instructor's covered range.
+            // Future syllabus checkpoints are not backlog just because the student
+            // frontier has not reached them yet.
+            if (referencePosition === null || index >= referencePosition || studentPosition === null) {
+              state = "not_recorded";
+            } else {
+              state = index < studentPosition ? "watched_only" : "not_watched";
+            }
           }
 
           const lessonRecord = lessonRecords[choice.nodeId];
@@ -381,8 +390,10 @@ export default function Planner() {
           if (completedBySq3r) state = "studied";
           if (state === "studied") continue;
           if (state === "not_recorded") {
-            unknownLessons += 1;
-            branchHasUnknownState = true;
+            if (referencePosition !== null && index < referencePosition) {
+              unknownLessons += 1;
+              branchHasUnknownState = true;
+            }
             continue;
           }
           const item: PathLesson = {
@@ -921,12 +932,12 @@ export default function Planner() {
               <div className="sf-sp-board-metrics">
                 <article><span>شرح لم يُشاهد</span><strong>{progressivePath.unseen.length.toLocaleString("ar-EG")}</strong></article>
                 <article><span>مذاكرة أو مراجعة مؤجلة</span><strong>{progressivePath.deferred.length.toLocaleString("ar-EG")}</strong></article>
-                <article><span>دروس حالتها غير مسجلة</span><strong>{progressivePath.unknownLessons.toLocaleString("ar-EG")}</strong></article>
+                <article><span>دروس داخل النطاق حالتها غير مسجلة</span><strong>{progressivePath.unknownLessons.toLocaleString("ar-EG")}</strong></article>
               </div>
 
               {progressivePath.unknownLessons > 0 && (
                 <div className="sf-sp-empty-inline" role="status">
-                  هناك {progressivePath.unknownLessons.toLocaleString("ar-EG")} درس لم تُسجّل حالته في {progressivePath.unknownBranches.toLocaleString("ar-EG")} فروع. حدّد آخر موضع وصلت إليه حتى لا نخمن المتراكم أو نعتبر المنهج كله جديدًا.
+                  هناك {progressivePath.unknownLessons.toLocaleString("ar-EG")} درس داخل نطاق شرح المدرس لم تُسجّل حالته في {progressivePath.unknownBranches.toLocaleString("ar-EG")} فروع. حدّد موضعك حتى نميّز الدروس المتراكمة من الدروس التي لم يشرحها المدرس بعد.
                 </div>
               )}
 
