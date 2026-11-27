@@ -272,9 +272,18 @@ export default function Home() {
     if (!step) return null;
     const curriculumNodeIds = Array.isArray(step.curriculumNodeIds) ? step.curriculumNodeIds : [];
     const subjectIds = profile.data?.subjectIds ?? [];
-    for (const subjectId of subjectIds) {
+    const inferredTaskMatch = curriculumNodeIds.length === 0
+      ? matchSIECheckpointTask(subjectIds, [step.title, step.detail || "", step.category || ""].join(" "))
+      : null;
+    const orderedSubjectIds = inferredTaskMatch
+      ? [inferredTaskMatch.subjectId]
+      : subjectIds;
+    const targetNodeIds = curriculumNodeIds.length
+      ? curriculumNodeIds
+      : inferredTaskMatch ? [inferredTaskMatch.nodeId] : [];
+    for (const subjectId of orderedSubjectIds) {
       for (const branch of getSIECheckpointProgressBranches(subjectId)) {
-        const nextChoice = branch.choices.find(choice => curriculumNodeIds.includes(choice.nodeId));
+        const nextChoice = branch.choices.find(choice => targetNodeIds.includes(choice.nodeId));
         if (!nextChoice) continue;
         const gap = (learning.data as any)?.gapByBranch?.[subjectId]?.[branch.branchId];
         return {
