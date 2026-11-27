@@ -1333,13 +1333,13 @@ function applyDailyPlanDepth(
   existingTasks: ExistingPlannerTask[],
   dailyMinutes: number,
 ): GeneratedPlan {
-  const baseTargetCount = dailyMinutes <= 60 ? 3 : dailyMinutes <= 150 ? 4 : 6;
+  const dailyTopicCapacity = dailyMinutes <= 60 ? 1 : dailyMinutes <= 150 ? 2 : 3;
   const openTasks = existingTasks.filter(task => task.status !== "done");
-  // Every selected subject with an eligible lesson gets a place in the plan.
-  // Up to two confirmed open obligations may expand the workload beyond the base pace.
+  // Plan a full seven-day horizon in topic units, not just a handful of subjects.
+  // The pace controls how many distinct curriculum/video topics can be tackled each study day.
   const targetCount = Math.min(
-    10,
-    Math.max(baseTargetCount, (profile.subjectIds ?? []).length) + Math.min(2, openTasks.length),
+    18,
+    Math.max(dailyTopicCapacity * 7, (profile.subjectIds ?? []).length) + Math.min(2, openTasks.length),
   );
   const snapshot = buildPlannerProgressSnapshot(profile);
   const selection = (profile.selection ?? {}) as Record<string, any>;
@@ -2004,6 +2004,20 @@ export async function generatePersonalPlan(
     };
   }
 
+  if (planScope === "daily" && profile) {
+    // Finish candidate selection and deduplication before assigning dates.
+    // Otherwise appended backlog/curriculum steps would have no due date.
+    plan = applyDailyPlanDepth(plan, profile, existingTasks, dailyMinutes);
+    plan = {
+      ...plan,
+      steps: plan.steps.map(step => ({
+        ...step,
+        phaseId: step.phaseId ?? (step.existingTask ? "backlog" : "steady"),
+      })),
+      executionStrategy: buildStudentExecutionStrategy(plan, profile),
+    };
+  }
+
   // Daily plans are topic-based: pace controls how many distinct learning chunks
   // fit in a study day. Video duration is never converted into task duration.
   let scheduleDay = 1;
@@ -2117,17 +2131,6 @@ export async function generatePersonalPlan(
   } else {
     const adaptiveNote = "كل مهمة موزعة على يوم دراسة محدد بحسب عدد الموضوعات التي يناسبها إيقاعك. لم نحول طول أي فيديو إلى ساعات مذاكرة أو مدد مفروضة.";
     plan = { ...plan, summary: (plan.summary + "\n\n" + adaptiveNote).slice(0, 1_500) };
-  }
-  if (planScope === "daily" && profile) {
-    plan = applyDailyPlanDepth(plan, profile, existingTasks, dailyMinutes);
-    plan = {
-      ...plan,
-      steps: plan.steps.map(step => ({
-        ...step,
-        phaseId: step.phaseId ?? (step.existingTask ? "backlog" : "steady"),
-      })),
-      executionStrategy: buildStudentExecutionStrategy(plan, profile),
-    };
   }
   if (constraints.memorySnapshot) plan = { ...plan, memorySnapshot: constraints.memorySnapshot };
   updatePlanGenerationProgress(userId, "saving", undefined, undefined, constraints.activityId);
