@@ -3847,7 +3847,7 @@ export const appRouter = router({
           dailyMinutes: z.number().int().min(20).max(600),
           daysPerWeek: z.union([z.literal(5), z.literal(6), z.literal(7)]).default(6),
           horizonDays: z.union([z.literal(7), z.literal(14)]).default(7),
-          mode: z.enum(["flexible", "scheduled"]).default("scheduled"),
+          mode: z.enum(["flexible", "scheduled", "topic"]).default("scheduled"),
         }).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -3868,6 +3868,7 @@ export const appRouter = router({
         }
         const schedule = input.schedule;
         const flexibleTasks = schedule.mode === "flexible";
+        const topicSchedule = schedule.mode === "topic";
         const scheduleSettings = {
           dailyMinutes: schedule.dailyMinutes, daysPerWeek: schedule.daysPerWeek,
           horizonDays: schedule.horizonDays, maxSessionMinutes: Math.min(90, schedule.dailyMinutes),
@@ -3881,6 +3882,21 @@ export const appRouter = router({
             dayIndex: null, dateOffsetDays: null, scheduleNote: undefined,
             sourceStepIndex: index, segmentIndex: undefined, segmentCount: undefined,
           }));
+        } else if (topicSchedule) {
+          // The AI has already divided long teacher videos into curriculum topics
+          // and assigned dates. Preserve those day offsets; never re-split by minutes.
+          approvedSteps = input.plan.steps.map((step, index) => ({
+            ...step,
+            day: step.day || "اليوم " + (index + 1),
+            minutes: 0,
+            scheduleState: step.scheduleState ?? "scheduled" as const,
+            dayIndex: step.dayIndex ?? (Number.isInteger(step.dateOffsetDays) ? (step.dateOffsetDays as number) + 1 : index + 1),
+            dateOffsetDays: step.dateOffsetDays ?? index,
+            sourceStepIndex: step.sourceStepIndex ?? index,
+            segmentIndex: undefined,
+            segmentCount: undefined,
+          }));
+          durationLabel = "توزيع موضوعي على أيام الدراسة";
         } else {
           const rescheduled = schedulePlanSteps(input.plan.steps, scheduleSettings);
           const evaluatedQuality = evaluatePlanQuality(rescheduled.steps, scheduleSettings, rescheduled.stats);
@@ -3937,11 +3953,18 @@ export const appRouter = router({
               : step;
           }),
         };
-        await saveAiPlan(ctx.user.id, {
-          prompt: DAILY_PLAN_PREFIX + fingerprint + ":",
-          title: "خطة المذاكرة",
-          planJson: JSON.stringify(approvedPlanWithTaskLinks),
-        });
+        const activeDailyRecord = await getLatestAiPlanByPromptPrefix(ctx.user.id, DAILY_PLAN_PREFIX);
+        const activePrompt = DAILY_PLAN_PREFIX + fingerprint + ":";
+        if (activeDailyRecord) {
+          await updateAiPlanContent(ctx.user.id, activeDailyRecord.id, JSON.stringify(approvedPlanWithTaskLinks));
+          await updateAiPlanPrompt(ctx.user.id, activeDailyRecord.id, activePrompt);
+        } else {
+          await saveAiPlan(ctx.user.id, {
+            prompt: activePrompt,
+            title: "خطة المذاكرة",
+            planJson: JSON.stringify(approvedPlanWithTaskLinks),
+          });
+        }
         await logStudentActivity(ctx.user.id, "plan.approved", "ai_plan", null, "اعتمد الطالب خطة المذاكرة وأنشئت المهام بعد مراجعته", {
           title: "خطة المذاكرة",
           taskCount: synced.taskCount,
