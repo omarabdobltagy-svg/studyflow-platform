@@ -898,6 +898,27 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number, f
         dueAt: task.dueAt,
       }] : [];
     });
+    const retiredStalePlanTasks = currentTasks.length - tasksForPlanning.length;
+    updateAIActivity(
+      userId,
+      activityId,
+      "مصالحة المهام مع تقدمك",
+      retiredStalePlanTasks > 0
+        ? "استبعد " + retiredStalePlanTasks + " مهمة منهجية قديمة من شجرة الخطة لأنها تخص دروسًا سجلتها مكتملة. المهام اليدوية وواجبات المدرس محفوظة."
+        : "راجع المهام المرتبطة بالتقدم الحالي؛ لا توجد مهام قديمة مؤهلة للاستبعاد، والواجبات والمهام المستقلة محفوظة.",
+    );
+    const schedules = (selection.teacherSchedules ?? {}) as Record<string, Array<{ dayOfWeek: number; startTime: string }>>;
+    const upcomingSessionCount = Object.entries(schedules)
+      .filter(([subjectId]) => profile.subjectIds.includes(subjectId))
+      .reduce((count, [, slots]) => count + (Array.isArray(slots) ? slots.length : 0), 0);
+    updateAIActivity(
+      userId,
+      activityId,
+      "مواءمة مواعيد المدرسين",
+      upcomingSessionCount > 0
+        ? "يراجع " + upcomingSessionCount + " موعد حصة أسبوعيًا مسجلًا ويربط التحضير بالمتراكم من غير افتراض محتوى المحاضرة الجديدة أو مدتها."
+        : "لا توجد مواعيد حصص مسجلة لهذا الأفق؛ سيعتمد التوزيع على المتراكم ومواضع المنهج المتاحة.",
+    );
     const sourceFingerprint = await getDailyPlanSourceFingerprint(userId, dailyMinutes, startDate);
     const expectedPromptPrefix = DAILY_PLAN_PREFIX + sourceFingerprint + ":";
     const latestDailyPlan = await getLatestAiPlanByPromptPrefix(userId, DAILY_PLAN_PREFIX);
