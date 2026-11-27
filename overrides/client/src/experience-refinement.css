@@ -1599,3 +1599,158 @@ body[data-studyflow-sections-open="true"] .sf-hub-root {
 .sf-shell-v3 .sf-nav-indicator {
   background: #C9ED62 !important;
 }
+
+
+/* Selected-node interaction for the study execution map. */
+.sf-sp-flow-node-select {
+  display: grid;
+  width: 100%;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: right;
+  cursor: pointer;
+}
+.sf-sp-flow-node-select h5 {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1.8;
+}
+.sf-sp-flow-node-select > span {
+  color: var(--muted-foreground);
+  font-size: 9px;
+  font-weight: 650;
+}
+.sf-sp-flow-node-select:hover h5,
+.sf-sp-flow-node-select[aria-pressed="true"] h5 {
+  color: var(--primary);
+}
+.sf-sp-flow-node-card:has(.sf-sp-flow-node-select[aria-pressed="true"]) {
+  border-color: color-mix(in srgb, var(--primary) 65%, var(--border));
+  background: color-mix(in srgb, var(--primary) 6%, var(--card));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 12%, transparent);
+}
+.sf-sp-flow-node-select:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 4px;
+  border-radius: 5px;
+}
+.sf-sp-flow-selection {
+  display: grid;
+  gap: 12px;
+  width: min(100%, 760px);
+  margin: 24px auto 0;
+  padding: clamp(16px, 2.2vw, 24px);
+  border: 1px solid color-mix(in srgb, var(--primary) 38%, var(--border));
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--primary) 9%, transparent), transparent 42%),
+    var(--card);
+  box-shadow: 0 18px 38px -32px rgba(0,0,0,.6);
+}
+.sf-sp-flow-selection > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.sf-sp-flow-selection > header > div {
+  display: grid;
+  gap: 3px;
+}
+.sf-sp-flow-selection > header span {
+  color: var(--primary);
+  font-size: 9px;
+  font-weight: 850;
+}
+.sf-sp-flow-selection > header strong {
+  color: var(--muted-foreground);
+  font-size: 10px;
+}
+.sf-sp-flow-selection > header button {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  color: var(--muted-foreground);
+  font-size: 10px;
+}
+.sf-sp-flow-selection > h4 {
+  margin: 0;
+  color: var(--foreground);
+  font-size: clamp(15px, 2vw, 19px);
+  font-weight: 900;
+  line-height: 1.7;
+}
+.sf-sp-flow-selection-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.sf-sp-flow-selection-meta span {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted-foreground);
+  background: var(--background);
+  font-size: 9px;
+  font-weight: 700;
+}
+.sf-sp-flow-selection > p {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.9;
+}
+.sf-sp-flow-selection-method {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--background);
+}
+.sf-sp-flow-selection-method summary {
+  color: var(--foreground);
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.sf-sp-flow-selection-method ol {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+  padding-inline-start: 22px;
+}
+.sf-sp-flow-selection-method li strong {
+  color: var(--foreground);
+  font-size: 11px;
+}
+.sf-sp-flow-selection-method li p,
+.sf-sp-flow-selection-method > small {
+  color: var(--muted-foreground);
+  font-size: 10px;
+  line-height: 1.8;
+}
+.sf-sp-flow-selection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px;
+}
+.sf-sp-flow-selection-actions > a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 11px;
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, var(--border));
+  border-radius: 10px;
+  color: var(--primary);
+  font-size: 10px;
+  font-weight: 800;
+}
+@media (max-width: 640px) {
+  .sf-sp-flow-selection { padding: 14px; border-radius: 16px; }
+  .sf-sp-flow-selection-actions { display: grid; grid-template-columns: minmax(0,1fr); }
+  .sf-sp-flow-selection-actions > a { justify-content: center; }
+}
