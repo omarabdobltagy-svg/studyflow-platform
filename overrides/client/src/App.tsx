@@ -31,7 +31,7 @@ function PageLoading() {
   return (
     <main className="sf-page-loading" role="status" aria-live="polite" aria-busy="true">
       <div className="sf-page-loading-mark"><span /></div>
-      <p>بنجهز الصفحة…</p>
+      <p>بنجهّز الصفحة ومساحتك الدراسية…</p>
       <span className="sf-page-loading-track"><span /></span>
     </main>
   );
