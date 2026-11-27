@@ -242,7 +242,7 @@ function displayArabicText(value: string | null | undefined, fallback: string): 
 }
 
 function displayTime12Hour(value: string): string {
-  const match = /^(?:([01]\\d|2[0-3])):([0-5]\\d)$/.exec(value);
+  const match = /^(?:([01]\d|2[0-3])):([0-5]\d)$/.exec(value);
   if (!match) return value;
   const hour24 = Number(match[1]);
   const minute = Number(match[2]);
@@ -1468,7 +1468,7 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
                       const stageTitles = ["معاينة الدرس", "تحديد المطلوب", "القراءة والفهم", "الاسترجاع من الذاكرة", "المراجعة والتثبيت"];
                       return (
                         <article key={step.plannerTaskId ?? step.existingTask?.id ?? step.sourceStepIndex ?? index} data-testid={"planner-node-" + (step.curriculumNodeIds?.[0] ?? step.existingTask?.id ?? index)} className={"sf-sp-flow-node " + nodeState}>
-                          <span className="sf-sp-flow-node-index">{isDone ? <CheckCircle2 className="size-4" /> : (laneIndex + 1).toLocaleString("ar-EG")}</span>
+                          <span className="sf-sp-flow-node-index">{(index + 1).toLocaleString("ar-EG")}</span>
                           <div className="sf-sp-flow-node-card">
                             <div className="sf-sp-flow-node-topline">
                               {step.day && <span>{step.day}</span>}
