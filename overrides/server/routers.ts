@@ -2754,12 +2754,21 @@ export const appRouter = router({
         const savedSelectedIds = new Set(storedSelectedTeacherItems.map(item => item.externalId));
 
         let selectedTeacherItems = storedSelectedTeacherItems;
+        let reviewSearchUnavailable = false;
+        const searchTeacherReviews = async (searchQuery: string) => {
+          try {
+            return await callDataApi("Youtube/search", {
+              query: { gl: "EG", hl: "ar", q: searchQuery },
+            }) as { items?: Array<Record<string, unknown>>; videos?: Array<Record<string, unknown>> };
+          } catch (error) {
+            reviewSearchUnavailable = true;
+            console.warn("[TeacherReviews] Optional external review search is unavailable:", error instanceof Error ? error.message : String(error));
+            return { items: [], videos: [] };
+          }
+        };
         if (selectedTeacher && selectedTeacherItems.length === 0) {
           const ownQuery = [selectedTeacher.nameAr, subject.nameAr, branch.branchTitle, "مراجعة", "البكالوريا المصرية", SIE_CATALOG_META.academicYear].join(" ");
-          const ownResult = await callDataApi("Youtube/search", { query: { gl: "EG", hl: "ar", q: ownQuery } }) as {
-            items?: Array<Record<string, unknown>>;
-            videos?: Array<Record<string, unknown>>;
-          };
+          const ownResult = await searchTeacherReviews(ownQuery);
           const ownRawItems = Array.isArray(ownResult?.items) ? ownResult.items : Array.isArray(ownResult?.videos) ? ownResult.videos : [];
           selectedTeacherItems = ownRawItems.flatMap(item => {
             const title = String(item.title ?? item.videoTitle ?? item.name ?? "").trim().slice(0, 240);
@@ -2808,11 +2817,8 @@ export const appRouter = router({
         let query = [subject.nameAr, branch.branchTitle, "مراجعة", "البكالوريا المصرية", SIE_CATALOG_META.academicYear].join(" ");
         // Search other teachers only when the selected teacher has no candidate
         // for this branch. An unmatched, fully analyzed review is not treated as useful.
-        if (selectedTeacherItems.length === 0) {
-          const result = await callDataApi("Youtube/search", { query: { gl: "EG", hl: "ar", q: query } }) as {
-            items?: Array<Record<string, unknown>>;
-            videos?: Array<Record<string, unknown>>;
-          };
+        if (selectedTeacherItems.length === 0 && !reviewSearchUnavailable) {
+          const result = await searchTeacherReviews(query);
           const rawItems = Array.isArray(result?.items) ? result.items : Array.isArray(result?.videos) ? result.videos : [];
           const seen = new Set<string>();
           alternativeItems = rawItems.flatMap(item => {
@@ -2897,9 +2903,11 @@ export const appRouter = router({
           query, subject: subject.nameAr, branch: branch.branchTitle,
           selectedTeacher: selectedTeacher?.nameAr ?? null,
           source: "YouTube", items,
-          note: selectedTeacherItems.length > 0
-            ? "نعرض مراجعات مدرسك المختار أولًا. الفيديوهات غير المحللة لا تدخل الخطة؛ تُدرج فقط بعد مطابقة محتواها مع دروس متراكمة فعلًا. عند عدم وجود مراجعة مناسبة من مدرسك، ننتقل إلى مدرس بديل للمادة."
-            : "لم تظهر مراجعة مناسبة من مدرسك المختار لهذا الفرع؛ لذلك بحثنا لدى مدرسين آخرين للمادة. هوية المدرس البديل وحدها لا تكفي، ولن يدخل الفيديو الخطة إلا بعد موافقتك وتحليل محتواه ومطابقته مع المنهج والمتراكم.",
+          note: reviewSearchUnavailable
+            ? "البحث الخارجي عن المراجعات غير متاح حاليًا في إعدادات المنصة. تقدر تتابع المذاكرة وتسجيل التقدم بشكل طبيعي؛ هذه الميزة الإضافية لا تؤثر على خطتك."
+            : selectedTeacherItems.length > 0
+              ? "نعرض مراجعات مدرسك المختار أولًا. الفيديوهات غير المحللة لا تدخل الخطة؛ تُدرج فقط بعد مطابقة محتواها مع دروس متراكمة فعلًا. عند عدم وجود مراجعة مناسبة من مدرسك، ننتقل إلى مدرس بديل للمادة."
+              : "لم تظهر مراجعة مناسبة من مدرسك المختار لهذا الفرع؛ لذلك بحثنا لدى مدرسين آخرين للمادة. هوية المدرس البديل وحدها لا تكفي، ولن يدخل الفيديو الخطة إلا بعد موافقتك وتحليل محتواه ومطابقته مع المنهج والمتراكم.",
         };
       }),
     acceptAlternativeReview: protectedProcedure
