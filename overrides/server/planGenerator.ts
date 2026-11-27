@@ -4,6 +4,7 @@ import { calculateLearningGap } from "@shared/sie-learning-progress";
 import { invokeLLM, invokeNvidiaLLM } from "./_core/llm";
 import { isPrimaryProviderFallbackEligible } from "./_core/llmFallback";
 import { updateAIActivity } from "./aiActivity";
+import { getPlannerLearningStatePriority } from "./plannerEngine";
 import { getStudentProfile, listTasks, saveAiPlan } from "./db";
 import { formatTextbookEvidence, getCurriculumBranchPriorityGuidance, orderPlanStepsByCurriculumDependencies, retrieveTextbookEvidence } from "./textbook-retrieval";
 import { buildExamBlueprintContext, SECOND_YEAR_BAC_EXAM_WINDOW_2026_2027 } from "./exam-blueprints";
@@ -151,19 +152,19 @@ const planSchema = z.object({
     objective: z.string().trim().min(10).max(900),
     rationale: z.string().trim().min(10).max(900),
     phases: z.array(z.object({
-      id: z.enum(["backlog", "teacher_sync", "steady"]),
+      id: z.enum(["backlog", "teacher_sync", "steady", "review_later"]),
       title: z.string().trim().min(3).max(140),
       purpose: z.string().trim().min(8).max(500),
       actions: z.array(z.string().trim().min(3).max(300)).max(8).default([]),
       completionCriteria: z.string().trim().min(5).max(400),
-    })).max(3).optional(),
+    })).max(4).optional(),
   }).optional(),
   durationLabel: z.string().trim().min(2).max(100),
   steps: z.array(z.object({
     day: z.string().trim().max(60).default(""),
     title: z.string().trim().min(2).max(180),
     detail: z.string().trim().min(5).max(1_200),
-    phaseId: z.enum(["backlog", "teacher_sync", "steady"]).optional(),
+    phaseId: z.enum(["backlog", "teacher_sync", "steady", "review_later"]).optional(),
     studyMethod: z.object({
       stages: z.array(z.object({
         title: z.string().trim().min(2).max(120),
@@ -914,6 +915,19 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
             : level === "medium" ? "متوسط حسب الطالب" : "لم يُقيّم بعد";
         return choice.title + ": " + label;
       });
+      const learningStateLabels: Record<StudentLessonState, string> = {
+        not_recorded: "حالة الشرح والمذاكرة غير مسجلة",
+        not_watched: "شرح غير مشاهد — أولوية التعلم الأولى",
+        watched_only: "الشرح شوهد ولم تسجل مذاكرته — مراجعة مؤجلة",
+        studied: "ذاكره الطالب — مكتمل ومستبعد",
+        needs_review: "ذاكره الطالب ويحتاج مراجعة — مؤجل لما بعد المنهج",
+      };
+      const lessonLearningStates = branch.choices.map(choice => {
+        const eligible = branchProgress?.eligibleChoices.find(item => item.nodeId === choice.nodeId);
+        const isCompleted = branchProgress?.completedChoices.some(item => item.nodeId === choice.nodeId);
+        const state = isCompleted ? "studied" : eligible?.learningState ?? "not_recorded";
+        return choice.title + ": " + learningStateLabels[state];
+      });
 
       return [
         "الفرع الرسمي: " + branch.branchTitle,
@@ -925,6 +939,7 @@ function buildLearningContext(profile: NonNullable<Awaited<ReturnType<typeof get
         "دروس مكتملة وممنوع إسنادها كمذاكرة جديدة: " + (branchProgress?.completedChoices.map(choice => choice.title + " [" + choice.nodeId + "]").join("، ") || "لا يوجد سجل مكتمل معروف"),
         "دروس متاحة للتخطيط الجديد فقط: " + (branchProgress?.eligibleChoices.map(choice => choice.title + " [" + choice.nodeId + "]").join("، ") || "لا توجد نقاط منهجية متبقية في هذا الفرع"),
         "إنجاز SQ3R في الفرع: " + completed + " مكتمل؛ " + underway + " قيد الدراسة",
+        "حالة مشاهدة الشرح والمذاكرة لكل درس (مرجع حاسم للأولوية): " + lessonLearningStates.join("؛ "),
         "تقييم صعوبة كل درس من الطالب: " + lessonDifficulty.join("؛ "),
       ].join(" | ");
     }).join("\n");
@@ -1553,72 +1568,70 @@ function applyDailyPlanDepth(
     if (linkedNodeId) representedNodeIds.add(linkedNodeId);
   }
 
-  // Find the next eligible checkpoint in each branch. The branch state and
-  // curriculum IDs remain authoritative; the model cannot invent a new node.
+  // Every eligible lesson is considered, not only the first checkpoint in each branch.
+  // Saved lesson state is authoritative; model priorities cannot override it.
+  const curriculumLearningByNode = new Map<string, {
+    subjectId: string; branchId: string; branchTitle: string; title: string;
+    learningState: StudentLessonState; curriculumIndex: number;
+  }>();
   const nextChoices: Array<{
-    subjectId: string;
-    branchId: string;
-    branchTitle: string;
-    nodeId: string;
-    title: string;
-    isNext: boolean;
-    teacherSelected: boolean;
-    learningState: StudentLessonState;
+    subjectId: string; branchId: string; branchTitle: string; nodeId: string; title: string;
+    isNext: boolean; teacherSelected: boolean; learningState: StudentLessonState; curriculumIndex: number;
   }> = [];
 
   for (const subjectId of profile.subjectIds ?? []) {
     for (const branch of getPlanningBranches(subjectId)) {
       const progress = snapshot.branches.get(plannerBranchKey(subjectId, branch.branchId));
-      const eligible = progress?.eligibleChoices ?? [];
-      const nextNode = eligible.find(choice => !representedNodeIds.has(choice.nodeId));
-      if (!nextNode) continue;
-      const index = branch.choices.findIndex(choice => choice.nodeId === nextNode.nodeId);
-      nextChoices.push({
-        subjectId,
-        branchId: branch.branchId,
-        branchTitle: branch.branchTitle,
-        nodeId: nextNode.nodeId,
-        title: nextNode.title,
-        isNext: progress?.nextEligiblePosition === index,
-        teacherSelected: Boolean(teacherChoices[subjectId] && teacherChoices[subjectId] !== "__SKIP__"),
-        learningState: nextNode.learningState ?? "not_watched",
-      });
+      for (const choice of progress?.eligibleChoices ?? []) {
+        const index = branch.choices.findIndex(item => item.nodeId === choice.nodeId);
+        const learningState = choice.learningState ?? "not_recorded";
+        curriculumLearningByNode.set(choice.nodeId, {
+          subjectId, branchId: branch.branchId, branchTitle: branch.branchTitle,
+          title: choice.title, learningState, curriculumIndex: index,
+        });
+        if (representedNodeIds.has(choice.nodeId)) continue;
+        nextChoices.push({
+          subjectId, branchId: branch.branchId, branchTitle: branch.branchTitle,
+          nodeId: choice.nodeId, title: choice.title,
+          isNext: progress?.nextEligiblePosition === index,
+          teacherSelected: Boolean(teacherChoices[subjectId] && teacherChoices[subjectId] !== "__SKIP__"),
+          learningState, curriculumIndex: index,
+        });
+      }
     }
   }
 
-  // Keep branch priority within each subject, then round-robin across subjects.
+  // Interleave subjects only within the same learning-state priority.
   nextChoices.sort((left, right) =>
-    left.subjectId === right.subjectId
-      ? Number(right.isNext) - Number(left.isNext)
-        || Number(right.teacherSelected) - Number(left.teacherSelected)
-        || left.branchId.localeCompare(right.branchId)
-      : (profile.subjectIds ?? []).indexOf(left.subjectId) - (profile.subjectIds ?? []).indexOf(right.subjectId)
+    getPlannerLearningStatePriority(left.learningState) - getPlannerLearningStatePriority(right.learningState)
+    || (profile.subjectIds ?? []).indexOf(left.subjectId) - (profile.subjectIds ?? []).indexOf(right.subjectId)
+    || left.curriculumIndex - right.curriculumIndex
+    || Number(right.isNext) - Number(left.isNext)
   );
 
   const nextChoiceSteps: GeneratedPlan["steps"] = nextChoices.map(item => {
     const subjectName = getSIESubject(item.subjectId)?.nameAr ?? item.subjectId;
     const hasTeacherSchedule = Array.isArray(teacherSchedules[item.subjectId]) && teacherSchedules[item.subjectId].length > 0;
-    const phaseId = item.learningState === "watched_only" || item.learningState === "needs_review"
-      ? "backlog" as const
+    const isReviewLater = item.learningState === "watched_only" || item.learningState === "needs_review";
+    const phaseId = isReviewLater
+      ? "review_later" as const
       : item.teacherSelected && hasTeacherSchedule ? "teacher_sync" as const : "steady" as const;
+    const detail = item.learningState === "not_watched"
+      ? "لم تشاهد شرح هذا الدرس بعد. ابدأ بمشاهدة شرح المدرس لهذا الدرس، ثم ذاكره من المصدر وسجّل تقدمك. لذلك يتقدم هذا الدرس على أي مراجعة لدرس سبق مشاهدة شرحه."
+      : item.learningState === "watched_only"
+        ? "شاهدت شرح هذا الدرس بالفعل، لكنك لم تسجل أنك ذاكرته. هذه الخطوة مؤجلة إلى ما بعد استكمال الدروس التي لم تشاهد شرحها؛ بعدها ارجع للمصدر وذاكر الدرس دون إعادة مشاهدة المحاضرة."
+        : item.learningState === "needs_review"
+          ? "سبق أن ذاكرت هذا الدرس وسجلت أنه يحتاج مراجعة. سنؤجل مراجعته إلى ما بعد استكمال الدروس الجديدة التي لم تشاهد شرحها."
+          : "حالة مشاهدة الشرح لهذا الدرس غير مسجلة. لا نفترض أنك شاهدته أو لم تشاهده؛ راجع موضعك مع المدرس أو منصة الكورس وحدّث حالته قبل التخطيط له.";
     return planSchema.shape.steps.element.parse({
       day: "",
       title: subjectName + " — " + item.branchTitle + " — " + item.title,
-      detail: item.learningState === "not_recorded"
-        ? "موضع البداية في هذا الفرع غير مسجل بعد. راجع آخر درس وصلت إليه مع المدرس أو على منصته، ثم حدّد حالة هذا الدرس قبل اعتباره جديدًا. StudyFlow لا يفترض أنك شاهدته أو ذاكرته، ولا يغيّر تقدمك من تلقاء نفسه."
-        : item.learningState === "watched_only"
-          ? "أنت شاهدت شرح هذا الدرس بالفعل، لكن لم تسجّل أنك ذاكرته. ابدأ الآن بمراجعته من المصدر، ثم اربط التفاصيل بشرح المدرس واشرح الفكرة لنفسك. لن نطلب منك مشاهدة المحاضرة مرة ثانية أو حل واجب غير مسجل."
-          : item.learningState === "needs_review"
-            ? "سبق أن ذاكرت هذا الدرس لكنك تحتاج إلى مراجعته. ارجع للمصدر وحدد الجزء الذي نسيته، ثم حدّث الحالة بعد المراجعة."
-            : item.learningState === "not_watched"
-              ? "هذا الدرس لم تسجل أنك شاهدت شرحه بعد. تابع شرح المدرس أولًا، ثم ارجع للمصدر وسجّل حالة مذاكرتك بشكل منفصل."
-              : item.teacherSelected && hasTeacherSchedule
-                ? "تابع شرح المدرس للموضوع التالي في هذا الفرع. قبل الحصة راجع عنوان الدرس ونقاطه الرئيسية، وبعد الشرح ارجع للمصدر وسجّل تقدمك. لا يوجد واجب مضاف هنا ما لم يكن مسجلًا من المدرس."
-                : "الموضوع التالي غير المكتمل في هذا الفرع. ابدأ بتمهيد سريع، ثم تابع شرح المدرس عند توفره، وسجّل تقدمك بعد الانتهاء. لا توجد أسئلة أو واجبات مولّدة من النظام.",
+      detail,
       minutes: 0,
       category: subjectName + " · " + item.branchTitle,
       curriculumNodeIds: [item.nodeId],
-      priority: item.isNext ? "high" : "medium",
+      priority: item.learningState === "not_watched" ? "high"
+        : isReviewLater ? "low" : item.isNext ? "high" : "medium",
       difficulty: "unknown",
       lessonSize: "unknown",
       difficultyBasis: "unknown",
@@ -1628,9 +1641,6 @@ function applyDailyPlanDepth(
     });
   });
 
-  // Prefer one meaningful item from every selected subject before adding a
-  // second branch from any subject. This prevents alphabetical subject order
-  // from letting Arabic (ARB_...) fill the whole list.
   const candidates: GeneratedPlan["steps"] = [...openTaskSteps, ...videoTopicSteps, ...steps, ...nextChoiceSteps];
   const seenTaskIds = new Set<number>();
   const seenNodes = new Set<string>();
@@ -1646,13 +1656,67 @@ function applyDailyPlanDepth(
     return true;
   });
 
-  const balancedSteps = interleavePlannerItemsBySubject(
-    deduplicated,
-    profile.subjectIds ?? [],
-    subjectForStep,
-  ).slice(0, targetCount);
+  // Split multi-lesson suggestions so one step cannot mix a new explanation
+  // with a watched/revision-only lesson and bypass the priority rule.
+  const normalizedCandidates: GeneratedPlan["steps"] = deduplicated.flatMap(step => {
+    const nodeIds = step.curriculumNodeIds ?? [];
+    if (nodeIds.length <= 1) return [step];
+    return nodeIds.map((nodeId, index) => {
+      const lesson = curriculumLearningByNode.get(nodeId);
+      const subjectName = lesson ? getSIESubject(lesson.subjectId)?.nameAr ?? lesson.subjectId : "";
+      return {
+        ...step,
+        title: lesson ? subjectName + " — " + lesson.branchTitle + " — " + lesson.title : step.title + " — " + (index + 1),
+        curriculumNodeIds: [nodeId],
+        ...(index === 0 ? {} : { existingTask: undefined }),
+      };
+    });
+  });
 
-  return { ...plan, steps: balancedSteps };
+  const stateBand = (step: GeneratedPlan["steps"][number]) => {
+    const lesson = (step.curriculumNodeIds ?? []).map(nodeId => curriculumLearningByNode.get(nodeId)).find(Boolean);
+    return lesson ? getPlannerLearningStatePriority(lesson.learningState) : 1;
+  };
+  const normalizeStateAndPhase = (step: GeneratedPlan["steps"][number]): GeneratedPlan["steps"][number] => {
+    const lesson = (step.curriculumNodeIds ?? []).map(nodeId => curriculumLearningByNode.get(nodeId)).find(Boolean);
+    if (!lesson) return step;
+    if (lesson.learningState === "not_watched") {
+      const hasSchedule = Array.isArray(teacherSchedules[lesson.subjectId]) && teacherSchedules[lesson.subjectId].length > 0;
+      const hasTeacher = Boolean(teacherChoices[lesson.subjectId] && teacherChoices[lesson.subjectId] !== "__SKIP__");
+      return {
+        ...step, phaseId: hasTeacher && hasSchedule ? "teacher_sync" : "steady",
+        priority: "high", priorityScore: 100,
+        priorityReason: "شرح الدرس لم يُشاهد بعد؛ لذلك يسبق الدروس التي شوهد شرحها وتحتاج مذاكرة أو مراجعة.",
+        detail: "لم تشاهد شرح هذا الدرس بعد. ابدأ بمشاهدة شرح المدرس، ثم ذاكره من المصدر وسجّل تقدمك.",
+      };
+    }
+    if (lesson.learningState === "watched_only" || lesson.learningState === "needs_review") {
+      const reviewDetail = lesson.learningState === "watched_only"
+        ? "شاهدت شرح هذا الدرس بالفعل ولم تسجل مذاكرته. هذه الخطوة مؤجلة لما بعد استكمال الدروس التي لم تشاهد شرحها."
+        : "هذا الدرس مذاكر من قبل ويحتاج مراجعة. أجّلناه لما بعد استكمال الدروس الجديدة التي لم تشاهد شرحها.";
+      return {
+        ...step, phaseId: "review_later", priority: "low", priorityScore: 10,
+        priorityReason: "مراجعة مؤجلة حتى الانتهاء من الدروس التي لم يُشاهد شرحها.",
+        detail: reviewDetail,
+      };
+    }
+    if (lesson.learningState === "not_recorded") {
+      return {
+        ...step, phaseId: "steady", priority: "medium", priorityScore: 35,
+        priorityReason: "حالة الشرح غير مسجلة؛ يجب تأكيد موضعك قبل اعتباره درسًا جديدًا.",
+        detail: "حالة مشاهدة شرح هذا الدرس غير مسجلة. راجع موضعك مع المدرس أو منصة الكورس وحدّث حالته؛ لا نفترض أنك شاهدته أو لم تشاهده.",
+      };
+    }
+    return step;
+  };
+
+  const orderedSteps: GeneratedPlan["steps"] = [];
+  for (const band of [0, 1, 2, 3]) {
+    const bucket = normalizedCandidates.filter(step => stateBand(step) === band).map(normalizeStateAndPhase);
+    orderedSteps.push(...interleavePlannerItemsBySubject(bucket, profile.subjectIds ?? [], subjectForStep));
+  }
+
+  return { ...plan, steps: orderedSteps.slice(0, targetCount) };
 }
 function buildStudentExecutionStrategy(
   plan: GeneratedPlan,
@@ -1667,6 +1731,7 @@ function buildStudentExecutionStrategy(
     backlog: plan.steps.filter(step => step.phaseId === "backlog"),
     teacher_sync: plan.steps.filter(step => step.phaseId === "teacher_sync"),
     steady: plan.steps.filter(step => step.phaseId === "steady" || !step.phaseId),
+    review_later: plan.steps.filter(step => step.phaseId === "review_later"),
   };
   const phaseMeta = [
     {
@@ -1690,13 +1755,21 @@ function buildStudentExecutionStrategy(
       completionCriteria: "تسجيل الدرس الذي أنهيته فعلًا، ثم إعادة حساب الخطوة التالية داخل الفرع نفسه.",
       empty: "لا توجد خطوة إضافية في هذه المرحلة ضمن سعة الخطة الحالية.",
     },
+    {
+      id: "review_later" as const,
+      title: "4. المذاكرة والمراجعة بعد استكمال المنهج الجديد",
+      defaultPurpose: "هذه الدروس شوهد شرحها بالفعل أو سبق مذاكرتها؛ نؤجلها حتى ننتهي من الدروس التي لم نشاهد شرحها، ثم نعود إليها للمذاكرة أو المراجعة.",
+      completionCriteria: "بعد استكمال الدروس الجديدة، ارجع إلى المصدر وذاكر الدروس التي شاهدت شرحها أو راجع الدروس التي تحتاج تثبيتًا.",
+      empty: "لا توجد مراجعات مؤجلة؛ الأولوية الحالية للدروس التي لم يُشاهد شرحها.",
+    },
   ];
   const phases = phaseMeta.map(meta => {
     const generated = suppliedPhases.get(meta.id);
     const defaultActions: Record<typeof meta.id, string[]> = {
       backlog: ["نراجع الالتزامات المفتوحة المسجلة", "نبدأ بالأقرب استحقاقًا والأعلى أولوية"],
       teacher_sync: ["نستخدم جدول الحصة المسجل للتحضير قبل الموعد", "بعد الحصة نحدّث موضع شرح المدرس من ردك"],
-      steady: ["نستكمل الموضوعات التالية داخل كل فرع", "نعيد ترتيب الأولويات مع كل تقدم جديد"],
+      steady: ["نستكمل الدروس التي لم يُشاهد شرحها بعد", "نحدّث ترتيب الأولويات مع كل تقدم جديد"],
+      review_later: ["نؤجل المذاكرة بعد الشرح والمراجعة", "نبدأ بها بعد تغطية كل الدروس الجديدة غير المشاهدة"],
     };
     const actions = stepsByPhase[meta.id].length
       ? (generated?.actions?.length ? generated.actions : defaultActions[meta.id])
@@ -1717,7 +1790,9 @@ function buildStudentExecutionStrategy(
             ? "لا توجد خطوة إضافية موثقة لهذه المرحلة ضمن سعة الخطة الحالية."
             : meta.id === "teacher_sync" && !hasSchedule
               ? "جدول الحصص الأسبوعي غير مسجل لمدرس من مدرسيك. لن نفترض موعدًا؛ أضف الجدول من ملفك الدراسي لتفعيل المزامنة."
-              : generated?.purpose ?? meta.defaultPurpose;
+              : meta.id === "review_later"
+                ? "لا نعرض هذه الدروس كأولوية حالية. ستبدأ مراجعتها بعد الانتهاء من الدروس التي لم تشاهد شرحها."
+                : generated?.purpose ?? meta.defaultPurpose;
     return {
       id: meta.id,
       title: meta.title,
@@ -1727,10 +1802,8 @@ function buildStudentExecutionStrategy(
     };
   });
   return {
-    objective: supplied?.objective
-      ?? "نغلق الالتزامات المؤكدة أولًا، ثم نربط متابعة المنهج بجدول المدرس، ونكمل الفجوات دون اختلاق واجبات أو افتراض إتقان.",
-    rationale: supplied?.rationale
-      ?? "ترتيب الخطة مبني على المهام المفتوحة ومواضع التقدم داخل كل فرع والجدول الأسبوعي الذي سجلته. التحضير للحصة القريبة لا يسقط التزامًا متأخرًا عاجلًا، وغياب البيانات لا يتحول إلى تخمين.",
+    objective: "نبدأ بالدروس التي لم تشاهد شرحها، ونؤجل المذاكرة بعد الشرح والمراجعة إلى ما بعد استكمال المنهج الجديد.",
+    rationale: "يفصل StudyFlow بين مشاهدة شرح المدرس ومذاكرة الدرس. الحالة المسجلة لكل درس هي التي تحدد ترتيبه؛ لا تتقدم المراجعة على درس لم تشاهد شرحه، ولا نفترض حالة غير مسجلة.",
     phases,
   };
 }
@@ -1830,6 +1903,8 @@ export async function generatePersonalPlan(
     "لا تطلب من الطالب إعادة كتابة بيانات موجودة في ملفه، ولا تنتظر منه هندسة برومبت احترافي. افترض أقل قدر ممكن، واذكر الافتراضات المؤثرة فقط داخل الملخص، ولا تخترع بيانات ناقصة.",
     "حلّل فجوة المنهج لكل فرع مستقل، وموضع الطالب مقابل موضع المدرس في الفرع نفسه، وما أكمله الطالب وما أجّله فعليًا، والصعوبة المسجلة من الطالب. لا تجمع فجوات الفروع المستقلة ولا تستنتج سلوكًا من غياب البيانات.",
     "افصل بين مشاهدة المحاضرة وبين مذاكرة الدرس وفهمه. آخر نقطة وصل إليها الطالب في الشرح تعني أنه حضر/شاهد حتى هذه النقطة فقط إذا كان سجل الفرع على lessonStateModelVersion=1. الحالة watched_only ليست إتمامًا للمذاكرة؛ أنشئ لها مهمة مراجعة المصدر وشرح الفكرة للنفس، ولا تطلب مشاهدة المحاضرة مرة أخرى. الحالة needs_review تعني أن الطالب ذاكر سابقًا لكنه يحتاج مراجعة، والحالة studied وحدها تعني أن أول دورة مذاكرة اكتملت بحسب تقريره الذاتي.",
+    "قاعدة أولوية إلزامية في الخطة اليومية: كل درس حالته not_watched (شرح المدرس لم يُشاهد) يسبق أي درس حالته watched_only أو needs_review. لا تضع watched_only أو needs_review في الجدول الحالي قبل تغطية كل الدروس غير المشاهدة في جميع المواد والفروع المختارة؛ ضعها في مرحلة review_later بعد استكمال المنهج الجديد. لا تخلط مشاهدة الشرح بمذاكرته، ولا تعِد تشغيل فيديو تمت مشاهدته. حالة not_recorded ليست دليلًا على عدم المشاهدة ولا على الإنجاز؛ لا تخمّنها، واجعلها بعد الدروس غير المشاهدة المعروفة. الحالة studied مكتملة ومستبعدة.",
+    "رتّب الدروس غير المشاهدة داخل كل فرع حسب تسلسل المنهج، ووازن بين المواد دون أن تقفز إلى مراجعة درس شوهد شرحه بينما توجد دروس أخرى لم يُشاهد شرحها. يملك المحرك قرار عدد الخطوات وترتيبها؛ لا تطلب من الطالب اختيار خطة مرنة أو متوازنة أو مكثفة.",
     "احترم الاستثناءات لكل درس على حدة: إذا كان lesson state=not_watched فلا تعتبره مكتملًا حتى لو كان بعده دروس أخرى في موضع الطالب. لا تعِد فتح الدروس التي حالتها studied، ولا تحوّل مجرد مشاهدة المحاضرة إلى إنجاز مذاكرة. الدروس القديمة التي لم تدخل نموذج الحالة الجديد قد تظل متوافقة مع سجلها السابق.",
     "حدود مسؤولية أساسية: StudyFlow مخطط ومتابع للتقدم، وليس مدرسًا أو منصة امتحانات. المهارات والأهداف التعليمية الواردة في الكتب تُستخدم لفهم طبيعة الدرس وترابطه فقط؛ المدرس هو من يشرح هذه المهارات ويدرّب الطالب عليها ويقيّمها.",
     "ممنوع أن تنشئ للطالب اختبارًا أو كويزًا أو أسئلة مراجعة أو سؤال استرجاع أو اختبارًا تشخيصيًا أو مهمة لقياس إتقان مهارة. لا تطلب من الطالب الإجابة عن أسئلة من المنهج، ولا تمنحه درجة أو حكم إتقان من خلال أسئلة يولدها النظام.",
@@ -1838,11 +1913,11 @@ export async function generatePersonalPlan(
     "قاعدة إلزامية: موضع الطالب هو آخر نقطة مكتملة بالفعل، ويبدأ التراكم من النقطة التالية. كل ما يظهر تحت (دروس مكتملة) مستبعد من مهام الدراسة الجديدة. لا تعِد شرح درس مكتمل ولا تنشئ له مهمة حل من البداية. اختر حصريًا من (دروس متاحة للتخطيط الجديد فقط)، وأرفق مع كل خطوة معرف المنهج الصحيح داخل curriculumNodeIds. لا تخترع معرفات ولا تستخدم معرف درس مكتمل.",
     "افصل بين تقدم المنهج وقائمة المهام: موضع الطالب هو حقيقة ما أكمله بالفعل؛ المهمة المفتوحة في قائمة المهام تعني التزامًا قائمًا فقط ولا تعني أن الدرس اكتمل. لا تغيّر موضع الطالب بسبب وجود مهمة مفتوحة أو منتهية. قبل إنشاء خطوة جديدة، طابق المهام الحالية مع الموضوعات المتاحة؛ إذا وُجدت مهمة مطابقة للموضوع نفسه فأشر إلى المهمة الموجودة ولا تنشئ نسخة ثانية. إذا كانت المهمة منتهية والموضوع ما زال غير مكتمل في موضع التقدم، أظهر التعارض للمراجعة ولا تعتبر الدرس مكتملًا تلقائيًا.",
     "هذه خطة تشغيلية للفترة القادمة فقط، وليست خطة سنوية ولا قائمة متراكمات منفصلة. التزم بأفق " + horizonDays + " أيام من تاريخ اليوم، ووزع الحمل على الأيام المتاحة. لا تحاول تغطية المنهج كله في كل توليد؛ اختر الخطوات التي يمكن تنفيذها داخل هذه الفترة ثم جدّد الخطة عند تغيّر المهام والتقدم ومواعيد الحصص.",
-    "في النمط الذكي الافتراضي: ابدأ بالمهام المفتوحة والمتأخرة التي تخص المنهج، ثم أضف الموضوع التالي الذي يشرحه المدرس قريبًا بما يسمح للطالب بالاستعداد قبل الحصة. لا تسمح للمتراكم أن يمحو مواكبة المدرس، ولا تسمح للجديد أن يزيح التزامًا متأخرًا عاجلًا.",
-    "اجعل الخطة مفهومة للطالب قبل تنفيذها: اكتب executionStrategy.objective وexecutionStrategy.rationale بالعربية الواضحة، وحدد مراحلها بترتيب واضح: backlog لإغلاق الالتزامات المفتوحة المؤكدة، teacher_sync لمواكبة شرح المدرس، steady لاستكمال التقدم. اربط كل مهمة بمرحلتها عبر phaseId. لا تكتب استراتيجية عامة لا تطابق المهام الفعلية؛ كل مرحلة تذكر ما سنفعله ولماذا ومتى نعتبرها قد تقدمت.",
+    "في النمط الذكي الافتراضي: الدروس التي لم يُشاهد شرحها هي أولوية التعلم الأولى. رتّبها داخل كل فرع حسب تسلسل المنهج ووازن بين المواد، ثم أضف الالتزامات المؤكدة ذات المواعيد القريبة. لا تضف درسًا شوهد شرحه أو يحتاج مراجعة إلى الجدول الحالي قبل تغطية جميع الدروس غير المشاهدة؛ ضعها في review_later.",
+    "اجعل الخطة مفهومة للطالب قبل تنفيذها: اكتب executionStrategy.objective وexecutionStrategy.rationale بالعربية الواضحة، وحدد مراحلها: backlog للالتزامات المفتوحة، teacher_sync للدروس غير المشاهدة المرتبطة بموعد المدرس، steady لبقية الدروس الجديدة غير المشاهدة، review_later للمذاكرة بعد الشرح والمراجعة المؤجلة لما بعد استكمال المنهج الجديد. اربط كل مهمة بمرحلتها عبر phaseId.",
     "إذا كانت هناك مهام مفتوحة مسجلة في البيانات، فلا تتجاهلها ولا تنشئ نسخة ثانية منها. ابدأ بالأقرب استحقاقًا والأعلى أولوية، ثم أضف الدرس التالي المتاح في الفروع المسجلة. لا تقل إننا سننهي كل المتراكم إذا كان حجمه أكبر من قدرة الأفق؛ اشرح ما الذي سنبدأ به وما الذي سيبقى للدورة التالية.",
     "عند تكوين قائمة الخطة اليومية، اجعل الإيقاع المرن نحو 3 خطوات، والمتوازن نحو 4، والمكثف نحو 6 خطوات. ارفع العدد عند الحاجة لتغطية المواد المختارة والالتزامات المفتوحة المؤكدة، بحد أقصى عملي، ولا تسمح بأن تملأ مادة واحدة القائمة إذا كانت مواد أخرى لديها دروس مؤهلة. هذه أهداف مرنة وليست إلزامًا لاختلاق مهام؛ إذا لم توجد التزامات أو نقاط منهج متاحة، أظهر ذلك بدل اختراعها.",
-    "في نمط المتراكم فقط: ركّز على المهام القديمة المفتوحة والفجوة الحالية التي يؤكدها سجل الطالب والمدرس، ولا تضف دروسًا جديدة لمجرد أنها لاحقة في الفهرس إلا إذا كانت لازمة لإكمال التزام متراكم.",
+    "في جميع الحالات، لا تجعل وجود مهام مراجعة أو مهام دروس شوهد شرحها يزيح الدروس التي لم يُشاهد شرحها. الالتزامات المفتوحة المرتبطة بدرس غير مشاهد يمكن ربطها بالدرس نفسه ومنع تكرارها.",
     "في نمط مواكبة المدرس: احجز وقتًا قبل أقرب حصة مسجلة لمراجعة ما سيشرحه المدرس أو استكمال متطلباته، ووزّع موضوعات ما بعد الحصة بعد موعدها المتوقع. لا تعتبر الحصة قد حدثت أو اتلغت إلا بإعلان موثوق أو تحديث مؤكد.",
     "اقرأ teacherSchedules لكل مادة كموعد أسبوعي محلي متكرر يتضمن اليوم ووقت البداية فقط، وليس فترة زمنية. لا تفترض مدة الحصة أو وقت انتهائها، ولا تحجز فترة بعدها دون معلومة موثقة. استخدم قائمة المواعيد التالية المحسوبة بالتاريخ والساعة: " + formatUpcomingTeacherSessions(profile, constraints.startDate ?? new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date()), horizonDays) + ". قدّم التحضير للموضوع القادم قبل موعده متى أمكن، ولا تضع بداية مهمة عند الساعة المسجلة نفسها.",
     "مهام الطالب الحالية ليست مجرد قائمة للتجاهل: إذا كانت مهمة مفتوحة ومطابقة لموضوع غير مكتمل، احتفظ بها واربط خطوة الخطة بها. لا تنشئ مهمة ثانية لنفس الموضوع. إذا لم تتطابق مهمة مع موضوع منهجي بثقة، اعرضها كالتزام مستقل ولا تخترع لها معرف منهج.",

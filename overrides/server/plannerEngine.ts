@@ -1,5 +1,18 @@
 export type PlannerEventImpact = "none" | "local" | "structural";
 
+export type PlannerLearningState = "not_recorded" | "not_watched" | "watched_only" | "studied" | "needs_review";
+
+/** Unwatched explanations precede every revision-only lesson. */
+export function getPlannerLearningStatePriority(state: PlannerLearningState): number {
+  switch (state) {
+    case "not_watched": return 0;
+    case "not_recorded": return 1;
+    case "watched_only":
+    case "needs_review": return 2;
+    case "studied": return 3;
+  }
+}
+
 export type PlannerScheduleSettings = {
   dailyMinutes: number;
   daysPerWeek: 5 | 6 | 7;

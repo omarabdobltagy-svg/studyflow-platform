@@ -4,10 +4,22 @@ import {
   combinePlannerEventImpacts,
   evaluatePlanQuality,
   getAvailableStudyDays,
+  getPlannerLearningStatePriority,
   schedulePlanSteps,
 } from "./plannerEngine";
 
 const settings = { dailyMinutes: 120, daysPerWeek: 5 as const, horizonDays: 7 as const };
+
+describe("AI curriculum learning priorities", () => {
+  it("puts unseen explanations before watched-only and review lessons", () => {
+    expect(getPlannerLearningStatePriority("not_watched")).toBeLessThan(getPlannerLearningStatePriority("watched_only"));
+    expect(getPlannerLearningStatePriority("not_watched")).toBeLessThan(getPlannerLearningStatePriority("needs_review"));
+    expect(getPlannerLearningStatePriority("not_recorded")).toBeLessThan(getPlannerLearningStatePriority("watched_only"));
+  });
+  it("keeps completed lessons outside active priority", () => {
+    expect(getPlannerLearningStatePriority("studied")).toBeGreaterThan(getPlannerLearningStatePriority("needs_review"));
+  });
+});
 
 describe("planner deterministic scheduler", () => {
   it("keeps each study day within capacity and respects weekly rest days", () => {

@@ -51,7 +51,7 @@ type PlanStep = {
   studyMethod?: { stages: Array<{ title: string; instruction: string; reason: string; optional?: boolean }>; completionCriteria: string; teacherPolicyNote?: string };
   minutes: number;
   category: string;
-  phaseId?: "backlog" | "teacher_sync" | "steady";
+  phaseId?: "backlog" | "teacher_sync" | "steady" | "review_later";
   priority?: "critical" | "high" | "medium" | "low";
   priorityScore?: number;
   priorityReason?: string;
@@ -91,7 +91,7 @@ type PlanQuality = {
     maxSessionMinutes: number;
   };
 };
-type ExecutionStrategyPhase = { id: "backlog" | "teacher_sync" | "steady"; title: string; purpose: string; actions: string[]; completionCriteria: string };
+type ExecutionStrategyPhase = { id: "backlog" | "teacher_sync" | "steady" | "review_later"; title: string; purpose: string; actions: string[]; completionCriteria: string };
 type PlanView = {
   title: string;
   summary: string;
@@ -611,31 +611,6 @@ export default function Planner() {
   const openTaskRows = taskRows.filter(task => task.status !== "done");
   const overdueTaskRows = openTaskRows.filter(task => task.dueAt && new Date(task.dueAt).getTime() < Date.now());
   const todayTaskRows = openTaskRows.filter(task => task.dueAt && new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date(task.dueAt)) === todayCairo);
-  const curriculumGapCount = progressPreview.reduce((sum, item) => sum + (typeof item.gapCount === "number" ? item.gapCount : 0), 0);
-  const workloadReady = !tasksQuery.isLoading && !learning.isLoading && !tasksQuery.isError && !learning.isError;
-  const paceRecommendation: StudyPace = !workloadReady
-    ? "balanced"
-    : overdueTaskRows.length >= 3 || openTaskRows.length >= 10 || curriculumGapCount >= 12
-      ? "intensive"
-      : openTaskRows.length <= 2 && overdueTaskRows.length === 0 && curriculumGapCount <= 3
-        ? "relaxed"
-        : "balanced";
-  const paceEvidence = !workloadReady
-    ? "لم تكتمل قراءة المهام وتقدم المنهج؛ ستظهر التوصية بعد تحميل البيانات."
-    : "بياناتك الحالية: " + openTaskRows.length.toLocaleString("ar-EG") + " مهمة مفتوحة، "
-      + overdueTaskRows.length.toLocaleString("ar-EG") + " متأخرة، و"
-      + curriculumGapCount.toLocaleString("ar-EG") + " موضعًا متأخرًا عن مرجع المدرس عبر الفروع المعروفة.";
-  const pacePersonalReasons: Record<StudyPace, string> = {
-    relaxed: "لديك " + openTaskRows.length.toLocaleString("ar-EG") + " مهمة مفتوحة و"
-      + overdueTaskRows.length.toLocaleString("ar-EG") + " متأخرة، مع " + curriculumGapCount.toLocaleString("ar-EG")
-      + " موضعًا معروفًا في فجوات المنهج. الإيقاع المرن يقلل عدد الخطوات ويترك مساحة للثبات.",
-    balanced: "لديك " + openTaskRows.length.toLocaleString("ar-EG") + " مهمة مفتوحة و"
-      + overdueTaskRows.length.toLocaleString("ar-EG") + " متأخرة، و" + curriculumGapCount.toLocaleString("ar-EG")
-      + " موضعًا في فجوات المنهج. المتوازن يقسم الانتباه بين إغلاق الالتزامات ومواكبة المواد.",
-    intensive: "لديك " + openTaskRows.length.toLocaleString("ar-EG") + " مهمة مفتوحة، منها "
-      + overdueTaskRows.length.toLocaleString("ar-EG") + " متأخرة، إضافة إلى "
-      + curriculumGapCount.toLocaleString("ar-EG") + " موضعًا في فجوات المنهج. المكثف يرفع عدد الخطوات المقترحة لتقليل هذا التراكم تدريجيًا.",
-  };
   const planSubjectCount = plan
     ? new Set(plan.steps.map(step => getPlanStepCurriculum(step, profile.data?.subjectIds ?? [])?.subjectId).filter(Boolean)).size
     : 0;
@@ -661,7 +636,7 @@ export default function Planner() {
             <div className="sf-sp-context">
               {profile.data?.track && <span>{profile.data.track}</span>}
               <span>{(profile.data?.subjectIds?.length ?? 0).toLocaleString("ar-EG")} مواد دراسية</span>
-              <span>{selectedPace === "relaxed" ? "إيقاع مرن" : selectedPace === "intensive" ? "إيقاع مكثف" : "إيقاع متوازن"}</span>
+              <span>الذكاء الاصطناعي يرتّب الأولويات تلقائيًا</span>
             </div>
           </div>
           <div className="sf-sp-hero-progress">
@@ -725,49 +700,22 @@ export default function Planner() {
 
               <aside className="sf-sp-builder-card">
                 <div className="sf-sp-section-heading">
-                  <div><span className="sf-sp-eyebrow">اختيار إيقاع الخطة</span><h2>تختار تذاكر بإيقاع إيه؟</h2></div>
+                  <div>
+                    <span className="sf-sp-eyebrow">المخطط الذكي</span>
+                    <h2>{plan ? "الذكاء الاصطناعي يدير أولوياتك" : "دع StudyFlow يرتّب أولوياتك"}</h2>
+                  </div>
                 </div>
-                <p>الاختيار يحدد حجم المهام التي يقترحها المحرك، ويظل قابلًا للتعديل. التوصية تتغير تلقائيًا حسب التراكم والمهام المتأخرة وفجوات المنهج.</p>
-                <div className="sf-sp-pace-options">
-                  {([
-                    ["relaxed", "مرنة", "خطوات أقل", "للاستمرارية الهادئة وإنجاز الأولويات القريبة."],
-                    ["balanced", "متوازنة", "توزيع متوازن", "للموازنة بين المتراكم ومواكبة جميع المواد."],
-                    ["intensive", "مكثفة", "خطوات أكثر", "لتقليل التراكم عندما تسمح طاقتك بذلك."],
-                  ] as const).map(([pace, label, subtitle, baseReason]) => (
-                    <button
-                      key={pace}
-                      type="button"
-                      aria-pressed={selectedPace === pace}
-                      className={"sf-sp-pace-choice " + (selectedPace === pace ? "is-selected" : "") + (paceRecommendation === pace ? " is-recommended" : "")}
-                      onClick={() => setSelectedPace(pace)}
-                    >
-                      <span className="sf-sp-pace-choice-top">
-                        <strong>{label}</strong>
-                        {workloadReady && paceRecommendation === pace && <em>الموصى بها لك</em>}
-                      </span>
-                      <small>{subtitle}</small>
-                      <p>{baseReason}</p>
-                      <span className="sf-sp-pace-personal">{workloadReady
-                        ? pacePersonalReasons[pace]
-                        : "تظهر ملاءمة هذا الإيقاع بعد اكتمال قراءة بياناتك."}</span>
-                    </button>
-                  ))}
-                </div>
+                <p>يحلّل تقدمك في كل درس، ومواعيد المدرسين، والمهام المفتوحة، ثم يختار ما يجب أن تبدأ به وحجم الحمل المناسب تلقائيًا. لا تحتاج إلى اختيار خطة مرنة أو متوازنة أو مكثفة.</p>
                 <div className="sf-sp-pace-evidence">
-                  <strong>{workloadReady ? "لماذا رُشّح هذا الإيقاع؟" : "جاري تجهيز التوصية"}</strong>
-                  <p>{paceEvidence}</p>
-                  <small>{workloadReady
-                    ? (paceRecommendation === "intensive"
-                      ? "تميل التوصية للمكثف عند وجود 3 مهام متأخرة أو 10 مهام مفتوحة أو 12 موضع فجوة فأكثر."
-                      : paceRecommendation === "relaxed"
-                        ? "تميل التوصية للمرن عندما تكون المهام المفتوحة 2 أو أقل، ولا توجد مهام متأخرة، والفجوات المعروفة 3 أو أقل."
-                        : "المتوازن هو الاختيار الافتراضي عندما لا تكون البيانات قليلة بما يكفي للمرن، ولا مرتفعة بما يكفي للمكثف.")
-                    : "لن نحدد إيقاعًا موصى به قبل اكتمال تحميل بيانات المهام والمنهج."}</small>
+                  <strong>قاعدة ترتيب الأولويات</strong>
+                  <p>أولًا: الدروس التي لم تشاهد شرحها. بعد استكمال الدروس الجديدة: الدروس التي شاهدت شرحها ولم تذاكرها، ثم الدروس التي تحتاج مراجعة.</p>
                 </div>
                 <Button type="button" className="sf-sp-build-button" disabled={!isPreflightReady || ensureDaily.isPending || !profile.data?.subjectIds?.length} onClick={runGeneration}>
-                  {ensureDaily.isPending ? <><Loader2 className="size-4 animate-spin" /> جارٍ تحديث الخطة</> : <>{plan ? <RefreshCw className="size-4" /> : <Sparkles className="size-4" />}{plan ? "إعادة بناء الخطة الحالية" : "تحديث خطة المذاكرة"}</>}
+                  {ensureDaily.isPending
+                    ? <><Loader2 className="size-4 animate-spin" /> جارٍ تحليل الأولويات</>
+                    : <>{plan ? <RefreshCw className="size-4" /> : <Sparkles className="size-4" />}{plan ? "إعادة تحليل الأولويات" : "إنشاء خطة المذاكرة"}</>}
                 </Button>
-                <small>StudyFlow ينشئ خطة واحدة تلقائيًا من التراكم وتحديثات المدرسين، ثم يحدّث المهام المفتوحة بدل نسخها. إعادة البناء تستبدل الخطة الحالية وتحافظ على المهام المكتملة.</small>
+                <small>عند تغيّر تقدمك أو مهامك، يعيد StudyFlow ترتيب الخطة ويحافظ على المهام المكتملة دون تكرار.</small>
               </aside>
             </section>
 
@@ -1010,12 +958,13 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
     const subjectCount = new Set(plan.steps.map(step => getPlanStepCurriculum(step, subjectIds)?.subjectId).filter(Boolean)).size;
   const confirmedTaskCount = plan.steps.filter(step => Boolean(step.existingTask)).length;
   const phaseLabels: Record<string,string> = {
-    backlog: "المتراكم والالتزامات المفتوحة",
-    teacher_sync: "مواكبة شرح المدرسين",
-    steady: "استكمال المنهج والتثبيت",
+    backlog: "الالتزامات المفتوحة",
+    teacher_sync: "دروس غير مشاهدة مرتبطة بموعد المدرس",
+    steady: "الدروس الجديدة غير المشاهدة",
+    review_later: "مذاكرة ومراجعة بعد استكمال المنهج",
     deferred: "خطوات مؤجلة للدورة القادمة",
   };
-  const phaseOrder = ["backlog", "teacher_sync", "steady", "deferred"];
+  const phaseOrder = ["backlog", "teacher_sync", "steady", "review_later", "deferred"];
   const grouped = new Map<string, Array<{step: PlanStep; index: number}>>();
   plan.steps.forEach((step,index) => {
     const key = step.scheduleState === "deferred"
@@ -1052,7 +1001,7 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
   };
   const priorityLabel: Record<string,string> = {critical:"عاجلة",high:"أولوية عالية",medium:"متوسطة",low:"مرنة"};
   const difficultyLabel: Record<string,string> = {easy:"خفيف",medium:"متوسط",hard:"يحتاج تركيزًا",unknown:"غير محدد"};
-  const phaseLabel: Record<string,string> = {backlog:"المتراكم",teacher_sync:"مواكبة المدرس",steady:"التثبيت"};
+  const phaseLabel: Record<string,string> = {backlog:"التزام مفتوح",teacher_sync:"شرح غير مشاهد",steady:"درس جديد",review_later:"مراجعة مؤجلة"};
   const summary = displayArabicText(plan.summary.split("\n\n")[0], "خطة مرتبة حسب التزاماتك والمواد المتاحة في ملفك الدراسي.");
   return (
     <section className="sf-sp-plan-board">
