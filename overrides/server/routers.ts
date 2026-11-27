@@ -2923,6 +2923,46 @@ export const appRouter = router({
           }))];
         };
 
+        const acceptedAlternativeContexts = selection.acceptedAlternativeReviewContext
+          && typeof selection.acceptedAlternativeReviewContext === "object"
+          && !Array.isArray(selection.acceptedAlternativeReviewContext)
+          ? selection.acceptedAlternativeReviewContext as Record<string, { subjectId?: string; branchId?: string }>
+          : {};
+        const storedAcceptedAlternativeItems = savedTeacherUpdates.flatMap(update => {
+          if (update.sourceType !== "youtube" || typeof update.url !== "string") return [];
+          const videoId = extractVideoId(update.url);
+          if (!videoId) return [];
+          const externalId = "youtube:" + videoId;
+          const context = acceptedAlternativeContexts[externalId];
+          if (!acceptedIds.has(externalId) || declinedIds.has(externalId)
+            || context?.subjectId !== input.subjectId || context?.branchId !== input.branchId) return [];
+          const matchedTopics = matchedBranchTopics(update);
+          const analysisStatus = String(update.contentAnalysis?.status ?? "processing");
+          if (analysisStatus === "failed" || (analysisStatus === "complete" && matchedTopics.length === 0)) return [];
+          const teacher = getSIETeacher(String(update.teacherId ?? ""));
+          const teacherName = String(update.teacherName ?? teacher?.nameAr ?? "مدرس المادة");
+          return [{
+            externalId,
+            teacherId: String(update.teacherId ?? ""),
+            teacherName,
+            teacherBrand: teacher?.brandName ?? teacherName,
+            title: String(update.title ?? "").trim().slice(0, 240),
+            channelTitle: teacher?.brandName ?? teacherName,
+            url: "https://www.youtube.com/watch?v=" + videoId,
+            publishedAt: String(update.publishedAt ?? ""),
+            description: String(update.description ?? "").slice(0, 700),
+            matchedSignals: matchedTopics.length,
+            matchedTopics,
+            accepted: true,
+            isSelectedTeacher: update.teacherId === selectedTeacherId,
+            analysisStatus,
+            verificationState: analysisStatus === "complete" ? "content_verified" : "analysis_pending",
+            relevance: analysisStatus === "complete"
+              ? "تم تحليل الفيديو ومطابقة موضوعاته مع دروس متراكمة في هذا الفرع."
+              : "وافق الطالب على تحليل الفيديو؛ ننتظر اكتمال فحص المحتوى قبل إدراجه في الخطة.",
+          }];
+        });
+
         // Start with revision material from the student's selected teacher.
         // A completed analysis must match this exact curriculum branch; otherwise
         // the video is not presented as a suitable revision recommendation.
@@ -3033,7 +3073,7 @@ export const appRouter = router({
         let query = [subject.nameAr, branch.branchTitle, "مراجعة", "البكالوريا المصرية", SIE_CATALOG_META.academicYear].join(" ");
         // Search other teachers only when the selected teacher has no candidate
         // for this branch. An unmatched, fully analyzed review is not treated as useful.
-        if (selectedTeacherItems.length === 0 && !reviewSearchUnavailable) {
+        if (!reviewSearchUnavailable) {
           const result = await searchTeacherReviews(query);
           const rawItems = Array.isArray(result?.items) ? result.items : Array.isArray(result?.videos) ? result.videos : [];
           const seen = new Set<string>();
@@ -3088,7 +3128,22 @@ export const appRouter = router({
             }];
           }).sort((a, b) => Number(b.accepted) - Number(a.accepted) || b.matchedSignals - a.matchedSignals).slice(0, 10);
         }
-        const items = selectedTeacherItems.length > 0 ? selectedTeacherItems : alternativeItems;
+        const candidateById = new Map<string, Record<string, any>>();
+        for (const item of [...storedAcceptedAlternativeItems, ...selectedTeacherItems, ...alternativeItems]) {
+          const existing = candidateById.get(String(item.externalId));
+          if (!existing || Number(item.matchedSignals ?? 0) > Number(existing.matchedSignals ?? 0)
+            || (item.verificationState === "content_verified" && existing.verificationState !== "content_verified")) {
+            candidateById.set(String(item.externalId), item);
+          }
+        }
+        const items = [...candidateById.values()]
+          .sort((a, b) =>
+            Number(b.verificationState === "content_verified") - Number(a.verificationState === "content_verified")
+            || Number(b.matchedSignals ?? 0) - Number(a.matchedSignals ?? 0)
+            || Number(b.isSelectedTeacher) - Number(a.isSelectedTeacher)
+            || Date.parse(b.publishedAt || "") - Date.parse(a.publishedAt || "")
+          )
+          .slice(0, 12);
         const latestSearchProfile = await getStudentProfile(ctx.user.id);
         if (latestSearchProfile) {
           const latestSearchSelection = (latestSearchProfile.selection ?? {}) as Record<string, any>;
@@ -3108,22 +3163,27 @@ export const appRouter = router({
             pendingAlternativeReviewCandidates: nextPending,
           });
         }
+        const hasVerifiedContentMatch = items.some(item => item.verificationState === "content_verified");
+        const hasAlternativeCandidate = items.some(item => !item.isSelectedTeacher);
         await logStudentActivity(ctx.user.id, "learning.review_search", "curriculum_branch", input.branchId,
-          selectedTeacherItems.length > 0 ? "تم عرض مراجعات المدرس المختار" : "تم البحث عن مراجعات بديلة لمدرس المادة", {
+          hasVerifiedContentMatch ? "تم عرض فيديوهات مراجعة طابق تحليل محتواها دروسًا متراكمة"
+            : hasAlternativeCandidate ? "تم عرض مراجعات من المدرس المختار ومدرسين بدلاء للمادة"
+              : "تم عرض مراجعات المدرس المختار", {
             subjectId: input.subjectId,
             selectedTeacherId: selectedTeacherId ?? null,
             resultCount: items.length,
-            source: selectedTeacherItems.length > 0 ? "selected_teacher" : "alternative_teacher",
+            source: hasAlternativeCandidate ? "selected_and_alternative_teachers" : "selected_teacher",
+            verifiedContentMatches: items.filter(item => item.verificationState === "content_verified").length,
           });
         return {
           query, subject: subject.nameAr, branch: branch.branchTitle,
           selectedTeacher: selectedTeacher?.nameAr ?? null,
           source: "YouTube", items,
           note: reviewSearchUnavailable
-            ? "البحث الخارجي عن المراجعات غير متاح حاليًا في إعدادات المنصة. تقدر تتابع المذاكرة وتسجيل التقدم بشكل طبيعي؛ هذه الميزة الإضافية لا تؤثر على خطتك."
-            : selectedTeacherItems.length > 0
-              ? "نعرض مراجعات مدرسك المختار أولًا. الفيديوهات غير المحللة لا تدخل الخطة؛ تُدرج فقط بعد مطابقة محتواها مع دروس متراكمة فعلًا. عند عدم وجود مراجعة مناسبة من مدرسك، ننتقل إلى مدرس بديل للمادة."
-              : "لم تظهر مراجعة مناسبة من مدرسك المختار لهذا الفرع؛ لذلك بحثنا لدى مدرسين آخرين للمادة. هوية المدرس البديل وحدها لا تكفي، ولن يدخل الفيديو الخطة إلا بعد موافقتك وتحليل محتواه ومطابقته مع المنهج والمتراكم.",
+            ? "تعذّر الوصول إلى البحث الخارجي الآن. تظل مراجعات الفيديو المحفوظة وتحليلها متاحة؛ جرّب البحث لاحقًا."
+            : hasVerifiedContentMatch
+              ? "رتّبنا النتائج حسب مطابقة محتوى الفيديو للدروس المتراكمة، وليس حسب اسم المدرس فقط. قد يظهر فيديو من مدرس آخر إذا كان شرحه أقرب لما تحتاجه. الفيديو غير المحلل لا يدخل الخطة."
+              : "جمعنا المرشحين من مدرسك المختار ومدرسين آخرين مسجلين للمادة. هذه مرشحات أولية فقط؛ وافق على فحص الفيديو أولًا، ولن يُربط بالخطة إلا بعد أن يطابق تحليل محتواه فرع المنهج ودروسك المتراكمة.",
         };
       }),
     acceptAlternativeReview: protectedProcedure
