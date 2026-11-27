@@ -1076,3 +1076,72 @@ html body .sf-login-screen.sf-shell-v3:has(.sf-login-3d canvas) .sf-login-graphi
 .sf-main [class*="text-purple-"] {
   color: var(--accent-foreground) !important;
 }
+
+/* Cohesive authentication and onboarding */
+.sf-onboarding-shell{max-width:1040px;padding-bottom:28px}
+.sf-onboarding-hero{border:1px solid rgba(255,255,255,.12);background:radial-gradient(circle at 90% 0%,rgba(145,169,255,.24),transparent 35%),linear-gradient(135deg,#111a31 0%,#202e50 58%,#3b4f86 100%)!important;box-shadow:0 26px 70px -42px rgba(15,26,54,.62)!important}
+.sf-onboarding-hero .eyebrow{color:rgba(240,245,255,.64)!important}
+.sf-onboarding-panel{border:1px solid color-mix(in srgb,var(--border) 78%,#8798bd 22%)!important;border-radius:26px!important;background:var(--card)!important;box-shadow:0 20px 54px -42px rgba(17,30,57,.4)!important}
+.sf-onboarding-panel>header{background:color-mix(in srgb,var(--muted) 54%,transparent)!important}
+.sf-teacher-selection-panel{padding:clamp(16px,3vw,24px);border:1px solid var(--border);border-radius:22px;background:color-mix(in srgb,var(--card) 96%,#edf2ff 4%)}
+.sf-teacher-choice{position:relative;min-height:88px!important;border-width:1.5px!important;background:var(--card)!important}
+.sf-teacher-choice:hover{border-color:var(--primary)!important;transform:translateY(-1px);box-shadow:0 8px 24px -20px rgba(48,76,151,.65)}
+.sf-teacher-choice.is-selected{border-color:var(--primary)!important;background:color-mix(in srgb,var(--primary) 8%,var(--card))!important;box-shadow:inset 0 0 0 1px var(--primary),0 12px 28px -24px rgba(48,76,151,.8)}
+.sf-teacher-choice-copy{display:grid;gap:5px}
+.sf-teacher-choice-copy b{font-size:15px;line-height:1.5;color:var(--foreground)}
+.sf-teacher-choice-copy small{font-size:11px;line-height:1.5;color:var(--muted-foreground)}
+.sf-teacher-choice-copy .sf-teacher-brand{color:var(--primary);font-weight:800}
+.sf-teacher-choice-check{display:grid;flex:0 0 24px;width:24px;height:24px;place-items:center;border:1.5px solid var(--input);border-radius:8px;color:white;background:transparent}
+.sf-teacher-choice.is-selected .sf-teacher-choice-check{border-color:var(--primary);background:var(--primary)}
+.sf-teacher-discover-button{min-height:46px;border-style:dashed!important;font-weight:800!important}
+.sf-teacher-discovery-result{display:flex;gap:12px;align-items:flex-start;margin-top:12px;padding:14px;border:1px solid color-mix(in srgb,var(--primary) 30%,var(--border));border-radius:16px;background:color-mix(in srgb,var(--primary) 6%,var(--card))}
+.sf-teacher-discovery-icon{display:grid;flex:0 0 28px;width:28px;height:28px;place-items:center;border-radius:9px;color:var(--primary);background:color-mix(in srgb,var(--primary) 13%,var(--card))}
+.sf-teacher-discovery-result>div{display:grid;gap:4px}
+.sf-teacher-discovery-result b{color:var(--foreground);font-size:13px}
+.sf-teacher-discovery-result small{color:var(--muted-foreground);font-size:11px;line-height:1.6}
+.sf-teacher-discovery-result a{width:fit-content;margin-top:4px;color:var(--primary);font-size:11px;font-weight:800;text-decoration:underline;text-underline-offset:3px}
+.sf-method-panel{padding:18px;border:1px solid var(--border);border-radius:20px;background:color-mix(in srgb,var(--muted) 22%,var(--card))}
+.sf-method-heading h4,.sf-schedule-header h4{margin:3px 0 0;color:var(--foreground);font-size:16px;font-weight:900}
+.sf-method-heading p:last-child,.sf-schedule-header p:last-child{margin:5px 0 0;color:var(--muted-foreground);font-size:12px;line-height:1.8}
+.sf-method-guidance{margin:14px 0;padding:11px 13px;border:1px solid var(--border);border-radius:13px;color:var(--muted-foreground);background:var(--card);font-size:12px;line-height:1.8}
+.sf-teacher-mode-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:14px}
+.sf-teacher-mode-choice{position:relative;display:grid;gap:6px;min-height:116px;padding:16px;border:1.5px solid var(--border);border-radius:16px;background:var(--card);text-align:right;transition:border-color .18s ease,box-shadow .18s ease,transform .18s ease,background .18s ease}
+.sf-teacher-mode-choice:hover{border-color:var(--primary);transform:translateY(-1px)}
+.sf-teacher-mode-choice.is-selected{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 8%,var(--card));box-shadow:inset 0 0 0 1px var(--primary),0 12px 24px -23px var(--primary)}
+.sf-mode-choice-mark{display:grid;width:22px;height:22px;place-items:center;border:1.5px solid var(--input);border-radius:7px;color:white}
+.sf-teacher-mode-choice.is-selected .sf-mode-choice-mark{border-color:var(--primary);background:var(--primary)}
+.sf-teacher-mode-title{color:var(--foreground);font-size:15px;font-weight:900}
+.sf-mode-choice-note{color:var(--muted-foreground);font-size:11px;line-height:1.6}
+.sf-method-fixed{display:flex;gap:12px;align-items:center;margin-top:14px;padding:16px;border:1px solid color-mix(in srgb,var(--primary) 32%,var(--border));border-radius:16px;color:var(--primary);background:color-mix(in srgb,var(--primary) 7%,var(--card))}
+.sf-method-fixed>div{display:grid;gap:4px}
+.sf-method-fixed b{color:var(--foreground);font-size:14px}
+.sf-method-fixed span{color:var(--muted-foreground);font-size:11px;line-height:1.6}
+.sf-method-required{margin:12px 0 0;color:var(--muted-foreground);font-size:11px}
+.sf-method-evidence{margin-top:12px;color:var(--muted-foreground);font-size:11px}
+.sf-method-evidence summary{cursor:pointer;width:fit-content;font-weight:800}
+.sf-method-evidence ul{display:grid;gap:7px;margin-top:8px}
+.sf-method-evidence a{color:var(--primary);text-decoration:underline;text-underline-offset:3px}
+.sf-schedule-panel{padding:18px;border:1px solid var(--border);border-radius:20px;background:var(--card)}
+.sf-schedule-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.sf-schedule-count{flex:0 0 auto;padding:6px 10px;border:1px solid var(--border);border-radius:999px;color:var(--muted-foreground);background:var(--muted);font-size:10px;font-weight:800}
+.sf-schedule-unfixed{display:flex;align-items:center;gap:11px;width:100%;margin-top:16px;padding:13px;border:1.5px solid var(--border);border-radius:14px;background:var(--muted);text-align:right}
+.sf-schedule-unfixed.is-selected{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 8%,var(--card))}
+.sf-schedule-checkbox{display:grid;flex:0 0 23px;width:23px;height:23px;place-items:center;border:1.5px solid var(--input);border-radius:7px;color:white}
+.sf-schedule-unfixed.is-selected .sf-schedule-checkbox{border-color:var(--primary);background:var(--primary)}
+.sf-schedule-unfixed>span:last-child{display:grid;gap:3px}
+.sf-schedule-unfixed b{color:var(--foreground);font-size:12px}
+.sf-schedule-unfixed small{color:var(--muted-foreground);font-size:10px;line-height:1.6}
+.sf-schedule-slots{display:grid;gap:12px;margin-top:14px}
+.sf-schedule-slot{padding:14px;border:1px solid var(--border);border-radius:16px;background:color-mix(in srgb,var(--muted) 20%,var(--card))}
+.sf-schedule-slot-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.sf-schedule-slot-top b{color:var(--foreground);font-size:12px}
+.sf-schedule-remove{min-height:30px!important;color:var(--destructive)!important;font-size:11px!important}
+.sf-schedule-day-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px;margin-top:12px}
+.sf-schedule-day-grid button{min-height:38px;padding:4px 2px;border:1px solid var(--border);border-radius:9px;color:var(--muted-foreground);background:var(--card);font-size:10px;font-weight:800}
+.sf-schedule-day-grid button[aria-pressed="true"]{border-color:var(--primary);color:var(--primary-foreground);background:var(--primary);box-shadow:0 5px 13px -10px var(--primary)}
+.sf-schedule-time{display:grid;gap:7px;max-width:210px;margin-top:14px;color:var(--foreground);font-size:11px;font-weight:800}
+.sf-schedule-time input{width:100%;height:43px;padding:0 12px;border:1px solid var(--input);border-radius:11px;color:var(--foreground);background:var(--background);font:800 14px/1 ui-monospace,monospace}
+.sf-schedule-add{min-height:46px!important;border:1.5px dashed var(--primary)!important;color:var(--primary)!important;font-weight:900!important}
+.sf-schedule-empty{margin:0;padding:12px;border:1px dashed var(--border);border-radius:12px;color:var(--muted-foreground);font-size:11px;text-align:center}
+.sf-schedule-footnote{margin:12px 0 0;color:var(--muted-foreground);font-size:10px;line-height:1.8}
+@media(max-width:520px){.sf-onboarding-shell{padding-inline:0}.sf-onboarding-hero{border-radius:22px!important}.sf-onboarding-panel{border-radius:20px!important}.sf-schedule-panel,.sf-method-panel{padding:14px}.sf-schedule-day-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}.sf-schedule-day-grid button{min-height:40px;padding-inline:3px;font-size:10px}.sf-teacher-mode-grid{gap:8px}.sf-teacher-mode-choice{min-height:108px;padding:12px}}

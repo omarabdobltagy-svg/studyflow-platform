@@ -393,25 +393,25 @@ export default function DashboardLayout({ title, description, children, action }
               {authMode === "register" && <>
                 <div className="space-y-2">
                   <Label htmlFor="studyflow-register-name">اسمك الكامل</Label>
-                  <Input id="studyflow-register-name" value={registerName} onChange={event => setRegisterName(event.target.value)} autoComplete="name" placeholder="اكتب اسمك الكامل" required minLength={2} maxLength={80} className="sf-auth-input" />
+                  <Input id="studyflow-register-name" name="name" type="text" inputMode="text" value={registerName} onChange={event => setRegisterName(event.target.value)} autoComplete="name" autoCapitalize="words" enterKeyHint="next" placeholder="اكتب اسمك الكامل" required minLength={2} maxLength={80} className="sf-auth-input" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="studyflow-register-phone">رقم الهاتف</Label>
-                  <Input id="studyflow-register-phone" value={registerPhone} onChange={event => setRegisterPhone(event.target.value)} autoComplete="tel" inputMode="tel" type="tel" placeholder="01xxxxxxxxx أو +20xxxxxxxxxx" required className="sf-auth-input" />
+                  <Input id="studyflow-register-phone" name="tel" value={registerPhone} onChange={event => setRegisterPhone(event.target.value)} autoComplete="tel" inputMode="tel" type="tel" enterKeyHint="next" placeholder="01xxxxxxxxx أو +20xxxxxxxxxx" required className="sf-auth-input" />
                   <p className="text-xs leading-6 text-muted-foreground">سيُحفظ رقمك مع الحساب ويُستخدم تلقائيًا في ملفك الدراسي؛ لن نطلب إدخاله مرة أخرى بعد التسجيل.</p>
                 </div>
               </>}
               <div className="space-y-2">
                 <Label htmlFor="studyflow-username">اسم المستخدم</Label>
-                <Input id="studyflow-username" value={loginUsername} onChange={event => setLoginUsername(event.target.value)} autoComplete="username" placeholder="مثال: omar_2026" required minLength={3} maxLength={32} pattern="[A-Za-z0-9._-]{3,32}" title="استخدم أحرفًا إنجليزية أو أرقامًا أو نقطة أو شرطة سفلية." dir="ltr" className="sf-auth-input text-left" />
+                <Input id="studyflow-username" name="username" type="text" inputMode="text" value={loginUsername} onChange={event => setLoginUsername(event.target.value)} autoComplete="username" autoCapitalize="none" spellCheck={false} placeholder="مثال: omar_2026" required minLength={3} maxLength={32} pattern="[A-Za-z0-9._-]{3,32}" title="استخدم أحرفًا إنجليزية أو أرقامًا أو نقطة أو شرطة سفلية." dir="ltr" className="sf-auth-input text-left" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="studyflow-password">كلمة المرور</Label>
-                <Input id="studyflow-password" type="password" value={loginPassword} onChange={event => setLoginPassword(event.target.value)} autoComplete={authMode === "register" ? "new-password" : "current-password"} placeholder={authMode === "register" ? "10 أحرف على الأقل" : "اكتب كلمة المرور"} required minLength={authMode === "register" ? 10 : 1} className="sf-auth-input" />
+                <Input id="studyflow-password" name="password" type="password" value={loginPassword} onChange={event => setLoginPassword(event.target.value)} autoComplete={authMode === "register" ? "new-password" : "current-password"} enterKeyHint={authMode === "register" ? "next" : "go"} placeholder={authMode === "register" ? "10 أحرف على الأقل" : "اكتب كلمة المرور"} required minLength={authMode === "register" ? 10 : 1} className="sf-auth-input" />
               </div>
               {authMode === "register" && <div className="space-y-2">
                 <Label htmlFor="studyflow-confirm-password">تأكيد كلمة المرور</Label>
-                <Input id="studyflow-confirm-password" type="password" value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} autoComplete="new-password" placeholder="أعد كتابة كلمة المرور" required minLength={10} className="sf-auth-input" />
+                <Input id="studyflow-confirm-password" name="new-password" type="password" value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} autoComplete="new-password" enterKeyHint="go" placeholder="أعد كتابة كلمة المرور" required minLength={10} className="sf-auth-input" />
               </div>}
               {(authFormError || (authMode === "register" ? registerMutation.error?.message : loginMutation.error?.message)) && <p role="alert" className="sf-auth-error-message">{authFormError || (authMode === "register" ? registerMutation.error?.message : loginMutation.error?.message)}</p>}
               <Button type="submit" disabled={loginMutation.isPending || registerMutation.isPending} size="lg" className="sf-auth-submit pressable w-full rounded-2xl font-bold">

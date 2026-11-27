@@ -95,7 +95,7 @@ import { invokeLLMWithNvidiaFallback, invokeLLMWithNvidiaFallbackStream } from "
 import type { InvokeParams } from "./_core/llm";
 import { formatTextbookEvidence, retrieveTextbookEvidence } from "./textbook-retrieval";
 import { createReminderCron, getReminderPreferences, listReminderNotifications, markReminderRead, saveReminderPreferences, saveReminderSchedule } from "./reminders";
-import { getTeacherCourseFactsWithRefresh } from "./teacher-course-research";
+import { discoverTeacherForSubject, getTeacherCourseFactsWithRefresh } from "./teacher-course-research";
 import { getEffectiveStudentLessonState, summarizeStudentLessonStates, STUDENT_LESSON_STATES, isStudentLessonState, type StudentLessonState } from "@shared/sie-lesson-state";
 import { getDueTeacherClassFollowups, buildTeacherClassFollowupKey, type TeacherClassFollowupRecord } from "./teacherClassFollowups";
 import { isStudyFlowManagedGoal, taskLooksLikeTeacherObligation, getRootGoalForTask } from "./proactiveTaskReconciliation";
@@ -2092,6 +2092,22 @@ export const appRouter = router({
         }
         return getTeacherCourseFactsWithRefresh({ teacherId: input.teacherId, subjectId: input.subjectId, educationSystem: input.systemId, gradeYear: input.gradeYear });
       }),
+    discover: protectedProcedure
+      .input(z.object({
+        teacherName: z.string().trim().min(2).max(120),
+        subjectId: z.string().trim().min(3).max(80),
+        systemId: z.enum(["EG_BACCALAUREATE", "EG_GENERAL_SECONDARY"]),
+        gradeYear: z.string().trim().min(2).max(60),
+      }))
+      .mutation(async ({ input }) => {
+        if (!getSIESubject(input.subjectId)) throw new TRPCError({ code: "BAD_REQUEST", message: "المادة المحددة غير موجودة." });
+        return discoverTeacherForSubject({
+          teacherName: input.teacherName,
+          subjectId: input.subjectId,
+          educationSystem: input.systemId,
+          gradeYear: input.gradeYear,
+        });
+      }),
   }),
 
   studentProfile: router({
@@ -2360,6 +2376,19 @@ export const appRouter = router({
         skippedTeacherSubjectIds: z.array(z.string().trim().min(1).max(80)).max(12).default([]),
         courseModes: z.record(z.string(), z.enum(["center", "online"])).default({}),
         customTeacherNames: z.record(z.string(), z.string().trim().max(120)).default({}),
+        customTeacherProfiles: z.record(z.string(), z.object({
+          nameAr: z.string().trim().min(2).max(120),
+          brandName: z.string().trim().min(1).max(180),
+          sourceUrl: z.string().url().max(1_000),
+          availableModes: z.array(z.enum(["center", "online"])).max(2),
+          confidence: z.enum(["low", "medium", "high"]),
+          evidence: z.array(z.object({
+            title: z.string().trim().min(1).max(240),
+            url: z.string().url().max(1_000),
+            source: z.string().trim().min(1).max(180),
+          })).max(5),
+          notes: z.string().max(700).optional(),
+        })).default({}),
         teacherAccessRequirements: z.record(z.string(), z.enum(["homework_and_exam", "homework_only", "exam_only", "none", "unknown"])).default({}),
         teacherHomeworkPolicy: z.record(z.string(), z.enum(["yes", "no", "varies", "unknown"])).default({}),
         teacherHomeworkRequiredBeforeNextLecture: z.record(z.string(), z.enum(["yes", "no", "varies", "unknown"])).default({}),
@@ -2411,6 +2440,11 @@ export const appRouter = router({
         for (const map of [input.teacherHomeworkPolicy, input.teacherHomeworkRequiredBeforeNextLecture, input.teacherPreLectureExamRequired]) {
           for (const subjectId of Object.keys(map)) {
             if (!input.subjectIds.includes(subjectId)) throw new TRPCError({ code: "BAD_REQUEST", message: "بيانات الواجب أو الامتحان يجب أن تخص مادة في ملفك." });
+          }
+        }
+        for (const subjectId of Object.keys(input.customTeacherProfiles)) {
+          if (!input.subjectIds.includes(subjectId) || !input.customTeacherNames[subjectId]?.trim()) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "بيانات المدرس الإضافي يجب أن تخص مادة واسمًا مسجلًا في الملف." });
           }
         }
         for (const [subjectId, schedule] of Object.entries(input.teacherSchedules)) {
@@ -2519,6 +2553,7 @@ export const appRouter = router({
             courseModes: Object.fromEntries(input.subjectIds.map(subjectId => [subjectId, input.courseModes[subjectId] ?? "online"])),
             learningCourseProgress,
             customTeacherNames: Object.fromEntries(Object.entries(input.customTeacherNames).filter(([subjectId, name]) => input.subjectIds.includes(subjectId) && name.trim())),
+            customTeacherProfiles: Object.fromEntries(Object.entries(input.customTeacherProfiles).filter(([subjectId]) => input.subjectIds.includes(subjectId))),
             teacherSchedules: Object.fromEntries(input.subjectIds.map(subjectId => [
               subjectId,
               (input.teacherSchedules[subjectId] ?? []).slice().sort((left, right) =>

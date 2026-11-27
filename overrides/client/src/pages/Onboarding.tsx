@@ -9,7 +9,6 @@ import {
   getSIEElectiveGroups,
   getSIECheckpointBranches,
   getSIECheckpointProgressOptions,
-  getSIECheckpointChoices,
   getSIECheckpointChoicesForTeacher,
   getSIETeacher,
   getSIESubject,
@@ -40,6 +39,7 @@ import { toast } from "sonner";
 type TeacherChoiceMap = Record<string, string>;
 type TeacherScheduleSlot = { dayOfWeek: number; startTime: string };
 type TeacherScheduleMap = Record<string, TeacherScheduleSlot[]>;
+type CustomTeacherProfile = { nameAr: string; brandName: string; sourceUrl: string; availableModes: Array<"center" | "online">; confidence: "low" | "medium" | "high"; evidence: Array<{ title: string; url: string; source: string }>; notes?: string };
 type TeacherRequirementState = "yes" | "no" | "varies" | "unknown";
 const WEEK_DAYS = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 type FormState = {
@@ -52,6 +52,7 @@ type FormState = {
   checkpointSelections: Record<string, string>;
   courseModes: Record<string, "center" | "online">;
   customTeacherNames: Record<string, string>;
+  customTeacherProfiles: Record<string, CustomTeacherProfile>;
   teacherSchedules: TeacherScheduleMap;
   teacherScheduleUnfixed: Record<string, boolean>;
   teacherAccessRequirements: Record<string, "homework_and_exam" | "homework_only" | "exam_only" | "none" | "unknown">;
@@ -69,6 +70,7 @@ function resetTeacherSpecificChoices(current: FormState, subjectId: string): For
   return {
     ...current,
     checkpointSelections: withoutSubject(current.checkpointSelections, subjectId),
+    customTeacherProfiles: withoutSubject(current.customTeacherProfiles, subjectId),
     courseModes: withoutSubject(current.courseModes, subjectId),
     teacherSchedules: withoutSubject(current.teacherSchedules, subjectId),
     teacherScheduleUnfixed: withoutSubject(current.teacherScheduleUnfixed, subjectId),
@@ -79,7 +81,7 @@ function resetTeacherSpecificChoices(current: FormState, subjectId: string): For
   };
 }
 
-const steps = ["بياناتك", "النظام الدراسي", "المسار", "المواد", "طريقة الدراسة لكل مادة"];
+const steps = ["بياناتك", "النظام الدراسي", "المسار", "المواد", "المدرس ومواعيد المحاضرات"];
 const SKIP_TEACHER = "__SKIP__";
 const CHECKPOINT_NOT_STARTED = "__NOT_STARTED__";
 const CHECKPOINT_UNKNOWN = "__UNKNOWN__";
@@ -141,6 +143,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
     checkpointSelections: {},
     courseModes: {},
     customTeacherNames: {},
+    customTeacherProfiles: {},
     teacherSchedules: {},
     teacherScheduleUnfixed: {},
     teacherAccessRequirements: {},
@@ -166,6 +169,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
         : (saved?.teacherFrontiers ?? {}),
       courseModes: Object.keys(current.courseModes).length ? current.courseModes : (saved?.courseModes ?? {}),
       customTeacherNames: Object.keys(current.customTeacherNames).length ? current.customTeacherNames : (saved?.customTeacherNames ?? {}),
+      customTeacherProfiles: Object.keys(current.customTeacherProfiles).length ? current.customTeacherProfiles : (saved?.customTeacherProfiles ?? {}),
       teacherSchedules: Object.keys(current.teacherSchedules).length ? current.teacherSchedules : (saved?.teacherSchedules ?? {}),
       teacherScheduleUnfixed: Object.keys(current.teacherScheduleUnfixed).length
         ? current.teacherScheduleUnfixed
@@ -218,13 +222,49 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
     staleTime: 60_000,
   });
 
+  const discoverTeacher = trpc.teacherDirectory.discover.useMutation({
+    onSuccess: (result, variables) => {
+      if (!result.found) {
+        toast.error("ملقيناش مصدرًا عامًا كافيًا يحدد المدرس ده. تقدر تحتفظ بالاسم وتختار طريقة متابعتك بنفسك.");
+        return;
+      }
+      const profile: CustomTeacherProfile = {
+        nameAr: variables.teacherName.trim(),
+        brandName: result.brandName || variables.teacherName.trim(),
+        sourceUrl: result.sourceUrl,
+        availableModes: result.availableModes,
+        confidence: result.confidence,
+        evidence: result.evidence,
+        notes: result.notes,
+      };
+      setForm(current => ({
+        ...current,
+        teacherSelections: { ...current.teacherSelections, [variables.subjectId]: SKIP_TEACHER },
+        customTeacherNames: { ...current.customTeacherNames, [variables.subjectId]: profile.nameAr },
+        customTeacherProfiles: { ...current.customTeacherProfiles, [variables.subjectId]: profile },
+        courseModes: profile.availableModes.length === 1
+          ? { ...current.courseModes, [variables.subjectId]: profile.availableModes[0] }
+          : current.courseModes,
+      }));
+      toast.success("لقينا مصدرًا عامًا مرتبطًا بالاسم وأضفناه لاختيارات المادة. راجع المنصة قبل المتابعة.");
+    },
+    onError: error => toast.error(error.message || "تعذر البحث عن المدرس الآن."),
+  });
+  const customTeacherProfile = form.customTeacherProfiles[currentSetupSubjectId];
+  const researchedModes = customTeacherProfile
+    ? (customTeacherProfile.confidence === "low" ? [] : customTeacherProfile.availableModes)
+    : ((teacherFacts.data?.state === "verified" || teacherFacts.data?.state === "partial")
+      ? teacherFacts.data.facts.availableModes
+      : []);
+  const modeResearchConfirmed = researchedModes.length > 0;
+
   useEffect(() => {
     const result = teacherFacts.data;
     if (!result || result.state === "researching" || result.state === "insufficient_evidence" || result.facts.isStale || !currentSetupSubjectId) return;
     setForm(current => {
       const subjectId = currentSetupSubjectId;
       const next = { ...current };
-      if (result.state === "verified" && result.facts.availableModes.length === 1 && !current.courseModes[subjectId]) {
+      if ((result.state === "verified" || result.state === "partial") && result.facts.availableModes.length === 1 && current.courseModes[subjectId] !== result.facts.availableModes[0]) {
         next.courseModes = { ...current.courseModes, [subjectId]: result.facts.availableModes[0] };
       }
       const updateWhenUnknown = (map: Record<string, TeacherRequirementState>, value: TeacherRequirementState) =>
@@ -332,6 +372,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
       skippedTeacherSubjectIds: selectedSubjects.filter(subject => !teacherSelections[subject.subjectId]).map(subject => subject.subjectId),
       courseModes: Object.fromEntries(selectedSubjects.map(subject => [subject.subjectId, form.courseModes[subject.subjectId] ?? "online"])),
       customTeacherNames: Object.fromEntries(Object.entries(form.customTeacherNames).filter(([id, name]) => selectedSubjects.some(subject => subject.subjectId === id) && name.trim()).map(([id, name]) => [id, name.trim()])),
+      customTeacherProfiles: Object.fromEntries(Object.entries(form.customTeacherProfiles).filter(([id]) => selectedSubjects.some(subject => subject.subjectId === id))),
       teacherSchedules: Object.fromEntries(selectedSubjects.map(subject => [
         subject.subjectId,
         (form.teacherSchedules[subject.subjectId] ?? []).map(slot => ({
@@ -371,8 +412,8 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
           onOpenStudy={() => setLocation("/study")}
         />
       ) : (
-        <div className="mx-auto max-w-4xl">
-          <section className="relative overflow-hidden rounded-[2rem] bg-primary p-6 text-primary-foreground shadow-xl sm:p-9">
+        <div className="sf-onboarding-shell mx-auto max-w-4xl">
+          <section className="sf-onboarding-hero relative overflow-hidden rounded-[2rem] bg-primary p-6 text-primary-foreground shadow-xl sm:p-9">
             <div className="pointer-events-none absolute -left-10 -top-16 size-56 rounded-full bg-white/10 blur-3xl" />
             <div className="relative flex items-start justify-between gap-4">
               <div>
@@ -400,7 +441,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
             </div>
           </section>
 
-          <section className="app-card mt-5 overflow-hidden">
+          <section className="sf-onboarding-panel app-card mt-5 overflow-hidden">
             <header className="border-b border-border/70 bg-muted/20 px-5 py-5 sm:px-7">
               <p className="eyebrow">الخطوة {progressStep} من {activeSteps.length}</p>
               <h2 className="mt-1 text-xl font-bold">{steps[step]}</h2>
@@ -419,6 +460,12 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                     <label className="mb-2 block text-sm font-semibold">اسمك</label>
                     <Input
                       autoFocus
+                      name="name"
+                      type="text"
+                      inputMode="text"
+                      autoComplete="name"
+                      autoCapitalize="words"
+                      enterKeyHint="next"
                       value={form.studentName}
                       onChange={event => setForm(current => ({ ...current, studentName: event.target.value }))}
                       placeholder="اكتب اسمك"
@@ -432,9 +479,11 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                       value={form.phone}
                       onChange={event => setForm(current => ({ ...current, phone: event.target.value }))}
                       placeholder="01xxxxxxxxx أو +20xxxxxxxxxx"
+                      name="tel"
                       type="tel"
                       inputMode="tel"
                       autoComplete="tel"
+                      enterKeyHint="next"
                       className="h-12 rounded-xl bg-background"
                     />
                     <p className="mt-2 text-xs leading-6 text-muted-foreground">
@@ -582,7 +631,8 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                                 className={"sf-teacher-choice flex min-h-16 items-center justify-between gap-3 rounded-2xl border p-4 text-right transition " + (selected ? "is-selected border-primary bg-secondary/45 ring-1 ring-primary/20" : "border-border bg-card hover:border-primary/40")}>
                                 <span className="sf-teacher-choice-copy min-w-0">
                                   <b>{teacher.nameAr}</b>
-                                  <small>{selected ? "مدرس محدد لهذه المادة" : "مدرس مسجل في دليل المادة"}</small>
+                                  {teacher.brandName && teacher.brandName.trim() !== teacher.nameAr.trim() && <small className="sf-teacher-brand">{teacher.brandName}</small>}
+                                  <small>{selected ? "تم اختيار المدرس" : "اضغط لاختيار المدرس"}</small>
                                 </span>
                                 <span className="sf-teacher-choice-check">{selected ? <Check className="size-4" /> : <span />}</span>
                               </button>
@@ -594,19 +644,40 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                       )}
                     </div>
 
-                    <label className="sf-teacher-custom-field block text-sm font-semibold">اسم مدرس آخر (لو مش موجود في القائمة)
-                      <Input
+                    <div className="sf-teacher-custom-field">
+                      <label htmlFor="sf-custom-teacher-name" className="block text-sm font-semibold">مش لاقي المدرس؟ اكتب اسمه</label>
+                      <Input id="sf-custom-teacher-name" name="teacherName" type="text" inputMode="text" autoComplete="off" autoCapitalize="words" enterKeyHint="search"
                         value={form.customTeacherNames[currentSetupSubjectId] ?? ""}
                         onChange={event => setForm(current => ({
                           ...resetTeacherSpecificChoices(current, currentSetupSubjectId),
                           customTeacherNames: { ...current.customTeacherNames, [currentSetupSubjectId]: event.target.value },
                           teacherSelections: { ...current.teacherSelections, [currentSetupSubjectId]: event.target.value.trim() ? SKIP_TEACHER : (current.teacherSelections[currentSetupSubjectId] ?? "") },
                         }))}
-                        placeholder="اكتب اسم المدرس"
-                        maxLength={120}
-                        className="sf-teacher-custom-input mt-2 h-12 rounded-xl bg-background"
-                      />
-                    </label>
+                        placeholder="اكتب الاسم المعروف بيه" maxLength={120}
+                        className="sf-teacher-custom-input mt-2 h-12 rounded-xl bg-background" />
+                      <Button type="button" variant="outline" className="sf-teacher-discover-button mt-3 w-full rounded-xl"
+                        disabled={discoverTeacher.isPending || (form.customTeacherNames[currentSetupSubjectId] ?? "").trim().length < 2}
+                        onClick={() => discoverTeacher.mutate({
+                          teacherName: (form.customTeacherNames[currentSetupSubjectId] ?? "").trim(),
+                          subjectId: currentSetupSubjectId,
+                          systemId: form.systemId as "EG_BACCALAUREATE" | "EG_GENERAL_SECONDARY",
+                          gradeYear: SIE_CATALOG_META.gradeYear,
+                        })}>
+                        {discoverTeacher.isPending ? <Loader2 className="ml-2 size-4 animate-spin" /> : <CircleHelp className="ml-2 size-4" />}
+                        {discoverTeacher.isPending ? "بنبحث عن المدرس..." : "ابحث عنه بالذكاء الاصطناعي"}
+                      </Button>
+                      {customTeacherProfile && (
+                        <div className="sf-teacher-discovery-result" role="status" aria-live="polite">
+                          <span className="sf-teacher-discovery-icon"><Check className="size-4" /></span>
+                          <div className="min-w-0 flex-1">
+                            <b>{customTeacherProfile.nameAr}</b>
+                            <small>{customTeacherProfile.brandName !== customTeacherProfile.nameAr ? customTeacherProfile.brandName : "قناة أو مصدر مرتبط بالمدرس"}</small>
+                            <small>{customTeacherProfile.confidence === "high" ? "ثقة عالية" : customTeacherProfile.confidence === "medium" ? "ثقة متوسطة" : "مطابقة أولية تحتاج تأكيدك"}</small>
+                            {customTeacherProfile.evidence[0]?.url && <a href={customTeacherProfile.evidence[0].url} target="_blank" rel="noreferrer">راجع المصدر الذي عثرنا عليه</a>}
+                          </div>
+                        </div>
+                      )}
+                    </div>
 
                     <button type="button"
                       aria-pressed={form.teacherSelections[currentSetupSubjectId] === SKIP_TEACHER && !form.customTeacherNames[currentSetupSubjectId]?.trim()}
@@ -620,157 +691,140 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                     </button>
                   </div>
 
-                  <div>
-                    <p className="mb-3 text-sm font-bold">بتتابع المدرس ده إزاي؟</p>
-                    {teacherFacts.data?.state === "verified" && teacherFacts.data.facts.availableModes.length > 0 ? (
-                      <p className="mb-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs leading-6 text-muted-foreground">
-                        تم التحقق من طرق الدراسة المتاحة للمدرس من مصادر عامة. اختار الطريقة اللي أنت مشترك أو بتحضر من خلالها.
-                      </p>
-                    ) : (
-                      <p className="mb-3 rounded-xl border border-border bg-muted/20 p-3 text-xs leading-6 text-muted-foreground">
-                        {teacherFacts.isFetching || teacherFacts.data?.state === "researching"
-                          ? "بنراجع المصادر المتاحة للمدرس في الخلفية. مش محتاج تعمل بحث بنفسك."
-                          : "لسه مفيش دليل كافٍ يؤكد طرق الدراسة المتاحة. اختار الطريقة اللي بتتابع منها، والمعلومة هتفضل غير مؤكدة لحد ما يظهر مصدر موثوق."}
-                      </p>
-                    )}
-                    <div className="sf-teacher-mode-grid grid gap-3 sm:grid-cols-2">
-                      {(["center", "online"] as const)
-                        .filter(mode => teacherFacts.data?.state !== "verified" || teacherFacts.data.facts.availableModes.length === 0 || teacherFacts.data.facts.availableModes.includes(mode))
-                        .map(mode => (
-                          <button key={mode} type="button" aria-pressed={form.courseModes[currentSetupSubjectId] === mode}
-                            onClick={() => setForm(current => ({ ...current, courseModes: { ...current.courseModes, [currentSetupSubjectId]: mode } }))}
-                            className={"sf-teacher-mode-choice rounded-2xl border p-5 text-right transition " + (form.courseModes[currentSetupSubjectId] === mode ? "is-selected border-primary bg-secondary/45 ring-1 ring-primary/20" : "border-border bg-card hover:border-primary/40")}>
-                            <span className="sf-teacher-mode-title block text-lg font-bold">{mode === "center" ? "سنتر / مجموعة حضورية" : "أونلاين"}</span>
-                            <span className="mt-1 block text-xs leading-6 text-muted-foreground">{mode === "center" ? "بتحضر شرح المادة مع المدرس في مكان أو مجموعة." : "بتتابع الكورس أو المحاضرات من منصة أو بث أونلاين."}</span>
-                          </button>
-                        ))}
+                  <section className="sf-method-panel" aria-labelledby="sf-method-heading">
+                    <div className="sf-method-heading">
+                      <p className="eyebrow">اختيار واحد واضح</p>
+                      <h4 id="sf-method-heading">طريقة متابعتك للمادة</h4>
+                      <p>اختَر الطريقة اللي بتحضر أو بتشاهد بيها شرح المدرس.</p>
                     </div>
-                    {!form.courseModes[currentSetupSubjectId] && (
-                      <p className="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/5 p-3 text-sm text-muted-foreground">حدد طريقة متابعتك للمادة لاستكمال الإعداد.</p>
+                    {modeResearchConfirmed && researchedModes.length === 1 ? (
+                      <div className="sf-method-fixed" role="status">
+                        <Check className="size-5" />
+                        <div>
+                          <b>{researchedModes[0] === "online" ? "أونلاين فقط" : "سنتر / حضور فقط"}</b>
+                          <span>{researchedModes[0] === "online" ? "المصادر التي راجعناها تؤكد أن المتابعة أونلاين." : "المصادر التي راجعناها تؤكد أن المتابعة حضورية."}</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="sf-method-guidance">
+                          {modeResearchConfirmed
+                            ? "المصادر تشير إلى أن المدرس يوفّر الطريقتين. اختَر الطريقة التي تستخدمها أنت."
+                            : teacherFacts.isFetching || teacherFacts.data?.state === "researching"
+                              ? "بنفحص المصادر العامة. لحد ما نتأكد، اختَر طريقة متابعتك الفعلية."
+                              : "لسه ما عندناش دليل كافٍ يحدد طريقة تقديم المدرس. اختَر طريقة متابعتك أنت؛ مش هنفترض إنه بيوفر الطريقتين."}
+                        </p>
+                        <div className="sf-teacher-mode-grid" role="group" aria-label="طريقة متابعة المادة">
+                          {(modeResearchConfirmed ? researchedModes : ["online", "center"] as Array<"online" | "center">).map(mode => {
+                            const selected = form.courseModes[currentSetupSubjectId] === mode;
+                            return (
+                              <button key={mode} type="button" aria-pressed={selected}
+                                onClick={() => setForm(current => ({ ...current, courseModes: { ...current.courseModes, [currentSetupSubjectId]: mode } }))}
+                                className={"sf-teacher-mode-choice " + (selected ? "is-selected" : "")}>
+                                <span className="sf-mode-choice-mark">{selected ? <Check className="size-4" /> : <span />}</span>
+                                <span className="sf-teacher-mode-title">{mode === "center" ? "سنتر / حضور" : "أونلاين"}</span>
+                                <span className="sf-mode-choice-note">{mode === "center" ? "محاضرات في مجموعة أو مكان" : "كورس أو محاضرات عبر الإنترنت"}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </>
                     )}
-                    {teacherFacts.data?.facts.evidence?.length ? (
-                      <details className="mt-3 text-[11px] text-muted-foreground">
-                        <summary className="cursor-pointer">المصادر التي اعتمدنا عليها</summary>
-                        <ul className="mt-2 space-y-1">{teacherFacts.data.facts.evidence.slice(0, 4).map((source, index) => <li key={index}><a href={source.url} target="_blank" rel="noreferrer" className="text-primary underline">{source.title}</a></li>)}</ul>
+                    {!form.courseModes[currentSetupSubjectId] && <p className="sf-method-required">اختَر طريقة المتابعة للانتقال للخطوة التالية.</p>}
+                    {customTeacherProfile?.evidence?.length ? (
+                      <details className="sf-method-evidence"><summary>مصادر البحث عن المدرس</summary>
+                        <ul>{customTeacherProfile.evidence.slice(0, 4).map((source, index) => <li key={index}><a href={source.url} target="_blank" rel="noreferrer">{source.title}</a></li>)}</ul>
+                      </details>
+                    ) : teacherFacts.data?.facts.evidence?.length ? (
+                      <details className="sf-method-evidence"><summary>مصادر التحقق</summary>
+                        <ul>{teacherFacts.data.facts.evidence.slice(0, 4).map((source, index) => <li key={index}><a href={source.url} target="_blank" rel="noreferrer">{source.title}</a></li>)}</ul>
                       </details>
                     ) : null}
-                  </div>
-
-                  <section className="rounded-2xl border border-border/70 bg-muted/10 p-4 sm:p-5">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-bold">مواعيد محاضرات المدرس</p>
-                        <p className="mt-1 text-xs leading-6 text-muted-foreground">سجّل اليوم ووقت بداية المحاضرة المتكرر. لا تحتاج إلى تحديد مدتها أو وقت انتهائها؛ المنصة ستستخدم الموعد لمساعدتك على تجهيز الدرس قبل الحصة.</p>
-                      </div>
-                      <span className="rounded-full border border-primary/20 bg-primary/5 px-3 py-1.5 text-[10px] font-bold text-primary">"مطلوب لكل مادة"</span>
-                    </div>
-                    <label className="mt-4 flex items-start gap-2 rounded-xl border border-border/70 bg-card px-3 py-3 text-xs leading-6">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(form.teacherScheduleUnfixed[currentSetupSubjectId])}
-                        onChange={event => setForm(current => ({
-                          ...current,
-                          teacherScheduleUnfixed: { ...current.teacherScheduleUnfixed, [currentSetupSubjectId]: event.target.checked },
-                          teacherSchedules: event.target.checked
-                            ? { ...current.teacherSchedules, [currentSetupSubjectId]: [] }
-                            : current.teacherSchedules,
-                        }))}
-                        className="mt-1 size-4 accent-primary"
-                      />
-                      <span><b>مواعيد المادة غير ثابتة حاليًا</b><span className="block text-muted-foreground">اختَر ده لو المدرس بينزل المحاضرات بدون جدول أسبوعي محدد.</span></span>
-                    </label>
-                    {!editMode && !form.teacherScheduleUnfixed[currentSetupSubjectId] && !(form.teacherSchedules[currentSetupSubjectId] ?? []).length && (
-                      <p className="mt-3 rounded-xl border border-primary/25 bg-primary/[.045] px-3 py-2 text-xs leading-6 text-muted-foreground">
-                        أضف موعدًا واحدًا على الأقل حتى تقدر المنصة تجهّز مذاكرتك قبل الحصة، أو فعّل «مواعيد المادة غير ثابتة حاليًا».
-                      </p>
-                    )}
-                    <div className="mt-4 space-y-2.5">
-                      {!form.teacherScheduleUnfixed[currentSetupSubjectId] && (form.teacherSchedules[currentSetupSubjectId] ?? []).map((slot, slotIndex) => (
-                        <div key={slotIndex} className="grid gap-2 rounded-xl border border-border/70 bg-card p-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-                          <label className="block text-xs font-semibold">
-                            اليوم
-                            <select
-                              value={slot.dayOfWeek}
-                              onChange={event => setForm(current => ({
-                                ...current,
-                                teacherSchedules: {
-                                  ...current.teacherSchedules,
-                                  [currentSetupSubjectId]: (current.teacherSchedules[currentSetupSubjectId] ?? []).map((item, index) => index === slotIndex ? { ...item, dayOfWeek: Number(event.target.value) } : item),
-                                },
-                              }))}
-                              className="mt-1.5 h-10 w-full rounded-lg border border-border bg-background px-2 text-sm"
-                            >
-                              {WEEK_DAYS.map((day, index) => <option key={day} value={index}>{day}</option>)}
-                            </select>
-                          </label>
-                          <label className="block text-xs font-semibold">
-                            موعد المحاضرة
-                            <input
-                              type="time"
-                              value={slot.startTime}
-                              onChange={event => setForm(current => ({
-                                ...current,
-                                teacherSchedules: {
-                                  ...current.teacherSchedules,
-                                  [currentSetupSubjectId]: (current.teacherSchedules[currentSetupSubjectId] ?? []).map((item, index) => index === slotIndex ? { ...item, startTime: event.target.value } : item),
-                                },
-                              }))}
-                              className="mt-1.5 h-10 w-full rounded-lg border border-border bg-background px-2 text-sm"
-                            />
-                          </label>
-                          <Button type="button" size="icon" variant="ghost" className="size-10 rounded-lg text-muted-foreground hover:text-destructive" aria-label="حذف موعد المحاضرة"
-                            onClick={() => setForm(current => ({
-                              ...current,
-                              teacherSchedules: {
-                                ...current.teacherSchedules,
-                                [currentSetupSubjectId]: (current.teacherSchedules[currentSetupSubjectId] ?? []).filter((_, index) => index !== slotIndex),
-                              },
-                            }))}>
-                            <X className="size-4" />
-                          </Button>
-                        </div>
-                      ))}
-                      {!form.teacherScheduleUnfixed[currentSetupSubjectId] && <Button type="button" variant="outline" className="w-full rounded-xl border-dashed" onClick={() => setForm(current => ({
-                        ...current,
-                        teacherSchedules: {
-                          ...current.teacherSchedules,
-                          [currentSetupSubjectId]: [
-                            ...(current.teacherSchedules[currentSetupSubjectId] ?? []),
-                            { dayOfWeek: 0, startTime: "18:00" },
-                          ],
-                        },
-                      }))}>
-                        <span className="text-base leading-none">+</span> إضافة موعد محاضرة
-                      </Button>}
-                    </div>
-                    <p className="mt-3 text-[10px] leading-5 text-muted-foreground">المواعيد هنا أسبوعية ومتكررة. لو المحاضرة لها موعد استثنائي أو اتلغت، متابعة الإعلانات العامة ستتعامل معه بشكل منفصل.</p>
                   </section>
-                  <details className="rounded-2xl border border-border/70 bg-card p-4 sm:p-5">
-                     <summary className="cursor-pointer text-sm font-bold">حدد نقطة بدايتك في المادة (اختياري)</summary>
-                     <p className="mt-2 text-xs leading-6 text-muted-foreground">لو تعرف آخر موضوع وصل له شرح المدرس، سجّله هنا. ده بيساعدنا نقارن موضعه بموضعك لاحقًا. مشاهدة المحاضرة وحدها مش معناها إنك ذاكرت الدرس أو فهمته؛ هتسجل الحالة دي بشكل مستقل في صفحة المذاكرة.</p>
-                     {selectedSetupTeacherId ? (
-                       <label className="mt-3 block text-xs font-semibold">
-                         آخر موضوع شرحه المدرس
-                         <select
-                           value={form.checkpointSelections[currentSetupSubjectId] ?? ""}
-                           onChange={event => setForm(current => ({
-                             ...current,
-                             checkpointSelections: { ...current.checkpointSelections, [currentSetupSubjectId]: event.target.value },
-                           }))}
-                           className="mt-2 h-11 w-full rounded-xl border border-border bg-background px-3 text-sm font-normal"
-                         >
-                           <option value="">هحدده بعد الإعداد</option>
-                           <option value="__NOT_STARTED__">المدرس لسه ما بدأش هذا الفرع</option>
-                           <option value="__UNKNOWN__">مش متأكد وصلت لفين</option>
-                           {getSIECheckpointChoices(currentSetupSubjectId).map(choice => (
-                             <option key={choice.nodeId} value={choice.nodeId}>{choice.title}</option>
-                           ))}
-                         </select>
-                       </label>
-                     ) : (
-                       <p className="mt-3 rounded-xl bg-muted/30 p-3 text-xs leading-6 text-muted-foreground">اختيار المدرس من القائمة مطلوب لتسجيل نقطة البداية هنا. تقدر تسجلها لاحقًا من صفحة المذاكرة حتى لو لسه ما اخترتش مدرسًا.</p>
-                     )}
-                   </details>
+
+                                    <section className="sf-schedule-panel" aria-labelledby="sf-schedule-heading">
+                    <div className="sf-schedule-header">
+                      <div>
+                        <p className="eyebrow">موعد الحصص الأسبوعي</p>
+                        <h4 id="sf-schedule-heading">مواعيد محاضرات {currentSetupSubject.nameAr}</h4>
+                        <p>أضف اليوم ووقت بداية كل محاضرة متكررة. تقدر تضيف أكتر من موعد.</p>
+                      </div>
+                      <span className="sf-schedule-count">{(form.teacherSchedules[currentSetupSubjectId] ?? []).length} مواعيد</span>
+                    </div>
+                    <button type="button" aria-pressed={Boolean(form.teacherScheduleUnfixed[currentSetupSubjectId])}
+                      className={"sf-schedule-unfixed " + (form.teacherScheduleUnfixed[currentSetupSubjectId] ? "is-selected" : "")}
+                      onClick={() => setForm(current => {
+                        const next = !current.teacherScheduleUnfixed[currentSetupSubjectId];
+                        return {
+                          ...current,
+                          teacherScheduleUnfixed: { ...current.teacherScheduleUnfixed, [currentSetupSubjectId]: next },
+                          teacherSchedules: next ? { ...current.teacherSchedules, [currentSetupSubjectId]: [] } : current.teacherSchedules,
+                        };
+                      })}>
+                      <span className="sf-schedule-checkbox">{form.teacherScheduleUnfixed[currentSetupSubjectId] ? <Check className="size-4" /> : null}</span>
+                      <span><b>مواعيد المحاضرات غير ثابتة</b><small>اختَر ده لو المدرس بيعلن مواعيد كل محاضرة بشكل منفصل.</small></span>
+                    </button>
+                    {!form.teacherScheduleUnfixed[currentSetupSubjectId] && (
+                      <div className="sf-schedule-slots">
+                        {(form.teacherSchedules[currentSetupSubjectId] ?? []).map((slot, slotIndex) => (
+                          <div key={slotIndex} className="sf-schedule-slot">
+                            <div className="sf-schedule-slot-top">
+                              <b>الموعد {slotIndex + 1}</b>
+                              <Button type="button" size="sm" variant="ghost" className="sf-schedule-remove" aria-label={"حذف الموعد " + (slotIndex + 1)}
+                                onClick={() => setForm(current => ({
+                                  ...current,
+                                  teacherSchedules: {
+                                    ...current.teacherSchedules,
+                                    [currentSetupSubjectId]: (current.teacherSchedules[currentSetupSubjectId] ?? []).filter((_, index) => index !== slotIndex),
+                                  },
+                                }))}>
+                                <X className="size-4" /> حذف
+                              </Button>
+                            </div>
+                            <div className="sf-schedule-day-grid" role="group" aria-label={"اختيار يوم الموعد " + (slotIndex + 1)}>
+                              {WEEK_DAYS.map((day, dayIndex) => (
+                                <button key={day} type="button" aria-pressed={slot.dayOfWeek === dayIndex}
+                                  onClick={() => setForm(current => ({
+                                    ...current,
+                                    teacherSchedules: {
+                                      ...current.teacherSchedules,
+                                      [currentSetupSubjectId]: (current.teacherSchedules[currentSetupSubjectId] ?? []).map((item, index) => index === slotIndex ? { ...item, dayOfWeek: dayIndex } : item),
+                                    },
+                                  }))}>
+                                  {day}
+                                </button>
+                              ))}
+                            </div>
+                            <label className="sf-schedule-time">
+                              <span>وقت بداية المحاضرة</span>
+                              <input type="time" inputMode="numeric" dir="ltr" step={900} value={slot.startTime}
+                                onChange={event => setForm(current => ({
+                                  ...current,
+                                  teacherSchedules: {
+                                    ...current.teacherSchedules,
+                                    [currentSetupSubjectId]: (current.teacherSchedules[currentSetupSubjectId] ?? []).map((item, index) => index === slotIndex ? { ...item, startTime: event.target.value } : item),
+                                  },
+                                }))} />
+                            </label>
+                          </div>
+                        ))}
+                        {!form.teacherSchedules[currentSetupSubjectId]?.length && (
+                          <p className="sf-schedule-empty">لسه ما أضفتش مواعيد. اضغط «إضافة موعد» وابدأ باختيار اليوم.</p>
+                        )}
+                        <Button type="button" variant="outline" className="sf-schedule-add w-full rounded-xl"
+                          onClick={() => setForm(current => ({
+                            ...current,
+                            teacherSchedules: {
+                              ...current.teacherSchedules,
+                              [currentSetupSubjectId]: [...(current.teacherSchedules[currentSetupSubjectId] ?? []), { dayOfWeek: 0, startTime: "18:00" }],
+                            },
+                          }))}>
+                          <span className="text-lg leading-none">+</span> إضافة موعد محاضرة
+                        </Button>
+                      </div>
+                    )}
+                    <p className="sf-schedule-footnote">المواعيد دي بتتكرر كل أسبوع. لو جدول المدرس اتغير، تقدر تعدّله من ملفك الدراسي.</p>
+                  </section>
 
                    <section className="rounded-2xl border border-primary/20 bg-primary/[.035] p-4 sm:p-5">
                     <p className="text-sm font-bold">نظام الواجب والامتحان عند المدرس</p>

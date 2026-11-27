@@ -316,3 +316,58 @@ export async function getTeacherCourseFactsWithRefresh(scope: ResearchScope): Pr
     },
   };
 }
+
+
+export type DiscoveredTeacher = {
+  found: boolean;
+  nameAr: string;
+  brandName: string;
+  sourceUrl: string;
+  availableModes: Array<"center" | "online">;
+  confidence: "low" | "medium" | "high";
+  evidence: Array<{ title: string; url: string; source: string }>;
+  notes: string;
+};
+
+/** Discover a teacher from strict public channel matches; delivery modes remain unknown without evidence. */
+export async function discoverTeacherForSubject(input: {
+  teacherName: string;
+  subjectId: string;
+  educationSystem: "EG_BACCALAUREATE" | "EG_GENERAL_SECONDARY";
+  gradeYear: string;
+}): Promise<DiscoveredTeacher> {
+  const teacherName = normalized(input.teacherName, 120);
+  const subject = getSIESubject(input.subjectId);
+  if (!subject) throw new Error("المادة المحددة غير موجودة في دليل الدراسة.");
+  const empty: DiscoveredTeacher = {
+    found: false, nameAr: teacherName, brandName: teacherName, sourceUrl: "",
+    availableModes: [], confidence: "low", evidence: [],
+    notes: "لم نعثر على قناة أو مصدر عام يطابق اسم المدرس بدرجة كافية.",
+  };
+  if (teacherName.length < 2) return empty;
+  const sources = await collectYouTubeEvidence(teacherName, teacherName, subject.nameAr);
+  if (!sources.length) return empty;
+  const channelCounts = new Map<string, number>();
+  for (const source of sources) {
+    const channel = source.source.replace(/^YouTube\s*·\s*/i, "").trim();
+    if (channel) channelCounts.set(channel, (channelCounts.get(channel) ?? 0) + 1);
+  }
+  const brandName = [...channelCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? teacherName;
+  const classification = await classifyEvidence(
+    teacherName, subject.nameAr,
+    { teacherId: "CUSTOM_TEACHER_DISCOVERY", subjectId: input.subjectId, educationSystem: input.educationSystem, gradeYear: input.gradeYear },
+    sources,
+  );
+  return {
+    found: true,
+    nameAr: teacherName,
+    brandName,
+    sourceUrl: sources[0].url,
+    availableModes: classification.confidence === "low" ? [] : classification.availableModes,
+    confidence: classification.confidence,
+    evidence: sources.slice(0, 5).map(source => ({ title: source.title, url: source.url, source: source.source })),
+    notes: classification.notes || (classification.confidence === "low"
+      ? "عثرنا على محتوى متطابق مع الاسم، لكن لم يظهر دليل كافٍ لتأكيد طرق الدراسة."
+      : "تم فحص محتوى عام مرتبط بالمدرس. راجع المصدر للتأكد من تطابقه مع مدرسك."),
+  };
+}
