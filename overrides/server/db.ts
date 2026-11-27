@@ -670,7 +670,7 @@ export type ApprovedPlanStep = {
   minutes: number;
   category: string;
   priority?: "critical" | "high" | "medium" | "low";
-  existingTask?: { id: number; title: string; status: "todo" | "done"; confidence: "exact" | "strong" };
+  existingTask?: { id: number; title: string; status: "todo" | "done"; confidence: "exact" | "strong"; dueAt?: string | null };
   resourceRecommendation?: { title: string; url: string; teacherName?: string; reason: string };
   scheduleState?: "scheduled" | "deferred";
   dayIndex?: number | null;
