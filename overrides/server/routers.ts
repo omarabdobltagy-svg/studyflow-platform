@@ -152,6 +152,57 @@ async function persistTeacherVideoAnalysis(
   return true;
 }
 
+function isRetryableTeacherVideoRequestError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  if (error instanceof TypeError) return true;
+  return /Gemini video API (408|429|500|502|503|504)\b/i.test(message)
+    || /resource[_ -]?exhausted|rate[_ -]?limit|deadline[_ -]?exceeded|service[_ -]?unavailable|temporar|timed? out|fetch failed|network error|internal error/i.test(message);
+}
+
+async function persistTeacherVideoAnalysisFailure(
+  userId: number,
+  externalId: string,
+  existing: TeacherPublicUpdate["contentAnalysis"],
+  interactionId: string | undefined,
+  model: string,
+  error: unknown,
+  activityId: string | undefined,
+  retryable: boolean,
+  errorCode?: string,
+) {
+  const message = (error instanceof Error ? error.message : String(error ?? "Unknown video analysis error")).slice(0, 500);
+  const retryCount = Math.max(0, Math.trunc(Number(existing?.retryCount) || 0)) + 1;
+  const shouldRetry = retryable && retryCount <= 2;
+  const retryDelayMs = Math.min(15 * 60_000 * (2 ** (retryCount - 1)), 6 * 60 * 60_000);
+  const nextRetryAt = shouldRetry ? new Date(Date.now() + retryDelayMs).toISOString() : undefined;
+  await persistTeacherVideoAnalysis(userId, externalId, {
+    status: shouldRetry ? "retry_wait" : "failed",
+    interactionId: shouldRetry ? undefined : interactionId,
+    model,
+    startedAt: existing?.startedAt || new Date().toISOString(),
+    completedAt: new Date().toISOString(),
+    retryCount,
+    ...(nextRetryAt ? { nextRetryAt } : {}),
+    error: message,
+  });
+  console.warn("[StudyFlow video analysis] Gemini video analysis failed", {
+    externalId,
+    model,
+    errorCode: errorCode || null,
+    retryable,
+    retryCount,
+    nextRetryAt: nextRetryAt || null,
+    message: message.slice(0, 360),
+  });
+  if (activityId) {
+    if (shouldRetry) {
+      completeAIActivity(userId, activityId, "تعثر تحليل الفيديو مؤقتًا؛ ستتم المحاولة مجددًا في دورة المراقبة القادمة بعد فترة التهدئة.");
+    } else {
+      failAIActivity(userId, activityId, "تعذّر تحليل الفيديو بعد المحاولات المتاحة: " + message);
+    }
+  }
+}
+
 async function processTeacherVideoAnalysis(userId: number, externalId: string, activityId?: string) {
   if (!isTeacherVideoAnalysisConfigured()) return;
   const profile = await getStudentProfile(userId);
@@ -187,28 +238,45 @@ async function processTeacherVideoAnalysis(userId: number, externalId: string, a
   let model = existing?.model || process.env.GEMINI_VIDEO_MODEL || "gemini-3.8-flash";
   if (!interactionId) {
     const selectedSubjects = (profile.subjectIds ?? []).map(subjectId => getSIESubject(subjectId)?.nameAr ?? subjectId);
-    const started = await startTeacherVideoAnalysis({
-      url: video.url,
-      videoTitle: video.title,
-      teacherName: video.teacherName,
-      selectedSubjects,
-    });
-    interactionId = started.interactionId;
-    model = started.model;
-    await persistTeacherVideoAnalysis(userId, externalId, {
-      status: "processing",
-      interactionId,
-      model,
-      startedAt: existing?.startedAt || new Date().toISOString(),
-      retryCount: Math.max(0, Math.trunc(Number(existing?.retryCount) || 0)),
-    });
-    if (activityId) updateAIActivity(userId, activityId, "تحليل موضوعات المراجعة", "بدأ تحليل الفيديو؛ سيحوّل الشرح إلى موضوعات فعلية بدل تقسيمه إلى فترات زمنية ثابتة.");
+    try {
+      const started = await startTeacherVideoAnalysis({
+        url: video.url,
+        videoTitle: video.title,
+        teacherName: video.teacherName,
+        selectedSubjects,
+      });
+      interactionId = started.interactionId;
+      model = started.model;
+      await persistTeacherVideoAnalysis(userId, externalId, {
+        status: "processing",
+        interactionId,
+        model,
+        startedAt: existing?.startedAt || new Date().toISOString(),
+        retryCount: Math.max(0, Math.trunc(Number(existing?.retryCount) || 0)),
+      });
+      if (activityId) updateAIActivity(userId, activityId, "تحليل موضوعات المراجعة", "بدأ تحليل الفيديو؛ سيحوّل الشرح إلى موضوعات فعلية بدل تقسيمه إلى فترات زمنية ثابتة.");
+    } catch (error) {
+      await persistTeacherVideoAnalysisFailure(
+        userId, externalId, existing, undefined, model, error, activityId,
+        isRetryableTeacherVideoRequestError(error),
+      );
+      return;
+    }
   }
 
   // Long-running video understanding happens off the student request path.
   // If the service restarts, a later source scan resumes polling this interaction ID.
   for (let attempt = 0; attempt < 150; attempt += 1) {
-    const state = await getTeacherVideoAnalysis(interactionId);
+    let state: Awaited<ReturnType<typeof getTeacherVideoAnalysis>>;
+    try {
+      state = await getTeacherVideoAnalysis(interactionId);
+    } catch (error) {
+      await persistTeacherVideoAnalysisFailure(
+        userId, externalId, existing, interactionId, model, error, activityId,
+        isRetryableTeacherVideoRequestError(error),
+      );
+      return;
+    }
     if (state.status === "completed") {
       const saved = await persistTeacherVideoAnalysis(userId, externalId, {
         status: "complete",
@@ -242,37 +310,10 @@ async function processTeacherVideoAnalysis(userId: number, externalId: string, a
       return;
     }
     if (state.status === "failed") {
-      const previousRetryCount = Math.max(0, Math.trunc(Number(existing?.retryCount) || 0));
-      const retryCount = previousRetryCount + 1;
-      const shouldRetry = state.retryable && retryCount <= 2;
-      const retryDelayMs = Math.min(15 * 60_000 * (2 ** (retryCount - 1)), 6 * 60 * 60_000);
-      const nextRetryAt = shouldRetry ? new Date(Date.now() + retryDelayMs).toISOString() : undefined;
-      await persistTeacherVideoAnalysis(userId, externalId, {
-        status: shouldRetry ? "retry_wait" : "failed",
-        interactionId: shouldRetry ? undefined : interactionId,
-        model: state.model || model,
-        startedAt: existing?.startedAt || new Date().toISOString(),
-        completedAt: new Date().toISOString(),
-        retryCount,
-        ...(nextRetryAt ? { nextRetryAt } : {}),
-        error: state.error,
-      });
-      console.warn("[StudyFlow video analysis] Gemini interaction failed", {
-        externalId,
-        model: state.model || model,
-        errorCode: state.errorCode || null,
-        retryable: state.retryable,
-        retryCount,
-        nextRetryAt: nextRetryAt || null,
-        message: state.error.slice(0, 360),
-      });
-      if (activityId) {
-        if (shouldRetry) {
-          completeAIActivity(userId, activityId, "تعثر تحليل الفيديو مؤقتًا؛ ستتم إعادة المحاولة تلقائيًا بعد فترة تهدئة.");
-        } else {
-          failAIActivity(userId, activityId, "تعذّر تحليل الفيديو بعد المحاولات المتاحة: " + state.error);
-        }
-      }
+      await persistTeacherVideoAnalysisFailure(
+        userId, externalId, existing, interactionId, state.model || model, state.error,
+        activityId, state.retryable, state.errorCode,
+      );
       return;
     }
     await pauseForVideoAnalysis(5_000);
