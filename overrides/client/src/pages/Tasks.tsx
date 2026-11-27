@@ -9,7 +9,7 @@ import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { getSIESubject, matchSIECheckpointTask } from "@shared/sie-catalog";
 import { displayBranchTitle, displayCurriculumTitle } from "@/lib/curriculum-display";
-import { CalendarDays, Check, Circle, Pencil, Plus, Search, Tag, Trash2, X } from "lucide-react";
+import { ArrowUpRight, CalendarDays, Check, Circle, Pencil, Plus, Search, Tag, Trash2, X } from "lucide-react";
 import { createPortal } from "react-dom";
 import { FormEvent, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -31,7 +31,7 @@ function dateInputValue(date: Date | null) {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
 }
 
-const COMPOSITE_TASK_MARKER = "\\n\\n<!-- STUDYFLOW_COMPOSITE_TASK_V1 -->\\n";
+const COMPOSITE_TASK_MARKER = "\n\n<!-- STUDYFLOW_COMPOSITE_TASK_V1 -->\n";
 type CompositeReviewSubtask = {
   id: string;
   title: string;
