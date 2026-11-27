@@ -1149,7 +1149,7 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
     const subjectCount = new Set(plan.steps.map(step => getPlanStepCurriculum(step, subjectIds)?.subjectId).filter(Boolean)).size;
   const confirmedTaskCount = plan.steps.filter(step => Boolean(step.existingTask)).length;
   const coveredCurriculumCount = new Set(plan.steps.flatMap(step => step.curriculumNodeIds ?? [])).size;
-  const backlogCoverageMatch = /المتراكم الفعلي:\\s*(\\d+)\\s*نقطة مؤكدة؛ أُدرج\\s*(\\d+)/.exec(plan.summary);
+  const backlogCoverageMatch = /المتراكم الفعلي:\s*(\d+)\s*نقطة مؤكدة؛ أُدرج\s*(\d+)/.exec(plan.summary);
   const backlogExpectedCount = backlogCoverageMatch ? Number(backlogCoverageMatch[1]) : null;
   const backlogIncludedCount = backlogCoverageMatch ? Number(backlogCoverageMatch[2]) : null;
   const backlogCoverageLabel = backlogExpectedCount === null || backlogIncludedCount === null
@@ -1226,6 +1226,11 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
   const selectedMapCurriculum = selectedMapStep
     ? getPlanStepCurriculum(selectedMapStep, subjectIds)
     : null;
+  const selectedMapNodeId = selectedMapStep?.curriculumNodeIds?.[0];
+  const selectedMapBranchId = selectedMapCurriculum && selectedMapNodeId
+    ? getSIECheckpointProgressBranches(selectedMapCurriculum.subjectId)
+        .find(branch => branch.choices.some(choice => choice.nodeId === selectedMapNodeId))?.branchId
+    : undefined;
   const saveEdit = () => {
     if (!editing) return;
     onChange({
@@ -1455,10 +1460,10 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
                     detail: selectedMapStep.detail,
                   })}>تعديل الخطوة</Button>
                 )}
-                {selectedMapCurriculum && selectedMapStep.curriculumNodeIds?.[0] && (
+                {selectedMapCurriculum && selectedMapBranchId && selectedMapNodeId && (
                   <a href={"/study?subject=" + encodeURIComponent(selectedMapCurriculum.subjectId)
-                    + "&branch=" + encodeURIComponent(selectedMapCurriculum.branchId)
-                    + "&lesson=" + encodeURIComponent(selectedMapStep.curriculumNodeIds[0])}>
+                    + "&branch=" + encodeURIComponent(selectedMapBranchId)
+                    + "&lesson=" + encodeURIComponent(selectedMapNodeId)}>
                     افتح الدرس في صفحة المذاكرة <ArrowUpRight className="size-3.5" />
                   </a>
                 )}
