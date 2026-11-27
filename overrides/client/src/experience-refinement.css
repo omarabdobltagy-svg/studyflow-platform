@@ -3465,6 +3465,7 @@ body[data-studyflow-sections-open="true"] .sf-hub-root {
   aspect-ratio: 1 / 1;
   box-sizing: border-box;
   place-items: center;
+  margin-top: 0 !important;
   padding: 0 !important;
   border: 1px solid #c9c6bb !important;
   border-radius: 50% !important;
