@@ -1318,6 +1318,7 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
                             <button
                               key={step.existingTask?.id ?? step.plannerTaskId ?? step.title}
                               type="button"
+                              data-testid={"planner-session-prep-" + (step.existingTask?.id ?? step.plannerTaskId ?? index)}
                               onClick={() => setSelectedMapStepIndex(index)}
                               aria-label={"عرض مهمة التحضير: " + displayPlanStepTitle(step, subjectIds)}
                             >
@@ -1373,12 +1374,12 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
         <div className="sf-sp-map-controls">
           <div className="sf-sp-filter-group" role="group" aria-label="تصفية مهام الخطة">
             {([["all","الكل"],["open","المتبقي"],["done","المكتمل"]] as const).map(([key,label]) => (
-              <button type="button" key={key} aria-pressed={filter===key} onClick={()=>setFilter(key)}>{label}</button>
+              <button type="button" key={key} aria-pressed={filter===key} data-testid={"planner-filter-" + key} onClick={()=>{setFilter(key);setSelectedMapStepIndex(null);}}>{label}</button>
             ))}
           </div>
           <div className="sf-sp-view-group" role="group" aria-label="طريقة عرض الخطة">
-            <button type="button" aria-pressed={viewMode==="map"} onClick={()=>setViewMode("map")}>الخريطة</button>
-            <button type="button" aria-pressed={viewMode==="list"} onClick={()=>setViewMode("list")}>القائمة</button>
+            <button type="button" data-testid="planner-view-map" aria-pressed={viewMode==="map"} onClick={()=>setViewMode("map")}>الخريطة</button>
+            <button type="button" data-testid="planner-view-list" aria-pressed={viewMode==="list"} onClick={()=>setViewMode("list")}>القائمة</button>
           </div>
         </div>
       </div>
@@ -1443,6 +1444,7 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
                             <button
                               type="button"
                               className="sf-sp-flow-node-select"
+                              data-testid={"planner-node-select-" + (step.curriculumNodeIds?.[0] ?? step.existingTask?.id ?? index)}
                               aria-pressed={selectedMapStepIndex === index}
                               onClick={() => setSelectedMapStepIndex(current => current === index ? null : index)}
                             >
@@ -1507,7 +1509,7 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
                   <span>العقدة المحددة</span>
                   <strong>{selectedMapCurriculum?.subject ?? "التزام مسجل"}{selectedMapCurriculum?.branch ? " · " + selectedMapCurriculum.branch : ""}</strong>
                 </div>
-                <button type="button" onClick={() => setSelectedMapStepIndex(null)} aria-label="إغلاق تفاصيل العقدة">إغلاق</button>
+                <button type="button" data-testid="planner-node-details-close" onClick={() => setSelectedMapStepIndex(null)} aria-label="إغلاق تفاصيل العقدة">إغلاق</button>
               </header>
               <h4>{displayPlanStepTitle(selectedMapStep, subjectIds)}</h4>
               <div className="sf-sp-flow-selection-meta">
