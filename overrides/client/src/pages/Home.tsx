@@ -67,13 +67,13 @@ function sessionLesson(session: ExternalSession | null) {
 }
 
 export default function Home() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
   const utils = trpc.useUtils();
-  const summary = trpc.dashboard.summary.useQuery({ timeZone: "Africa/Cairo" });
-  const tasksQuery = trpc.tasks.list.useQuery();
-  const learning = trpc.learning.get.useQuery();
-  const profile = trpc.studentProfile.get.useQuery();
+  const summary = trpc.dashboard.summary.useQuery({ timeZone: "Africa/Cairo" }, { enabled: Boolean(user) && !authLoading });
+  const tasksQuery = trpc.tasks.list.useQuery(undefined, { enabled: Boolean(user) && !authLoading });
+  const learning = trpc.learning.get.useQuery(undefined, { enabled: Boolean(user) && !authLoading });
+  const profile = trpc.studentProfile.get.useQuery(undefined, { enabled: Boolean(user) && !authLoading });
   const [showWelcomeGuide, setShowWelcomeGuide] = useState(false);
   const [welcomeGuideStep, setWelcomeGuideStep] = useState(0);
   const completeWelcomeGuide = trpc.studentProfile.completeWelcomeGuide.useMutation({
@@ -84,11 +84,13 @@ export default function Home() {
     onError: error => toast.error(error.message || "تعذّر حفظ إكمال دليل البداية."),
   });
   const dailyPlan = trpc.plans.currentDaily.useQuery(undefined, {
+    enabled: Boolean(user) && !authLoading,
     staleTime: 10_000,
     refetchInterval: query => query.state.data?.needsRefresh ? 1_500 : !query.state.data?.plan ? 15_000 : 180_000,
     refetchOnWindowFocus: true, retry: 1,
   });
   const activeSessionQuery = trpc.learning.activeExternalSession.useQuery(undefined, {
+    enabled: Boolean(user) && !authLoading,
     refetchInterval: query => query.state.data ? 5_000 : false,
     refetchOnWindowFocus: true,
   });
