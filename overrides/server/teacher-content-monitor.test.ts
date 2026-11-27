@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { acceptedAlternativeReviewVideoIds, classifyTeacherAnnouncement, isHighConfidenceScheduleAnnouncement, isSecondYearBaccalaureateProfile, isSecondYearBaccalaureateUpdate, isTeacherVideoUpdateAllowed, parseYoutubeAtomFeed, parseYoutubeDurationMinutes, selectedTeacherIds, shouldScanTeacherSource } from "./teacher-content-monitor";
+import { acceptedAlternativeReviewVideoIds, classifyTeacherAnnouncement, getAcceptedAlternativeReviewContext, isHighConfidenceScheduleAnnouncement, isSecondYearBaccalaureateProfile, isSecondYearBaccalaureateUpdate, isTeacherVideoUpdateAllowed, parseYoutubeAtomFeed, parseYoutubeDurationMinutes, selectedTeacherIds, shouldScanTeacherSource } from "./teacher-content-monitor";
 
 describe("teacher public channel monitor", () => {
   it("parses public YouTube upload entries and decodes Arabic metadata", () => {
@@ -71,6 +71,18 @@ describe("teacher public channel monitor", () => {
     expect(isTeacherVideoUpdateAllowed(profile, { teacherId: "T_HIS_GOMAA_EL_SAYED", externalId: "youtube:altVideo123" })).toBe(true);
     expect(isTeacherVideoUpdateAllowed(profile, { teacherId: "T_HIS_GOMAA_EL_SAYED", externalId: "youtube:anotherVideo1" })).toBe(false);
     expect(isTeacherVideoUpdateAllowed(profile, { teacherId: "T_HIS_AHMED_ADEL", externalId: "youtube:selectedTeacherVideo" })).toBe(true);
+    const scopedProfile = {
+      ...profile,
+      selection: {
+        acceptedAlternativeReviewVideoIds: ["youtube:altVideo123"],
+        acceptedAlternativeReviewContext: {
+          "youtube:altVideo123": { subjectId: "HIS_G2_BAC", branchId: "HIS_UNIT_1" },
+        },
+      },
+    };
+    expect(getAcceptedAlternativeReviewContext(scopedProfile, "youtube:altVideo123"))
+      .toEqual({ subjectId: "HIS_G2_BAC", branchId: "HIS_UNIT_1" });
+    expect(getAcceptedAlternativeReviewContext(scopedProfile, "youtube:otherVideo1")).toBeUndefined();
   });
 
   it("rejects second-year general secondary, other grades, and teacher-to-subject mismatches", () => {
