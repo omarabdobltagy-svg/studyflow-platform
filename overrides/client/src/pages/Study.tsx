@@ -61,6 +61,14 @@ export default function Study() {
     },
   });
   const learning = trpc.learning.get.useQuery();
+  const [progressGuideDismissed, setProgressGuideDismissed] = useState(false);
+  const completeProgressPickerGuide = trpc.studentProfile.completeProgressPickerGuide.useMutation({
+    onSuccess: async () => {
+      await utils.studentProfile.get.invalidate();
+      setProgressGuideDismissed(true);
+    },
+    onError: error => toast.error(error.message || "تعذّر حفظ إغلاق دليل مواضع التقدم."),
+  });
   const initialStudyParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
   const [subjectId, setSubjectId] = useState(initialStudyParams?.get("subject") || "");
   const [branchId, setBranchId] = useState(initialStudyParams?.get("branch") || "");
@@ -124,6 +132,18 @@ export default function Study() {
     ?? branches[0];
   const branchChoices = currentBranch?.choices ?? [];
   const currentBranchId = currentBranch?.branchId ?? "";
+  const setupCoachmarkVersion = Number(selection.setupCoachmarkVersion ?? 0);
+  const showProgressPickerGuide = setupCoachmarkVersion >= 1
+    && !selection.progressPickerGuideCompletedAt
+    && !progressGuideDismissed
+    && studyViewMode === "lessons"
+    && branchChoices.length > 0;
+  useEffect(() => {
+    if (setupCoachmarkVersion >= 1 && !selection.progressPickerGuideCompletedAt
+      && branches.length > 0 && studyViewMode === "units") {
+      setStudyViewMode("lessons");
+    }
+  }, [setupCoachmarkVersion, selection.progressPickerGuideCompletedAt, branches.length, studyViewMode]);
   const reviewSearch = trpc.teachers.recommendReviews.useMutation({
     onSuccess: result => {
       setReviewCandidates(result.items as typeof reviewCandidates);
@@ -398,6 +418,10 @@ export default function Study() {
         }
         const nextTarget = getNextLearningTarget(subjects, subjectId, branches, currentBranchId);
         if (nextTarget) {
+          const nextLabel = nextTarget.branchId
+            ? displayBranchTitle(allBranches.find(item => item.branchId === nextTarget.branchId)?.branchTitle ?? "الفرع التالي")
+            : getSIESubject(nextTarget.subjectId)?.nameAr;
+          setBranchTransition({ from: branchDisplayTitle, to: nextLabel || "المادة التالية" });
           setSubjectId(nextTarget.subjectId);
           setBranchId(nextTarget.branchId || "");
           toast.success("اكتملت فروع العربي؛ انتقلنا إلى المادة التالية.");
@@ -418,6 +442,7 @@ export default function Study() {
           const nextLabel = nextTarget.branchId
             ? displayBranchTitle(branches.find(item => item.branchId === nextTarget.branchId)?.branchTitle ?? "الفرع التالي")
             : getSIESubject(nextTarget.subjectId)?.nameAr;
+          setBranchTransition({ from: branchDisplayTitle, to: nextLabel || "المادة التالية" });
           toast.success("أنهيت موضوعات هذا الفرع؛ انتقلنا إلى " + (nextLabel || "الموضع التالي") + ".");
           return;
         }
@@ -509,7 +534,11 @@ export default function Study() {
       const targetIndex = branch.choices.findIndex(item => item.nodeId === last.nodeId);
       return savedIndex < targetIndex;
     }) ?? unit.branches[0];
-    if (nextBranch) setBranchId(nextBranch.branchId);
+    if (nextBranch) {
+      const fromLabel = currentBranch?.branchTitle ? displayBranchTitle(currentBranch.branchTitle) : "الوحدة الحالية";
+      setBranchTransition({ from: fromLabel, to: displayBranchTitle(nextBranch.branchTitle) });
+      setBranchId(nextBranch.branchId);
+    }
     setStudyViewMode("lessons");
   };
 
@@ -616,7 +645,7 @@ export default function Study() {
       </section>
 
       <AnimatePresence>
-        {branchTransition && subjectId === "ARB_G2_BAC" && (
+        {branchTransition && (
           <motion.div
             key={branchTransition.to}
             initial={{ opacity: 0, y: -12, scale: .97, filter: "blur(5px)" }}
@@ -927,8 +956,13 @@ export default function Study() {
                       return (
                         <button key={branch.branchId} type="button" data-testid={"study-branch-" + branch.branchId} aria-pressed={active} aria-current={active ? "step" : undefined}
                           onClick={() => {
-                            setBranchTransition(null);
-                            setBranchId(branch.branchId);
+                            if (branch.branchId !== currentBranchId) {
+                              setBranchTransition({
+                                from: branchDisplayTitle,
+                                to: displayBranchTitle(branch.branchTitle),
+                              });
+                              setBranchId(branch.branchId);
+                            }
                           }}
                           className={"flex min-h-14 min-w-0 items-center gap-2 rounded-xl border px-3 py-2.5 text-right text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 " +
                             (active ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary/20" : isAtEnd ? "border-primary/25 bg-primary/[0.035] text-foreground" : hasProgress ? "border-primary/25 bg-primary/[0.035] text-foreground" : "border-border bg-background text-muted-foreground hover:border-primary/35 hover:text-foreground")}>
@@ -1074,7 +1108,37 @@ export default function Study() {
                         <h4 className="mt-1 break-words text-sm font-bold sm:text-base">آخر درس وصلت له في شرح المدرس</h4>
                         <p className="mt-1 text-xs leading-5 text-muted-foreground">النقطة المختارة تحدد آخر درس شاهدت شرحه أو حضرت حصته. ده لا يعني إنك ذاكرت الدرس أو فهمته؛ حالة المذاكرة والفهم هتتسجل لكل درس بشكل مستقل تحت.</p>
                       </div>
-                      <div className="mt-4 grid gap-6 md:grid-cols-2">
+                      <AnimatePresence initial={false}>
+                      {showProgressPickerGuide && (
+                        <motion.aside
+                          key={subjectId + "::" + currentBranchId}
+                          className="sf-progress-coach-float"
+                          role="status"
+                          aria-live="polite"
+                          aria-atomic="true"
+                          initial={{ opacity: 0, y: 12, scale: .985 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: -8, scale: .985 }}
+                          transition={{ type: "spring", stiffness: 260, damping: 24 }}
+                        >
+                          <span className="sf-progress-coach-kicker"><Sparkles className="size-3.5" /> أول إعداد لتقدمك</span>
+                          <strong>عندك موضعان منفصلان — اختار كل واحد بدقة</strong>
+                          <p>
+                            «آخر درس وصلت له في الشرح» هو آخر درس حضرت شرحه أو شاهدته أنت.
+                            «موضع المدرس» هو آخر نقطة وصل إليها هو في تدريسه. اختيار أحدهما لا يغيّر الآخر،
+                            ومشاهدة المحاضرة لا تعني أنك ذاكرت الدرس أو فهمته.
+                          </p>
+                          <div className="sf-progress-coach-actions">
+                            <button type="button" onClick={() => setProgressGuideDismissed(true)}>ذكّرني لاحقًا</button>
+                            <button type="button" disabled={completeProgressPickerGuide.isPending}
+                              onClick={() => completeProgressPickerGuide.mutate(undefined)}>
+                              {completeProgressPickerGuide.isPending ? "جارٍ الحفظ..." : "فهمت، ابدأ الاختيار"}
+                            </button>
+                          </div>
+                        </motion.aside>
+                      )}
+                    </AnimatePresence>
+                    <div className="mt-4 grid gap-6 md:grid-cols-2 sf-progress-position-pickers">
                         <div className="min-w-0 rounded-xl border border-border/70 bg-background/70 p-3">
                           <SearchableFrontierPicker testId="student-frontier" label="آخر درس وصلت له في الشرح" hint="اختَر آخر محاضرة حضرتها أو درس وصل له شرح المدرس. هنعرض الدروس السابقة بعلامة مشاهدة، لكن المذاكرة والفهم حالة منفصلة."
                             value={hasStudentFrontierSelection ? lastCompletedLessonId : ""} onChange={setLastCompletedLessonId} disabled={saveBranchFrontier.isPending}
@@ -1339,13 +1403,17 @@ function SearchableFrontierPicker({
       <div className="grid max-h-[430px] gap-2 overflow-y-auto overscroll-contain pr-1 sm:grid-cols-2">
         {visibleOptions.map(option => {
           const selected = value === option.value;
-          return <button key={option.value} type="button" data-testid={testId ? testId + "-option-" + option.value : undefined} aria-pressed={selected} disabled={disabled}
+          return <motion.button key={option.value} type="button" data-testid={testId ? testId + "-option-" + option.value : undefined} data-selected={selected ? "true" : "false"} aria-pressed={selected} disabled={disabled}
+            layout
+            whileTap={{ scale: 0.975 }}
+            animate={{ scale: selected ? 1.012 : 1 }}
+            transition={{ type: "spring", stiffness: 380, damping: 25 }}
             onClick={() => onChange(option.value)}
-            className={"flex min-h-14 min-w-0 items-center justify-between gap-2 rounded-xl border px-3 py-3 text-right transition disabled:cursor-not-allowed disabled:opacity-50 " + (selected ? "border-primary bg-primary/10 text-foreground ring-2 ring-primary/10" : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground")}>
+            className={"flex min-h-14 min-w-0 items-center justify-between gap-2 rounded-xl border px-3 py-3 text-right transition disabled:cursor-not-allowed disabled:opacity-50 " + (selected ? "is-selected border-primary bg-primary/10 text-foreground ring-2 ring-primary/10" : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground")}>
             <span className="min-w-0"><span className="block break-words text-sm font-semibold leading-5">{option.label}</span>
               {option.description && <span className="mt-1 block text-[10px] leading-4 text-muted-foreground">{option.description}</span>}</span>
             <span className={"flex size-6 shrink-0 items-center justify-center rounded-full border " + (selected ? "border-primary bg-primary text-primary-foreground" : "border-border text-transparent")}>{selected && <Check className="size-3.5" />}</span>
-          </button>;
+          </motion.button>;
         })}
       </div>
       {!normalizedQuery && hiddenOptionCount > 0 && !showAllOptions && <Button type="button" data-testid={testId ? testId + "-show-all" : undefined} variant="outline" size="sm" className="w-full rounded-xl text-xs" onClick={() => setShowAllOptions(true)}>إظهار باقي الدروس ({hiddenOptionCount})</Button>}

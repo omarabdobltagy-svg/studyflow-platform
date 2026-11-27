@@ -2228,6 +2228,21 @@ export const appRouter = router({
         }
         return { success: true };
       }),
+    completeProgressPickerGuide: protectedProcedure
+      .mutation(async ({ ctx }) => {
+        const profile = await getStudentProfile(ctx.user.id);
+        if (!profile) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "أكمل ملفك الدراسي أولًا." });
+        }
+        const selection = (profile.selection ?? {}) as Record<string, any>;
+        if (!selection.progressPickerGuideCompletedAt) {
+          await updateStudentProfileSelection(ctx.user.id, {
+            ...selection,
+            progressPickerGuideCompletedAt: new Date().toISOString(),
+          });
+        }
+        return { success: true };
+      }),
     updateTeacherSelection: protectedProcedure
       .input(z.object({
         subjectId: z.string().trim().min(1).max(80),
@@ -2618,6 +2633,7 @@ export const appRouter = router({
           subjects: subjectNames,
           teacherSelections: input.teacherSelections,
           selection: {
+            ...(previousProfile ? {} : { setupCoachmarkVersion: 1 }),
             packageVersion: SIE_CATALOG_META.packageVersion,
             systemId: input.systemId,
             academicYear: SIE_CATALOG_META.academicYear,

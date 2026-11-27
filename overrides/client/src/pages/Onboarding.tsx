@@ -15,6 +15,7 @@ import {
   getSIESubject,
   getSIESubjectsForTrack,
   getSIETeachersForSubject,
+  getSIEStudentVisibleBranches,
   getSIETrack,
   getSIETracks,
   type SIESystemId,
@@ -32,6 +33,7 @@ import {
   ShieldCheck,
   X,
 } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useLocation, type RouteComponentProps } from "wouter";
@@ -151,7 +153,8 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
         setIsEditingProfile(false);
         setStep(0);
       } else {
-        setLocation("/");
+        // Start new students at the progress fields after saving teacher setup.
+        setLocation("/study");
       }
     },
     onError: error => toast.error(error.message || "تعذر حفظ بيانات الحساب."),
@@ -162,6 +165,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
   const [expandedCheckpointChoices, setExpandedCheckpointChoices] = useState<Record<string, number>>({});
   const [refreshCheckpointMode, setRefreshCheckpointMode] = useState(false);
   const [teacherDirectorySearch, setTeacherDirectorySearch] = useState("");
+  const [setupCoachDismissed, setSetupCoachDismissed] = useState(false);
   const [form, setForm] = useState<FormState>({
     studentName: "",
     phone: "",
@@ -249,6 +253,16 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
   const activeStepIndex = progressStep - 1;
   const currentSetupSubject = selectedSubjects[subjectSetupIndex] ?? selectedSubjects[0];
   const currentSetupSubjectId = currentSetupSubject?.subjectId ?? "";
+  const setupCoachIsNewAccount = !editMode && profile.isSuccess && profile.data == null;
+  const setupCoachHasTeacher = Boolean(form.teacherSelections[currentSetupSubjectId]);
+  const setupCoachHasMethod = Boolean(form.courseModes[currentSetupSubjectId]);
+  const setupCoachHasSchedule = Boolean(form.teacherScheduleUnfixed[currentSetupSubjectId]
+    || (form.teacherSchedules[currentSetupSubjectId] ?? []).length > 0);
+  const setupCoachStage = !setupCoachHasTeacher ? "teacher"
+    : !setupCoachHasMethod ? "method"
+      : !setupCoachHasSchedule ? "schedule" : "continue";
+  const showSetupCoach = setupCoachIsNewAccount && !setupCoachDismissed && step === 5 && Boolean(currentSetupSubject);
+  useEffect(() => setSetupCoachDismissed(false), [currentSetupSubjectId]);
   const setupTeacherOptions = currentSetupSubjectId && form.systemId ? getSIETeachersForSubject(currentSetupSubjectId, form.systemId) : [];
   const sharedTeacherDirectory = trpc.teacherDirectory.list.useQuery({
     subjectId: currentSetupSubjectId || "__none__",
@@ -700,7 +714,53 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                     </div>
                     <span className="rounded-full border border-border bg-background px-3 py-2 text-xs font-semibold">{subjectSetupIndex + 1} / {selectedSubjects.length}</span>
                   </div>
-                  <div className="sf-teacher-selection-panel space-y-5">
+                  <AnimatePresence initial={false}>
+                    {showSetupCoach && (
+                      <motion.aside
+                        key={setupCoachStage + "::" + currentSetupSubjectId}
+                        id="sf-setup-coach"
+                        className="sf-setup-coach-float"
+                        role="status"
+                        aria-live="polite"
+                        aria-atomic="true"
+                        initial={{ opacity: 0, y: -10, scale: .985 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -8, scale: .985 }}
+                        transition={{ type: "spring", stiffness: 280, damping: 25 }}
+                      >
+                        <span className="sf-setup-coach-step">
+                          {setupCoachStage === "teacher" ? "١ / ٤"
+                            : setupCoachStage === "method" ? "٢ / ٤"
+                              : setupCoachStage === "schedule" ? "٣ / ٤" : "٤ / ٤"}
+                          <span>دليل الإعداد</span>
+                        </span>
+                        <div className="sf-setup-coach-copy">
+                          <strong>
+                            {setupCoachStage === "teacher" ? "اختار المدرس اللي بتتابعه"
+                              : setupCoachStage === "method" ? "حدّد طريقة متابعتك"
+                                : setupCoachStage === "schedule" ? "سجّل موعد المحاضرة"
+                                  : "تمام، إعداد المادة اكتمل"}
+                          </strong>
+                          <p>
+                            {setupCoachStage === "teacher"
+                              ? "اضغط على بطاقة المدرس في دليل المادة. لو مش لاقيه، اكتب اسمه أو اختار إنك لسه ما حددتش مدرسًا."
+                              : setupCoachStage === "method"
+                                ? "اختار أونلاين أو سنتر / حضور حسب الطريقة اللي بتتابع بيها المدرس فعلًا."
+                                : setupCoachStage === "schedule"
+                                  ? "اختار يوم المحاضرة ووقتها، واضغط «إضافة موعد» لو عندك أكثر من حصة أسبوعيًا. ولو المواعيد بتتغير كل مرة، علّم «مواعيد المحاضرات غير ثابتة»."
+                                  : subjectSetupIndex < selectedSubjects.length - 1
+                                    ? "اضغط «التالي» أسفل النموذج للانتقال للمادة التالية. الدليل هيرجع يوضح لك الخطوة المناسبة فيها."
+                                    : "اضغط «إكمال إعداد الحساب» أسفل النموذج. هتنتقل بعدها مباشرةً لتحديد آخر موضع وصلت له أنت وموضع شرح المدرس."}
+                          </p>
+                        </div>
+                        <button type="button" className="sf-setup-coach-dismiss" onClick={() => setSetupCoachDismissed(true)}>
+                          إخفاء الدليل
+                        </button>
+                      </motion.aside>
+                    )}
+                  </AnimatePresence>
+                  <div className="sf-teacher-selection-panel space-y-5"
+                    data-setup-coach-focus={showSetupCoach && setupCoachStage === "teacher" ? "true" : undefined}>
                     <div className="sf-teacher-selection-title">
                       <div className="sf-teacher-selection-icon"><GraduationCap className="size-5" /></div>
                       <div>
@@ -875,7 +935,8 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                     </button>
                   </div>
 
-                  <section className="sf-method-panel" aria-labelledby="sf-method-heading">
+                  <section className="sf-method-panel" aria-labelledby="sf-method-heading"
+                    data-setup-coach-focus={showSetupCoach && setupCoachStage === "method" ? "true" : undefined}>
                     <div className="sf-method-heading">
                       <p className="eyebrow">اختيار واحد واضح</p>
                       <h4 id="sf-method-heading">طريقة متابعتك للمادة</h4>
@@ -918,7 +979,8 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
 
                   </section>
 
-                                    <section className="sf-schedule-panel" aria-labelledby="sf-schedule-heading">
+                                    <section className="sf-schedule-panel" aria-labelledby="sf-schedule-heading"
+                    data-setup-coach-focus={showSetupCoach && setupCoachStage === "schedule" ? "true" : undefined}>
                     <div className="sf-schedule-header">
                       <div>
                         <p className="eyebrow">موعد الحصص الأسبوعي</p>

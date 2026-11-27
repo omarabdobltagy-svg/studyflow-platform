@@ -4617,3 +4617,187 @@ body[data-studyflow-sections-open="true"] .sf-hub-root {
 .sf-main-planner .sf-sp-flow-map .sf-sp-flow-lane-progress-rail i {
   background: #91a85b;
 }
+
+
+/* Contextual first-run guidance and responsive interaction finish. */
+.sf-setup-coach-float,
+.sf-progress-coach-float {
+  position: sticky;
+  top: calc(76px + env(safe-area-inset-top));
+  z-index: 35;
+  width: min(100%, 560px);
+  margin: 0 auto 16px;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--primary) 42%, var(--border));
+  border-radius: 18px;
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--card) 96%, transparent);
+  box-shadow: 0 18px 46px -28px rgba(0,0,0,.48), 0 0 0 1px color-mix(in srgb, var(--primary) 7%, transparent);
+  backdrop-filter: blur(16px);
+}
+.sf-setup-coach-step,
+.sf-progress-coach-kicker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--primary);
+  font-size: 10px;
+  font-weight: 900;
+}
+.sf-setup-coach-step > span { color: var(--muted-foreground); font-weight: 750; }
+.sf-setup-coach-copy { min-width: 0; margin-top: 7px; }
+.sf-setup-coach-copy strong,
+.sf-progress-coach-float > strong {
+  display: block;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 950;
+  line-height: 1.7;
+}
+.sf-setup-coach-copy p,
+.sf-progress-coach-float > p {
+  margin-top: 5px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.9;
+}
+.sf-setup-coach-dismiss {
+  min-height: 34px;
+  margin-top: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-weight: 800;
+}
+.sf-progress-coach-float { width: 100%; margin-top: 14px; }
+.sf-progress-coach-float > strong { margin-top: 6px; }
+.sf-progress-coach-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  margin-top: 11px;
+}
+.sf-progress-coach-actions button {
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--muted-foreground);
+  background: var(--background);
+  font-size: 11px;
+  font-weight: 850;
+}
+.sf-progress-coach-actions button:last-child {
+  border-color: var(--primary);
+  color: var(--primary-foreground);
+  background: var(--primary);
+}
+.sf-progress-coach-actions button:disabled { opacity: .6; }
+[data-setup-coach-focus="true"] {
+  border-radius: 18px;
+  outline: 2px solid color-mix(in srgb, var(--primary) 54%, transparent);
+  outline-offset: 4px;
+  box-shadow: 0 0 0 7px color-mix(in srgb, var(--primary) 9%, transparent);
+  transition: outline-color .2s ease, box-shadow .2s ease;
+}
+.sf-onboarding-shell .sf-teacher-choice {
+  transform: translateZ(0);
+  transition: transform .24s cubic-bezier(.2,.75,.25,1), border-color .2s ease, background .2s ease, box-shadow .2s ease;
+}
+.sf-onboarding-shell .sf-teacher-choice:active { transform: scale(.982); }
+.sf-onboarding-shell .sf-teacher-choice.is-selected {
+  animation: sf-teacher-choice-selected .42s cubic-bezier(.2,.8,.2,1);
+}
+@keyframes sf-teacher-choice-selected {
+  0% { transform: scale(.985); }
+  55% { transform: scale(1.012); }
+  100% { transform: scale(1); }
+}
+.sf-progress-position-pickers [data-selected="true"] {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 13%, transparent), 0 10px 24px -20px var(--primary);
+}
+.sf-progress-position-pickers [data-selected="true"] > span:last-child {
+  animation: sf-frontier-marker-pop .32s cubic-bezier(.2,.8,.2,1);
+}
+@keyframes sf-frontier-marker-pop {
+  0% { transform: scale(.65) rotate(-12deg); }
+  72% { transform: scale(1.12) rotate(2deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+.sf-study-subject-selector,
+.sf-study-subject-selector *,
+.sf-map-hero,
+.sf-map-hero *,
+.sf-map-scene-card,
+.sf-map-scene-card *,
+.sf-map-branch-card,
+.sf-map-branch-card *,
+.sf-teacher-selection-panel,
+.sf-teacher-selection-panel *,
+.sf-schedule-panel,
+.sf-schedule-panel *,
+.sf-progress-position-pickers,
+.sf-progress-position-pickers * { min-width: 0; }
+@media (max-width: 700px) {
+  html, body, #root { max-width: 100%; overflow-x: clip; }
+  .sf-app-shell, .sf-app-frame, .sf-app-main, .sf-main { min-width: 0; max-width: 100%; }
+  .sf-main { padding-inline: 12px; }
+  .sf-setup-coach-float, .sf-progress-coach-float {
+    top: calc(66px + env(safe-area-inset-top));
+    padding: 12px 13px;
+    border-radius: 15px;
+  }
+  .sf-setup-coach-copy strong, .sf-progress-coach-float > strong { font-size: 12px; }
+  .sf-setup-coach-copy p, .sf-progress-coach-float > p { font-size: 10px; line-height: 1.8; }
+  .sf-teacher-selection-title { align-items: flex-start; flex-wrap: wrap; }
+  .sf-teacher-selection-title > div:nth-child(2) { flex: 1 1 calc(100% - 56px); min-width: 0; }
+  .sf-teacher-subject-tag { margin-inline-start: 48px; }
+  .sf-teacher-choice-grid { grid-template-columns: minmax(0,1fr) !important; }
+  .sf-teacher-choice { min-height: 62px; padding: 12px !important; }
+  .sf-method-panel, .sf-schedule-panel { padding: 13px !important; border-radius: 16px !important; }
+  .sf-schedule-header { align-items: flex-start; flex-wrap: wrap; gap: 10px; }
+  .sf-schedule-header > div { min-width: 0; width: 100%; }
+  .sf-schedule-count { margin-inline-start: 0; }
+  .sf-schedule-slot { min-width: 0; padding: 11px !important; }
+  .sf-schedule-day-grid { grid-template-columns: repeat(4, minmax(0,1fr)) !important; gap: 6px !important; }
+  .sf-schedule-day-grid button { min-height: 40px; min-width: 0; padding-inline: 4px; font-size: 10px; }
+  .sf-lecture-time-card { min-width: 0; }
+  .sf-lecture-time-controls { grid-template-columns: minmax(0,1fr) 10px minmax(0,1fr); gap: 6px; }
+  .sf-lecture-time-controls label, .sf-lecture-time-controls select { min-width: 0; width: 100%; }
+  .sf-lecture-period { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; }
+  .sf-map-hero { padding: 17px !important; border-radius: 18px !important; }
+  .sf-map-filter-bar { align-items: stretch !important; flex-direction: column !important; gap: 9px !important; }
+  .sf-map-subject-select, .sf-map-view-toggle { width: 100% !important; min-width: 0 !important; }
+  .sf-map-view-toggle { display: grid !important; grid-template-columns: minmax(0,1fr) minmax(0,1fr) !important; }
+  .sf-map-branch-select { display: grid !important; grid-template-columns: 34px minmax(0,1fr) !important; gap: 8px !important; }
+  .sf-map-branch-titles { min-width: 0; overflow-wrap: anywhere; }
+  .sf-map-gap-status { grid-column: 2; justify-self: start; max-width: 100%; white-space: normal; }
+  .sf-map-branch-steps { grid-template-columns: minmax(0,1fr) !important; }
+  .sf-map-branch-actions { display: grid !important; grid-template-columns: minmax(0,1fr) !important; }
+  .sf-map-legend { display: grid !important; grid-template-columns: repeat(2,minmax(0,1fr)) !important; gap: 7px !important; }
+  .sf-map-scene-heading { align-items: flex-start !important; gap: 8px !important; }
+  .sf-map-scene-heading > div { min-width: 0; }
+  .sf-map-step { min-width: 0; overflow-wrap: anywhere; }
+  .sf-progress-position-pickers { grid-template-columns: minmax(0,1fr) !important; }
+  .sf-progress-coach-actions { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+  .sf-progress-coach-actions button { min-width: 0; padding-inline: 8px; font-size: 10px; }
+}
+@media (max-width: 380px) {
+  .sf-main { padding-inline: 9px; }
+  .sf-onboarding-panel > div { padding: 12px !important; }
+  .sf-setup-coach-float, .sf-progress-coach-float { padding: 10px; }
+  .sf-progress-coach-actions { grid-template-columns: 1fr; }
+  .sf-map-legend { grid-template-columns: minmax(0,1fr) !important; }
+  .sf-schedule-day-grid { grid-template-columns: repeat(3,minmax(0,1fr)) !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sf-onboarding-shell .sf-teacher-choice.is-selected,
+  .sf-progress-position-pickers [data-selected="true"] > span:last-child { animation: none !important; }
+  .sf-setup-coach-float, .sf-progress-coach-float,
+  .sf-onboarding-shell .sf-teacher-choice,
+  .sf-progress-position-pickers [data-selected="true"] { transition: none !important; }
+}

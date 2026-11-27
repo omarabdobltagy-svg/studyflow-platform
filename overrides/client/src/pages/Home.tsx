@@ -96,7 +96,10 @@ export default function Home() {
   });
 
   useEffect(() => {
-    if (profile.isSuccess && profile.data && !((profile.data.selection as Record<string, any> | undefined)?.welcomeGuideCompletedAt)) {
+    const selection = (profile.data?.selection ?? {}) as Record<string, any>;
+    if (profile.isSuccess && profile.data
+      && !selection.welcomeGuideCompletedAt
+      && Number(selection.setupCoachmarkVersion ?? 0) < 1) {
       setShowWelcomeGuide(true);
     }
   }, [profile.isSuccess, (profile.data?.selection as Record<string, any> | undefined)?.welcomeGuideCompletedAt]);
