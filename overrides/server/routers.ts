@@ -152,7 +152,7 @@ async function persistTeacherVideoAnalysis(
   return true;
 }
 
-async function processTeacherVideoAnalysis(userId: number, externalId: string) {
+async function processTeacherVideoAnalysis(userId: number, externalId: string, activityId?: string) {
   if (!isTeacherVideoAnalysisConfigured()) return;
   const profile = await getStudentProfile(userId);
   if (!profile) return;
@@ -166,10 +166,17 @@ async function processTeacherVideoAnalysis(userId: number, externalId: string) {
     && update.sourceType === "youtube"
     && allowedTeachers.has(update.teacherId)
   );
-  if (!video || !video.url) return;
+  if (!video || !video.url) {
+    if (activityId) completeAIActivity(userId, activityId, "لم يعد الفيديو ضمن مصادر المدرسين المختارين؛ لم يتم تحليله.");
+    return;
+  }
   const existing = video.contentAnalysis;
-  if (existing?.status === "complete" || existing?.status === "failed") return;
+  if (existing?.status === "complete" || existing?.status === "failed") {
+    if (activityId) completeAIActivity(userId, activityId, "هذا الفيديو سبق تحليله أو تعذّر تحليله؛ لم نكرر الطلب.");
+    return;
+  }
 
+  if (activityId) updateAIActivity(userId, activityId, "فهم محتوى الفيديو", "يفحص الفيديو نفسه لاستخراج الموضوعات التعليمية والطوابع الزمنية والتعليمات الصريحة للمدرس.");
   let interactionId = existing?.interactionId;
   let model = existing?.model || process.env.GEMINI_VIDEO_MODEL || "gemini-3.8-flash";
   if (!interactionId) {
@@ -188,6 +195,7 @@ async function processTeacherVideoAnalysis(userId: number, externalId: string) {
       model,
       startedAt: new Date().toISOString(),
     });
+    if (activityId) updateAIActivity(userId, activityId, "تحليل موضوعات المراجعة", "بدأ تحليل الفيديو؛ سيحوّل الشرح إلى موضوعات فعلية بدل تقسيمه إلى فترات زمنية ثابتة.");
   }
 
   // Long-running video understanding happens off the student request path.
@@ -223,6 +231,7 @@ async function processTeacherVideoAnalysis(userId: number, externalId: string) {
         });
         queueDailyPlanReconciliation(userId);
       }
+      if (activityId) completeAIActivity(userId, activityId, "اكتمل التحليل واُستخرج " + state.analysis.topics.length + " موضوعًا مع تعليمات المدرس المؤكدة؛ سيُحدّث المخطط المهام المطابقة للمنهج.");
       return;
     }
     if (state.status === "failed") {
@@ -235,6 +244,7 @@ async function processTeacherVideoAnalysis(userId: number, externalId: string) {
         error: state.error,
       });
       console.warn("[StudyFlow video analysis] Gemini interaction failed:", state.error);
+      if (activityId) failAIActivity(userId, activityId, "فشل تحليل الفيديو: " + state.error);
       return;
     }
     await pauseForVideoAnalysis(5_000);
@@ -242,6 +252,7 @@ async function processTeacherVideoAnalysis(userId: number, externalId: string) {
   // Leave it pending. The next teacher source scan will resume polling the same
   // background interaction rather than submit another copy of the video.
   console.info("[StudyFlow video analysis] Interaction is still running:", externalId);
+  if (activityId) updateAIActivity(userId, activityId, "استكمال تحليل الفيديو", "ما زال تحليل الفيديو يعمل في الخلفية. سيُستأنف من نفس طلب Gemini بدل إرسال نسخة مكررة.");
 }
 
 function queueTeacherVideoAnalyses(userId: number, updates: TeacherPublicUpdate[]) {
@@ -263,9 +274,17 @@ function queueTeacherVideoAnalyses(userId: number, updates: TeacherPublicUpdate[
     const lockKey = userId + ":" + update.externalId;
     if (teacherVideoAnalysisLocks.has(lockKey)) continue;
     queued += 1;
-    const task = processTeacherVideoAnalysis(userId, update.externalId)
+    const activityId = startAIActivity(userId, {
+      kind: "teacher_monitor",
+      title: "تحليل مراجعة من قناة المدرس",
+      stage: "فهم محتوى الفيديو",
+      detail: "يفحص فيديو «" + String(update.title || "مراجعة المدرس").slice(0, 100) + "» من قناة " + String(update.teacherName || "المدرس").slice(0, 80) + " ويستخرج موضوعاته الفعلية.",
+    });
+    const task = processTeacherVideoAnalysis(userId, update.externalId, activityId)
       .catch(error => {
-        console.warn("[StudyFlow video analysis] Could not analyze teacher video:", error instanceof Error ? error.message.slice(0, 500) : "unknown error");
+        const message = error instanceof Error ? error.message.slice(0, 220) : "خطأ غير معروف";
+        failAIActivity(userId, activityId, "تعذّر تحليل الفيديو: " + message);
+        console.warn("[StudyFlow video analysis] Could not analyze teacher video:", message);
       })
       .finally(async () => {
         if (teacherVideoAnalysisLocks.get(lockKey) === task) teacherVideoAnalysisLocks.delete(lockKey);
@@ -332,8 +351,9 @@ async function getDailyPlanSourceFingerprint(userId: number, dailyMinutes: numbe
 }
 
 
-async function scanTeacherSourcesForStudent(userId: number): Promise<boolean> {
+async function scanTeacherSourcesForStudent(userId: number, activityId?: string): Promise<boolean> {
   if (process.env.NODE_ENV === "test") return false;
+  if (activityId) updateAIActivity(userId, activityId, "البحث في قنوات المدرسين", "يفحص قنوات YouTube العامة للمدرسين الذين اخترتهم، دون الحاجة إلى طلب بحث منك.");
   const running = teacherSourceScanLocks.get(userId);
   if (running) return running;
 
@@ -341,6 +361,12 @@ async function scanTeacherSourcesForStudent(userId: number): Promise<boolean> {
     try {
       const profile = await getStudentProfile(userId);
       if (!profile) return false;
+      const selectedIds = selectedTeacherIds(profile);
+      if (!selectedIds.length) {
+        if (activityId) updateAIActivity(userId, activityId, "لا توجد قنوات محددة", "لم يتم اختيار مدرسين لموادك بعد؛ سيبدأ البحث تلقائيًا بعد اختيارهم.");
+        return false;
+      }
+      if (activityId) updateAIActivity(userId, activityId, "فحص القنوات المختارة", "يبحث في " + selectedIds.length + " قناة/مصدرًا تابعًا للمدرسين المختارين ويجلب الفيديوهات الحديثة.");
       const result = await scanSelectedTeacherSources(profile);
       const latestProfile = await getStudentProfile(userId);
       if (!latestProfile) return false;
@@ -349,27 +375,30 @@ async function scanTeacherSourcesForStudent(userId: number): Promise<boolean> {
       const rawPreviousUpdates = Array.isArray(latestSelection.teacherPublicUpdates)
         ? latestSelection.teacherPublicUpdates as Array<Record<string, any>>
         : [];
+      const relevantUpdate = (update: Record<string, any>) =>
+        update.sourceType === "youtube"
+        || isSecondYearBaccalaureateUpdate(update as TeacherPublicUpdate)
+        || isHighConfidenceScheduleAnnouncement(update as TeacherPublicUpdate);
       const previousUpdates = rawPreviousUpdates.filter(update =>
-        typeof update.teacherId === "string" && allowedTeacherIds.has(update.teacherId)
-        && (isSecondYearBaccalaureateUpdate(update) || isHighConfidenceScheduleAnnouncement(update))
+        typeof update.teacherId === "string"
+        && allowedTeacherIds.has(update.teacherId)
+        && relevantUpdate(update)
       );
       const knownIds = new Set(previousUpdates.map(update => String(update.externalId ?? "")).filter(Boolean));
       const newUpdates = result.updates
         .map(classifyTeacherPublicUpdate)
         .filter(update =>
           allowedTeacherIds.has(update.teacherId)
-          && (isSecondYearBaccalaureateUpdate(update) || isHighConfidenceScheduleAnnouncement(update))
+          && relevantUpdate(update)
           && !knownIds.has(update.externalId)
         );
       const previousScanState = (latestSelection.teacherPublicScanState ?? {}) as Record<string, string>;
       const nextScanState = { ...previousScanState, ...result.scanState };
+      const previousChannels = (latestSelection.teacherYoutubeChannels ?? {}) as Record<string, string>;
+      const nextChannels = { ...previousChannels, ...result.resolvedChannels };
       const scanStateChanged = JSON.stringify(previousScanState) !== JSON.stringify(nextScanState);
+      const channelMapChanged = JSON.stringify(previousChannels) !== JSON.stringify(nextChannels);
       const staleUpdatesRemoved = previousUpdates.length !== rawPreviousUpdates.length;
-      if (!newUpdates.length && !scanStateChanged && !staleUpdatesRemoved) {
-        queueTeacherVideoAnalyses(userId, previousUpdates);
-        return false;
-      }
-
       const freshCutoff = Date.now() - 30 * 24 * 60 * 60 * 1_000;
       const mergedUpdates = [...newUpdates, ...previousUpdates]
         .filter(update => {
@@ -378,18 +407,45 @@ async function scanTeacherSourcesForStudent(userId: number): Promise<boolean> {
         })
         .sort((left, right) => Date.parse(String(right.publishedAt)) - Date.parse(String(left.publishedAt)))
         .slice(0, 36);
+
+      if (!newUpdates.length && !scanStateChanged && !staleUpdatesRemoved && !channelMapChanged) {
+        queueTeacherVideoAnalyses(userId, previousUpdates as TeacherPublicUpdate[]);
+        const videoCount = previousUpdates.filter(update => update.sourceType === "youtube").length;
+        if (activityId) updateAIActivity(
+          userId,
+          activityId,
+          isTeacherVideoAnalysisConfigured() ? "مراجعة الفيديوهات المحفوظة" : "اكتمل الرصد الأولي",
+          isTeacherVideoAnalysisConfigured()
+            ? "لم تظهر فيديوهات جديدة. يواصل StudyFlow تحليل الفيديوهات السابقة غير المكتملة."
+            : "لم تظهر فيديوهات جديدة. تحليل الفيديو التفصيلي غير مفعّل حاليًا؛ يحتاج متغير GEMINI_API_KEY في خدمة Preview.",
+        );
+        return false;
+      }
+
       await updateStudentProfileSelection(userId, {
         ...latestSelection,
         teacherPublicUpdates: mergedUpdates,
         teacherPublicScanState: nextScanState,
+        teacherYoutubeChannels: nextChannels,
       });
       queueTeacherVideoAnalyses(userId, mergedUpdates as TeacherPublicUpdate[]);
+      if (activityId) {
+        const videoCount = mergedUpdates.filter(update => update.sourceType === "youtube").length;
+        updateAIActivity(
+          userId,
+          activityId,
+          "فرز أحدث محتوى المدرسين",
+          isTeacherVideoAnalysisConfigured()
+            ? "تم حفظ " + videoCount + " فيديو حديث من القنوات المختارة. يجري تحليل الفيديوهات على دفعات في الخلفية، ثم تُربط الموضوعات المطابقة بالمنهج."
+            : "تم حفظ " + videoCount + " فيديو حديث من القنوات المختارة. تحليل محتوى الفيديو إلى موضوعات يحتاج إضافة GEMINI_API_KEY إلى خدمة StudyFlow Preview.",
+        );
+      }
       if (newUpdates.length) {
         await recordStudentActivityEvent({
           userId,
           eventType: "teacher.public_update_detected",
           entityType: "teacher_source",
-          summary: "تم رصد تحديث عام جديد من أحد المدرسين المختارين",
+          summary: "تم رصد محتوى جديد من قنوات المدرسين المختارين",
           metadata: {
             count: newUpdates.length,
             sources: [...new Set(newUpdates.map(item => item.sourceType))],
@@ -407,6 +463,7 @@ async function scanTeacherSourcesForStudent(userId: number): Promise<boolean> {
       return newUpdates.length > 0;
     } catch (error) {
       console.warn("[StudyFlow teacher sources] Public source scan failed:", error instanceof Error ? error.message : String(error));
+      if (activityId) updateAIActivity(userId, activityId, "تعذّر فحص بعض المصادر", "لم يكتمل أحد طلبات البحث؛ سيُعاد الفحص في دورة الرصد التالية. سبب الفشل سُجّل للخادم.");
       return false;
     }
   })();
@@ -509,8 +566,20 @@ function queueTeacherSourceScan(userId: number) {
       }
     }
   }
-  void scanTeacherSourcesForStudent(userId);
+  const activityId = startAIActivity(userId, {
+    kind: "teacher_monitor",
+    title: "الرصد التلقائي لقنوات المدرسين",
+    stage: "البحث في قنوات المدرسين",
+    detail: "يتحقق StudyFlow من أحدث الفيديوهات العامة للمدرسين الذين اخترتهم.",
+  });
+  void scanTeacherSourcesForStudent(userId, activityId).then(() => {
+    completeAIActivity(userId, activityId, "اكتملت دورة الرصد الأولي. يستمر تحليل الفيديوهات المؤهلة في الخلفية.");
+  }).catch(error => {
+    const message = error instanceof Error ? error.message.slice(0, 220) : "خطأ غير معروف";
+    failAIActivity(userId, activityId, "تعذّر إكمال الرصد: " + message);
+  });
 }
+
 function queueDailyPlanEnsure(userId: number, _dailyMinutes: number) {
   if (process.env.NODE_ENV === "test") return;
   queueDailyPlanReconciliation(userId, "planner.fingerprint.stale", "planner");
@@ -712,7 +781,7 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number, f
   });
   const task = (async (): Promise<DailyPlanResult> => {
     try {
-      await scanTeacherSourcesForStudent(userId);
+      await scanTeacherSourcesForStudent(userId, activityId);
       updateAIActivity(userId, activityId, "تجميع سياق الدراسة", "يجمع ملفك والمهام الحالية والتقدم المسجل.");
       const profile = await getStudentProfile(userId);
     if (!profile || !Array.isArray(profile.subjectIds) || profile.subjectIds.length === 0) {
@@ -3774,7 +3843,7 @@ export const appRouter = router({
       }),
     currentDaily: protectedProcedure.query(async ({ ctx }) => {
       let snapshot = await getCurrentDailyPlanForStudent(ctx.user.id);
-      queueTeacherSourceScan(ctx.user.id);
+      if (snapshot.plan || snapshot.generatedAt) queueTeacherSourceScan(ctx.user.id);
       // Build the first plan from the live student signals automatically. A user
       // should not have to ask the AI to make the plan or press Generate.
       if (!snapshot.plan && !snapshot.generatedAt) {
