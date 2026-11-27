@@ -85,7 +85,8 @@ describe("actual accumulated daily backlog scope", () => {
     const result = applyDailyPlanDepth(emptyPlan(), profile, []);
     const plannedIds = result.steps.flatMap(step => step.curriculumNodeIds ?? []);
 
-    expect(plannedIds).toEqual(choices.slice(1, 5).map(choice => choice.nodeId));
+    // The saved student frontier is inclusive: the reached checkpoint itself is complete.
+    expect(plannedIds).toEqual(choices.slice(2, 5).map(choice => choice.nodeId));
     expect(plannedIds).not.toContain(choices[5].nodeId);
   });
 
