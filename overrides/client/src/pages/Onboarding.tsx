@@ -111,6 +111,15 @@ function daysSince(dateString: string) {
   return Math.floor((Date.now() - date.getTime()) / 86_400_000);
 }
 
+function displayArabicScheduleTime(value?: string) {
+  if (!value || !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(value)) return "غير محدد";
+  const [hourText, minuteText] = value.split(":");
+  const hour = Number(hourText);
+  const hour12 = hour % 12 || 12;
+  const period = hour < 12 ? "ص" : "م";
+  return hour12.toLocaleString("ar-EG") + ":" + Number(minuteText).toLocaleString("ar-EG", { minimumIntegerDigits: 2 }) + " " + period;
+}
+
 export default function Onboarding({ editMode = false }: Partial<RouteComponentProps> & { editMode?: boolean }) {
   const [, setLocation] = useLocation();
   const auth = trpc.auth.me.useQuery(undefined, { retry: false });
@@ -866,6 +875,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                               <label className="sf-schedule-time-field">
                                 <span><b>تبدأ</b><small>وقت البداية</small></span>
                                 <input type="time" inputMode="numeric" dir="ltr" step={900} value={slot.startTime}
+                                  aria-label={"وقت بداية المحاضرة " + (slotIndex + 1) + " بنظام 24 ساعة"}
                                   onChange={event => setForm(current => ({
                                     ...current,
                                     teacherSchedules: {
@@ -873,6 +883,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                                       [currentSetupSubjectId]: (current.teacherSchedules[currentSetupSubjectId] ?? []).map((item, index) => index === slotIndex ? { ...item, startTime: event.target.value } : item),
                                     },
                                   }))} />
+                                <small className="sf-schedule-time-preview">العرض بنظام 12 ساعة: {displayArabicScheduleTime(slot.startTime)}</small>
                               </label>
                               <span className="sf-schedule-time-range-arrow" aria-hidden="true">←</span>
                               <label className="sf-schedule-time-field">
@@ -886,6 +897,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                                       [currentSetupSubjectId]: (current.teacherSchedules[currentSetupSubjectId] ?? []).map((item, index) => index === slotIndex ? { ...item, endTime: event.target.value || undefined } : item),
                                     },
                                   }))} />
+                                <small className="sf-schedule-time-preview">العرض بنظام 12 ساعة: {displayArabicScheduleTime(slot.endTime)}</small>
                               </label>
                             </div>
                             <div className={"sf-schedule-duration " + (slot.endTime ? "is-set" : "")}>
@@ -1017,7 +1029,7 @@ function StudentProfileOverview({
           <div>
             <p className="eyebrow">ملفك الدراسي الحالي</p>
             <h2 className="mt-2 text-2xl font-bold sm:text-3xl">{profile?.studentName || "بيانات الطالب"}</h2>
-            <p className="mt-2 text-sm text-muted-foreground">{system?.nameAr ?? profile?.educationSystem ?? "النظام الدراسي غير محدد"} · {track?.nameAr ?? profile?.track ?? "المسار غير محدد"}</p>
+            <p className="mt-2 text-sm text-muted-foreground">{system?.nameAr ?? profile?.educationSystem ?? "النظام الدراسي غير محدد"} · {profile?.gradeYear ?? selection.gradeYear ?? "السنة غير محددة"} · {track?.nameAr ?? profile?.track ?? "المسار غير محدد"}</p>
             <div className="mt-4 flex flex-wrap gap-2">
               {subjectNames.map(name => <span key={name} className="rounded-full border border-border bg-secondary/60 px-3 py-1.5 text-xs font-semibold">{name}</span>)}
             </div>
