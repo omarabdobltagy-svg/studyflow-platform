@@ -30,7 +30,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 
-remove YouTube helperexport default function Study() {
+export default function Study() {
   const reduceMotion = useReducedMotion();
   const utils = trpc.useUtils();
   const profile = trpc.studentProfile.get.useQuery(undefined, {
