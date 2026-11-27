@@ -1416,14 +1416,9 @@ function applyDailyPlanDepth(
   existingTasks: ExistingPlannerTask[],
   dailyMinutes: number,
 ): GeneratedPlan {
-  const dailyTopicCapacity = dailyMinutes <= 60 ? 1 : dailyMinutes <= 150 ? 2 : 3;
   const openTasks = existingTasks.filter(task => task.status !== "done");
-  // Plan a full seven-day horizon in topic units, not just a handful of subjects.
-  // The pace controls how many distinct curriculum/video topics can be tackled each study day.
-  const targetCount = Math.min(
-    18,
-    Math.max(dailyTopicCapacity * 7, (profile.subjectIds ?? []).length) + Math.min(2, openTasks.length),
-  );
+  // Keep the complete eligible backlog in the plan. Daily capacity controls dates,
+  // never whether an eligible curriculum point is silently removed from the plan.
   const snapshot = buildPlannerProgressSnapshot(profile);
   const selection = (profile.selection ?? {}) as Record<string, any>;
   const teacherChoices = (selection.teacherChoices ?? profile.teacherSelections ?? {}) as Record<string, string>;
@@ -1473,10 +1468,19 @@ function applyDailyPlanDepth(
       ? hours + ":" + String(minutes).padStart(2, "0") + ":" + String(rest).padStart(2, "0")
       : minutes + ":" + String(rest).padStart(2, "0");
   };
+  const reviewEligibleNodeIds = new Set<string>();
+  for (const branchProgress of snapshot.branches.values()) {
+    for (const choice of branchProgress.eligibleChoices ?? []) {
+      if (choice.learningState === "watched_only" || choice.learningState === "needs_review") {
+        reviewEligibleNodeIds.add(choice.nodeId);
+      }
+    }
+  }
   const analyzedVideos = rawTeacherVideos
     .filter(update => typeof update.teacherId === "string"
       && (allowedTeacherIds.has(update.teacherId) || acceptedAlternativeVideoIds.has(String(update.externalId ?? "")))
       && update.sourceType === "youtube"
+      && (update.announcementType === "revision" || /مراجعة|مراجعات|review|revision/i.test(String(update.title ?? "") + " " + String(update.description ?? "")))
       && update.contentAnalysis?.status === "complete"
       && Array.isArray(update.contentAnalysis.topics))
     .sort((left, right) => Date.parse(String(right.publishedAt)) - Date.parse(String(left.publishedAt)));
@@ -1503,6 +1507,7 @@ function applyDailyPlanDepth(
         || (acceptedContext && (match.subjectId !== acceptedContext.subjectId || match.branchId !== acceptedContext.branchId))
         || !teacher?.subjectIds.includes(match.subjectId)
         || !snapshot.eligibleNodeIds.has(match.nodeId)
+        || !reviewEligibleNodeIds.has(match.nodeId)
         || representedNodeIds.has(match.nodeId)) continue;
       const subjectName = getSIESubject(match.subjectId)?.nameAr ?? match.subjectId;
       const topicTitle = String(topic.titleAr || match.title).slice(0, 150);
@@ -1514,10 +1519,10 @@ function applyDailyPlanDepth(
         title: subjectName + " — " + match.branchTitle + " — " + topicTitle,
         detail: [
           String(topic.descriptionAr || "جزء موضوعي من مراجعة المدرس."),
-          "هذا الجزء مستخرج من محتوى مراجعة " + String(video.teacherName || teacher?.nameAr || "المدرس") + " من " + startLabel + " إلى " + endLabel + ".",
-          "ابدأ مشاهدة الجزء من هنا: " + topicUrl,
+          "هذا الجزء مستخرج من تحليل محتوى مراجعة " + String(video.teacherName || teacher?.nameAr || "المدرس") + " من " + startLabel + " إلى " + endLabel + ".",
+          "تمت مطابقته مع درس سبق أن شاهدت شرحه أو سجلت أنه يحتاج مراجعة؛ ابدأ المشاهدة من هذا الموضع: " + topicUrl,
         ].join(" "),
-        minutes: 0,
+        minutes: Math.max(1, Math.min(90, Math.ceil((endSeconds - startSeconds) / 60))),
         category: subjectName + " · " + match.branchTitle,
         curriculumNodeIds: [match.nodeId],
         priority: "high",
@@ -1531,7 +1536,7 @@ function applyDailyPlanDepth(
           title: String(video.title || topicTitle).slice(0, 180) + " — " + topicTitle,
           url: topicUrl,
           teacherName: String(video.teacherName || teacher?.nameAr || "المدرس"),
-          reason: "الموضوع مستخرج من تحليل فيديو المدرس ومطابق لموضع غير مكتمل في المنهج.",
+          reason: "مراجعة فيديو اجتازت تحليل المحتوى وطابقت موضوعًا متراكمًا مسجلًا لدى الطالب.",
         },
       });
       videoTopicSteps.push(step);
@@ -1735,7 +1740,18 @@ function applyDailyPlanDepth(
     orderedSteps.push(...interleavePlannerItemsBySubject(bucket, profile.subjectIds ?? [], subjectForStep));
   }
 
-  return { ...plan, steps: orderedSteps.slice(0, targetCount) };
+  const coveredNodeCount = new Set(orderedSteps.flatMap(step => step.curriculumNodeIds ?? [])).size;
+  const reviewVideoCount = orderedSteps.filter(step =>
+    Boolean(step.resourceRecommendation && /مراجعة/.test(step.resourceRecommendation.reason || ""))
+  ).length;
+  const coverageNote = "تغطية المتراكم: أُدرجت " + coveredNodeCount
+    + " نقطة منهجية مؤهلة في الخطة دون اقتطاع بسبب حدّ عددي. فيديوهات المراجعة المطابقة للمحتوى: "
+    + reviewVideoCount + ".";
+  return {
+    ...plan,
+    summary: (coverageNote + "\n\n" + plan.summary).slice(0, 1_500),
+    steps: orderedSteps,
+  };
 }
 function buildStudentExecutionStrategy(
   plan: GeneratedPlan,
@@ -2250,7 +2266,7 @@ export async function generatePersonalPlan(
   }
 
   // Daily plans are topic-based: pace controls how many distinct learning chunks
-  // fit in a study day. Video duration is never converted into task duration.
+  // fit in a study day. An analyzed revision segment keeps its measured segment length.
   let scheduleDay = 1;
   const totalPlannedMinutes = plan.steps.reduce((sum, step) => sum + step.minutes, 0);
   if (planScope === "daily") {
@@ -2315,7 +2331,8 @@ export async function generatePersonalPlan(
       return {
         ...step,
         day: formatStudyDate(dueDate),
-        minutes: 0,
+        // Keep the model estimate or verified revision-segment duration visible to the student.
+        minutes: step.minutes,
         scheduleState: "scheduled" as const,
         dayIndex: assignedStudyDay,
         dateOffsetDays: calendarOffset,
@@ -2327,7 +2344,9 @@ export async function generatePersonalPlan(
     });
     plan = {
       ...plan,
-      durationLabel: "خطة موزعة على أيام الدراسة",
+      durationLabel: datedSteps.length.toLocaleString("ar-EG") + " خطوة موزعة على "
+        + datedSteps.reduce((max, step) => Math.max(max, step.dayIndex ?? 1), 0).toLocaleString("ar-EG")
+        + " يوم دراسة",
       quality: undefined,
       steps: datedSteps,
     };
