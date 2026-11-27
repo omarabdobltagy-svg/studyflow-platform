@@ -2905,3 +2905,153 @@ body[data-studyflow-sections-open="true"] .sf-hub-root {
   background: linear-gradient(105deg, #152B3D 0%, #193247 58%, #142737 100%) !important;
   border-bottom-color: rgba(155,170,255,.14) !important;
 }
+
+
+/* ChatGPT-style study workspace: calm canvas, readable history, focused composer */
+.sf-assistant-shell {
+  border-color: color-mix(in srgb, var(--primary) 20%, var(--border)) !important;
+  border-radius: 26px !important;
+  background:
+    radial-gradient(ellipse at 92% 0%, color-mix(in srgb, var(--primary) 7%, transparent), transparent 36rem),
+    var(--card) !important;
+  box-shadow: 0 26px 70px -56px rgba(0,0,0,.75), inset 0 1px 0 rgba(255,255,255,.035);
+}
+.sf-assistant-sidebar {
+  border-color: var(--border) !important;
+  background: color-mix(in srgb, var(--background) 88%, var(--card)) !important;
+}
+.sf-assistant-sidebar > button:first-child {
+  min-height: 46px;
+  border-radius: 14px;
+  font-weight: 800;
+  box-shadow: 0 9px 20px -15px var(--primary);
+}
+.sf-assistant-sidebar > div:nth-child(2) { padding-inline: 4px; }
+.sf-assistant-sidebar > div:nth-child(3) button {
+  min-height: 70px;
+  border-color: var(--border);
+  background: var(--card);
+  transition: border-color .16s ease, background .16s ease, transform .16s ease;
+}
+.sf-assistant-sidebar > div:nth-child(3) button:hover { transform: translateY(-1px); }
+.sf-assistant-workspace { min-width: 0; }
+.sf-assistant-chat-panel {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--background);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.025);
+}
+.sf-assistant-attachments-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--card) 84%, var(--background));
+}
+.sf-assistant-attachments-actions { display: flex; align-items: center; gap: 8px; }
+.sf-assistant-attach-button {
+  min-height: 36px !important;
+  border-radius: 11px !important;
+  border-color: color-mix(in srgb, var(--primary) 28%, var(--border)) !important;
+  background: var(--card) !important;
+  color: var(--foreground) !important;
+  font-size: 11px !important;
+  font-weight: 750 !important;
+}
+.sf-assistant-attach-button svg { color: var(--primary); }
+.sf-assistant-attachment-hint { color: var(--muted-foreground); font-size: 9px; line-height: 1.7; }
+.sf-assistant-attachment-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 10px 12px 0;
+  background: var(--background);
+}
+.sf-assistant-attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 6px 8px;
+  border: 1px solid color-mix(in srgb, var(--primary) 27%, var(--border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--primary) 7%, var(--card));
+  color: var(--foreground);
+  font-size: 10px;
+  font-weight: 700;
+}
+.sf-assistant-attachment-chip > svg { flex: 0 0 auto; color: var(--primary); }
+.sf-assistant-attachment-chip > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sf-assistant-attachment-chip button {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 7px;
+  color: var(--muted-foreground);
+}
+.sf-assistant-attachment-chip button:hover { background: var(--muted); color: var(--destructive); }
+.sf-assistant-disclosure { max-width: 100ch; color: var(--muted-foreground); }
+@media (max-width: 640px) {
+  .sf-assistant-shell { border-radius: 18px !important; }
+  .sf-assistant-chat-panel { border-radius: 15px; }
+  .sf-assistant-attachments-bar { align-items: flex-start; flex-direction: column; }
+  .sf-assistant-attachment-hint { padding-inline: 3px; }
+}
+
+/* Teacher schedule cards sit alongside the AI-generated plan, not in the task list. */
+.sf-sp-teacher-schedule {
+  display: grid;
+  gap: 13px;
+  padding: 17px;
+  border: 1px solid color-mix(in srgb, var(--primary) 25%, var(--border));
+  border-radius: 19px;
+  background:
+    radial-gradient(ellipse at 100% 0%, color-mix(in srgb, var(--primary) 8%, transparent), transparent 55%),
+    var(--card);
+}
+.sf-sp-teacher-schedule > header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 9px;
+}
+.sf-sp-teacher-schedule > header > div { display: grid; gap: 3px; }
+.sf-sp-teacher-schedule > header span { color: var(--primary); font-size: 9px; font-weight: 850; }
+.sf-sp-teacher-schedule > header h3 { margin: 0; color: var(--foreground); font-size: 15px; font-weight: 900; }
+.sf-sp-teacher-schedule > header small { color: var(--muted-foreground); font-size: 9px; }
+.sf-sp-teacher-session-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+  gap: 9px;
+}
+.sf-sp-teacher-session-list article {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--background) 58%, var(--card));
+}
+.sf-sp-teacher-session-time {
+  display: grid;
+  min-width: 100px;
+  gap: 3px;
+  padding-inline-end: 11px;
+  border-inline-end: 1px solid var(--border);
+}
+.sf-sp-teacher-session-time strong { color: var(--primary); font-size: 17px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.sf-sp-teacher-session-time span { color: var(--muted-foreground); font-size: 9px; line-height: 1.6; }
+.sf-sp-teacher-session-copy { display: grid; gap: 4px; min-width: 0; }
+.sf-sp-teacher-session-copy strong { overflow-wrap: anywhere; color: var(--foreground); font-size: 11px; font-weight: 850; }
+.sf-sp-teacher-session-copy span { color: var(--muted-foreground); font-size: 10px; }
+.sf-sp-teacher-schedule > p { margin: 0; color: var(--muted-foreground); font-size: 10px; line-height: 1.9; }
