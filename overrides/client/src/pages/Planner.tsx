@@ -1224,9 +1224,11 @@ function PlanAssistantChat({ plan, subjectIds, editable, onChange, onApprove, ap
   const chat = trpc.ai.chat.useMutation({
     onSuccess: result => {
       setMessages(current => [...current, { role: "assistant" as const, content: result.content }].slice(-20));
-      setWebSearchAvailable(result.webSearchAvailable ?? false);
-      if (result.planPatch && editable) {
-        const updatedPlan = applyPlannerAssistantPatch(plan, result.planPatch);
+      const webSearchAvailable = "webSearchAvailable" in result ? result.webSearchAvailable : false;
+      setWebSearchAvailable(webSearchAvailable);
+      const planPatch = "planPatch" in result ? result.planPatch : undefined;
+      if (planPatch && editable) {
+        const updatedPlan = applyPlannerAssistantPatch(plan, planPatch);
         onChange(updatedPlan);
         onApprove(updatedPlan);
         toast("المساعد طبّق التغيير على الخطة ويزامن المهام الآن.");
