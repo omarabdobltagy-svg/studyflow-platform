@@ -422,6 +422,22 @@ function buildPlannerProgressSnapshot(
       const branchCompleted: PlannerCurriculumChoice[] = [];
       const branchEligible: PlannerCurriculumChoice[] = [];
 
+      // An unknown frontier is not proof that the branch is complete. Offer one
+      // clearly-labelled checkpoint so the student can confirm their starting
+      // position; do not silently treat every unrecorded lesson as watched.
+      const studentFrontierConfirmed = Boolean(
+        saved.studentFrontierConfirmedAt ?? reported.studentFrontierConfirmedAt,
+      );
+      const unknownFrontierFallbackNodeId = studentFrontier === "__UNKNOWN__" && !studentFrontierConfirmed
+        ? branch.choices.find(choice => {
+            const record = subjectLessonRecords[choice.nodeId];
+            const completedBySq3r = Array.isArray(record?.completedSteps)
+              && new Set(record.completedSteps).size === 5;
+            const savedState = lessonStates[choice.nodeId]?.state;
+            return !completedBySq3r && savedState !== "studied";
+          })?.nodeId ?? null
+        : null;
+
       for (const choice of branch.choices) {
         const record = subjectLessonRecords[choice.nodeId];
         const completedBySq3r = Array.isArray(record?.completedSteps)
@@ -449,7 +465,7 @@ function buildPlannerProgressSnapshot(
           branchCompleted.push(item);
           completedChoices.push(item);
           completedNodeIds.add(choice.nodeId);
-        } else if (learningState !== "not_recorded") {
+        } else if (learningState !== "not_recorded" || choice.nodeId === unknownFrontierFallbackNodeId) {
           branchEligible.push(item);
           eligibleNodeIds.add(choice.nodeId);
         }
@@ -1560,15 +1576,17 @@ function applyDailyPlanDepth(
     return planSchema.shape.steps.element.parse({
       day: "",
       title: subjectName + " — " + item.branchTitle + " — " + item.title,
-      detail: item.learningState === "watched_only"
-        ? "أنت شاهدت شرح هذا الدرس بالفعل، لكن لم تسجّل أنك ذاكرته. ابدأ الآن بمراجعته من المصدر، ثم اربط التفاصيل بشرح المدرس واشرح الفكرة لنفسك. لن نطلب منك مشاهدة المحاضرة مرة ثانية أو حل واجب غير مسجل."
-        : item.learningState === "needs_review"
-          ? "سبق أن ذاكرت هذا الدرس لكنك تحتاج إلى مراجعته. ارجع للمصدر وحدد الجزء الذي نسيته، ثم حدّث الحالة بعد المراجعة."
-          : item.learningState === "not_watched"
-            ? "هذا الدرس لم تسجل أنك شاهدت شرحه بعد. تابع شرح المدرس أولًا، ثم ارجع للمصدر وسجّل حالة مذاكرتك بشكل منفصل."
-            : item.teacherSelected && hasTeacherSchedule
-              ? "تابع شرح المدرس للموضوع التالي في هذا الفرع. قبل الحصة راجع عنوان الدرس ونقاطه الرئيسية، وبعد الشرح ارجع للمصدر وسجّل تقدمك. لا يوجد واجب مضاف هنا ما لم يكن مسجلًا من المدرس."
-              : "الموضوع التالي غير المكتمل في هذا الفرع. ابدأ بتمهيد سريع، ثم تابع شرح المدرس عند توفره، وسجّل تقدمك بعد الانتهاء. لا توجد أسئلة أو واجبات مولّدة من النظام.",
+      detail: item.learningState === "not_recorded"
+        ? "موضع البداية في هذا الفرع غير مسجل بعد. راجع آخر درس وصلت إليه مع المدرس أو على منصته، ثم حدّد حالة هذا الدرس قبل اعتباره جديدًا. StudyFlow لا يفترض أنك شاهدته أو ذاكرته، ولا يغيّر تقدمك من تلقاء نفسه."
+        : item.learningState === "watched_only"
+          ? "أنت شاهدت شرح هذا الدرس بالفعل، لكن لم تسجّل أنك ذاكرته. ابدأ الآن بمراجعته من المصدر، ثم اربط التفاصيل بشرح المدرس واشرح الفكرة لنفسك. لن نطلب منك مشاهدة المحاضرة مرة ثانية أو حل واجب غير مسجل."
+          : item.learningState === "needs_review"
+            ? "سبق أن ذاكرت هذا الدرس لكنك تحتاج إلى مراجعته. ارجع للمصدر وحدد الجزء الذي نسيته، ثم حدّث الحالة بعد المراجعة."
+            : item.learningState === "not_watched"
+              ? "هذا الدرس لم تسجل أنك شاهدت شرحه بعد. تابع شرح المدرس أولًا، ثم ارجع للمصدر وسجّل حالة مذاكرتك بشكل منفصل."
+              : item.teacherSelected && hasTeacherSchedule
+                ? "تابع شرح المدرس للموضوع التالي في هذا الفرع. قبل الحصة راجع عنوان الدرس ونقاطه الرئيسية، وبعد الشرح ارجع للمصدر وسجّل تقدمك. لا يوجد واجب مضاف هنا ما لم يكن مسجلًا من المدرس."
+                : "الموضوع التالي غير المكتمل في هذا الفرع. ابدأ بتمهيد سريع، ثم تابع شرح المدرس عند توفره، وسجّل تقدمك بعد الانتهاء. لا توجد أسئلة أو واجبات مولّدة من النظام.",
       minutes: 0,
       category: subjectName + " · " + item.branchTitle,
       curriculumNodeIds: [item.nodeId],
