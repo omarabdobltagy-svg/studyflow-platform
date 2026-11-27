@@ -31,25 +31,101 @@ function dateInputValue(date: Date | null) {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
 }
 
+const COMPOSITE_TASK_MARKER = "\\n\\n<!-- STUDYFLOW_COMPOSITE_TASK_V1 -->\\n";
+type CompositeReviewSubtask = {
+  id: string;
+  title: string;
+  detail: string;
+  completed: boolean;
+  startSeconds: number;
+  curriculumNodeIds?: string[];
+};
+type CompositeReviewTask = {
+  version: 1;
+  kind: "youtube_review";
+  videoTitle: string;
+  videoUrl: string;
+  teacherName: string;
+  subtasks: CompositeReviewSubtask[];
+};
+
+function parseCompositeTaskNotes(notes: string | null | undefined): { description: string; metadata: CompositeReviewTask | null } {
+  const value = String(notes ?? "");
+  const markerIndex = value.lastIndexOf(COMPOSITE_TASK_MARKER);
+  if (markerIndex < 0) return { description: value, metadata: null };
+  const description = value.slice(0, markerIndex).trim();
+  try {
+    const parsed = JSON.parse(value.slice(markerIndex + COMPOSITE_TASK_MARKER.length));
+    if (parsed?.version !== 1 || parsed?.kind !== "youtube_review" || !Array.isArray(parsed.subtasks)) {
+      return { description, metadata: null };
+    }
+    const subtasks = parsed.subtasks.filter((item: any) =>
+      item && typeof item.id === "string" && typeof item.title === "string"
+      && typeof item.detail === "string" && Number.isInteger(item.startSeconds) && item.startSeconds >= 0
+    ).map((item: any) => ({
+      id: item.id,
+      title: item.title,
+      detail: item.detail,
+      completed: item.completed === true,
+      startSeconds: item.startSeconds,
+      curriculumNodeIds: Array.isArray(item.curriculumNodeIds)
+        ? item.curriculumNodeIds.filter((id: unknown) => typeof id === "string")
+        : [],
+    }));
+    if (!subtasks.length || typeof parsed.videoUrl !== "string" || !parsed.videoUrl.startsWith("https://")) {
+      return { description, metadata: null };
+    }
+    return {
+      description,
+      metadata: {
+        version: 1,
+        kind: "youtube_review",
+        videoTitle: String(parsed.videoTitle || "مراجعة المدرس"),
+        videoUrl: parsed.videoUrl,
+        teacherName: String(parsed.teacherName || ""),
+        subtasks,
+      },
+    };
+  } catch {
+    return { description, metadata: null };
+  }
+}
+
+function formatCompositeTaskNotes(description: string | null, metadata: CompositeReviewTask | null): string | null {
+  if (!metadata) return description;
+  return String(description ?? "").trim() + COMPOSITE_TASK_MARKER + JSON.stringify(metadata);
+}
 
 function hasEnglishWords(value: string | null | undefined) {
   return /[A-Za-z]{3,}/.test(String(value ?? ""));
 }
 
 function taskArabicPresentation(task: { title: string; category: string; notes: string | null }, subjectIds: string[]) {
-  const match = matchSIECheckpointTask(subjectIds, [task.title, task.notes ?? ""].join(" "));
+  const parsedNotes = parseCompositeTaskNotes(task.notes);
+  if (parsedNotes.metadata) {
+    const videoTitle = hasEnglishWords(parsedNotes.metadata.videoTitle) ? "مراجعة المدرس" : parsedNotes.metadata.videoTitle;
+    return {
+      title: "مراجعة فيديو: " + videoTitle,
+      category: "مراجعة فيديو" + (parsedNotes.metadata.teacherName ? " · " + parsedNotes.metadata.teacherName : ""),
+      notes: hasEnglishWords(parsedNotes.description) ? "التفاصيل محفوظة في مراجعة الفيديو المرتبطة." : parsedNotes.description,
+      compositeTask: parsedNotes.metadata,
+    };
+  }
+  const match = matchSIECheckpointTask(subjectIds, [task.title, parsedNotes.description].join(" "));
   if (match) {
     const subject = getSIESubject(match.subjectId)?.nameAr ?? "مادة دراسية";
     return {
       title: subject + " · " + displayBranchTitle(match.branchTitle) + " · " + displayCurriculumTitle(match.title),
       category: subject + " · " + displayBranchTitle(match.branchTitle),
-      notes: hasEnglishWords(task.notes) ? "التفاصيل محفوظة في التكليف الأصلي. راجع المصدر المرتبط قبل التنفيذ." : task.notes,
+      notes: hasEnglishWords(parsedNotes.description) ? "التفاصيل محفوظة في التكليف الأصلي. راجع المصدر المرتبط قبل التنفيذ." : parsedNotes.description,
+      compositeTask: null,
     };
   }
   return {
     title: hasEnglishWords(task.title) ? "مهمة دراسية مسجلة" : task.title,
     category: hasEnglishWords(task.category) ? "مهمة عامة" : task.category,
-    notes: hasEnglishWords(task.notes) ? "التفاصيل محفوظة في السجل الأصلي. راجع المصدر قبل التنفيذ." : task.notes,
+    notes: hasEnglishWords(parsedNotes.description) ? "التفاصيل محفوظة في السجل الأصلي. راجع المصدر قبل التنفيذ." : parsedNotes.description,
+    compositeTask: null,
   };
 }
 
@@ -63,6 +139,7 @@ export default function Tasks() {
   const [reportingTaskId, setReportingTaskId] = useState<number | null>(null);
   const [blockerReason, setBlockerReason] = useState<"low_time" | "not_understood" | "too_much" | "other_commitment" | "forgot" | "other">("low_time");
   const [blockerNote, setBlockerNote] = useState("");
+  const [compositeTaskBusy, setCompositeTaskBusy] = useState(false);
   const tasksQuery = trpc.tasks.list.useQuery();
   const profileQuery = trpc.studentProfile.get.useQuery();
   const subjectIds = profileQuery.data?.subjectIds ?? [];
@@ -81,6 +158,10 @@ export default function Tasks() {
   });
   const undoTask = trpc.tasks.undo.useMutation({ onSuccess: () => { void utils.tasks.list.invalidate(); void utils.calendar.list.invalidate(); void utils.dashboard.summary.invalidate(); void utils.goals.list.invalidate(); toast.success("تم التراجع عن التغيير."); }, onError: error => toast.error(error.message) });
   const updateTask = trpc.tasks.update.useMutation({ onSuccess: () => { void utils.tasks.list.invalidate(); void utils.calendar.list.invalidate(); void utils.dashboard.summary.invalidate(); void utils.goals.list.invalidate(); setEditingTaskId(null); toast.success("تم حفظ تعديلات المهمة."); }, onError: error => toast.error(error.message) });
+  const persistCompositeTask = trpc.tasks.update.useMutation({
+    onSuccess: () => { void utils.tasks.list.invalidate(); void utils.calendar.list.invalidate(); void utils.dashboard.summary.invalidate(); void utils.goals.list.invalidate(); },
+    onError: error => toast.error(error.message),
+  });
   const deleteTask = trpc.tasks.delete.useMutation({ onSuccess: () => { void utils.tasks.list.invalidate(); void utils.calendar.list.invalidate(); void utils.dashboard.summary.invalidate(); void utils.goals.list.invalidate(); setEditingTaskId(null); toast.success("حُذفت المهمة."); }, onError: error => toast.error(error.message) });
   const shownTasks = useMemo(() => {
     const query = searchQuery.trim().toLocaleLowerCase("ar");
@@ -105,6 +186,60 @@ export default function Tasks() {
   const selectedTaskPresentation = selectedTask
     ? taskArabicPresentation(selectedTask, subjectIds)
     : null;
+
+  const saveCompositeSubtasks = async (task: NonNullable<typeof selectedTask>, metadata: CompositeReviewTask) => {
+    await persistCompositeTask.mutateAsync({
+      id: task.id,
+      title: task.title,
+      notes: formatCompositeTaskNotes(parseCompositeTaskNotes(task.notes).description, metadata),
+      category: task.category,
+      priority: task.priority,
+      dueAt: task.dueAt,
+      goalId: task.goalId,
+      bookId: task.bookId,
+    });
+  };
+
+  const setTaskDone = async (task: NonNullable<typeof selectedTask>, done: boolean) => {
+    try {
+      const parsed = parseCompositeTaskNotes(task.notes);
+      if (parsed.metadata) {
+        const metadata = {
+          ...parsed.metadata,
+          subtasks: parsed.metadata.subtasks.map(item => ({ ...item, completed: done })),
+        };
+        await saveCompositeSubtasks(task, metadata);
+      }
+      await toggleTask.mutateAsync({ id: task.id, done });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "تعذّر تحديث المهمة.");
+    }
+  };
+
+  const toggleCompositeSubtask = async (task: NonNullable<typeof selectedTask>, subtaskId: string) => {
+    if (compositeTaskBusy) return;
+    const parsed = parseCompositeTaskNotes(task.notes);
+    if (!parsed.metadata) return;
+    setCompositeTaskBusy(true);
+    try {
+      const selected = parsed.metadata.subtasks.find(item => item.id === subtaskId);
+      if (!selected) return;
+      const isCurrentlyDone = task.status === "done" || selected.completed;
+      const subtasks = parsed.metadata.subtasks.map(item => item.id === subtaskId
+        ? { ...item, completed: !isCurrentlyDone }
+        : item);
+      const metadata = { ...parsed.metadata, subtasks };
+      await saveCompositeSubtasks(task, metadata);
+      const allDone = subtasks.every(item => item.completed);
+      if ((task.status === "done") !== allDone) {
+        await toggleTask.mutateAsync({ id: task.id, done: allDone });
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "تعذّر تحديث خطوة المراجعة.");
+    } finally {
+      setCompositeTaskBusy(false);
+    }
+  };
   const todoCount = allTasks.filter(task => task.status === "todo").length;
   const doneCount = allTasks.filter(task => task.status === "done").length;
   const todayKey = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
@@ -166,9 +301,53 @@ export default function Tasks() {
                 <h3 className="text-sm font-bold">تفاصيل التنفيذ</h3>
                 <p className="mt-2 whitespace-pre-line text-sm leading-7 text-muted-foreground">{selectedTaskPresentation.notes || "لا توجد تفاصيل إضافية مسجلة لهذه المهمة."}</p>
               </section>
+              {selectedTaskPresentation.compositeTask && (
+                <section className="sf-task-composite-review">
+                  <header>
+                    <div>
+                      <span>مهمة مراجعة مركبة</span>
+                      <strong>{selectedTaskPresentation.compositeTask.videoTitle}</strong>
+                      {selectedTaskPresentation.compositeTask.teacherName && <small>{selectedTaskPresentation.compositeTask.teacherName}</small>}
+                    </div>
+                    <a href={selectedTaskPresentation.compositeTask.videoUrl} target="_blank" rel="noreferrer">فتح الفيديو <ArrowUpRight className="size-3.5" /></a>
+                  </header>
+                  <div className="sf-task-composite-progress">
+                    <strong>{selectedTaskPresentation.compositeTask.subtasks.filter(item => selectedTask.status === "done" || item.completed).length.toLocaleString("ar-EG")} / {selectedTaskPresentation.compositeTask.subtasks.length.toLocaleString("ar-EG")}</strong>
+                    <span>خطوات مكتملة</span>
+                  </div>
+                  <ol>
+                    {selectedTaskPresentation.compositeTask.subtasks.map((subtask, index) => {
+                      const checked = selectedTask.status === "done" || subtask.completed;
+                      const timestampUrl = selectedTaskPresentation.compositeTask!.videoUrl + "#t=" + subtask.startSeconds;
+                      const minutes = Math.floor(subtask.startSeconds / 60);
+                      const seconds = subtask.startSeconds % 60;
+                      return (
+                        <li key={subtask.id} className={checked ? "is-done" : ""}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={compositeTaskBusy || persistCompositeTask.isPending}
+                            onChange={() => void toggleCompositeSubtask(selectedTask, subtask.id)}
+                            aria-label={"إكمال خطوة " + subtask.title}
+                          />
+                          <div>
+                            <strong>{(index + 1).toLocaleString("ar-EG")}. {subtask.title}</strong>
+                            <p>{subtask.detail}</p>
+                            <a href={timestampUrl} target="_blank" rel="noreferrer">
+                              ابدأ من {minutes.toLocaleString("ar-EG")}:{seconds.toLocaleString("ar-EG",{minimumIntegerDigits:2,useGrouping:false})}
+                              <ArrowUpRight className="size-3.5" />
+                            </a>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                  <small className="sf-task-composite-hint">عند إكمال كل الخطوات، تُعلَّم المهمة الرئيسية كمكتملة تلقائيًا.</small>
+                </section>
+              )}
               <div className="flex flex-wrap justify-end gap-2">
                 <Button type="button" variant="outline" onClick={() => { setEditingTaskId(selectedTask.id); setSelectedTaskId(null); }}><Pencil className="size-4" />تعديل</Button>
-                <Button type="button" onClick={() => { const done = selectedTask.status !== "done"; if (done && selectedTask.notes?.includes("طريقة المذاكرة:") && !window.confirm("هل أنهيت طريقة المذاكرة المطلوبة، وخلصت واجب أو امتحان المدرس لو كان مطلوبًا؟")) return; toggleTask.mutate({ id: selectedTask.id, done }); setSelectedTaskId(null); }}>
+                <Button type="button" onClick={() => { const done = selectedTask.status !== "done"; if (done && selectedTask.notes?.includes("طريقة المذاكرة:") && !window.confirm("هل أنهيت طريقة المذاكرة المطلوبة، وخلصت واجب أو امتحان المدرس لو كان مطلوبًا؟")) return; void setTaskDone(selectedTask, done); setSelectedTaskId(null); }}>
                   <Check className="size-4" />{selectedTask.status === "done" ? "إعادة فتح المهمة" : "إنهاء المهمة"}
                 </Button>
               </div>
@@ -209,12 +388,13 @@ export default function Tasks() {
             const meta = priorityMeta[task.priority];
             const presentation = taskArabicPresentation(task, subjectIds);
             return <article key={task.id} className="group flex items-center gap-3 border-b border-border/60 px-4 py-4 transition-colors hover:bg-muted/35 sm:px-5">
-              <button type="button" onClick={() => { const done = task.status !== "done"; if (done && task.notes?.includes("طريقة المذاكرة:") && !window.confirm("هل أنهيت طريقة المذاكرة المطلوبة، وخلصت واجب أو امتحان المدرس لو كان مطلوبًا؟")) return; toggleTask.mutate({ id: task.id, done }); }} disabled={toggleTask.isPending} className={cn("pressable flex size-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors", task.status === "done" ? "border-emerald-500 bg-emerald-500 text-white" : "border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground")} aria-label={task.status === "done" ? `إعادة فتح ${presentation.title}` : `إكمال ${presentation.title}`}>{task.status === "done" && <Check className="size-3.5" />}</button>
+              <button type="button" onClick={() => { const done = task.status !== "done"; if (done && task.notes?.includes("طريقة المذاكرة:") && !window.confirm("هل أنهيت طريقة المذاكرة المطلوبة، وخلصت واجب أو امتحان المدرس لو كان مطلوبًا؟")) return; void setTaskDone(task, done); }} disabled={toggleTask.isPending} className={cn("pressable flex size-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors", task.status === "done" ? "border-emerald-500 bg-emerald-500 text-white" : "border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground")} aria-label={task.status === "done" ? `إعادة فتح ${presentation.title}` : `إكمال ${presentation.title}`}>{task.status === "done" && <Check className="size-3.5" />}</button>
               <button type="button" onClick={() => setSelectedTaskId(task.id)} className="min-w-0 flex-1 rounded-xl text-right outline-none focus-visible:ring-2 focus-visible:ring-primary/60">
                 <span className={cn("block truncate text-sm font-semibold", task.status === "done" && "text-muted-foreground line-through")}>{presentation.title}</span>
                 <span className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                   <span className="inline-flex items-center gap-1"><Tag className="size-3" />{presentation.category}</span>
                   {task.dueAt && <span className="inline-flex items-center gap-1"><CalendarDays className="size-3" />{displayDate(task.dueAt)}</span>}
+                  {presentation.compositeTask && <span>{presentation.compositeTask.subtasks.filter(item => task.status === "done" || item.completed).length.toLocaleString("ar-EG")} / {presentation.compositeTask.subtasks.length.toLocaleString("ar-EG")} خطوات</span>}
                   {task.status === "todo" && <span>اضغط لفتح التفاصيل</span>}
                 </span>
               </button>
@@ -235,8 +415,9 @@ export default function Tasks() {
 type EditableTask = { title: string; notes: string | null; category: string; priority: "low" | "medium" | "high"; dueAt: Date | null; goalId: number | null; bookId: number | null };
 
 function TaskEditForm({ task, goals, onClose, onSubmit, onDelete, loading }: { task: EditableTask; goals: { id: number; title: string }[]; onClose: () => void; onSubmit: (data: { title: string; notes: string | null; category: string; priority: "low" | "medium" | "high"; dueAt: Date | null; goalId: number | null; bookId: number | null }) => void; onDelete: () => void; loading: boolean }) {
-  const [title, setTitle] = useState(task.title); const [notes, setNotes] = useState(task.notes || ""); const [category, setCategory] = useState(task.category); const [priority, setPriority] = useState<"low" | "medium" | "high">(task.priority); const [date, setDate] = useState(dateInputValue(task.dueAt)); const [goalId, setGoalId] = useState(task.goalId ? String(task.goalId) : "none");
-  const submit = (event: FormEvent) => { event.preventDefault(); if (!title.trim()) return toast.error("اكتب عنوان المهمة أولًا."); onSubmit({ title: title.trim(), notes: notes.trim() || null, category: category.trim() || "عام", priority, dueAt: date ? new Date(`${date}T12:00:00`) : null, goalId: goalId === "none" ? null : Number(goalId), bookId: task.bookId }); };
+  const [title, setTitle] = useState(task.title); const [notes, setNotes] = useState(parseCompositeTaskNotes(task.notes).description); const [category, setCategory] = useState(task.category);
+  const compositeMetadata = parseCompositeTaskNotes(task.notes).metadata; const [priority, setPriority] = useState<"low" | "medium" | "high">(task.priority); const [date, setDate] = useState(dateInputValue(task.dueAt)); const [goalId, setGoalId] = useState(task.goalId ? String(task.goalId) : "none");
+  const submit = (event: FormEvent) => { event.preventDefault(); if (!title.trim()) return toast.error("اكتب عنوان المهمة أولًا."); onSubmit({ title: title.trim(), notes: formatCompositeTaskNotes(notes.trim() || null, compositeMetadata), category: category.trim() || "عام", priority, dueAt: date ? new Date(`${date}T12:00:00`) : null, goalId: goalId === "none" ? null : Number(goalId), bookId: task.bookId }); };
   return <section className="enter app-card mb-6 overflow-hidden border-primary/20"><div className="flex items-center justify-between border-b border-border/65 px-5 py-4"><div><p className="eyebrow">تعديل سريع</p><h2 className="mt-1 font-bold">تفاصيل المهمة</h2></div><Button variant="ghost" size="icon" onClick={onClose} className="rounded-xl"><X className="size-4" /></Button></div><form onSubmit={submit} className="grid gap-4 p-5 sm:grid-cols-2"><div className="sm:col-span-2"><label className="mb-2 block text-sm font-semibold">المهمة</label><Input autoFocus value={title} onChange={event => setTitle(event.target.value)} className="h-11 rounded-xl bg-background" /></div><div className="sm:col-span-2"><label className="mb-2 block text-sm font-semibold">ملاحظات</label><Textarea value={notes} onChange={event => setNotes(event.target.value)} className="min-h-20 rounded-xl bg-background" /></div><div><label className="mb-2 block text-sm font-semibold">التصنيف</label><Input value={category} onChange={event => setCategory(event.target.value)} className="h-11 rounded-xl bg-background" /></div><div><label className="mb-2 block text-sm font-semibold">موعد استحقاق <span className="font-normal text-muted-foreground">(اختياري)</span></label><Input type="date" value={date} onChange={event => setDate(event.target.value)} className="h-11 rounded-xl bg-background" /></div><div><label className="mb-2 block text-sm font-semibold">الأولوية</label><Select value={priority} onValueChange={(value: "low" | "medium" | "high") => setPriority(value)}><SelectTrigger className="h-11 rounded-xl bg-background"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="high">عالية</SelectItem><SelectItem value="medium">متوسطة</SelectItem><SelectItem value="low">مرنة</SelectItem></SelectContent></Select></div><div><label className="mb-2 block text-sm font-semibold">ربط بهدف</label><Select value={goalId} onValueChange={setGoalId}><SelectTrigger className="h-11 rounded-xl bg-background"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">من دون هدف</SelectItem>{goals.map(goal => <SelectItem key={goal.id} value={String(goal.id)}>{goal.title}</SelectItem>)}</SelectContent></Select></div><div className="flex flex-wrap items-center justify-between gap-2 sm:col-span-2"><Button type="button" variant="ghost" onClick={onDelete} className="rounded-xl text-destructive hover:text-destructive"><Trash2 className="size-4" />حذف المهمة</Button><div className="flex gap-2"><Button type="button" variant="outline" onClick={onClose} className="rounded-xl">إلغاء</Button><Button disabled={loading} className="pressable rounded-xl bg-primary">حفظ التعديلات</Button></div></div></form></section>;
 }
 
