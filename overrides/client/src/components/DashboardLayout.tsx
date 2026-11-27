@@ -119,6 +119,13 @@ export default function DashboardLayout({ title, description, children, action }
   });
   const aiInboxUtils = trpc.useUtils();
   const [aiInboxOpen, setAIInboxOpen] = useState(false);
+  const [aiInboxFilter, setAIInboxFilter] = useState<"all" | "unread">("all");
+  const inboxItems = aiInbox.data?.items ?? [];
+  const unreadAIInboxCount = aiInbox.data?.unreadCount ?? 0;
+  const filteredAIInboxItems = useMemo(
+    () => aiInboxFilter === "unread" ? inboxItems.filter(message => !message.read) : inboxItems,
+    [inboxItems, aiInboxFilter],
+  );
   const notifiedAIMessageIds = useRef(new Set<number>());
   const reconcileCurriculumTasks = trpc.ai.reconcileCurriculumTasks.useMutation({
     onSuccess: async result => {
@@ -509,14 +516,27 @@ export default function DashboardLayout({ title, description, children, action }
               <Button
                 type="button"
                 variant="outline"
-                size="icon"
-                className="sf-ai-inbox-trigger relative"
-                aria-label={"رسائل المساعد" + (aiInbox.data?.unreadCount ? "، " + aiInbox.data.unreadCount + " غير مقروءة" : "")}
-                title="رسائل المساعد"
-                onClick={() => setAIInboxOpen(true)}
+                className="sf-ai-inbox-trigger"
+                aria-label={"رسائل المساعد" + (unreadAIInboxCount ? "، " + unreadAIInboxCount + " غير مقروءة" : "")}
+                aria-haspopup="dialog"
+                aria-expanded={aiInboxOpen}
+                aria-controls="sf-ai-inbox-sheet"
+                title="افتح رسائل المساعد الدراسي"
+                onClick={() => {
+                  setAIInboxFilter("all");
+                  setAIInboxOpen(true);
+                  void aiInbox.refetch();
+                }}
               >
-                {aiInbox.data?.unreadCount ? <BellRing className="size-4" /> : <Bell className="size-4" />}
-                {Boolean(aiInbox.data?.unreadCount) && <span className="sf-ai-inbox-count">{aiInbox.data?.unreadCount}</span>}
+                <span className="sf-ai-inbox-trigger-icon" aria-hidden="true">
+                  {unreadAIInboxCount ? <BellRing className="size-[18px]" /> : <Bell className="size-[18px]" />}
+                </span>
+                <span className="sf-ai-inbox-trigger-label">رسائل المساعد</span>
+                {unreadAIInboxCount > 0 && (
+                  <span className="sf-ai-inbox-count" aria-label={unreadAIInboxCount + " رسالة غير مقروءة"}>
+                    {unreadAIInboxCount > 99 ? "99+" : unreadAIInboxCount}
+                  </span>
+                )}
               </Button>
               <Button
                 type="button"
@@ -589,61 +609,138 @@ export default function DashboardLayout({ title, description, children, action }
       </nav>
 
       <Sheet open={aiInboxOpen} onOpenChange={setAIInboxOpen}>
-        <SheetContent side="right" className="sf-ai-inbox-sheet w-full sm:max-w-[460px]">
-          <SheetHeader className="text-right">
+        <SheetContent
+          id="sf-ai-inbox-sheet"
+          side="right"
+          className="sf-ai-inbox-sheet"
+          aria-describedby="sf-ai-inbox-description"
+        >
+          <SheetHeader className="sf-ai-inbox-header">
             <div className="sf-ai-inbox-heading">
               <span className="sf-ai-inbox-mark"><BrainCircuit className="size-5" /></span>
-              <div>
+              <div className="sf-ai-inbox-heading-copy">
+                <span className="sf-ai-inbox-kicker">مركز الرسائل</span>
                 <SheetTitle>رسائل مساعدك الدراسي</SheetTitle>
-                <SheetDescription>هنا هتلاقي أسئلة ومتابعات مرتبطة بتقدمك ومهامك.</SheetDescription>
+                <SheetDescription id="sf-ai-inbox-description">متابعات وأسئلة تحتاج إلى مراجعتك أو ردك.</SheetDescription>
               </div>
             </div>
           </SheetHeader>
-          <div className="sf-ai-inbox-tools">
-            <span>{aiInbox.data?.unreadCount ? aiInbox.data.unreadCount + " رسالة تحتاج ردك" : "لا توجد رسائل جديدة"}</span>
-            <Button type="button" variant="outline" size="sm" onClick={() => void enableBrowserAINotifications()}>
-              <Bell className="size-3.5" /> تفعيل إشعارات المتصفح
+
+          <section className="sf-ai-inbox-summary" aria-label="ملخص صندوق الرسائل">
+            <div className="sf-ai-inbox-summary-copy">
+              <span>حالة الصندوق</span>
+              <strong>{unreadAIInboxCount > 0 ? "لديك رسائل تحتاج إلى مراجعتك" : "أنت على اطلاع"}</strong>
+              <small>{inboxItems.length.toLocaleString("ar-EG")} رسالة محفوظة في حسابك</small>
+            </div>
+            <span className="sf-ai-inbox-summary-count" aria-label={unreadAIInboxCount + " غير مقروءة"}>
+              {unreadAIInboxCount.toLocaleString("ar-EG")}
+              <small>غير مقروءة</small>
+            </span>
+          </section>
+
+          <div className="sf-ai-inbox-toolbar">
+            <div className="sf-ai-inbox-filters" role="tablist" aria-label="تصفية الرسائل">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={aiInboxFilter === "all"}
+                className={aiInboxFilter === "all" ? "is-active" : ""}
+                onClick={() => setAIInboxFilter("all")}
+              >
+                الكل <span>{inboxItems.length.toLocaleString("ar-EG")}</span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={aiInboxFilter === "unread"}
+                className={aiInboxFilter === "unread" ? "is-active" : ""}
+                onClick={() => setAIInboxFilter("unread")}
+              >
+                غير مقروءة <span>{unreadAIInboxCount.toLocaleString("ar-EG")}</span>
+              </button>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="sf-ai-inbox-refresh"
+              disabled={aiInbox.isFetching}
+              onClick={() => void aiInbox.refetch()}
+            >
+              {aiInbox.isFetching ? "جارٍ التحديث" : "تحديث"}
             </Button>
           </div>
-          <div className="sf-ai-inbox-list">
+
+          <div className="sf-ai-inbox-list" aria-live="polite">
             {aiInbox.isLoading ? (
-              <div className="sf-ai-inbox-empty">بنحمّل رسائلك...</div>
-            ) : aiInbox.isError ? (
-              <div className="sf-ai-inbox-empty">
-                تعذّر تحميل الرسائل.
-                <Button type="button" variant="link" onClick={() => void aiInbox.refetch()}>إعادة المحاولة</Button>
+              <div className="sf-ai-inbox-loading" role="status" aria-label="جارٍ تحميل الرسائل">
+                <span /><span /><span />
               </div>
-            ) : (aiInbox.data?.items.length ?? 0) === 0 ? (
+            ) : aiInbox.isError ? (
+              <div className="sf-ai-inbox-empty is-error" role="alert">
+                <span className="sf-ai-inbox-empty-mark"><Bell className="size-5" /></span>
+                <strong>تعذّر تحميل الرسائل</strong>
+                <p>تحقق من اتصالك ثم حاول تحديث الصندوق.</p>
+                <Button type="button" variant="outline" onClick={() => void aiInbox.refetch()}>إعادة المحاولة</Button>
+              </div>
+            ) : filteredAIInboxItems.length === 0 ? (
               <div className="sf-ai-inbox-empty">
-                <BrainCircuit className="size-8" />
-                <strong>المساعد متابع معاك</strong>
-                <p>لما يظهر تعارض يحتاج قرارك أو معلومة ناقصة توقف الخطوة التالية، هتوصلك رسالة هنا.</p>
+                <span className="sf-ai-inbox-empty-mark"><BrainCircuit className="size-6" /></span>
+                <strong>{aiInboxFilter === "unread" ? "لا توجد رسائل غير مقروءة" : "صندوقك هادئ حاليًا"}</strong>
+                <p>{aiInboxFilter === "unread"
+                  ? "راجعت كل الرسائل التي أرسلها لك المساعد."
+                  : "عندما يحتاج المساعد إلى قرار منك أو يكتشف معلومة ناقصة، ستظهر الرسالة هنا."}</p>
+                {aiInboxFilter === "unread" && inboxItems.length > 0 && (
+                  <Button type="button" variant="outline" onClick={() => setAIInboxFilter("all")}>عرض كل الرسائل</Button>
+                )}
               </div>
             ) : (
-              (aiInbox.data?.items ?? []).map(message => (
-                <article key={message.id} className={"sf-ai-inbox-message" + (!message.read ? " is-unread" : "")}>
+              filteredAIInboxItems.map(message => (
+                <article
+                  key={message.id}
+                  className={
+                    "sf-ai-inbox-message" +
+                    (!message.read ? " is-unread" : "") +
+                    (message.answered ? " is-answered" : "")
+                  }
+                >
                   <div className="sf-ai-inbox-message-top">
-                    <span>{message.answered ? "تم الرد" : message.read ? "مقروءة" : "تحتاج ردك"}</span>
-                    <time>{new Date(message.createdAt).toLocaleString("ar-EG", { dateStyle: "medium", timeStyle: "short" })}</time>
+                    <span className={"sf-ai-inbox-status" + (!message.read ? " is-new" : message.answered ? " is-answered" : "")}>
+                      {message.answered ? "تم الرد" : message.read ? "مقروءة" : "تحتاج ردك"}
+                    </span>
+                    <time dateTime={new Date(message.createdAt).toISOString()}>
+                      {new Date(message.createdAt).toLocaleString("ar-EG", { dateStyle: "medium", timeStyle: "short" })}
+                    </time>
                   </div>
                   <h3>{message.title}</h3>
                   <p>{message.message}</p>
-                  {!message.read && (
-                    <Button type="button" variant="ghost" size="sm" className="sf-ai-inbox-read"
-                      onClick={() => markAIMessageRead.mutate({ messageId: message.id })}>
-                      تعليم كمقروءة
-                    </Button>
-                  )}
-                  {!message.answered && Array.isArray(message.actions) && (
+                  {(message.actions.length > 0 || !message.read) && (
                     <div className="sf-ai-inbox-actions">
-                      {message.actions.map(action => (
-                        <Button key={action.id} type="button" size="sm"
+                      {!message.read && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="sf-ai-inbox-read"
+                          disabled={markAIMessageRead.isPending}
+                          onClick={() => markAIMessageRead.mutate({ messageId: message.id })}
+                        >
+                          تعليم كمقروءة
+                        </Button>
+                      )}
+                      {!message.answered && message.actions.map(action => (
+                        <Button
+                          key={action.id}
+                          type="button"
+                          size="sm"
+                          className="sf-ai-inbox-response"
                           variant={action.id === "mark_done" ? "default" : "outline"}
                           disabled={respondToAIMessage.isPending}
                           onClick={() => respondToAIMessage.mutate({
                             messageId: message.id,
                             action: action.id as "mark_done" | "keep_open",
-                          })}>
+                          })}
+                        >
                           {action.label}
                         </Button>
                       ))}
@@ -653,9 +750,14 @@ export default function DashboardLayout({ title, description, children, action }
               ))
             )}
           </div>
-          <div className="sf-ai-inbox-footer">
-            الرسائل داخل المنصة محفوظة في حسابك. إشعارات المتصفح تعمل بعد منح الإذن، طالما المتصفح يسمح للتطبيق بالعمل في الخلفية.
-          </div>
+
+          <footer className="sf-ai-inbox-footer">
+            <span className="sf-ai-inbox-footer-mark"><Bell className="size-4" /></span>
+            <p>ستجد رسائلك محفوظة هنا. ويمكنك تفعيل إشعارات المتصفح للتنبيه عند وصول رسالة جديدة.</p>
+            <Button type="button" variant="outline" size="sm" onClick={() => void enableBrowserAINotifications()}>
+              تفعيل إشعارات المتصفح
+            </Button>
+          </footer>
         </SheetContent>
       </Sheet>
 
