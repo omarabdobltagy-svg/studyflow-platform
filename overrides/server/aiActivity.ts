@@ -206,6 +206,7 @@ export function getAIActivitySnapshot(userId: number): AIActivitySnapshot {
   const now = Date.now();
   pruneUserActivities(userId, now);
   const records = [...(activitiesByUser.get(userId)?.values() ?? [])]
+    .filter(activity => activity.kind !== "assistant")
     .sort((left, right) => right.updatedAt - left.updatedAt);
   return {
     active: records.filter(activity => activity.status === "running").map(activity => ({

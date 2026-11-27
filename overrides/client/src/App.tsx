@@ -10,6 +10,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 const WorkspaceInteractionHub = lazy(() => import("@/components/WorkspaceInteractionHub"));
 const TeacherClassFollowup = lazy(() => import("@/components/TeacherClassFollowup"));
 const AIActivityCenter = lazy(() => import("@/components/AIActivityCenter"));
+const AIActivityHistory = lazy(() => import("@/pages/AIActivityHistory"));
 const Books = lazy(() => import("@/pages/Books"));
 const Calendar = lazy(() => import("@/pages/Calendar"));
 const Goals = lazy(() => import("@/pages/Goals"));
@@ -86,6 +87,7 @@ function Router() {
         <Route path={"/routines"} component={Routines} />
         <Route path={"/calendar"} component={Calendar} />
         <Route path={"/planner"} component={Planner} />
+        <Route path={"/ai-activity"} component={AIActivityHistory} />
         <Route path={"/reminders"} component={Reminders} />
         <Route path={"/assistant"} component={Assistant} />
         <Route path={"/analytics"} component={Analytics} />

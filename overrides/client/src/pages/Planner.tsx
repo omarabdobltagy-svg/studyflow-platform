@@ -175,16 +175,11 @@ function displayArabicText(value: string | null | undefined, fallback: string): 
     .replace(/\bLesson\s+(\d+)\b/gi, "الدرس $1");
 }
 
-function displayTime12Hour(value: string): string {
-  const match = /^(?:([01]\d|2[0-3])):([0-5]\d)$/.exec(value);
+function displayTime24Hour(value: string): string {
+  const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(value);
   if (!match) return value;
-  const hour24 = Number(match[1]);
-  const minute = Number(match[2]);
-  const hour12 = hour24 % 12 || 12;
-  const period = hour24 < 12 ? "ص" : "م";
-  return hour12.toLocaleString("ar-EG") + ":"
-    + minute.toLocaleString("ar-EG", { minimumIntegerDigits: 2, useGrouping: false })
-    + " " + period;
+  const arabicDigits = (part: string) => part.replace(/\d/g, digit => "٠١٢٣٤٥٦٧٨٩"[Number(digit)]);
+  return arabicDigits(match[1]) + ":" + arabicDigits(match[2]);
 }
 
 function displayPlanStepTitle(step: PlanStep, subjectIds: string[]): string {
@@ -486,7 +481,6 @@ export default function Planner() {
       });
       setApproved(true);
       setLoadedSavedDraft(false);
-      setPlannerTab("schedule");
       await Promise.all([
         utils.plans.currentDaily.invalidate(),
         utils.tasks.list.invalidate(),
@@ -852,11 +846,23 @@ export default function Planner() {
                   <strong>قاعدة ترتيب الأولويات</strong>
                   <p>أولًا: الدروس التي لم تشاهد شرحها. بعد استكمال الدروس الجديدة: الدروس التي شاهدت شرحها ولم تذاكرها، ثم الدروس التي تحتاج مراجعة.</p>
                 </div>
-                <Button type="button" className="sf-sp-build-button" disabled={!isPreflightReady || isPlanGenerationRunning || !profile.data?.subjectIds?.length} onClick={runGeneration}>
-                  {isPlanGenerationRunning
-                    ? <><Loader2 className="size-4 animate-spin" /> جارٍ تحديث الخطة في الخلفية</>
-                    : <>{plan ? <RefreshCw className="size-4" /> : <Sparkles className="size-4" />}{plan ? "إعادة تحليل الأولويات" : "إنشاء خطة المذاكرة"}</>}
-                </Button>
+                {plan ? (
+                  <div className="sf-sp-auto-plan-status" role="status" aria-live="polite">
+                    {isPlanGenerationRunning ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
+                    <div>
+                      <strong>{isPlanGenerationRunning ? "يُحدّث StudyFlow الخطة الآن" : "خطتك تعمل تلقائيًا"}</strong>
+                      <span>{isPlanGenerationRunning
+                        ? "يجري ربط التغييرات بالمهام والتقدم المسجل."
+                        : "يراقب StudyFlow تغيّر تقدمك ومواعيدك ويعيد ترتيب الخطة عند الحاجة؛ لا يلزمك تشغيل التحليل يدويًا."}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <Button type="button" className="sf-sp-build-button" disabled={!isPreflightReady || isPlanGenerationRunning || !profile.data?.subjectIds?.length} onClick={runGeneration}>
+                    {isPlanGenerationRunning
+                      ? <><Loader2 className="size-4 animate-spin" /> جارٍ تجهيز الخطة</>
+                      : <><Sparkles className="size-4" /> إنشاء خطة المذاكرة</>}
+                  </Button>
+                )}
                 <small>عند تغيّر تقدمك أو مهامك، يعيد StudyFlow ترتيب الخطة ويحافظ على المهام المكتملة دون تكرار.</small>
               </aside>
             </section>
@@ -876,11 +882,11 @@ export default function Planner() {
                   <p className="mt-1 text-xs leading-6 text-muted-foreground">
                     {aiCapabilities.data.youtubeMonitoring
                       ? "البحث عن قنوات المدرسين المختارين وفحص الفيديوهات العامة مفعّل."
-                      : "البحث التلقائي عن قنوات YouTube يحتاج إعداد YOUTUBE_API_KEY على خدمة Preview."}
+                      : "الرصد التلقائي لقنوات المدرسين غير متاح حاليًا. ستظل خطتك وتقدمك محفوظين وتعمل بقية أدوات الدراسة."}
                     {" "}
                     {aiCapabilities.data.teacherVideoAnalysis
                       ? "تحليل الفيديو إلى موضوعات فعلية مفعّل."
-                      : "تحليل محتوى الفيديو غير مفعّل: أضف GEMINI_API_KEY إلى متغيرات خدمة StudyFlow Preview في Railway. لا تضع المفتاح في المحادثة أو في واجهة الطالب."}
+                      : "تحليل محتوى الفيديو غير متاح حاليًا؛ ستظهر المطابقات المؤكدة فقط عند توافر التحليل."}
                   </p>
                 </div>
               </section>
@@ -1219,6 +1225,7 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
     return firstOpen >= 0 ? firstOpen : plan.steps.length > 0 ? 0 : null;
   });
   const teacherSessionGroups = useMemo(() => groupPlannerTeacherSessions(teacherSessions), [teacherSessions]);
+  const [teacherScheduleExpanded, setTeacherScheduleExpanded] = useState(true);
   const completedCount = plan.steps.filter(step => step.plannerTaskStatus === "done" || step.existingTask?.status === "done").length;
     const subjectCount = new Set(plan.steps.map(step => getPlanStepCurriculum(step, subjectIds)?.subjectId).filter(Boolean)).size;
   const confirmedTaskCount = plan.steps.filter(step => Boolean(step.existingTask)).length;
@@ -1333,9 +1340,16 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
         <section className="sf-sp-teacher-schedule" aria-label="مواعيد المدرسين الأسبوعية">
           <header>
             <div><span>الجدول الأسبوعي</span><h3>كل مواعيد كل مدرس</h3></div>
-            <small>{teacherSessions.length.toLocaleString("ar-EG")} مواعيد · {teacherSessionGroups.length.toLocaleString("ar-EG")} مدرسين</small>
+            <div className="sf-sp-schedule-header-actions">
+              <small>{teacherSessions.length.toLocaleString("ar-EG")} مواعيد · {teacherSessionGroups.length.toLocaleString("ar-EG")} مدرسين</small>
+              <button type="button" className="sf-sp-schedule-toggle" aria-expanded={teacherScheduleExpanded}
+                aria-controls="sf-sp-teacher-session-list" onClick={() => setTeacherScheduleExpanded(value => !value)}>
+                {teacherScheduleExpanded ? <ArrowUp className="size-3.5" /> : <ArrowDown className="size-3.5" />}
+                {teacherScheduleExpanded ? "طي الجدول" : "عرض المواعيد"}
+              </button>
+            </div>
           </header>
-          <div className="sf-sp-teacher-session-list">
+          {teacherScheduleExpanded && <div id="sf-sp-teacher-session-list" className="sf-sp-teacher-session-list">
             {teacherSessionGroups.map(group => {
               const nearestSession = group.sessions[0];
               const preparationSteps = getTeacherSessionPreparationSteps(plan.steps, group.subjectId, subjectIds, 2, nearestSession?.dateOffsetDays ?? 0);
@@ -1351,7 +1365,7 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
                     {group.sessions.map(session => (
                       <div key={session.key} className="sf-sp-teacher-session-slot" data-testid={"planner-teacher-slot-" + group.subjectId + "-" + session.dayOfWeek}>
                         <span>{new Intl.DateTimeFormat("ar-EG", { timeZone: "Africa/Cairo", weekday: "long" }).format(new Date(session.sortDate + "T12:00:00.000Z"))}</span>
-                        <strong>{displayTime12Hour(session.time)}</strong>
+                        <strong>{displayTime24Hour(session.time)}</strong>
                         <small>وقت المحاضرة</small>
                       </div>
                     ))}
@@ -1383,7 +1397,7 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
                 </article>
               );
             })}
-          </div>
+          </div>}
         </section>
       )}
 

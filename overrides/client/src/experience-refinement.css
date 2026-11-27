@@ -4542,3 +4542,47 @@ body[data-studyflow-sections-open="true"] .sf-hub-root {
   .sf-home-exam-item-subject { flex-wrap: wrap; }
   .sf-home-exam-item-subject small { width: 100%; margin-inline-start: 34px; }
 }
+
+
+/* Planner-only olive accent replaces the former blue within this page. */
+.sf-main-planner .sf-sp-teacher-schedule {
+  border-color: color-mix(in srgb, #91a85b 34%, var(--border));
+  background: radial-gradient(ellipse at 100% 0%, color-mix(in srgb, #91a85b 9%, transparent), transparent 55%), var(--card);
+}
+.sf-main-planner .sf-sp-teacher-schedule > header span,
+.sf-main-planner .sf-sp-teacher-session-slot > small { color: #91a85b; }
+.sf-main-planner .sf-sp-schedule-header-actions { display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:8px; }
+.sf-main-planner .sf-sp-schedule-toggle {
+  display:inline-flex; min-height:34px; align-items:center; justify-content:center; gap:6px;
+  padding:0 10px; border:1px solid var(--border); border-radius:10px;
+  background:var(--card); color:var(--foreground); font-size:10px; font-weight:800;
+}
+.sf-main-planner .sf-sp-schedule-toggle:hover { border-color:#91a85b; background:color-mix(in srgb,#91a85b 8%,var(--card)); }
+.sf-main-planner .sf-sp-auto-plan-status {
+  display:flex; align-items:flex-start; gap:10px; margin-top:13px; padding:12px;
+  border:1px solid color-mix(in srgb,#91a85b 28%,var(--border)); border-radius:13px;
+  background:color-mix(in srgb,#91a85b 7%,var(--card)); color:#91a85b;
+}
+.sf-main-planner .sf-sp-auto-plan-status > svg { flex:0 0 auto; margin-top:2px; }
+.sf-main-planner .sf-sp-auto-plan-status > div { display:grid; gap:4px; min-width:0; }
+.sf-main-planner .sf-sp-auto-plan-status strong { color:var(--foreground); font-size:12px; font-weight:900; }
+.sf-main-planner .sf-sp-auto-plan-status span { color:var(--muted-foreground); font-size:10px; line-height:1.8; }
+.sf-main-planner .sf-sp-map-toolbar { border-color:color-mix(in srgb,#91a85b 25%,var(--border)); background:radial-gradient(ellipse at 100% 0%,color-mix(in srgb,#91a85b 8%,transparent),transparent 55%),var(--card); }
+.sf-main-planner .sf-sp-filter-group button[aria-pressed=true],
+.sf-main-planner .sf-sp-view-group button[aria-pressed=true] { background:#91a85b; color:#17200e; box-shadow:0 3px 9px -7px #91a85b; }
+.sf-main-planner .sf-sp-flow-map { border-color:color-mix(in srgb,#91a85b 30%,var(--border)); background:radial-gradient(ellipse at 100% 0%,color-mix(in srgb,#91a85b 10%,transparent),transparent 40%),linear-gradient(160deg,color-mix(in srgb,#91a85b 4%,var(--card)),var(--card) 62%); }
+.sf-main-planner .sf-sp-flow-track:before { background:linear-gradient(180deg,color-mix(in srgb,#91a85b 55%,transparent),var(--border) 68%,transparent); }
+.sf-main-planner .sf-sp-flow-node.is-next .sf-sp-flow-node-index { border-color:#91a85b; background:#91a85b; color:#17200e; box-shadow:0 0 0 4px color-mix(in srgb,#91a85b 13%,transparent); }
+.sf-main-planner .sf-sp-flow-node.is-next .sf-sp-flow-node-card { border-color:color-mix(in srgb,#91a85b 60%,var(--border)); background:color-mix(in srgb,#91a85b 7%,var(--card)); }
+.sf-mobile-sheet-header { position:relative; padding-top:48px !important; padding-inline-start:58px !important; padding-inline-end:16px !important; }
+.sf-mobile-sheet-header [data-slot="sheet-title"] { max-width:100%; }
+@media (min-width:721px) and (max-width:900px) {
+  .sf-mobile-dock { bottom:calc(18px + env(safe-area-inset-bottom)) !important; width:min(680px,calc(100vw - 32px)) !important; min-height:72px !important; padding:7px !important; }
+  .sf-mobile-dock-item { min-height:58px !important; font-size:11px !important; }
+  .sf-main { padding-bottom:calc(126px + env(safe-area-inset-bottom)) !important; }
+}
+@media (max-width:720px) {
+  .sf-mobile-sheet-header { padding-top:44px !important; padding-inline-start:56px !important; padding-inline-end:16px !important; }
+  .sf-main-planner .sf-sp-schedule-header-actions { justify-content:flex-start; width:100%; }
+  .sf-main-planner .sf-sp-schedule-toggle { min-height:38px; }
+}

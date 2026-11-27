@@ -62,6 +62,7 @@ const navigation: NavigationGroup[] = [
   { label: "التخطيط", items: [
     { label: "الأهداف", path: "/goals", icon: Goal },
     { label: "المخطط الذكي", path: "/planner", icon: CalendarRange },
+    { label: "أنشطة الذكاء الاصطناعي", path: "/ai-activity", icon: BrainCircuit },
     { label: "تحليل الأداء", path: "/analytics", icon: BarChart3 },
   ] },
   { label: "إدارة المساحة", items: [

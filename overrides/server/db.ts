@@ -2065,6 +2065,44 @@ export async function listRecentStudentActivityEvents(userId: number, limit = 30
   }));
 }
 
+const AI_BACKGROUND_EVENT_TYPES = [
+  "ai.background.started",
+  "ai.background.progress",
+  "ai.background.completed",
+  "ai.background.failed",
+  "teacher.public_update_detected",
+  "teacher.video_analysis_completed",
+  "teacher.video_analysis_failed",
+  "teacher.alternative_review_accepted",
+] as const;
+
+/** Bounded per-student reader for background AI work; conversations are excluded. */
+export async function listRecentAIBackgroundActivityEvents(userId: number, limit = 60) {
+  const db = await requireDb();
+  const safeLimit = Math.max(1, Math.min(100, Math.trunc(Number.isFinite(limit) ? limit : 60)));
+  const rows = await db.select()
+    .from(studentActivityEvents)
+    .where(and(
+      eq(studentActivityEvents.userId, userId),
+      inArray(studentActivityEvents.eventType, [...AI_BACKGROUND_EVENT_TYPES]),
+    ))
+    .orderBy(desc(studentActivityEvents.createdAt), desc(studentActivityEvents.id))
+    .limit(safeLimit);
+
+  return rows.map(row => ({
+    id: row.id,
+    eventType: row.eventType,
+    entityType: row.entityType,
+    entityId: row.entityId,
+    summary: row.summary,
+    metadata: (() => {
+      try { return JSON.parse(row.metadataJson || "{}") as Record<string, unknown>; }
+      catch { return {}; }
+    })(),
+    createdAt: row.createdAt,
+  }));
+}
+
 export async function getDashboard(userId: number, timeZone = "UTC") {
   const [taskRows, goalRows, bookRows, routineRows, eventRows] = await Promise.all([
     listTasks(userId),

@@ -47,6 +47,7 @@ import {
   completePlannerReconciliationJob,
   failPlannerReconciliationJob,
   listRecentStudentActivityEvents,
+  listRecentAIBackgroundActivityEvents,
   listStudentTeacherMonitoringProfiles,
   listTeacherDirectoryEntries,
   upsertTeacherDirectoryEntry,
@@ -358,9 +359,11 @@ function queueTeacherVideoAnalyses(userId: number, updates: TeacherPublicUpdate[
       detail: "يفحص فيديو «" + String(update.title || "مراجعة المدرس").slice(0, 100) + "» من قناة " + String(update.teacherName || "المدرس").slice(0, 80) + " ويستخرج موضوعاته الفعلية.",
     });
     const task = processTeacherVideoAnalysis(userId, update.externalId, activityId)
-      .catch(error => {
+      .catch(async error => {
         const message = error instanceof Error ? error.message.slice(0, 220) : "خطأ غير معروف";
         failAIActivity(userId, activityId, "تعذّر تحليل الفيديو: " + message);
+        await logStudentActivity(userId, "teacher.video_analysis_failed", "teacher_video", update.externalId,
+          "تعذّر تحليل فيديو من مصادر المدرسين المختارين.", { teacherId: update.teacherId, status: "failed" });
         console.warn("[StudyFlow video analysis] Could not analyze teacher video:", message);
       })
       .finally(async () => {
@@ -652,12 +655,19 @@ function queueTeacherSourceScan(userId: number) {
     stage: "البحث في قنوات المدرسين",
     detail: "يتحقق StudyFlow من أحدث الفيديوهات العامة للمدرسين الذين اخترتهم.",
   });
-  void scanTeacherSourcesForStudent(userId, activityId).then(() => {
-    completeAIActivity(userId, activityId, "اكتملت دورة الرصد الأولي. يستمر تحليل الفيديوهات المؤهلة في الخلفية.");
-  }).catch(error => {
-    const message = error instanceof Error ? error.message.slice(0, 220) : "خطأ غير معروف";
-    failAIActivity(userId, activityId, "تعذّر إكمال الرصد: " + message);
-  });
+  void logStudentActivity(userId, "ai.background.started", "ai_background", activityId,
+    "بدأ StudyFlow فحص قنوات المدرسين المختارين بحثًا عن محتوى جديد.", { kind: "teacher_monitor", status: "running" })
+    .then(() => scanTeacherSourcesForStudent(userId, activityId))
+    .then(async () => {
+      completeAIActivity(userId, activityId, "اكتملت دورة الرصد الأولي. يستمر تحليل الفيديوهات المؤهلة في الخلفية.");
+      await logStudentActivity(userId, "ai.background.completed", "ai_background", activityId,
+        "اكتملت دورة رصد قنوات المدرسين.", { kind: "teacher_monitor", status: "complete" });
+    }).catch(async error => {
+      const message = error instanceof Error ? error.message.slice(0, 220) : "خطأ غير معروف";
+      failAIActivity(userId, activityId, "تعذّر إكمال الرصد: " + message);
+      await logStudentActivity(userId, "ai.background.failed", "ai_background", activityId,
+        "تعذّر إكمال دورة رصد قنوات المدرسين.", { kind: "teacher_monitor", status: "failed" });
+    });
 }
 
 function queueDailyPlanEnsure(userId: number, _dailyMinutes: number) {
@@ -873,6 +883,8 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number, f
     stage: "فحص التغييرات",
     detail: "يراجع تحديثات المدرسين وموضعك الدراسي قبل اتخاذ قرار بإعادة بناء الخطة.",
   });
+  await logStudentActivity(userId, "ai.background.started", "ai_background", activityId,
+    "بدأ StudyFlow مراجعة خطة المذاكرة ومواضع التقدم والمهام.", { kind: "daily_plan", status: "running" });
   const task = (async (): Promise<DailyPlanResult> => {
     try {
       await scanTeacherSourcesForStudent(userId, activityId);
@@ -951,6 +963,8 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number, f
         const saved = JSON.parse(latestDailyPlan.planJson) as Awaited<ReturnType<typeof generatePersonalPlan>>;
         if (saved && typeof saved.title === "string" && Array.isArray(saved.steps) && saved.steps.length > 0) {
           completeAIActivity(userId, activityId, "البيانات لم تتغير؛ الخطة الحالية ما زالت متوافقة ولا تحتاج إلى إعادة بناء.");
+          await logStudentActivity(userId, "ai.background.completed", "ai_background", activityId,
+            "تم فحص البيانات؛ الخطة الحالية ما زالت متوافقة ولا تحتاج إلى إعادة بناء.", { kind: "daily_plan", status: "complete", rebuilt: false });
           return {
             plan: saved,
             generatedAt: new Date(latestDailyPlan.createdAt),
@@ -1027,6 +1041,8 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number, f
       });
     }
     completeAIActivity(userId, activityId, "اكتملت إعادة ترتيب الخطة ومزامنة المهام.");
+    await logStudentActivity(userId, "ai.background.completed", "ai_background", activityId,
+      "اكتملت إعادة ترتيب خطة المذاكرة ومزامنة المهام.", { kind: "daily_plan", status: "complete", rebuilt: true, taskCount: taskSync.taskCount });
     return {
       plan: planWithTaskLinks,
       generatedAt: new Date(),
@@ -1038,6 +1054,8 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number, f
     };
     } catch (error) {
       failAIActivity(userId, activityId, "تعذّر إكمال إعادة ترتيب خطة اليوم. لم يتم إعلان نتيجة غير مؤكدة.");
+      await logStudentActivity(userId, "ai.background.failed", "ai_background", activityId,
+        "تعذّر إكمال إعادة ترتيب خطة المذاكرة. لم يتم اعتماد نتيجة غير مكتملة.", { kind: "daily_plan", status: "failed" });
       throw error;
     }
   })();
@@ -3559,6 +3577,9 @@ export const appRouter = router({
 
   ai: router({
     activity: protectedProcedure.query(({ ctx }) => getAIActivitySnapshot(ctx.user.id)),
+    history: protectedProcedure
+      .input(z.object({ limit: z.number().int().min(1).max(100).default(60) }).optional())
+      .query(({ ctx, input }) => listRecentAIBackgroundActivityEvents(ctx.user.id, input?.limit ?? 60)),
     inbox: protectedProcedure.query(({ ctx }) => getAIInboxForStudent(ctx.user.id)),
     reconcileCurriculumTasks: protectedProcedure.mutation(({ ctx }) => reconcileCompletedCurriculumTasks(ctx.user.id)),
     markInboxMessageRead: protectedProcedure

@@ -125,6 +125,11 @@ export default function AIActivityCenter() {
             </button>
           </header>
 
+          <div className="border-t border-border/60 px-3.5 py-2">
+            <a href="/ai-activity" className="text-xs font-semibold text-primary underline-offset-4 hover:underline">
+              فتح سجل أنشطة الذكاء الاصطناعي
+            </a>
+          </div>
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 px-3.5 py-2 text-[10px] text-muted-foreground">
             <span>{completedEventCount.toLocaleString("ar-EG")} من {eventCount.toLocaleString("ar-EG")} خطوات مسجلة مكتملة</span>
             <span>المدة: {elapsedLabel}</span>
