@@ -290,8 +290,8 @@ export default function Planner() {
   const historyInitialized = useRef(false);
   const initialDailyGenerationStarted = useRef(false);
   const plannerPreferencesInitialized = useRef(false);
-  // Open the execution map first; the overview remains one tap away.
-  const [plannerTab, setPlannerTab] = useState<"overview" | "schedule" | "curriculum" | "tasks" | "history">("schedule");
+  // Start at the overview; the distribution map is opened only by an explicit tab choice.
+  const [plannerTab, setPlannerTab] = useState<"overview" | "schedule" | "curriculum" | "tasks" | "history">("overview");
 
   const history = trpc.plans.list.useQuery();
   const profile = trpc.studentProfile.get.useQuery(undefined, {
@@ -300,7 +300,7 @@ export default function Planner() {
   });
   const upcomingTeacherSessions = useMemo(
     () => getPlannerTeacherSessions(profile.data),
-    [profile.data?.selection, profile.data?.subjectIds, profile.data?.teacherSelections, profile.data?.teacherSchedules],
+    [profile.data?.selection, profile.data?.subjectIds, profile.data?.teacherSelections, (profile.data?.selection as Record<string, any> | undefined)?.teacherSchedules],
   );
   const learning = trpc.learning.get.useQuery(undefined, { staleTime: 15_000 });
   const tasksQuery = trpc.tasks.list.useQuery(undefined, { staleTime: 15_000 });
@@ -851,19 +851,19 @@ export default function Planner() {
                   <strong>قاعدة ترتيب الأولويات</strong>
                   <p>أولًا: الدروس التي لم تشاهد شرحها. بعد استكمال الدروس الجديدة: الدروس التي شاهدت شرحها ولم تذاكرها، ثم الدروس التي تحتاج مراجعة.</p>
                 </div>
-                <Button type="button" className="sf-sp-build-button" disabled={!isPreflightReady || ensureDaily.isPending || !profile.data?.subjectIds?.length} onClick={runGeneration}>
-                  {ensureDaily.isPending
-                    ? <><Loader2 className="size-4 animate-spin" /> جارٍ تحليل الأولويات</>
+                <Button type="button" className="sf-sp-build-button" disabled={!isPreflightReady || isPlanGenerationRunning || !profile.data?.subjectIds?.length} onClick={runGeneration}>
+                  {isPlanGenerationRunning
+                    ? <><Loader2 className="size-4 animate-spin" /> جارٍ تحديث الخطة في الخلفية</>
                     : <>{plan ? <RefreshCw className="size-4" /> : <Sparkles className="size-4" />}{plan ? "إعادة تحليل الأولويات" : "إنشاء خطة المذاكرة"}</>}
                 </Button>
                 <small>عند تغيّر تقدمك أو مهامك، يعيد StudyFlow ترتيب الخطة ويحافظ على المهام المكتملة دون تكرار.</small>
               </aside>
             </section>
 
-            {ensureDaily.isPending && (
+            {isPlanGenerationRunning && (
               <PlanGenerationInlineStatus progress={generationProgress.data ?? null} onShow={() => {
-                setGenerationModalHiddenForRun(false);
-                setShowGenerationModal(true);
+                setGenerationDetailsHiddenForRun(false);
+                setShowGenerationDetails(true);
               }} />
             )}
 
@@ -1135,7 +1135,7 @@ function PlanGenerationInlineStatus({ progress, onShow }: { progress: Generation
     <section className="sf-plan-generation-inline" role="status" aria-live="polite">
       <span className="sf-plan-generation-inline-mark"><Loader2 className="size-4 animate-spin" /></span>
       <div>
-        <strong>إعادة بناء الخطة جارية</strong>
+        <strong>تحديث خطة المذاكرة جارٍ في الخلفية</strong>
         <p>{progress?.detail || "نراجع الصف والمواد والمهام ومواعيد المدرسين قبل ترتيب التوزيع الجديد."}</p>
       </div>
       <Button type="button" size="sm" variant="outline" onClick={onShow}>عرض التقدم</Button>
