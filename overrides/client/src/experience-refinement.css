@@ -3158,3 +3158,115 @@ body[data-studyflow-sections-open="true"] .sf-hub-root {
   .sf-plan-loading-stages li { gap: 8px; padding: 9px; }
   .sf-plan-loading-state { font-size: 8px; }
 }
+
+
+/* Curriculum picker: paired tabs, count badges and a single clear active state. */
+.sf-study-view-tabs {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+  width: min(100%, 360px);
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--background) 85%, var(--card));
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.08);
+}
+.sf-study-view-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-width: 0;
+  min-height: 43px;
+  padding: 8px 13px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 850;
+  white-space: nowrap;
+  transition: background-color .16s ease, color .16s ease, border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+.sf-study-view-tab:hover { color: var(--foreground); background: color-mix(in srgb, var(--primary) 5%, var(--card)); }
+.sf-study-view-tab:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.sf-study-view-tab.is-active {
+  border-color: color-mix(in srgb, var(--primary) 28%, transparent);
+  background: var(--primary);
+  color: var(--primary-foreground);
+  box-shadow: 0 6px 16px -10px var(--primary), inset 0 1px 0 rgba(255,255,255,.16);
+}
+.sf-study-view-count {
+  display: inline-grid;
+  min-width: 23px;
+  height: 23px;
+  padding-inline: 5px;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+.sf-study-view-tab.is-active .sf-study-view-count {
+  border-color: color-mix(in srgb, var(--primary-foreground) 24%, transparent);
+  background: color-mix(in srgb, var(--primary-foreground) 13%, transparent);
+  color: var(--primary-foreground);
+}
+.sf-study-unit-count {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 3px 8px;
+  border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--primary) 7%, var(--card));
+  color: var(--primary);
+  font-size: 9px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+.sf-study-unit-card > div > div:first-child h3 { overflow-wrap: anywhere; }
+.sf-study-unit-card .sf-english-unit-map { margin-top: 14px; }
+.sf-study-unit-card .sf-english-unit-lessons { gap: 8px; }
+.sf-study-unit-card .sf-english-lesson-row {
+  align-items: center;
+  min-height: 58px;
+  border-radius: 13px;
+  padding: 11px 12px;
+}
+.sf-study-unit-card .sf-english-lesson-sequence {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  border-radius: 7px;
+  padding: 3px 7px;
+  background: color-mix(in srgb, var(--primary) 8%, var(--card));
+  color: var(--primary);
+  font-size: 9px;
+  font-weight: 900;
+}
+.sf-study-unit-card .sf-english-lesson-copy { display: grid; gap: 5px; }
+.sf-study-unit-card .sf-english-lesson-name { line-height: 1.7; }
+.sf-study-unit-card .sf-english-lesson-type,
+.sf-study-unit-card .sf-english-section-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 25px;
+  border-radius: 8px;
+  font-size: 9px;
+  font-weight: 850;
+}
+@media (max-width: 640px) {
+  .sf-study-view-tabs { width: 100%; }
+  .sf-study-view-tab { min-height: 44px; padding-inline: 8px; }
+  .sf-study-unit-card { padding: 13px !important; border-radius: 17px !important; }
+  .sf-study-unit-card .sf-english-lesson-row { align-items: flex-start; }
+}
