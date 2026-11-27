@@ -160,17 +160,6 @@ export default function Assistant() {
       : thread
     ));
 
-    const memory = threads
-      .filter(thread => thread.id !== threadId && thread.messages.length > 0)
-      .slice()
-      .sort((left, right) => right.updatedAt - left.updatedAt)
-      .slice(0, 5)
-      .map(thread => "محادثة سابقة: " + thread.title + "\n" + thread.messages.slice(-2)
-        .map(message => (message.role === "user" ? "الطالب: " : "المساعد: ") + message.content.slice(0, 500))
-        .join("\n"))
-      .join("\n---\n")
-      .slice(0, 2_400);
-
     if (attachments.length) setPendingAttachments([]);
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -213,7 +202,6 @@ export default function Assistant() {
         },
         body: JSON.stringify({
           messages: requestMessages,
-          memory,
           context: attachmentContext || undefined,
         }),
         signal: controller.signal,
