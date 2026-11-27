@@ -325,11 +325,11 @@ export default function Planner() {
       const isLegacyAnnualPlan = prompt.startsWith(ANNUAL_PLAN_PREFIX)
         || saved?.title.includes("الخطة السنوية")
         || saved?.title.includes("الخطة القديمة");
-      const isDailyPlanRecord = prompt.startsWith(DAILY_SNAPSHOT_PREFIX);
+      const isDailyPlanRecord = prompt.startsWith(DAILY_SNAPSHOT_PREFIX)
+        || prompt.startsWith(DAILY_PLAN_PREFIX);
       const isUncommittedAutoDraft = prompt.startsWith(DAILY_PLAN_DRAFT_PREFIX);
-      const isLegacyApprovedRecord = prompt.startsWith(STUDY_PLAN_PREFIX)
-        && /^[a-f0-9]{32}:$/.test(prompt.slice(STUDY_PLAN_PREFIX.length));
-      if (!saved || isLegacyAnnualPlan || isDailyPlanRecord || isUncommittedAutoDraft || isLegacyApprovedRecord) return [];
+      const isLegacyManualPlan = prompt.startsWith(STUDY_PLAN_PREFIX);
+      if (!saved || isLegacyAnnualPlan || isDailyPlanRecord || isUncommittedAutoDraft || isLegacyManualPlan) return [];
       return [{ id: record.id, createdAt: record.createdAt, plan: saved }];
     })
     .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()), [history.data]);
@@ -345,25 +345,38 @@ export default function Planner() {
     plannerPreferencesInitialized.current = true;
   }, [profile.data, profile.isLoading, profile.isError]);
 
-  const generate = trpc.plans.generate.useMutation({
-    onSuccess: result => {
+  const ensureDaily = trpc.plans.ensureDaily.useMutation({
+    onSuccess: async result => {
       setPlan({
-        ...result,
-        habits: Array.isArray(result.habits) ? result.habits : [],
-        steps: Array.isArray(result.steps) ? result.steps : [],
+        ...result.plan,
+        habits: Array.isArray(result.plan.habits) ? result.plan.habits : [],
+        steps: Array.isArray(result.plan.steps) ? result.plan.steps : [],
         reviewQuestion: "",
+        taskSync: {
+          parentGoalId: 0,
+          stageCount: result.taskCount,
+          taskCount: result.taskCount,
+        },
       });
-      setApproved(false);
+      setApproved(true);
       setLoadedSavedDraft(false);
-      void utils.plans.list.invalidate();
-      toast.success("قائمة المهام الذكية جاهزة. راجعها قبل إضافتها إلى مهامك.");
+      await Promise.all([
+        utils.plans.currentDaily.invalidate(),
+        utils.tasks.list.invalidate(),
+        utils.goals.list.invalidate(),
+        utils.dashboard.summary.invalidate(),
+        utils.plans.list.invalidate(),
+      ]);
+      toast.success(result.generated
+        ? "تم تحديث خطة واحدة ومزامنة المهام مع مواعيدها."
+        : "الخطة الحالية متوافقة مع بياناتك؛ لم يتم إنشاء نسخة جديدة.");
     },
-    onError: error => toast.error("تعذّر بناء الخطة: " + error.message),
+    onError: error => toast.error("تعذّر تحديث الخطة: " + error.message),
   });
 
   const generationProgress = trpc.plans.generationProgress.useQuery(undefined, {
-    enabled: generate.isPending,
-    refetchInterval: generate.isPending ? 750 : false,
+    enabled: ensureDaily.isPending,
+    refetchInterval: ensureDaily.isPending ? 750 : false,
     refetchOnWindowFocus: false,
   });
 
@@ -424,17 +437,9 @@ export default function Planner() {
   });
 
   const runGeneration = () => {
-    generate.mutate({
-      prompt: initialPrompt,
-      includeStudentProfile: true,
-      planningMode: "smart",
-      horizonDays: 7,
+    ensureDaily.mutate({
       dailyMinutes,
-      daysPerWeek: 6,
-      startDate: todayCairo,
-      pace: selectedPace,
-      paceLevel: 2,
-      deadline: null,
+      forceRebuild: true,
     });
   };
 
@@ -708,14 +713,14 @@ export default function Planner() {
                         : "المتوازن هو الاختيار الافتراضي عندما لا تكون البيانات قليلة بما يكفي للمرن، ولا مرتفعة بما يكفي للمكثف.")
                     : "لن نحدد إيقاعًا موصى به قبل اكتمال تحميل بيانات المهام والمنهج."}</small>
                 </div>
-                <Button type="button" className="sf-sp-build-button" disabled={!isPreflightReady || generate.isPending || !profile.data?.subjectIds?.length} onClick={runGeneration}>
-                  {generate.isPending ? <><Loader2 className="size-4 animate-spin" /> جارٍ بناء الخطة</> : <>{plan ? <RefreshCw className="size-4" /> : <Sparkles className="size-4" />}{plan ? "إعادة بناء الخطة" : "أنشئ خطة المذاكرة"}</>}
+                <Button type="button" className="sf-sp-build-button" disabled={!isPreflightReady || ensureDaily.isPending || !profile.data?.subjectIds?.length} onClick={runGeneration}>
+                  {ensureDaily.isPending ? <><Loader2 className="size-4 animate-spin" /> جارٍ تحديث الخطة</> : <>{plan ? <RefreshCw className="size-4" /> : <Sparkles className="size-4" />}{plan ? "إعادة بناء الخطة الحالية" : "تحديث خطة المذاكرة"}</>}
                 </Button>
-                <small>ستظهر المسودة أولًا للمراجعة. لن تُضاف أي مهمة إلى قائمتك قبل اعتماد الخطة.</small>
+                <small>StudyFlow ينشئ خطة واحدة تلقائيًا من التراكم وتحديثات المدرسين، ثم يحدّث المهام المفتوحة بدل نسخها. إعادة البناء تستبدل الخطة الحالية وتحافظ على المهام المكتملة.</small>
               </aside>
             </section>
 
-            {generate.isPending && <PlanLoading progress={generationProgress.data ?? null} />}
+            {ensureDaily.isPending && <PlanLoading progress={generationProgress.data ?? null} />}
 
             {!profile.isLoading && profile.data && profile.data.subjectIds.length === 0 && (
               <section className="sf-sp-empty" data-scroll-reveal>
@@ -994,7 +999,7 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
       )}
 
       <div className="sf-sp-board-toolbar">
-        <div><h3>خطوات المذاكرة</h3><p>مقسمة حسب سبب تنفيذها، وليس إلى أيام أو ساعات مفترضة.</p></div>
+        <div><h3>خطوات المذاكرة</h3><p>كل خطوة مرتبطة بيوم تنفيذ محدد، ويتغير عدد الأجزاء حسب إيقاعك الدراسي.</p></div>
         <div className="sf-sp-filter-group" role="group" aria-label="تصفية مهام الخطة">
           {([["all","الكل"],["open","المتبقي"],["done","المكتمل"]] as const).map(([key,label]) => <button type="button" key={key} aria-pressed={filter===key} onClick={()=>setFilter(key)}>{label}</button>)}
         </div>
@@ -1032,13 +1037,16 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
                             {step.existingTask && <span>التزام مسجل</span>}
                             {step.scheduleState === "deferred" && <span>مؤجلة للدورة القادمة</span>}
                             {isDone && <span>مكتملة</span>}
-                            {formatDate(step.existingTask?.dueAt) && <span>موعدها {formatDate(step.existingTask?.dueAt)}</span>}
+                            {(formatDate(step.existingTask?.dueAt) || step.day) && <span>يوم التنفيذ: {formatDate(step.existingTask?.dueAt) || step.day}</span>}
                           </div>
                           <h4>{titleText}</h4>
                           {!curriculum && <small className="sf-sp-source-title">{displayPlanStepCategory(step, subjectIds)}</small>}
                           {step.sourceTitle && <small className="sf-sp-source-title">عنوان المنهج: {displayCurriculumTitle(step.sourceTitle)}</small>}
-                          <p>{detailText}</p>
-                          {step.scheduleNote && <small className="sf-sp-source-title">{displayArabicText(step.scheduleNote,"تم تأجيل هذه الخطوة إلى دورة التخطيط التالية.")}</small>}
+                          <details className="sf-sp-step-details">
+                            <summary>تفاصيل التنفيذ</summary>
+                            <p>{detailText}</p>
+                            {step.scheduleNote && <small className="sf-sp-source-title">{displayArabicText(step.scheduleNote,"تم تأجيل هذه الخطوة إلى دورة التخطيط التالية.")}</small>}
+                          </details>}
                           {step.studyMethod && (
                             <details className="sf-sp-study-method">
                               <summary>طريقة مذاكرة الدرس — {step.studyMethod.stages.length} مراحل</summary>
@@ -1086,7 +1094,7 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
         <footer className="sf-sp-approved-footer"><CheckCircle2 className="size-4" /><span>هذه الخطة معتمدة، والمهام مرتبطة بقائمة عملك. تعديل المصدر يتم من المهام أو من تقدم المنهج.</span>{plan.taskSync && <strong>{plan.taskSync.taskCount.toLocaleString("ar-EG")} مهمة مرتبطة</strong>}</footer>
       )}
 
-      <details className="sf-sp-plan-extra"><summary>ملخص إضافي ومساعد الخطة</summary><p>{displayArabicText(plan.summary,"خطة مذاكرة مرتبة حسب بيانات ملفك الدراسي.")}</p>{plan.habits.length > 0 && <div className="sf-sp-habits">{plan.habits.map((habit,index)=><article key={habit.title+index}><strong>{displayArabicText(habit.title,"عادة دراسية")}</strong><small>{displayArabicText(habit.cue,"استخدمها لدعم الاستمرارية في المذاكرة.")}</small></article>)}</div>}<PlanAssistantChat plan={plan} subjectIds={subjectIds} editable={editable} onChange={onChange} /></details>
+      <details className="sf-sp-plan-extra"><summary>ملخص إضافي ومساعد الخطة</summary><p>{displayArabicText(plan.summary,"خطة مذاكرة مرتبة حسب بيانات ملفك الدراسي.")}</p>{plan.habits.length > 0 && <div className="sf-sp-habits">{plan.habits.map((habit,index)=><article key={habit.title+index}><strong>{displayArabicText(habit.title,"عادة دراسية")}</strong><small>{displayArabicText(habit.cue,"استخدمها لدعم الاستمرارية في المذاكرة.")}</small></article>)}</div>}<PlanAssistantChat plan={plan} subjectIds={subjectIds} editable={true} onChange={onChange} /></details>
     </section>
   );
 }
@@ -1145,7 +1153,7 @@ function PlanAssistantChat({ plan, subjectIds, editable, onChange }: {
             priority: step.priority,
             phaseId: step.phaseId,
             completed: step.plannerTaskStatus === "done" || step.existingTask?.status === "done",
-            linkedTask: Boolean(step.existingTask || step.plannerTaskId),
+            linkedTask: Boolean(step.existingTask),
           })),
         },
       } : {}),
