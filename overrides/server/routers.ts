@@ -7,6 +7,7 @@ import { TRPCError } from "@trpc/server";
 import { COOKIE_NAME } from "@shared/const";
 import { SIE_CATALOG_META, SIE_SYSTEMS, SIE_TEACHERS, SIE_SUBJECTS, getSIEEducationSystem, getSIESubject, getSIETeacher, getSIETeachersForSubject, getSIETrack, getSIECheckpointChoices, getSIECheckpointBranches, normalizeSIECheckpointFrontier, getSIECheckpointProgressBranches, matchSIECheckpointTask, validateSIESubjectSelection } from "@shared/sie-catalog";
 import { getCairoSecondYearBaccalaureateExams } from "@shared/cairo-baccalaureate-exam-calendar";
+import { matchTeacherReviewDescription } from "./teacher-review-description";
 import { calculateLearningGap, selectLegacyLinearFrontier } from "@shared/sie-learning-progress";
 import {
   addChapter,
@@ -2959,20 +2960,34 @@ export const appRouter = router({
           : []);
         const branchNodeIds = new Set(branch.choices.map(choice => choice.nodeId));
         const matchedBranchTopics = (update: Record<string, any>) => {
-          const topics = Array.isArray(update.contentAnalysis?.topics)
-            ? update.contentAnalysis.topics as Array<Record<string, any>>
-            : [];
-          return [...new Set(topics.flatMap(topic => {
-            if (topic.confidence === "low") return [];
-            const topicText = [
-              topic.titleAr,
-              topic.descriptionAr,
-              ...(Array.isArray(topic.curriculumKeywords) ? topic.curriculumKeywords : []),
-              ...(Array.isArray(topic.branchHints) ? topic.branchHints : []),
-            ].filter(value => typeof value === "string").join(" ");
-            const match = matchSIECheckpointTask([input.subjectId], topicText);
-            return match && branchNodeIds.has(match.nodeId) ? [match.title] : [];
-          }))];
+          const analysisStatus = String(update.contentAnalysis?.status ?? "");
+          if (analysisStatus === "complete") {
+            const topics = Array.isArray(update.contentAnalysis?.topics)
+              ? update.contentAnalysis.topics as Array<Record<string, any>>
+              : [];
+            return [...new Set(topics.flatMap(topic => {
+              if (topic.confidence === "low") return [];
+              const topicText = [
+                topic.titleAr,
+                topic.descriptionAr,
+                ...(Array.isArray(topic.curriculumKeywords) ? topic.curriculumKeywords : []),
+                ...(Array.isArray(topic.branchHints) ? topic.branchHints : []),
+              ].filter(value => typeof value === "string").join(" ");
+              const match = matchSIECheckpointTask([input.subjectId], topicText);
+              return match && branchNodeIds.has(match.nodeId) ? [match.title] : [];
+            }))];
+          }
+
+          // A public description is sufficient only when it names a concrete
+          // checkpoint in this exact subject and branch. Completed video analysis
+          // remains authoritative and cannot be overridden by description text.
+          const descriptionMatch = update.descriptionMatch;
+          if (descriptionMatch?.subjectId !== input.subjectId
+            || descriptionMatch?.branchId !== input.branchId
+            || !Array.isArray(descriptionMatch?.topics)) return [];
+          return [...new Set(descriptionMatch.topics.filter((topic: unknown): topic is string =>
+            typeof topic === "string" && branch.choices.some(choice => choice.title === topic)
+          ))];
         };
 
         const savedTeacherUpdates = Array.isArray(selection.teacherPublicUpdates)
@@ -2992,7 +3007,12 @@ export const appRouter = router({
           if (!acceptedIds.has(externalId) || declinedIds.has(externalId)
             || context?.subjectId !== input.subjectId || context?.branchId !== input.branchId) return [];
           const matchedTopics = matchedBranchTopics(update);
-          const analysisStatus = String(update.contentAnalysis?.status ?? "processing");
+          const rawAnalysisStatus = String(update.contentAnalysis?.status ?? "");
+          const analysisStatus = rawAnalysisStatus === "complete"
+            ? "complete"
+            : matchedTopics.length
+              ? "description_verified"
+              : rawAnalysisStatus || "processing";
           if (analysisStatus === "failed" || (analysisStatus === "complete" && matchedTopics.length === 0)) return [];
           const teacher = getSIETeacher(String(update.teacherId ?? ""));
           const teacherName = String(update.teacherName ?? teacher?.nameAr ?? "مدرس المادة");
@@ -3011,10 +3031,13 @@ export const appRouter = router({
             accepted: true,
             isSelectedTeacher: update.teacherId === selectedTeacherId,
             analysisStatus,
-            verificationState: analysisStatus === "complete" ? "content_verified" : "analysis_pending",
+            verificationState: analysisStatus === "complete" ? "content_verified"
+              : analysisStatus === "description_verified" ? "description_verified" : "analysis_pending",
             relevance: analysisStatus === "complete"
-              ? "تم تحليل الفيديو ومطابقة موضوعاته مع دروس متراكمة في هذا الفرع."
-              : "وافق الطالب على تحليل الفيديو؛ ننتظر اكتمال فحص المحتوى قبل إدراجه في الخطة.",
+              ? "طابق تحليل الفيديو موضوعات من هذا الفرع."
+              : analysisStatus === "description_verified"
+                ? "وصف الفيديو نفسه يذكر درسًا محددًا من هذا الفرع؛ لم نحتج إلى تحليل الفيديو كاملًا."
+                : "وافق الطالب على مصدر المدرس البديل؛ يجري فحصه قبل ربطه بالمنهج.",
           }];
         });
 
@@ -3025,16 +3048,19 @@ export const appRouter = router({
           .filter(update => update.teacherId === selectedTeacherId
             && update.sourceType === "youtube"
             && update.announcementType === "revision"
-            && typeof update.url === "string"
-            && !/failed/.test(String(update.contentAnalysis?.status ?? "")))
+            && typeof update.url === "string")
           .flatMap(update => {
             const videoId = extractVideoId(String(update.url));
             if (!videoId) return [];
             const externalId = "youtube:" + videoId;
             if (declinedIds.has(externalId)) return [];
             const matchedTopics = matchedBranchTopics(update);
-            const analysisStatus = String(update.contentAnalysis?.status
-              ?? (isTeacherVideoAnalysisConfigured() ? "processing" : "analysis_unavailable"));
+            const rawAnalysisStatus = String(update.contentAnalysis?.status ?? "");
+            const analysisStatus = rawAnalysisStatus === "complete"
+              ? "complete"
+              : matchedTopics.length
+                ? "description_verified"
+                : rawAnalysisStatus || (isTeacherVideoAnalysisConfigured() ? "processing" : "analysis_unavailable");
             if (analysisStatus === "complete" && matchedTopics.length === 0) return [];
             const teacherName = String(update.teacherName ?? selectedTeacher?.nameAr ?? "مدرسك");
             return [{
@@ -3052,12 +3078,15 @@ export const appRouter = router({
               accepted: true,
               isSelectedTeacher: true,
               analysisStatus,
-              verificationState: analysisStatus === "complete" ? "content_verified" : "analysis_pending",
+              verificationState: analysisStatus === "complete" ? "content_verified"
+                : analysisStatus === "description_verified" ? "description_verified" : "analysis_pending",
               relevance: analysisStatus === "complete"
-                ? "تم تحليل محتوى الفيديو وربطه بموضوعات متراكمة داخل هذا الفرع."
-                : analysisStatus === "processing"
-                  ? "هذا فيديو مراجعة من قناة مدرسك المختار؛ يجري تحليل محتواه قبل ربطه بالمنهج."
-                  : "تم العثور على الفيديو من قناة مدرسك، لكن تحليل Gemini غير متاح حاليًا؛ لذلك لن يدخل الخطة قبل إتمام التحليل.",
+                ? "طابق تحليل الفيديو موضوعات متراكمة داخل هذا الفرع."
+                : analysisStatus === "description_verified"
+                  ? "وصف الفيديو يحدد درسًا من هذا الفرع بوضوح؛ استخدمناه دون تحليل الفيديو كاملًا."
+                  : analysisStatus === "processing"
+                    ? "الوصف لا يحدد الدرس بوضوح؛ يجري تحليل الفيديو نفسه تلقائيًا."
+                    : "الوصف غير كافٍ وتحليل Gemini غير متاح حاليًا؛ لذلك لن يدخل الفيديو في الخطة دون تحقق.",
             }];
           })
           .sort((a, b) => Date.parse(b.publishedAt || "") - Date.parse(a.publishedAt || ""))
@@ -3101,6 +3130,21 @@ export const appRouter = router({
             const combined = normalize(title + " " + description);
             const branchMatch = normalizedTokens(branch.branchTitle).some(token => combined.includes(token));
             const subjectMatch = normalizedTokens(subject.nameAr).some(token => combined.includes(token));
+            const descriptionMatchedTopics = matchTeacherReviewDescription({
+              subjectId: input.subjectId,
+              branchId: input.branchId,
+              title,
+              description,
+            });
+            const descriptionMatch = descriptionMatchedTopics.length ? {
+              subjectId: input.subjectId,
+              branchId: input.branchId,
+              topics: descriptionMatchedTopics,
+              verifiedAt: new Date().toISOString(),
+            } : undefined;
+            const analysisStatus = descriptionMatch
+              ? "description_verified"
+              : isTeacherVideoAnalysisConfigured() ? "processing" : "analysis_unavailable";
             return [{
               externalId,
               teacherId: selectedTeacher.teacherId,
@@ -3112,17 +3156,20 @@ export const appRouter = router({
               publishedAt: String(item.publishedAt ?? item.published_at ?? ""),
               description,
               matchedSignals: Number(branchMatch) + Number(subjectMatch) + 1,
-              matchedTopics: [] as string[],
-              // Selecting this teacher already authorizes StudyFlow to inspect
-              // public revision material from the teacher's verified channel.
-              // Videos from alternative teachers still require explicit acceptance.
+              matchedTopics: descriptionMatchedTopics,
+              // The selected teacher's public channel is already linked. Prefer
+              // its description when it explicitly identifies a lesson; only send
+              // unclear descriptions to full video analysis.
               accepted: true,
               isSelectedTeacher: true,
-              analysisStatus: isTeacherVideoAnalysisConfigured() ? "processing" : "analysis_unavailable",
-              verificationState: "selected_teacher_identity_only" as const,
-              relevance: isTeacherVideoAnalysisConfigured()
-                ? "هذا الفيديو من قناة مدرسك المختار؛ بدأ StudyFlow تحليل محتواه تلقائيًا، ولن يربطه بالخطة إلا بعد مطابقته مع المنهج."
-                : "تم التحقق من قناة مدرسك، لكن تحليل محتوى الفيديو يحتاج إعداد Gemini في خدمة Preview.",
+              analysisStatus,
+              verificationState: descriptionMatch ? "description_verified" as const : "selected_teacher_identity_only" as const,
+              ...(descriptionMatch ? { descriptionMatch } : {}),
+              relevance: descriptionMatch
+                ? "وصف الفيديو يحدد درسًا واضحًا في هذا الفرع؛ استخدمناه كمصدر كافٍ دون انتظار تحليل الفيديو."
+                : isTeacherVideoAnalysisConfigured()
+                  ? "الوصف لا يحدد الدرس بوضوح؛ بدأ StudyFlow تحليل الفيديو نفسه تلقائيًا."
+                  : "الوصف غير كافٍ لتأكيد الدرس، وتحليل Gemini غير متاح حاليًا.",
             }];
           }).slice(0, 5);
         }
@@ -3211,7 +3258,7 @@ export const appRouter = router({
         const automaticTeacherRevisionUpdates: TeacherPublicUpdate[] = selectedTeacherItems
           .filter(item => item.isSelectedTeacher
             && item.accepted
-            && item.verificationState === "selected_teacher_identity_only")
+            && ["selected_teacher_identity_only", "description_verified"].includes(item.verificationState))
           .map(item => ({
             externalId: item.externalId,
             teacherId: item.teacherId,
@@ -3226,6 +3273,14 @@ export const appRouter = router({
             observedAt: new Date().toISOString(),
             announcementType: "revision",
             confidence: "medium",
+            ...(item.verificationState === "description_verified" && Array.isArray(item.matchedTopics) ? {
+              descriptionMatch: {
+                subjectId: input.subjectId,
+                branchId: input.branchId,
+                topics: item.matchedTopics,
+                verifiedAt: new Date().toISOString(),
+              },
+            } : {}),
           }));
 
         const latestSearchProfile = await getStudentProfile(ctx.user.id);
@@ -3245,10 +3300,16 @@ export const appRouter = router({
           const previousTeacherUpdates = Array.isArray(latestSearchSelection.teacherPublicUpdates)
             ? latestSearchSelection.teacherPublicUpdates as TeacherPublicUpdate[]
             : [];
-          const automaticIds = new Set(automaticTeacherRevisionUpdates.map(update => update.externalId));
+          const automaticById = new Map(automaticTeacherRevisionUpdates.map(update => [update.externalId, update]));
+          const automaticIds = new Set(automaticTeacherRevisionUpdates
+            .filter(update => !update.descriptionMatch)
+            .map(update => update.externalId));
           const nextTeacherUpdates = [
+            ...previousTeacherUpdates.map(saved => {
+              const refreshed = automaticById.get(saved.externalId);
+              return refreshed ? { ...saved, ...refreshed } : saved;
+            }),
             ...automaticTeacherRevisionUpdates.filter(update => !previousTeacherUpdates.some(saved => saved.externalId === update.externalId)),
-            ...previousTeacherUpdates,
           ].slice(0, 60);
           await updateStudentProfileSelection(ctx.user.id, {
             ...latestSearchSelection,
@@ -3262,7 +3323,9 @@ export const appRouter = router({
             );
           }
         }
-        const hasVerifiedContentMatch = items.some(item => item.verificationState === "content_verified");
+        const hasVerifiedContentMatch = items.some(item =>
+          item.verificationState === "content_verified" || item.verificationState === "description_verified"
+        );
         const hasAlternativeCandidate = items.some(item => !item.isSelectedTeacher);
         await logStudentActivity(ctx.user.id, "learning.review_search", "curriculum_branch", input.branchId,
           hasVerifiedContentMatch ? "تم عرض فيديوهات مراجعة طابق تحليل محتواها دروسًا متراكمة"
@@ -3272,7 +3335,9 @@ export const appRouter = router({
             selectedTeacherId: selectedTeacherId ?? null,
             resultCount: items.length,
             source: hasAlternativeCandidate ? "selected_and_alternative_teachers" : "selected_teacher",
-            verifiedContentMatches: items.filter(item => item.verificationState === "content_verified").length,
+            verifiedContentMatches: items.filter(item =>
+              item.verificationState === "content_verified" || item.verificationState === "description_verified"
+            ).length,
           });
         return {
           query, subject: subject.nameAr, branch: branch.branchTitle,
@@ -3281,8 +3346,8 @@ export const appRouter = router({
           note: reviewSearchUnavailable
             ? "تعذّر الوصول إلى البحث الخارجي الآن. تظل مراجعات الفيديو المحفوظة وتحليلها متاحة؛ جرّب البحث لاحقًا."
             : hasVerifiedContentMatch
-              ? "رتّبنا النتائج حسب مطابقة محتوى الفيديو للدروس المتراكمة، وليس حسب اسم المدرس فقط. قد يظهر فيديو من مدرس آخر إذا كان شرحه أقرب لما تحتاجه. الفيديو غير المحلل لا يدخل الخطة."
-              : "فيديوهات مدرسك المختار تُفحص تلقائيًا من قناته المعروفة، ولا تدخل الخطة إلا بعد تحليل محتواها ومطابقتها مع دروسك المتراكمة. مراجعات المدرسين البدلاء تظل مرشحات منفصلة وتتطلب موافقتك قبل تحليلها أو ربطها.",
+              ? "نرتّب النتائج حسب مطابقة الوصف أو تحليل الفيديو مع الدروس المتراكمة، وليس حسب اسم المدرس فقط. لا ندخل فيديو لمجرد أن عنوانه يحتوي كلمة مراجعة."
+              : "يستخدم StudyFlow وصف فيديو مدرسك أولًا عندما يذكر درسًا محددًا، ويحلل الفيديو نفسه عندما لا يكون الوصف كافيًا. مراجعات المدرسين البدلاء تظل منفصلة وتتطلب موافقتك قبل ربطها بالمنهج.",
         };
       }),
     acceptAlternativeReview: protectedProcedure
