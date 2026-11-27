@@ -517,7 +517,7 @@ export default function Study() {
   const visibleSubjects = subjects.filter(id => normalizeFrontierSearch(getSIESubject(id)?.nameAr || id).includes(normalizeFrontierSearch(subjectSearch)));
 
   return (
-    <DashboardLayout title="المذاكرة والتقدم" description="اختر المادة وحدّد موضعك وموضع شرح المدرس في المنهج.">
+    <DashboardLayout title="المذاكرة والتقدم" description="اختر المادة والوحدة، وسجّل حالة الشرح والمذاكرة لكل درس.">
       {profile.isError && <div className="rounded-2xl border border-destructive/20 bg-destructive/5 p-4 text-sm">تعذّر تحميل ملفك الدراسي. <button className="font-bold underline" onClick={() => void profile.refetch()}>إعادة المحاولة</button></div>}
       <section className="grid gap-6">
         <article className="sf-study-subject-selector app-card min-w-0 overflow-hidden rounded-2xl">
@@ -596,7 +596,7 @@ export default function Study() {
                 <span>الدروس</span>
                 <span className="sf-study-view-count">{curriculumLessonCount.toLocaleString("ar-EG")}</span>
               </button>
-            </div>>
+            </div>
           </div>
         </header>
         {studyViewMode === "units" ? (
