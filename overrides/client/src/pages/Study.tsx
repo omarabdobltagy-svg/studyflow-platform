@@ -25,7 +25,7 @@ import {
   summarizeStudentLessonStates,
   type StudentLessonState,
 } from "@shared/sie-lesson-state";
-import { BookOpenText, Check, ChevronLeft, ChevronRight, Search, X } from "lucide-react";
+import { BookOpenText, Check, ChevronLeft, ChevronRight, Loader2, Search, Sparkles, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "framer-motion";
@@ -43,11 +43,16 @@ export default function Study() {
       const acceptedIds = new Set(Array.isArray(savedSelection?.acceptedAlternativeReviewVideoIds)
         ? savedSelection?.acceptedAlternativeReviewVideoIds.filter((value: unknown): value is string => typeof value === "string")
         : []);
+      const selectedTeacherIds = new Set(Object.values({
+        ...((query.state.data?.teacherSelections ?? {}) as Record<string, unknown>),
+        ...((savedSelection?.teacherChoices ?? {}) as Record<string, unknown>),
+      }).filter((value): value is string => typeof value === "string" && Boolean(value)));
       const updates = Array.isArray(savedSelection?.teacherPublicUpdates) ? savedSelection.teacherPublicUpdates : [];
       const analysisStillRunning = updates.some((update: any) => {
         const videoId = typeof update.externalId === "string" ? update.externalId : "";
         const status = String(update.contentAnalysis?.status ?? "processing");
-        return acceptedIds.has(videoId) && status !== "complete" && status !== "failed";
+        const selectedTeacherVideo = typeof update.teacherId === "string" && selectedTeacherIds.has(update.teacherId);
+        return (acceptedIds.has(videoId) || selectedTeacherVideo) && status !== "complete" && status !== "failed";
       });
       return analysisStillRunning ? 3_500 : false;
     },
@@ -175,7 +180,9 @@ export default function Study() {
       ? selection.acceptedAlternativeReviewVideoIds.filter((value: unknown): value is string => typeof value === "string")
       : []);
     const completedAcceptedCandidates = reviewCandidates.filter(candidate => {
-      if (!candidate.accepted || !acceptedIds.has(candidate.externalId)) return false;
+      const isEligibleForAutomaticRefresh = candidate.isSelectedTeacher === true
+        || (candidate.accepted && acceptedIds.has(candidate.externalId));
+      if (!isEligibleForAutomaticRefresh) return false;
       const update = savedUpdates.find((item: any) => item.externalId === candidate.externalId);
       const status = String(update?.contentAnalysis?.status ?? "");
       return status === "complete" || status === "failed";
