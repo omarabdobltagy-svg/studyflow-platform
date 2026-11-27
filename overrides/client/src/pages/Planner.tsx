@@ -30,6 +30,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 type PlanningMode = "smart" | "backlog" | "teacher_sync";
+type StudyPace = "relaxed" | "balanced" | "intensive";
+const PACE_DAILY_CAPACITY: Record<StudyPace, number> = {
+  relaxed: 60,
+  balanced: 120,
+  intensive: 180,
+};
 type GenerationProgress = {
   status: "running" | "complete" | "failed";
   currentStage: "profile" | "curriculum" | "model" | "validation" | "saving" | "complete";
@@ -104,12 +110,77 @@ const DAILY_PLAN_DRAFT_PREFIX = "SIE_DAILY_PLAN_DRAFT_V1:";
 const ANNUAL_PLAN_PREFIX = "SIE_ANNUAL_PLAN_V1:";
 const STUDY_PLAN_PREFIX = "SIE_STUDY_PLAN_V2:";
 const todayCairo = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
-const initialPrompt = "كوّن لي خطة مذاكرة عملية للفترة القادمة. استخدم المهام الحالية وآخر موضع مكتمل وجدول حصص المدرسين، ووازن بين إنهاء المتراكم والاستعداد للمحاضرات الجديدة. لا تنشئ اختبارات أو أسئلة أو واجبات من عندك.";
+const initialPrompt = "كوّن لي خطة مذاكرة عملية موزعة على جميع المواد المحددة في ملفي الدراسي، وليس مادة واحدة فقط. استخدم المهام الحالية وآخر موضع مكتمل وجدول حصص المدرسين، ووازن بين إنهاء المتراكم والاستعداد للمحاضرات الجديدة. اجعل عناوين المهام وشرحها بالعربية الواضحة. لا تنشئ اختبارات أو أسئلة أو واجبات من عندك.";
 const planningModeOptions: Array<{ value: PlanningMode; title: string; description: string; marker: string }> = [
   { value: "smart", title: "الخطة الذكية", description: "تخلّص المتراكم، وفي نفس الوقت تجهّزك لشرح المدرس القادم.", marker: "الموصى بها" },
   { value: "backlog", title: "المتراكم أولًا", description: "ركّز على المهام المفتوحة والفجوات المؤكدة قبل إضافة الجديد.", marker: "تركيز" },
   { value: "teacher_sync", title: "مواكبة المدرس", description: "حضّر للموضوع القادم قبل موعد الحصة وحافظ على متابعة الجديد.", marker: "استمرارية" },
 ];
+
+function isEnglishOnlyText(value: string | null | undefined): boolean {
+  const text = String(value ?? "").trim();
+  return /[A-Za-z]{3,}/.test(text) && !/[\u0600-\u06FF]/.test(text);
+}
+
+function displayArabicText(value: string | null | undefined, fallback: string): string {
+  const text = String(value ?? "").trim();
+  if (!text) return fallback;
+  return isEnglishOnlyText(text) ? fallback : text;
+}
+
+function getPlanStepCurriculum(step: PlanStep, subjectIds: string[]) {
+  const nodeIds = new Set(step.curriculumNodeIds ?? []);
+  for (const subjectId of subjectIds) {
+    const branch = getSIECheckpointProgressBranches(subjectId).find(item =>
+      item.choices.some(choice => nodeIds.has(choice.nodeId))
+    );
+    if (!branch) continue;
+    const choice = branch.choices.find(item => nodeIds.has(item.nodeId));
+    if (!choice) continue;
+    return {
+      subjectId,
+      subject: getSIESubject(subjectId)?.nameAr ?? "مادة دراسية",
+      branch: displayBranchTitle(branch.branchTitle),
+      lesson: displayCurriculumTitle(choice.title),
+    };
+  }
+  const match = matchSIECheckpointTask(subjectIds, [step.title, step.detail, step.category].join(" "));
+  if (match) {
+    return {
+      subjectId: match.subjectId,
+      subject: getSIESubject(match.subjectId)?.nameAr ?? "مادة دراسية",
+      branch: displayBranchTitle(match.branchTitle),
+      lesson: displayCurriculumTitle(match.title),
+    };
+  }
+  return null;
+}
+
+function displayPlanStepTitle(step: PlanStep, subjectIds: string[]): string {
+  const curriculum = getPlanStepCurriculum(step, subjectIds);
+  if (curriculum) {
+    const segment = step.segmentIndex && step.segmentCount && step.segmentCount > 1
+      ? " — الجزء " + step.segmentIndex.toLocaleString("ar-EG") + " من " + step.segmentCount.toLocaleString("ar-EG")
+      : "";
+    return curriculum.subject + " · " + curriculum.branch + " · " + curriculum.lesson + segment;
+  }
+  return displayArabicText(displayCurriculumTitle(step.title), "مهمة دراسية");
+}
+
+function displayPlanStepCategory(step: PlanStep, subjectIds: string[]): string {
+  const curriculum = getPlanStepCurriculum(step, subjectIds);
+  if (curriculum) return curriculum.subject + " · " + curriculum.branch;
+  return displayArabicText(step.category, step.existingTask ? "التزامات مسجلة" : "دراسة");
+}
+
+function displayPlanStepDetail(step: PlanStep, subjectIds: string[]): string {
+  const fallback = step.existingTask
+    ? "نفّذ التكليف المسجل كما هو، ثم حدّث حالة المهمة في قائمتك."
+    : getPlanStepCurriculum(step, subjectIds)
+      ? "ابدأ من مصدر المادة للدرس المحدد، وتابع شرح المدرس عند توفره، ثم سجّل تقدمك بعد المذاكرة."
+      : "راجع المطلوب في المهمة، ونفّذه من المصدر المسجل، ثم حدّث حالتها.";
+  return displayArabicText(step.detail, fallback);
+}
 
 function parseSavedPlan(record: { planJson: string }): PlanView | null {
   try {
@@ -142,7 +213,8 @@ export default function Planner() {
   const utils = trpc.useUtils();
   const [plan, setPlan] = useState<PlanView | null>(null);
   const planningMode: PlanningMode = "smart";
-  const [dailyMinutes, setDailyMinutes] = useState(120);
+  const [selectedPace, setSelectedPace] = useState<StudyPace>("balanced");
+  const dailyMinutes = PACE_DAILY_CAPACITY[selectedPace];
   const [approved, setApproved] = useState(false);
   const [loadedSavedDraft, setLoadedSavedDraft] = useState(false);
   const historyInitialized = useRef(false);
@@ -229,7 +301,9 @@ export default function Planner() {
     const selection = (profile.data.selection ?? {}) as Record<string, any>;
     const conditions = (selection.studyConditions ?? {}) as Record<string, unknown>;
     const configuredMinutes = Number(conditions.dailyMinutes);
-    if (Number.isFinite(configuredMinutes) && configuredMinutes > 0) setDailyMinutes(configuredMinutes <= 60 ? 60 : configuredMinutes <= 150 ? 120 : 180);
+    if (Number.isFinite(configuredMinutes) && configuredMinutes > 0) {
+      setSelectedPace(configuredMinutes <= 60 ? "relaxed" : configuredMinutes <= 150 ? "balanced" : "intensive");
+    }
     plannerPreferencesInitialized.current = true;
   }, [profile.data, profile.isLoading, profile.isError]);
 
@@ -311,16 +385,16 @@ export default function Planner() {
     onError: error => toast.error("تعذّر مسح الخطط: " + error.message),
   });
 
-  const runGeneration = (minutes: number) => {
+  const runGeneration = () => {
     generate.mutate({
       prompt: initialPrompt,
       includeStudentProfile: true,
       planningMode: "smart",
       horizonDays: 7,
-      dailyMinutes: minutes,
+      dailyMinutes,
       daysPerWeek: 6,
       startDate: todayCairo,
-      pace: "balanced",
+      pace: selectedPace,
       paceLevel: 2,
       deadline: null,
     });
@@ -439,12 +513,29 @@ export default function Planner() {
   const completedPlanCount = plan?.steps.filter(step => step.plannerTaskStatus === "done" || step.existingTask?.status === "done").length ?? 0;
   const planProgress = planStepCount ? Math.round((completedPlanCount / planStepCount) * 100) : 0;
   const nextPlanStep = plan?.steps.find(step => step.plannerTaskStatus !== "done" && step.existingTask?.status !== "done") ?? null;
-  const plannedMinutes = plan?.steps.reduce((sum, step) => sum + (Number.isFinite(step.minutes) ? Math.max(0, step.minutes) : 0), 0) ?? 0;
   const taskRows = tasksQuery.data ?? [];
   const openTaskRows = taskRows.filter(task => task.status !== "done");
   const overdueTaskRows = openTaskRows.filter(task => task.dueAt && new Date(task.dueAt).getTime() < Date.now());
   const todayTaskRows = openTaskRows.filter(task => task.dueAt && new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date(task.dueAt)) === todayCairo);
   const curriculumGapCount = progressPreview.reduce((sum, item) => sum + (typeof item.gapCount === "number" ? item.gapCount : 0), 0);
+  const paceRecommendation: StudyPace = overdueTaskRows.length >= 3 || openTaskRows.length >= 10 || curriculumGapCount >= 12
+    ? "intensive"
+    : openTaskRows.length <= 2 && overdueTaskRows.length === 0 && curriculumGapCount <= 3
+      ? "relaxed"
+      : "balanced";
+  const paceEvidence = tasksQuery.isLoading || learning.isLoading
+    ? "جارٍ حساب التراكم من بياناتك المسجلة."
+    : "بياناتك الحالية: " + openTaskRows.length.toLocaleString("ar-EG") + " مهمة مفتوحة، "
+      + overdueTaskRows.length.toLocaleString("ar-EG") + " متأخرة، و"
+      + curriculumGapCount.toLocaleString("ar-EG") + " موضعًا متأخرًا عن مرجع المدرس عبر الفروع المعروفة.";
+  const paceReasons: Record<StudyPace, string> = {
+    relaxed: "يحافظ على الاستمرارية بخطوات أقل، ويناسب الفترات التي يكون فيها التراكم محدودًا.",
+    balanced: "يوازن بين إغلاق الالتزامات الحالية ومواكبة الدروس التالية عبر المواد.",
+    intensive: "يرفع عدد الخطوات في دورة التخطيط لتقليل التراكم، مع الحفاظ على ترتيب الأولويات وعدم اختراع واجبات.",
+  };
+  const planSubjectCount = plan
+    ? new Set(plan.steps.map(step => getPlanStepCurriculum(step, profile.data?.subjectIds ?? [])?.subjectId).filter(Boolean)).size
+    : 0;
   const planNeedsRefresh = Boolean(activeDailyPlan.data?.needsRefresh);
 
   return (
@@ -467,7 +558,7 @@ export default function Planner() {
             <div className="sf-sp-context">
               {profile.data?.track && <span>{profile.data.track}</span>}
               <span>{(profile.data?.subjectIds?.length ?? 0).toLocaleString("ar-EG")} مواد دراسية</span>
-              <span>{dailyMinutes === 60 ? "حمل يومي خفيف" : dailyMinutes === 120 ? "حمل يومي متوازن" : "مساحة يومية أكبر"}</span>
+              <span>{selectedPace === "relaxed" ? "إيقاع مرن" : selectedPace === "intensive" ? "إيقاع مكثف" : "إيقاع متوازن"}</span>
             </div>
           </div>
           <div className="sf-sp-hero-progress">
@@ -485,7 +576,7 @@ export default function Planner() {
           <article className="sf-sp-metric"><span>المهام المفتوحة</span><strong>{tasksQuery.isLoading ? "…" : openTaskRows.length.toLocaleString("ar-EG")}</strong><small>من قائمة مهامك الفعلية</small></article>
           <article className="sf-sp-metric"><span>مهام مستحقة اليوم</span><strong>{tasksQuery.isLoading ? "…" : todayTaskRows.length.toLocaleString("ar-EG")}</strong><small>وفق المواعيد المسجلة</small></article>
           <article className="sf-sp-metric"><span>مهام تجاوزت موعدها</span><strong>{tasksQuery.isLoading ? "…" : overdueTaskRows.length.toLocaleString("ar-EG")}</strong><small>تحتاج إلى إعادة ترتيب</small></article>
-          <article className="sf-sp-metric"><span>وقت الخطة المقترح</span><strong>{plan ? Math.round(plannedMinutes / 60 * 10) / 10 + " س" : "—"}</strong><small>{plan ? planStepCount.toLocaleString("ar-EG") + " مهمة في المقترح" : "يظهر بعد بناء الخطة"}</small></article>
+          <article className="sf-sp-metric"><span>المواد الممثلة في الخطة</span><strong>{plan ? planSubjectCount.toLocaleString("ar-EG") : "—"}</strong><small>{plan ? "من المواد المحددة في ملفك" : "تظهر بعد بناء الخطة"}</small></article>
         </section>
 
         <nav className="sf-sp-tabs" role="tablist" aria-label="أقسام خطة المذاكرة">
@@ -512,8 +603,8 @@ export default function Planner() {
                 </div>
                 {nextPlanStep ? (
                   <>
-                    <div className="sf-sp-focus-title">{displayCurriculumTitle(nextPlanStep.title)}</div>
-                    <p className="sf-sp-focus-detail">{nextPlanStep.detail}</p>
+                    <div className="sf-sp-focus-title">{displayPlanStepTitle(nextPlanStep, profile.data?.subjectIds ?? [])}</div>
+                    <p className="sf-sp-focus-detail">{displayPlanStepDetail(nextPlanStep, profile.data?.subjectIds ?? [])}</p>
                     <div className="sf-sp-step-meta">
                       {nextPlanStep.minutes > 0 && <span><CalendarClock className="size-3.5" />{nextPlanStep.minutes.toLocaleString("ar-EG")} دقيقة</span>}
                       {nextPlanStep.category && <span>{nextPlanStep.category}</span>}
@@ -533,20 +624,51 @@ export default function Planner() {
 
               <aside className="sf-sp-builder-card">
                 <div className="sf-sp-section-heading">
-                  <div><span className="sf-sp-eyebrow">توزيع الحمل</span><h2>الوقت المتاح لك يوميًا</h2></div>
+                  <div><span className="sf-sp-eyebrow">اختيار إيقاع الخطة</span><h2>تختار تذاكر بإيقاع إيه؟</h2></div>
                 </div>
-                <p>اختر متوسط الوقت الذي تستطيع تخصيصه للمذاكرة. سيستخدمه المحرك لضبط حجم العمل، لا لفرض مواعيد ثابتة.</p>
-                <div className="sf-sp-capacity-options">
-                  {([[60,"ساعة","حمل أقل"],[120,"ساعتان","حمل متوازن"],[180,"3 ساعات","حمل أكبر"]] as const).map(([value,label,description]) => (
-                    <button key={value} type="button" aria-pressed={dailyMinutes === value} className="sf-sp-capacity" onClick={() => setDailyMinutes(value)}>
-                      <strong>{label}</strong><span>{description}</span>
+                <p>الاختيار يحدد حجم المهام التي يقترحها المحرك، ويظل قابلًا للتعديل. التوصية تتغير تلقائيًا حسب التراكم والمهام المتأخرة وفجوات المنهج.</p>
+                <div className="sf-sp-pace-options">
+                  {([
+                    ["relaxed", "مرنة", "خطوات أقل", "للاستمرارية الهادئة وإنجاز الأولويات القريبة."],
+                    ["balanced", "متوازنة", "توزيع متوازن", "للموازنة بين المتراكم ومواكبة جميع المواد."],
+                    ["intensive", "مكثفة", "خطوات أكثر", "لتقليل التراكم عندما تسمح طاقتك بذلك."],
+                  ] as const).map(([pace, label, subtitle, baseReason]) => (
+                    <button
+                      key={pace}
+                      type="button"
+                      aria-pressed={selectedPace === pace}
+                      className={"sf-sp-pace-choice " + (selectedPace === pace ? "is-selected" : "") + (paceRecommendation === pace ? " is-recommended" : "")}
+                      onClick={() => setSelectedPace(pace)}
+                    >
+                      <span className="sf-sp-pace-choice-top">
+                        <strong>{label}</strong>
+                        {paceRecommendation === pace && <em>الأنسب لبياناتك</em>}
+                      </span>
+                      <small>{subtitle}</small>
+                      <p>{baseReason}</p>
+                      <span className="sf-sp-pace-personal">
+                        {pace === "relaxed"
+                          ? (openTaskRows.length <= 2 && overdueTaskRows.length === 0
+                            ? "التراكم المسجل محدود حاليًا؛ تقدر تحافظ على وتيرة ثابتة."
+                            : "هذا الخيار يقلل عدد الخطوات، لكنه قد يترك جزءًا من التراكم للدورة القادمة.")
+                          : pace === "balanced"
+                            ? "يراعي المهام المفتوحة ويترك مساحة لمتابعة الدروس التالية في المواد المختارة."
+                            : (overdueTaskRows.length > 0 || curriculumGapCount > 0
+                              ? "مناسب لو هدفك معالجة التراكم بسرعة أكبر، مع مراجعة قدرتك على تنفيذ المقترح."
+                              : "يزيد عدد الخطوات حتى مع قلة التراكم؛ اختره فقط إذا كانت لديك مساحة فعلية.") }
+                      </span>
                     </button>
                   ))}
                 </div>
-                <Button type="button" className="sf-sp-build-button" disabled={!isPreflightReady || generate.isPending || !profile.data?.subjectIds?.length} onClick={() => runGeneration(dailyMinutes)}>
+                <div className="sf-sp-pace-evidence">
+                  <strong>سبب التوصية</strong>
+                  <p>{paceEvidence}</p>
+                  <small>{paceReasons[paceRecommendation]}</small>
+                </div>
+                <Button type="button" className="sf-sp-build-button" disabled={!isPreflightReady || generate.isPending || !profile.data?.subjectIds?.length} onClick={runGeneration}>
                   {generate.isPending ? <><Loader2 className="size-4 animate-spin" /> جارٍ بناء الخطة</> : <>{plan ? <RefreshCw className="size-4" /> : <Sparkles className="size-4" />}{plan ? "إعادة بناء الخطة" : "أنشئ خطة المذاكرة"}</>}
                 </Button>
-                <small>ستظهر المسودة أولًا للمراجعة. لن تُضاف المهام إلى قائمتك قبل اعتمادك.</small>
+                <small>ستظهر المسودة أولًا للمراجعة. لن تُضاف أي مهمة إلى قائمتك قبل اعتماد الخطة.</small>
               </aside>
             </section>
 
@@ -602,7 +724,7 @@ export default function Planner() {
         {plannerTab === "schedule" && (
           <div className="sf-sp-panel" data-scroll-reveal>
             {plan ? (
-              <PlanCard plan={plan} title={approved ? "الخطة المعتمدة" : loadedSavedDraft ? "مسودة محفوظة" : "مقترح للمراجعة"} studentName={profile.data?.studentName} editable={!approved} onChange={updatePlan} onApprove={approveCurrentPlan} onAddStep={addStep} onRemoveStep={removeStep} onMoveStep={moveStep} approving={approvePlan.isPending} approved={approved} />
+              <PlanCard plan={plan} subjectIds={profile.data?.subjectIds ?? []} title={approved ? "الخطة المعتمدة" : loadedSavedDraft ? "مسودة محفوظة" : "مقترح للمراجعة"} studentName={profile.data?.studentName} editable={!approved} onChange={updatePlan} onApprove={approveCurrentPlan} onAddStep={addStep} onRemoveStep={removeStep} onMoveStep={moveStep} approving={approvePlan.isPending} approved={approved} />
             ) : (
               <section className="sf-sp-empty"><h2>لا يوجد جدول مذاكرة حالي</h2><p>أنشئ مقترحًا أولًا، ثم راجع توزيع المهام حسب اليوم والمرحلة واعتمده لإضافته إلى قائمتك.</p><Button type="button" onClick={() => setPlannerTab("overview")}>العودة إلى الملخص</Button></section>
             )}
@@ -653,7 +775,7 @@ export default function Planner() {
                   {mappedOpenTasks.map(({task,match}) => (
                     <article key={task.id} className="sf-sp-task-row">
                       <span className="sf-sp-task-check" aria-hidden="true" />
-                      <div><strong>{task.title}</strong><p>{task.notes || "لا توجد تفاصيل إضافية مسجلة."}</p><small>{match ? (getSIESubject(match.subjectId)?.nameAr ?? "مادة دراسية") + " · " + displayCurriculumTitle(match.title) : task.category || "مهمة عامة"}</small></div>
+                      <div><strong>{match ? (getSIESubject(match.subjectId)?.nameAr ?? "مادة دراسية") + " · " + displayBranchTitle(match.branchTitle) + " · " + displayCurriculumTitle(match.title) : displayArabicText(task.title, "مهمة مسجلة")}</strong><p>{displayArabicText(task.notes || "", "لا توجد تفاصيل إضافية مسجلة.")}</p><small>{match ? (getSIESubject(match.subjectId)?.nameAr ?? "مادة دراسية") : displayArabicText(task.category, "مهمة عامة")}</small></div>
                       <div className="sf-sp-task-meta"><span>{task.priority === "high" ? "أولوية عالية" : task.priority === "low" ? "مرنة" : "متوسطة"}</span><small>{task.dueAt ? new Intl.DateTimeFormat("ar-EG",{timeZone:"Africa/Cairo",day:"numeric",month:"short"}).format(new Date(task.dueAt)) : "بلا موعد"}</small></div>
                     </article>
                   ))}
@@ -729,8 +851,8 @@ function PlanLoading({ progress }: { progress: GenerationProgress | null }) {
   );
 }
 
-function PlanCard({ plan, title, studentName, editable, onChange, onApprove, onAddStep, onRemoveStep, onMoveStep, approving, approved }: {
-  plan: PlanView; title: string; studentName?: string; editable: boolean;
+function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, onApprove, onAddStep, onRemoveStep, onMoveStep, approving, approved }: {
+  plan: PlanView; subjectIds: string[]; title: string; studentName?: string; editable: boolean;
   onChange: (next: PlanView) => void; onApprove: () => void; onAddStep: () => void;
   onRemoveStep: (index: number) => void; onMoveStep: (index: number, direction: -1 | 1) => void;
   approving: boolean; approved: boolean;
@@ -738,15 +860,30 @@ function PlanCard({ plan, title, studentName, editable, onChange, onApprove, onA
   const [editing, setEditing] = useState<{ index: number; title: string; detail: string } | null>(null);
   const [filter, setFilter] = useState<"all" | "open" | "done">("all");
   const completedCount = plan.steps.filter(step => step.plannerTaskStatus === "done" || step.existingTask?.status === "done").length;
-  const totalMinutes = plan.steps.reduce((sum, step) => sum + Math.max(0, Number(step.minutes) || 0), 0);
-  const dayGroups = Array.from(plan.steps.reduce((groups, step, index) => {
-    const key = step.scheduleState === "deferred" ? "خارج فترة الخطة" : step.day?.trim() || (typeof step.dayIndex === "number" ? "اليوم " + (step.dayIndex + 1) : "غير محدد اليوم");
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push({ step, index });
-    return groups;
-  }, new Map<string, Array<{step: PlanStep; index: number}>>()).entries());
-  const visibleGroups = dayGroups.map(([day, items]) => ({
-    day,
+  const deferredCount = plan.steps.filter(step => step.scheduleState === "deferred").length;
+  const subjectCount = new Set(plan.steps.map(step => getPlanStepCurriculum(step, subjectIds)?.subjectId).filter(Boolean)).size;
+  const confirmedTaskCount = plan.steps.filter(step => Boolean(step.existingTask)).length;
+  const phaseLabels: Record<string,string> = {
+    backlog: "المتراكم والالتزامات المفتوحة",
+    teacher_sync: "مواكبة شرح المدرسين",
+    steady: "استكمال المنهج والتثبيت",
+    deferred: "خطوات مؤجلة للدورة القادمة",
+  };
+  const phaseOrder = ["backlog", "teacher_sync", "steady", "deferred"];
+  const grouped = new Map<string, Array<{step: PlanStep; index: number}>>();
+  plan.steps.forEach((step,index) => {
+    const key = step.scheduleState === "deferred"
+      ? "deferred"
+      : step.phaseId ?? (step.existingTask ? "backlog" : "steady");
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key)!.push({step,index});
+  });
+  const orderedGroups = phaseOrder
+    .filter(key => grouped.has(key))
+    .map(key => [key, grouped.get(key)!] as const);
+  const visibleGroups = orderedGroups.map(([key,items]) => ({
+    key,
+    title: phaseLabels[key] ?? "مهام دراسية",
     items: items.filter(({step}) => filter === "all" || (filter === "done"
       ? step.plannerTaskStatus === "done" || step.existingTask?.status === "done"
       : step.plannerTaskStatus !== "done" && step.existingTask?.status !== "done")),
@@ -755,7 +892,7 @@ function PlanCard({ plan, title, studentName, editable, onChange, onApprove, onA
     if (!editing) return;
     onChange({
       ...plan,
-      steps: plan.steps.map((step, index) => index === editing.index
+      steps: plan.steps.map((step,index) => index === editing.index
         ? { ...step, title: editing.title.trim() || step.title, detail: editing.detail.trim() || step.detail }
         : step),
     });
@@ -770,13 +907,14 @@ function PlanCard({ plan, title, studentName, editable, onChange, onApprove, onA
   const priorityLabel: Record<string,string> = {critical:"عاجلة",high:"أولوية عالية",medium:"متوسطة",low:"مرنة"};
   const difficultyLabel: Record<string,string> = {easy:"خفيف",medium:"متوسط",hard:"يحتاج تركيزًا",unknown:"غير محدد"};
   const phaseLabel: Record<string,string> = {backlog:"المتراكم",teacher_sync:"مواكبة المدرس",steady:"التثبيت"};
+  const summary = displayArabicText(plan.summary.split("\n\n")[0], "خطة مرتبة حسب التزاماتك والمواد المتاحة في ملفك الدراسي.");
   return (
     <section className="sf-sp-plan-board">
       <header className="sf-sp-board-header">
         <div className="sf-sp-board-title">
-          <span className="sf-sp-eyebrow">تفاصيل التنفيذ</span>
+          <span className="sf-sp-eyebrow">خطة التنفيذ</span>
           <div className="sf-sp-section-heading">
-            <div><h2>{plan.title || "خطة المذاكرة"}</h2><p>{plan.summary.split("\n\n")[0]}</p></div>
+            <div><h2>{displayArabicText(plan.title, "خطة المذاكرة")}</h2><p>{summary}</p></div>
             <span className={"sf-sp-status " + (approved ? "is-active" : "is-draft")}>{approved ? "معتمدة" : "بانتظار الاعتماد"}</span>
           </div>
           {studentName && <small>مبنية على البيانات المسجلة في ملف {studentName}</small>}
@@ -785,21 +923,21 @@ function PlanCard({ plan, title, studentName, editable, onChange, onApprove, onA
       </header>
 
       <div className="sf-sp-board-metrics">
-        <article><span>إجمالي المهام</span><strong>{plan.steps.length.toLocaleString("ar-EG")}</strong></article>
-        <article><span>المكتمل</span><strong>{completedCount.toLocaleString("ar-EG")}</strong></article>
-        <article><span>الوقت التقديري</span><strong>{totalMinutes.toLocaleString("ar-EG")} دقيقة</strong></article>
-        <article><span>المؤجل خارج الفترة</span><strong>{plan.steps.filter(step => step.scheduleState === "deferred").length.toLocaleString("ar-EG")}</strong></article>
+        <article><span>إجمالي الخطوات</span><strong>{plan.steps.length.toLocaleString("ar-EG")}</strong></article>
+        <article><span>الخطوات المكتملة</span><strong>{completedCount.toLocaleString("ar-EG")}</strong></article>
+        <article><span>المواد الممثلة</span><strong>{subjectCount.toLocaleString("ar-EG")}</strong></article>
+        <article><span>التزامات مسجلة</span><strong>{confirmedTaskCount.toLocaleString("ar-EG")}</strong></article>
       </div>
 
       {plan.executionStrategy && (
         <section className="sf-sp-plan-rationale">
-          <span className="sf-sp-eyebrow">لماذا هذا الترتيب؟</span>
-          <h3>{plan.executionStrategy.objective}</h3>
-          <p>{plan.executionStrategy.rationale}</p>
+          <span className="sf-sp-eyebrow">منطق الترتيب</span>
+          <h3>{displayArabicText(plan.executionStrategy.objective, "نبدأ بالأولويات المسجلة، ثم نواكب شرح المدرس ونكمل المنهج.")}</h3>
+          <p>{displayArabicText(plan.executionStrategy.rationale, "يراعي الترتيب المهام المفتوحة وتقدمك الفعلي في كل مادة، من دون تكرار ما أنجزته.")}</p>
           {plan.executionStrategy.phases?.length ? (
             <div className="sf-sp-phase-summary">
               {plan.executionStrategy.phases.map((phase,index) => (
-                <article key={phase.id}><span>{(index+1).toLocaleString("ar-EG")}</span><div><strong>{phase.title}</strong><small>{phase.purpose}</small></div></article>
+                <article key={phase.id}><span>{(index+1).toLocaleString("ar-EG")}</span><div><strong>{phaseLabels[phase.id] ?? phase.title}</strong><small>{displayArabicText(phase.purpose, "مرحلة لتنفيذ الخطوات ذات الأولوية.")}</small></div></article>
               ))}
             </div>
           ) : null}
@@ -808,25 +946,29 @@ function PlanCard({ plan, title, studentName, editable, onChange, onApprove, onA
 
       {plan.quality && (
         <section className={"sf-sp-quality sf-sp-quality-" + plan.quality.status}>
-          <div><strong>{plan.quality.status === "ready" ? "الخطة جاهزة للاعتماد" : plan.quality.status === "partial" ? "الخطة تحتاج مراجعة" : "هناك عائق يمنع الاعتماد"}</strong><p>تقييم التوزيع: {plan.quality.score.toLocaleString("ar-EG")} من 100. الحمل اليومي الأقصى {plan.quality.stats.maxDailyLoadMinutes.toLocaleString("ar-EG")} دقيقة.</p></div>
-          <div>{plan.quality.blockers.map((item,index)=><small key={"b"+index}>{item}</small>)}{plan.quality.warnings.map((item,index)=><small key={"w"+index}>{item}</small>)}</div>
+          <div><strong>{plan.quality.status === "ready" ? "الخطة جاهزة للاعتماد" : plan.quality.status === "partial" ? "الخطة تحتاج مراجعة" : "هناك عائق يمنع الاعتماد"}</strong><p>تقييم التوزيع: {plan.quality.score.toLocaleString("ar-EG")} من 100.</p></div>
+          <div>{plan.quality.blockers.map((item,index)=><small key={"b"+index}>{displayArabicText(item,"يوجد عائق يحتاج مراجعة.")}</small>)}{plan.quality.warnings.map((item,index)=><small key={"w"+index}>{displayArabicText(item,"هناك ملاحظة على توزيع الخطة.")}</small>)}</div>
         </section>
       )}
 
       <div className="sf-sp-board-toolbar">
-        <div><h3>توزيع الجلسات</h3><p>افتح تفاصيل أي مهمة لمعرفة المطلوب وطريقة تنفيذها.</p></div>
+        <div><h3>خطوات المذاكرة</h3><p>مقسمة حسب سبب تنفيذها، وليس إلى أيام أو ساعات مفترضة.</p></div>
         <div className="sf-sp-filter-group" role="group" aria-label="تصفية مهام الخطة">
           {([["all","الكل"],["open","المتبقي"],["done","المكتمل"]] as const).map(([key,label]) => <button type="button" key={key} aria-pressed={filter===key} onClick={()=>setFilter(key)}>{label}</button>)}
         </div>
       </div>
 
-      <div className="sf-sp-day-groups">
+      <div className="sf-sp-day-groups sf-sp-phase-groups">
         {visibleGroups.length ? visibleGroups.map(group => (
-          <section className="sf-sp-day-group" key={group.day}>
-            <header><div><span className="sf-sp-day-dot" /><h4>{group.day}</h4></div><small>{group.items.length.toLocaleString("ar-EG")} مهمة</small></header>
+          <section className="sf-sp-day-group sf-sp-phase-group" key={group.key}>
+            <header><div><span className="sf-sp-day-dot" /><h4>{group.title}</h4></div><small>{group.items.length.toLocaleString("ar-EG")} خطوة</small></header>
             <div className="sf-sp-day-items">
               {group.items.map(({step,index}) => {
                 const isDone = step.plannerTaskStatus === "done" || step.existingTask?.status === "done";
+                const curriculum = getPlanStepCurriculum(step, subjectIds);
+                const titleText = displayPlanStepTitle(step, subjectIds);
+                const detailText = displayPlanStepDetail(step, subjectIds);
+                const stageTitles = ["معاينة الدرس", "تحديد المطلوب", "القراءة والفهم", "الاسترجاع من الذاكرة", "المراجعة والتثبيت"];
                 return (
                   <article key={step.plannerTaskId ?? step.existingTask?.id ?? step.sourceStepIndex ?? index} className={"sf-sp-plan-step " + (isDone ? "is-done" : "")}>
                     {editing?.index === index ? (
@@ -840,38 +982,39 @@ function PlanCard({ plan, title, studentName, editable, onChange, onApprove, onA
                         <div className="sf-sp-step-index">{isDone ? <CheckCircle2 className="size-4" /> : (index+1).toLocaleString("ar-EG")}</div>
                         <div className="sf-sp-step-content">
                           <div className="sf-sp-step-tags">
-                            {step.category && <span>{step.category}</span>}
+                            {curriculum && <span>{curriculum.subject}</span>}
+                            {curriculum && <span>{curriculum.branch}</span>}
                             {step.phaseId && <span>{phaseLabel[step.phaseId] || "مرحلة الخطة"}</span>}
                             {step.priority && <span>{priorityLabel[step.priority] || "أولوية عادية"}</span>}
                             {step.difficulty && <span>{difficultyLabel[step.difficulty] || "غير محدد"}</span>}
-                            {step.minutes > 0 && <span><CalendarClock className="size-3" />{step.minutes.toLocaleString("ar-EG")} دقيقة</span>}
-                            {step.existingTask && <span>مهمة مسجلة مسبقًا</span>}
-                            {step.scheduleState === "deferred" && <span>مؤجلة خارج الفترة</span>}
+                            {step.existingTask && <span>التزام مسجل</span>}
+                            {step.scheduleState === "deferred" && <span>مؤجلة للدورة القادمة</span>}
                             {isDone && <span>مكتملة</span>}
                             {formatDate(step.existingTask?.dueAt) && <span>موعدها {formatDate(step.existingTask?.dueAt)}</span>}
                           </div>
-                          <h4>{displayCurriculumTitle(step.title)}</h4>
-                          {step.sourceTitle && <small className="sf-sp-source-title">مرجع الدرس: {displayCurriculumTitle(step.sourceTitle)}</small>}
-                          <p>{step.detail}</p>
-                          {step.scheduleNote && <small className="sf-sp-source-title">{step.scheduleNote}</small>}
+                          <h4>{titleText}</h4>
+                          {!curriculum && <small className="sf-sp-source-title">{displayPlanStepCategory(step, subjectIds)}</small>}
+                          {step.sourceTitle && <small className="sf-sp-source-title">عنوان المنهج: {displayCurriculumTitle(step.sourceTitle)}</small>}
+                          <p>{detailText}</p>
+                          {step.scheduleNote && <small className="sf-sp-source-title">{displayArabicText(step.scheduleNote,"تم تأجيل هذه الخطوة إلى دورة التخطيط التالية.")}</small>}
                           {step.studyMethod && (
                             <details className="sf-sp-study-method">
-                              <summary>طريقة تنفيذ الجلسة — {step.studyMethod.stages.length} مراحل</summary>
+                              <summary>طريقة مذاكرة الدرس — {step.studyMethod.stages.length} مراحل</summary>
                               <ol>
                                 {step.studyMethod.stages.map((stage,stageIndex) => (
                                   <li key={stageIndex}>
-                                    <strong>{(stageIndex+1).toLocaleString("ar-EG")}. {stage.title}</strong>
+                                    <strong>{(stageIndex+1).toLocaleString("ar-EG")}. {displayArabicText(stage.title,stageTitles[stageIndex] ?? "مرحلة المذاكرة")}</strong>
                                     {stage.optional && <span>اختياري حسب تكليف المدرس</span>}
-                                    <p>{stage.instruction}</p>
-                                    <small>الهدف من المرحلة: {stage.reason}</small>
+                                    <p>{displayArabicText(stage.instruction,"نفّذ هذه المرحلة من مصدر المادة، ثم حدّث تقدم الدرس.")}</p>
+                                    <small>الهدف: {displayArabicText(stage.reason,"تثبيت فهمك للجزء الذي تدرسه.")}</small>
                                   </li>
                                 ))}
                               </ol>
-                              <p className="sf-sp-completion-rule">معيار الإكمال: {step.studyMethod.completionCriteria}</p>
-                              {step.studyMethod.teacherPolicyNote && <small>{step.studyMethod.teacherPolicyNote}</small>}
+                              <p className="sf-sp-completion-rule">متى تعتبر المهمة مكتملة؟ {displayArabicText(step.studyMethod.completionCriteria,"بعد تنفيذ الخطوات وتسجيل تقدمك الفعلي في الدرس.")}</p>
+                              {step.studyMethod.teacherPolicyNote && <small>{displayArabicText(step.studyMethod.teacherPolicyNote,"راجع متطلبات المدرس المسجلة قبل الانتقال للدرس التالي.")}</small>}
                             </details>
                           )}
-                          {step.priorityReason && <details className="sf-sp-step-extra"><summary>لماذا ظهرت هذه المهمة هنا؟</summary><p>{step.priorityReason}</p></details>}
+                          {step.priorityReason && <details className="sf-sp-step-extra"><summary>لماذا ظهرت هذه الخطوة في الخطة؟</summary><p>{displayArabicText(step.priorityReason,"تم اختيارها حسب ترتيب تقدمك والالتزامات المسجلة.")}</p></details>}
                           {step.resourceRecommendation && <a className="sf-sp-resource-link" href={step.resourceRecommendation.url} target="_blank" rel="noreferrer">افتح شرح المدرس المقترح <ArrowUpRight className="size-3.5" /></a>}
                           {editable && (
                             <div className="sf-sp-step-actions">
@@ -889,19 +1032,19 @@ function PlanCard({ plan, title, studentName, editable, onChange, onApprove, onA
               })}
             </div>
           </section>
-        )) : <div className="sf-sp-empty-inline">{filter === "done" ? "لا توجد مهام مكتملة في هذا العرض." : filter === "open" ? "لا توجد مهام متبقية." : "لا توجد مهام ضمن الفلتر الحالي."}</div>}
+        )) : <div className="sf-sp-empty-inline">{filter === "done" ? "لا توجد خطوات مكتملة في هذا العرض." : filter === "open" ? "لا توجد خطوات متبقية." : "لا توجد خطوات ضمن الفلتر الحالي."}</div>}
       </div>
 
       {editable ? (
         <footer className="sf-sp-board-footer">
-          <Button type="button" variant="outline" onClick={onAddStep}><Plus className="size-4" />أضف مهمة</Button>
-          <div><small>سيعاد فحص توزيع الخطة عند اعتمادها. لن تُنشأ مواعيد أو واجبات غير مسجلة.</small><Button type="button" onClick={onApprove} disabled={approving || !plan.steps.length || !plan.title.trim()}>{approving ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}اعتماد الخطة وإضافة المهام</Button></div>
+          <Button type="button" variant="outline" onClick={onAddStep}><Plus className="size-4" />أضف خطوة</Button>
+          <div><small>سيعاد فحص ترتيب الخطة عند اعتمادها. لن تُنشأ مواعيد أو واجبات غير مسجلة.</small><Button type="button" onClick={onApprove} disabled={approving || !plan.steps.length || !plan.title.trim()}>{approving ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}اعتماد الخطة وإضافة المهام</Button></div>
         </footer>
       ) : (
         <footer className="sf-sp-approved-footer"><CheckCircle2 className="size-4" /><span>هذه الخطة معتمدة، والمهام مرتبطة بقائمة عملك. تعديل المصدر يتم من المهام أو من تقدم المنهج.</span>{plan.taskSync && <strong>{plan.taskSync.taskCount.toLocaleString("ar-EG")} مهمة مرتبطة</strong>}</footer>
       )}
 
-      <details className="sf-sp-plan-extra"><summary>ملخص إضافي ومساعد الخطة</summary><p>{plan.summary}</p>{plan.habits.length > 0 && <div className="sf-sp-habits">{plan.habits.map((habit,index)=><article key={habit.title+index}><strong>{habit.title}</strong><small>{habit.cue}</small></article>)}</div>}<PlanAssistantChat plan={plan} /></details>
+      <details className="sf-sp-plan-extra"><summary>ملخص إضافي ومساعد الخطة</summary><p>{displayArabicText(plan.summary,"خطة مذاكرة مرتبة حسب بيانات ملفك الدراسي.")}</p>{plan.habits.length > 0 && <div className="sf-sp-habits">{plan.habits.map((habit,index)=><article key={habit.title+index}><strong>{displayArabicText(habit.title,"عادة دراسية")}</strong><small>{displayArabicText(habit.cue,"استخدمها لدعم الاستمرارية في المذاكرة.")}</small></article>)}</div>}<PlanAssistantChat plan={plan} /></details>
     </section>
   );
 }
