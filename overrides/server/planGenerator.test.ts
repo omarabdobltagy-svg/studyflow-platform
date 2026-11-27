@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyCurriculumPrioritySignals,
+  applyDailyPlanDepth,
   applyPlannerCurriculumCoverageGuard,
   applyPlannerProgressGuard,
   buildPlannerProgressSnapshot,
@@ -14,6 +15,35 @@ import {
   mergeLegacyLinearBranchProgress,
   selectLegacyLinearFrontier,
 } from "@shared/sie-learning-progress";
+
+describe("complete daily plan coverage", () => {
+  it("keeps more than eighteen candidate tasks instead of silently truncating the plan", () => {
+    const steps = Array.from({ length: 24 }, (_, index) => ({
+      day: "",
+      title: "مهمة تراكمية " + (index + 1),
+      detail: "مهمة اختبارية للتحقق من عدم اقتطاع المتراكم.",
+      minutes: 20,
+      category: "تراكم",
+      priority: "medium",
+      difficulty: "unknown",
+      lessonSize: "unknown",
+      sourcePages: [],
+    }));
+    const plan = {
+      title: "خطة اختبار تغطية",
+      summary: "اختبار اكتمال التغطية.",
+      durationLabel: "اختبار",
+      steps,
+      habits: [],
+    } as any;
+    const profile = { subjectIds: [], selection: {} } as any;
+
+    const result = applyDailyPlanDepth(plan, profile, []);
+
+    expect(result.steps).toHaveLength(24);
+    expect(new Set(result.steps.map(step => step.title)).size).toBe(24);
+  });
+});
 
 describe("official English curriculum sequence", () => {
   it("labels the Unit 1 Conditional Structures checkpoint as Lesson 4 & 5", () => {
