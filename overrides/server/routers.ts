@@ -2706,8 +2706,11 @@ export const appRouter = router({
           const reviewText = normalize(title + " " + description);
           if (!/مراجعه|مراجعات|revision|review/.test(reviewText)) return [];
           const normalizedChannel = normalize(channelTitle);
+          if (normalizedChannel.length < 4) return [];
           const alternativeTeacher = knownAlternativeTeachers.find(candidate => {
-            const identities = [candidate.nameAr, candidate.brandName].map(normalize).filter(Boolean);
+            const identities = [candidate.nameAr, candidate.brandName]
+              .map(value => typeof value === "string" ? normalize(value) : "")
+              .filter(identity => identity.length >= 4);
             return identities.some(identity => normalizedChannel === identity
               || normalizedChannel.includes(identity)
               || identity.includes(normalizedChannel));
@@ -2786,7 +2789,8 @@ export const appRouter = router({
           .trim();
         const channelIdentity = normalizeIdentity(input.channelTitle);
         const catalogIdentities = [teacher.nameAr, teacher.brandName]
-          .map(normalizeIdentity).filter(Boolean);
+          .map(value => typeof value === "string" ? normalizeIdentity(value) : "")
+          .filter(identity => identity.length >= 4);
         if (!catalogIdentities.some(identity => channelIdentity === identity
           || channelIdentity.includes(identity) || identity.includes(channelIdentity))) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "اسم قناة الفيديو لا يطابق المدرس المسجل في دليل المنصة." });
@@ -2831,19 +2835,35 @@ export const appRouter = router({
         }
         const publishedDate = input.publishedAt && Number.isFinite(Date.parse(input.publishedAt))
           ? new Date(input.publishedAt).toISOString() : new Date().toISOString();
-        const acceptedUpdate: TeacherPublicUpdate = existingUpdate ?? {
-          externalId: input.externalId,
-          teacherId: input.teacherId,
-          teacherName: teacher.nameAr,
-          sourceType: "youtube",
-          title: input.title,
-          description: input.description ?? "",
-          url: "https://www.youtube.com/watch?v=" + externalIdFromUrl,
-          publishedAt: publishedDate,
-          observedAt: new Date().toISOString(),
-          announcementType: "revision",
-          confidence: "medium",
-        };
+        const acceptedUpdate: TeacherPublicUpdate = existingUpdate
+          ? {
+              ...existingUpdate,
+              teacherId: input.teacherId,
+              teacherName: teacher.nameAr,
+              title: input.title,
+              description: input.description ?? existingUpdate.description ?? "",
+              url: "https://www.youtube.com/watch?v=" + externalIdFromUrl,
+              announcementType: "revision",
+              confidence: "medium",
+              // A previously failed analysis can be restarted once the student
+              // explicitly accepts this specific alternate-teacher video.
+              ...(existingUpdate.contentAnalysis?.status === "failed"
+                ? { contentAnalysis: undefined }
+                : {}),
+            }
+          : {
+              externalId: input.externalId,
+              teacherId: input.teacherId,
+              teacherName: teacher.nameAr,
+              sourceType: "youtube",
+              title: input.title,
+              description: input.description ?? "",
+              url: "https://www.youtube.com/watch?v=" + externalIdFromUrl,
+              publishedAt: publishedDate,
+              observedAt: new Date().toISOString(),
+              announcementType: "revision",
+              confidence: "medium",
+            };
         const nextUpdates = existingUpdate
           ? updates
           : [acceptedUpdate, ...updates].slice(0, 60);
@@ -2870,6 +2890,9 @@ export const appRouter = router({
           metadata: { externalId: input.externalId, teacherId: input.teacherId, subjectId: input.subjectId, branchId: input.branchId },
         });
         if (isTeacherVideoAnalysisConfigured()) queueTeacherVideoAnalyses(ctx.user.id, [acceptedUpdate]);
+        if (acceptedUpdate.contentAnalysis?.status === "complete") {
+          queueDailyPlanReconciliation(ctx.user.id, "teacher.alternative_review_accepted", "teacher_video");
+        }
         return {
           success: true,
           analysisQueued: isTeacherVideoAnalysisConfigured(),
