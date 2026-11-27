@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { Component, lazy, Suspense, type ReactNode } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Route, Switch, Router as WouterRouter } from "wouter";
@@ -37,6 +37,40 @@ function PageLoading() {
   );
 }
 
+
+type PageRecoveryBoundaryState = { failed: boolean };
+
+class PageRecoveryBoundary extends Component<{ children: ReactNode }, PageRecoveryBoundaryState> {
+  state: PageRecoveryBoundaryState = { failed: false };
+
+  static getDerivedStateFromError(): PageRecoveryBoundaryState {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: Error) {
+    console.error("[StudyFlow] Page render failed:", error);
+  }
+
+  render() {
+    if (this.state.failed) {
+      return (
+        <main className="min-h-[70vh] grid place-items-center p-5">
+          <section className="app-card w-full max-w-lg rounded-2xl border border-border/70 p-6 text-center">
+            <div className="mx-auto flex size-12 items-center justify-center rounded-xl bg-secondary text-primary">!</div>
+            <h1 className="mt-4 text-lg font-extrabold">حصلت مشكلة أثناء فتح الصفحة</h1>
+            <p className="mt-2 text-sm leading-7 text-muted-foreground">لم نفقد تقدمك المحفوظ. أعد تحميل الصفحة لإعادة تشغيل الجزء الذي تعذّر عرضه.</p>
+            <div className="mt-5 flex flex-wrap justify-center gap-2">
+              <button type="button" onClick={() => window.location.reload()} className="min-h-10 rounded-xl bg-primary px-4 text-sm font-bold text-primary-foreground">إعادة تحميل الصفحة</button>
+              <a href="/" className="inline-flex min-h-10 items-center rounded-xl border border-border px-4 text-sm font-semibold">العودة للرئيسية</a>
+            </div>
+          </section>
+        </main>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function Router() {
   return (
     <Suspense fallback={<PageLoading />}>
@@ -72,7 +106,7 @@ function App() {
         <TooltipProvider>
           <WouterRouter>
             <Toaster />
-            <Router />
+            <PageRecoveryBoundary><Router /></PageRecoveryBoundary>
             {/* Keep global tools lazy so they do not block the first page paint. */}
             <Suspense fallback={null}>
               <WorkspaceInteractionHub />
