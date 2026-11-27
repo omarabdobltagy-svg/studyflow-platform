@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyTeacherAnnouncement, isHighConfidenceScheduleAnnouncement, isSecondYearBaccalaureateProfile, isSecondYearBaccalaureateUpdate, parseYoutubeAtomFeed, parseYoutubeDurationMinutes, selectedTeacherIds, shouldScanTeacherSource } from "./teacher-content-monitor";
+import { acceptedAlternativeReviewVideoIds, classifyTeacherAnnouncement, isHighConfidenceScheduleAnnouncement, isSecondYearBaccalaureateProfile, isSecondYearBaccalaureateUpdate, isTeacherVideoUpdateAllowed, parseYoutubeAtomFeed, parseYoutubeDurationMinutes, selectedTeacherIds, shouldScanTeacherSource } from "./teacher-content-monitor";
 
 describe("teacher public channel monitor", () => {
   it("parses public YouTube upload entries and decodes Arabic metadata", () => {
@@ -57,6 +57,20 @@ describe("teacher public channel monitor", () => {
     expect(isSecondYearBaccalaureateProfile(profile)).toBe(true);
     expect(selectedTeacherIds(profile)).toEqual(expect.arrayContaining(["T_AR_MOHAMED_SALAH", "T_EN_MAHMOUD_RADWAN"]));
     expect(selectedTeacherIds(profile)).not.toContain("T_AR_REDA_FAROUK");
+  });
+
+  it("allows only explicitly accepted alternative review videos, not all videos from that teacher", () => {
+    const profile = {
+      educationSystem: "baccalaureate",
+      gradeYear: "الصف الثاني الثانوي – دفعة 2027",
+      subjectIds: ["HIS_G2_BAC"],
+      teacherSelections: { HIS_G2_BAC: "T_HIS_AHMED_ADEL" },
+      selection: { acceptedAlternativeReviewVideoIds: ["youtube:altVideo123"] },
+    };
+    expect(acceptedAlternativeReviewVideoIds(profile).has("youtube:altVideo123")).toBe(true);
+    expect(isTeacherVideoUpdateAllowed(profile, { teacherId: "T_HIS_GOMAA_EL_SAYED", externalId: "youtube:altVideo123" })).toBe(true);
+    expect(isTeacherVideoUpdateAllowed(profile, { teacherId: "T_HIS_GOMAA_EL_SAYED", externalId: "youtube:anotherVideo1" })).toBe(false);
+    expect(isTeacherVideoUpdateAllowed(profile, { teacherId: "T_HIS_AHMED_ADEL", externalId: "youtube:selectedTeacherVideo" })).toBe(true);
   });
 
   it("rejects second-year general secondary, other grades, and teacher-to-subject mismatches", () => {
