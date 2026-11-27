@@ -216,7 +216,7 @@ export default function Study() {
     || Object.prototype.hasOwnProperty.call(schoolFrontierDrafts, studentFrontierDraftKey);
   const branchChoiceOptions = getSIECheckpointProgressOptions(subjectId, currentBranchId);
   const currentBranchLastLessonId = branchChoices[branchChoices.length - 1]?.nodeId;
-  const isCurrentBranchComplete = Boolean(currentBranchLastLessonId && lastCompletedLessonId === currentBranchLastLessonId);
+  const hasReachedEndOfCurrentBranch = Boolean(currentBranchLastLessonId && lastCompletedLessonId === currentBranchLastLessonId);
   const autoSaveFingerprintRef = useRef("");
   const setLastCompletedLessonId = (value: string) => {
     autoSaveFingerprintRef.current = "";
@@ -255,7 +255,7 @@ export default function Study() {
     ?? currentGap.studentFrontierTitle;
   const teacherFrontierDisplayLabel = branchChoiceOptions.find(option => option.value === teacherTeachingFrontierId)?.label
     ?? currentGap.referenceFrontierTitle;
-  const isStudentDoneWithBranch = currentGap.studentPosition === branchChoices.length && branchChoices.length > 0;
+  const hasReachedEndOfBranch = currentGap.studentPosition === branchChoices.length && branchChoices.length > 0;
 
 
   useEffect(() => {
@@ -784,7 +784,7 @@ export default function Study() {
                         && savedPosition !== "__UNKNOWN__"
                         && savedPosition !== "__NOT_STARTED__"
                         && branch.choices.some(choice => choice.nodeId === savedPosition);
-                      const isComplete = branch.choices.length > 0
+                      const isAtEnd = branch.choices.length > 0
                         && savedPosition === branch.choices[branch.choices.length - 1]?.nodeId;
                       const active = branch.branchId === currentBranchId;
                       return (
@@ -794,11 +794,13 @@ export default function Study() {
                             setBranchId(branch.branchId);
                           }}
                           className={"flex min-h-14 min-w-0 items-center gap-2 rounded-xl border px-3 py-2.5 text-right text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 " +
-                            (active ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary/20" : isComplete ? "border-emerald-500/25 bg-emerald-500/[0.05] text-foreground" : hasProgress ? "border-primary/25 bg-primary/[0.035] text-foreground" : "border-border bg-background text-muted-foreground hover:border-primary/35 hover:text-foreground")}>
-                          <span className={"flex size-6 shrink-0 items-center justify-center rounded-full text-[10px] " + (isComplete ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>
-                            {isComplete ? <Check className="size-3.5" /> : index + 1}
+                            (active ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary/20" : isAtEnd ? "border-primary/25 bg-primary/[0.035] text-foreground" : hasProgress ? "border-primary/25 bg-primary/[0.035] text-foreground" : "border-border bg-background text-muted-foreground hover:border-primary/35 hover:text-foreground")}>
+                          <span className={"flex size-6 shrink-0 items-center justify-center rounded-full text-[10px] " + (isAtEnd ? "bg-primary/10 text-primary" : active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>
+                            {index + 1}
                           </span>
-                          <span className="min-w-0 break-words leading-5">{displayBranchTitle(branch.branchTitle)}</span>
+                          <span className="min-w-0 break-words leading-5">{displayBranchTitle(branch.branchTitle)}
+                            {isAtEnd && <small className="mt-0.5 block text-[9px] font-medium text-primary">آخر نقطة في الشرح</small>}
+                          </span>
                         </button>
                       );
                     })}
@@ -928,7 +930,7 @@ export default function Study() {
                             options={[{ value: "__NOT_STARTED__", label: "لم أبدأ هذا الفرع" },{ value: "__UNKNOWN__", label: "موضعي غير معروف" },...branchChoiceOptions]} visibleOptionLimit={subjectId === "ARB_G2_BAC" && currentBranchId === "ARB_SPELLING" ? 8 : 6} />
                           {hasStudentFrontierSelection && currentGap.studentPosition !== null && <div className="mt-3 rounded-xl border border-primary/15 bg-primary/[0.045] px-3 py-2.5">
                             <p className="text-[10px] font-semibold text-muted-foreground">الخطوة التالية عليك</p>
-                            <p className="mt-1 text-sm font-bold text-foreground">{nextStudentLesson?.title || (isStudentDoneWithBranch ? "أنهيت كل الموضوعات المفهرسة في هذا الفرع" : "لم يتم تحديد الموضوع التالي")}</p>
+                            <p className="mt-1 text-sm font-bold text-foreground">{nextStudentLesson?.title || (hasReachedEndOfBranch ? "وصلت إلى آخر نقطة في شرح هذا الفرع" : "لم يتم تحديد الموضوع التالي")}</p>
                           </div>}
                         </div>
                         <div className="min-w-0 rounded-xl border border-border/70 bg-background/70 p-3">
@@ -1061,9 +1063,10 @@ export default function Study() {
                             تم حفظ موضعك وموضع المدرس تلقائيًا.
                           </div>
                           <p className="mt-1 pr-8 text-xs leading-5 text-muted-foreground">
-                            {isCurrentBranchComplete
-                              ? isEnglishSkillBranch ? "اكتمل هذا المسار داخل الوحدات. يمكنك متابعة نوع الدرس الآخر أو العودة إلى الوحدات."
-                                : nextVisibleBranch ? "اكتمل الفرع؛ يتم الانتقال تلقائيًا إلى الفرع التالي." : "اكتملت الفروع الظاهرة في هذه المادة."
+                            {hasReachedEndOfCurrentBranch
+                              ? isEnglishSkillBranch ? "وصلت إلى آخر نقطة في هذا المسار. يمكنك متابعة نوع الدرس الآخر أو العودة إلى الوحدات."
+                                : nextVisibleBranch ? "وصلت إلى آخر نقطة في هذا الفرع؛ انتقلنا للفرع التالي. هذا لا يؤكد مذاكرة دروسه."
+                                  : "وصلت إلى آخر نقطة في هذا الفرع. راجع حالة مذاكرة كل درس بشكل مستقل."
                               : "يمكنك تعديل أي موضع في أي وقت، وسيُحفظ التحديث تلقائيًا."}
                           </p>
                         </motion.div>
@@ -1103,9 +1106,9 @@ export default function Study() {
             </p>
           </div>
           <div className="rounded-xl border border-primary/20 bg-primary/[0.045] p-4">
-            <p className="text-xs text-muted-foreground">التالي بعد آخر موضوع مكتمل</p>
-            <p className="mt-2 font-bold text-foreground">{nextStudentLesson?.title || (isStudentDoneWithBranch ? "اكتملت موضوعات هذا الفرع" : "حدد آخر موضوع أنهيته")}</p>
-            <p className="mt-1 text-[11px] leading-5 text-muted-foreground">ده موضع وصولك في شرح المدرس فقط. حالة المذاكرة والفهم لكل درس محسوبة منفصلة في قائمة الدروس.</p>
+            <p className="text-xs text-muted-foreground">التالي بعد آخر نقطة وصلت لها في الشرح</p>
+            <p className="mt-2 font-bold text-foreground">{nextStudentLesson?.title || (hasReachedEndOfBranch ? "وصلت إلى نهاية نقاط الشرح المسجلة" : "حدد آخر موضع وصلت إليه في الشرح")}</p>
+            <p className="mt-1 text-[11px] leading-5 text-muted-foreground">تسجيل آخر نقطة في الشرح لا يعني أنك ذاكرت كل الدروس أو فهمتها. حالة المذاكرة والفهم لكل درس محفوظة بشكل مستقل.</p>
           </div>
           <p className="text-xs leading-6 text-muted-foreground sm:col-span-2 lg:col-span-4">
             {currentGap.status === "student_position_missing" ? "حدد موضعك أنت أولًا." : currentGap.status === "reference_missing" ? "لا يوجد مرجع محفوظ للمقارنة حتى الآن؛ يمكنك متابعة تقدمك دون إعداد إضافي هنا." : "الحساب يستخدم عدد نقاط الفهرس داخل هذا الفرع فقط؛ لا يعمم الرقم على بقية فروع المادة."}
