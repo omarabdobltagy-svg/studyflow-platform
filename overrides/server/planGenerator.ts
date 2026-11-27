@@ -1557,9 +1557,11 @@ export function applyDailyPlanDepth(
       ? hours + ":" + String(minutes).padStart(2, "0") + ":" + String(rest).padStart(2, "0")
       : minutes + ":" + String(rest).padStart(2, "0");
   };
+  // A review video may help either a lesson the student marked for review
+  // or a lesson whose explanation was watched but not yet studied.
   const reviewEligibleNodeIds = new Set(
     dailyBacklogItems
-      .filter(item => item.choice.learningState === "needs_review")
+      .filter(item => item.choice.learningState === "needs_review" || item.choice.learningState === "watched_only")
       .map(item => item.choice.nodeId),
   );
   const analyzedVideos = rawTeacherVideos
@@ -1643,8 +1645,8 @@ export function applyDailyPlanDepth(
     const parentStep = planSchema.shape.steps.element.parse({
       day: "",
       title: ("مراجعة: " + videoTitle).slice(0, 180),
-      detail: "مهمة مراجعة واحدة من فيديو المدرس، مقسمة إلى " + subtasks.length
-        + " موضوعات فرعية تم استخراجها من محتوى الفيديو ومطابقتها مع دروس تحتاج مراجعة. افتح كل جزء من توقيته المحدد، وأنهِ خطوات المهمة بالترتيب المناسب لك.",
+      detail: "مهمة واحدة لفيديو YouTube تم تحليل محتواه، مقسمة إلى " + subtasks.length
+        + " موضوعات فرعية طابقت دروسًا متراكمة لديك. افتح كل جزء من توقيته المحدد، ونفّذ خطوات المراجعة داخل هذه المهمة بدل إنشاء مهام منفصلة لكل مقطع.",
       minutes: 0,
       category: "مراجعة فيديو",
       curriculumNodeIds: [...new Set(subtasks.flatMap(item => item.curriculumNodeIds))].slice(0, 8),
@@ -1659,7 +1661,7 @@ export function applyDailyPlanDepth(
         title: videoTitle,
         url: videoUrl,
         teacherName,
-        reason: "فيديو مراجعة موثق من مصدر مدرس مختار، ويغطي موضوعات مطابقة لدروس تحتاج مراجعة.",
+        reason: "فيديو مراجعة موثق من " + teacherName + "، اختير بعد تحليل محتواه ومطابقة مقاطعه مع دروس متراكمة لديك.",
       },
       subtasks,
     });
