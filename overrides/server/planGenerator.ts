@@ -1410,7 +1410,7 @@ export function interleavePlannerItemsBySubject<T>(
   return [...ordered, ...unassigned];
 }
 
-function applyDailyPlanDepth(
+export function applyDailyPlanDepth(
   plan: GeneratedPlan,
   profile: NonNullable<Awaited<ReturnType<typeof getStudentProfile>>>,
   existingTasks: ExistingPlannerTask[],
@@ -1470,7 +1470,9 @@ function applyDailyPlanDepth(
   const reviewEligibleNodeIds = new Set<string>();
   for (const branchProgress of snapshot.branches.values()) {
     for (const choice of branchProgress.eligibleChoices ?? []) {
-      if (choice.learningState === "watched_only" || choice.learningState === "needs_review") {
+      // A revision video replaces only a lesson already studied and explicitly marked
+      // as needing review. Watched-only lessons still require ordinary learning tasks.
+      if (choice.learningState === "needs_review") {
         reviewEligibleNodeIds.add(choice.nodeId);
       }
     }
@@ -1488,7 +1490,8 @@ function applyDailyPlanDepth(
     const analysis = video.contentAnalysis as Record<string, any>;
     const topics = Array.isArray(analysis.topics) ? analysis.topics as Array<Record<string, any>> : [];
     for (const topic of topics) {
-      if (topic.confidence === "low") continue;
+      // Only high-confidence curriculum matches may replace a normal review task.
+      if (topic.confidence !== "high") continue;
       const startSeconds = Number(topic.startSeconds);
       const endSeconds = Number(topic.endSeconds);
       if (!Number.isInteger(startSeconds) || startSeconds < 0 || !Number.isInteger(endSeconds) || endSeconds <= startSeconds) continue;
@@ -1745,7 +1748,7 @@ function applyDailyPlanDepth(
   ).length;
   const coverageNote = "تغطية المتراكم: أُدرجت " + coveredNodeCount
     + " نقطة منهجية مؤهلة في الخطة دون اقتطاع بسبب حدّ عددي. فيديوهات المراجعة المطابقة للمحتوى: "
-    + reviewVideoCount + ".";
+    + reviewVideoCount + ". لا تستبدل المراجعة العادية إلا مراجعة فيديو عالية الثقة تطابق درسًا مسجلًا بأنه يحتاج مراجعة؛ وإلا تبقى المهمة الدراسية الأصلية.";
   return {
     ...plan,
     summary: (coverageNote + "\n\n" + plan.summary).slice(0, 1_500),
