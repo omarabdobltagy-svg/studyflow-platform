@@ -7,6 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
+import { getSIESubject, matchSIECheckpointTask } from "@shared/sie-catalog";
+import { displayBranchTitle, displayCurriculumTitle } from "@/lib/curriculum-display";
 import { CalendarDays, Check, Circle, Pencil, Plus, Search, Tag, Trash2, X } from "lucide-react";
 import { FormEvent, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -28,6 +30,29 @@ function dateInputValue(date: Date | null) {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
 }
 
+
+function isEnglishOnlyTaskText(value: string | null | undefined) {
+  const text = String(value ?? "").trim();
+  return /[A-Za-z]{3,}/.test(text) && !/[\\u0600-\\u06FF]/.test(text);
+}
+
+function taskArabicPresentation(task: { title: string; category: string; notes: string | null }, subjectIds: string[]) {
+  const match = matchSIECheckpointTask(subjectIds, [task.title, task.notes ?? ""].join(" "));
+  if (match) {
+    const subject = getSIESubject(match.subjectId)?.nameAr ?? "مادة دراسية";
+    return {
+      title: subject + " · " + displayBranchTitle(match.branchTitle) + " · " + displayCurriculumTitle(match.title),
+      category: subject + " · " + displayBranchTitle(match.branchTitle),
+      notes: isEnglishOnlyTaskText(task.notes) ? "تفاصيل التكليف محفوظة في المصدر الأصلي. راجع شرح المدرس أو المنصة المرتبطة." : task.notes,
+    };
+  }
+  return {
+    title: isEnglishOnlyTaskText(task.title) ? "مهمة دراسية مسجلة" : task.title,
+    category: isEnglishOnlyTaskText(task.category) ? "مهمة عامة" : task.category,
+    notes: isEnglishOnlyTaskText(task.notes) ? "تفاصيل المهمة محفوظة باللغة الأصلية في السجل." : task.notes,
+  };
+}
+
 export default function Tasks() {
   const utils = trpc.useUtils();
   const [isFormOpen, setFormOpen] = useState(false);
@@ -38,6 +63,8 @@ export default function Tasks() {
   const [blockerReason, setBlockerReason] = useState<"low_time" | "not_understood" | "too_much" | "other_commitment" | "forgot" | "other">("low_time");
   const [blockerNote, setBlockerNote] = useState("");
   const tasksQuery = trpc.tasks.list.useQuery();
+  const profileQuery = trpc.studentProfile.get.useQuery();
+  const subjectIds = profileQuery.data?.subjectIds ?? [];
   const goalsQuery = trpc.goals.list.useQuery();
   const createTask = trpc.tasks.create.useMutation({
     onSuccess: () => { void utils.tasks.list.invalidate(); void utils.calendar.list.invalidate(); void utils.dashboard.summary.invalidate(); void utils.goals.list.invalidate(); setFormOpen(false); toast.success("أُضيفت المهمة إلى يومك."); },
@@ -146,7 +173,7 @@ export default function Tasks() {
             const meta = priorityMeta[task.priority];
             return <div key={task.id} className="group flex items-center gap-3 px-5 py-4 transition-colors hover:bg-muted/30 sm:px-6">
               <button onClick={() => { const done = task.status !== "done"; if (done && task.notes?.includes("طريقة المذاكرة:") && !window.confirm("هل أنهيت طريقة المذاكرة المطلوبة، وخلصت واجب أو امتحان المدرس لو كان مطلوبًا؟")) return; toggleTask.mutate({ id: task.id, done }); }} disabled={toggleTask.isPending} className={cn("pressable flex size-6 shrink-0 items-center justify-center rounded-full border-2", task.status === "done" ? "border-emerald-500 bg-emerald-500 text-white" : "border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground")} aria-label={task.status === "done" ? `إعادة فتح ${task.title}` : `إكمال ${task.title}`}>{task.status === "done" && <Check className="size-3.5" />}</button>
-              <div className="min-w-0 flex-1"><p className={cn("font-semibold", task.status === "done" && "text-muted-foreground line-through")}>{task.title}</p><div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground"><span className="inline-flex items-center gap-1"><Tag className="size-3" />{task.category}</span>{task.dueAt && <span className="inline-flex items-center gap-1"><CalendarDays className="size-3" />{displayDate(task.dueAt)}</span>}</div>{task.notes&&<details className="mt-2 max-w-2xl rounded-lg border border-border/60 bg-muted/20 px-3 py-2"><summary className="cursor-pointer text-[11px] font-semibold text-primary">{task.notes.includes("طريقة المذاكرة:")?"عرض طريقة المذاكرة وسبب كل مرحلة":"عرض ملاحظات المهمة"}</summary><p className="mt-2 whitespace-pre-line text-xs leading-6 text-muted-foreground">{task.notes}</p></details>}</div>
+              <div className="min-w-0 flex-1"><p className={cn("font-semibold", task.status === "done" && "text-muted-foreground line-through")}>{presentation.title}</p><div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground"><span className="inline-flex items-center gap-1"><Tag className="size-3" />{presentation.category}</span>{task.dueAt && <span className="inline-flex items-center gap-1"><CalendarDays className="size-3" />{displayDate(task.dueAt)}</span>}</div>{presentation.notes&&<details className="mt-2 max-w-2xl rounded-lg border border-border/60 bg-muted/20 px-3 py-2"><summary className="cursor-pointer text-[11px] font-semibold text-primary">{presentation.notes.includes("طريقة المذاكرة:")?"عرض طريقة المذاكرة وسبب كل مرحلة":"عرض تفاصيل المهمة"}</summary><p className="mt-2 whitespace-pre-line text-xs leading-6 text-muted-foreground">{presentation.notes}</p></details>}</div>
               <Badge className={cn("shrink-0 rounded-lg border-0 px-2 py-1 text-[11px]", meta.pill)}><span className={cn("ml-1 inline-block size-1.5 rounded-full", meta.dot)} />{meta.label}</Badge>{task.status!=="done"&&<Button type="button" size="sm" variant="ghost" onClick={()=>{setReportingTaskId(task.id);setBlockerReason("low_time");setBlockerNote("");}} className="h-8 shrink-0 rounded-lg px-2 text-[11px] text-muted-foreground">ليه ما كملتش؟</Button>}<div className="flex shrink-0 items-center gap-1"><Button size="icon" variant="ghost" onClick={() => setEditingTaskId(task.id)} className="size-8 rounded-lg" aria-label={`تعديل ${task.title}`}><Pencil className="size-3.5" /></Button><Button size="icon" variant="ghost" onClick={() => { if (window.confirm("حذف هذه المهمة؟")) deleteTask.mutate({ id: task.id }); }} className="size-8 rounded-lg text-destructive hover:text-destructive" aria-label={`حذف ${task.title}`}><Trash2 className="size-3.5" /></Button></div>
             </div>;
           }) : <div className="flex min-h-64 flex-col items-center justify-center px-5 text-center"><Circle className="mb-3 size-8 text-muted-foreground/35" /><p className="font-semibold">{searchQuery ? "مفيش نتائج مطابقة للبحث" : "لا توجد مهام في هذه القائمة"}</p><p className="mt-1 max-w-sm text-sm text-muted-foreground">{searchQuery ? "جرّب كلمة مختلفة أو امسح البحث لعرض المهام." : "أضف مهمة محددة وصغيرة بما يكفي لتبدأ بها اليوم."}</p>{searchQuery ? <Button variant="link" onClick={() => setSearchQuery("")} className="mt-2 text-primary">مسح البحث</Button> : <Button variant="link" onClick={() => setFormOpen(true)} className="mt-2 gap-1 text-primary"><Plus className="size-4" />أضف مهمة</Button>}</div>}
