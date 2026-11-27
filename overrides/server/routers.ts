@@ -480,7 +480,7 @@ async function buildDailyPlanOperationalContext(userId: number) {
   };
 }
 
-async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): Promise<DailyPlanResult> {
+async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number, forceRebuild = false): Promise<DailyPlanResult> {
   const running = dailyPlanLocks.get(userId);
   if (running) return running;
 
@@ -528,7 +528,7 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): 
       : null;
 
     updateAIActivity(userId, activityId, "مقارنة الخطة الحالية", "يقارن بصمة بياناتك بالخطة المحفوظة لتحديد هل يلزم إعادة بنائها.");
-    if (latestDailyPlan && latestDailyPlan.prompt.startsWith(expectedPromptPrefix)
+    if (!forceRebuild && latestDailyPlan && latestDailyPlan.prompt.startsWith(expectedPromptPrefix)
       && latestPlanDay === startDate && !isDailyPlanStale(latestDailyPlan.createdAt)) {
       try {
         const saved = JSON.parse(latestDailyPlan.planJson) as Awaited<ReturnType<typeof generatePersonalPlan>>;
@@ -563,6 +563,8 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): 
         dailyMinutes,
         daysPerWeek,
         startDate,
+        pace: dailyMinutes <= 60 ? "relaxed" : dailyMinutes <= 150 ? "balanced" : "intensive",
+        persist: false,
         existingCurriculumTasks,
         existingTasks: currentTasks.map(task => ({
           id: task.id,
@@ -594,16 +596,15 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number): 
           : step;
       }),
     };
-    const generatedDraft = await getLatestAiPlanByPromptPrefix(userId, DAILY_PLAN_DRAFT_PREFIX);
     const refreshedFingerprint = await getDailyPlanSourceFingerprint(userId, dailyMinutes, startDate);
-    if (generatedDraft) {
-      // Promote the generated draft only after task reconciliation succeeds.
-      await updateAiPlanContent(userId, generatedDraft.id, JSON.stringify(planWithTaskLinks));
-      await updateAiPlanPrompt(userId, generatedDraft.id, DAILY_PLAN_PREFIX + refreshedFingerprint + ":");
+    const activePrompt = DAILY_PLAN_PREFIX + refreshedFingerprint + ":";
+    if (latestDailyPlan) {
+      // Rebuild the same canonical record instead of adding another active-plan row.
+      await updateAiPlanContent(userId, latestDailyPlan.id, JSON.stringify(planWithTaskLinks));
+      await updateAiPlanPrompt(userId, latestDailyPlan.id, activePrompt);
     } else {
-      // Keep activation explicit even if the generator's internal draft persistence changes.
       await saveAiPlan(userId, {
-        prompt: DAILY_PLAN_PREFIX + refreshedFingerprint + ":",
+        prompt: activePrompt,
         title: plan.title || "خطة المذاكرة",
         planJson: JSON.stringify(planWithTaskLinks),
       });
@@ -3596,10 +3597,25 @@ export const appRouter = router({
         return { success: true, ...result };
       }),
     currentDaily: protectedProcedure.query(async ({ ctx }) => {
-      const snapshot = await getCurrentDailyPlanForStudent(ctx.user.id);
+      let snapshot = await getCurrentDailyPlanForStudent(ctx.user.id);
       queueTeacherSourceScan(ctx.user.id);
-      // Initial plans are created and approved in Planner. This query only reads the
-      // active snapshot; stale approved plans are reconciled in the background.
+      // Build the first plan from the live student signals automatically. A user
+      // should not have to ask the AI to make the plan or press Generate.
+      if (!snapshot.plan && !snapshot.generatedAt) {
+        const profile = await getStudentProfile(ctx.user.id);
+        if (profile?.subjectIds?.length) {
+          const result = await ensureDailyPlanForStudent(ctx.user.id, snapshot.dailyMinutes || 120);
+          const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
+          snapshot = {
+            plan: result.plan,
+            generatedAt: result.generatedAt,
+            needsRefresh: false,
+            sourceFingerprint: await getDailyPlanSourceFingerprint(ctx.user.id, snapshot.dailyMinutes || 120, today),
+            dailyMinutes: snapshot.dailyMinutes || 120,
+            taskCount: result.taskCount,
+          };
+        }
+      }
       if (snapshot.needsRefresh && snapshot.dailyMinutes && snapshot.generatedAt) {
         queueDailyPlanEnsure(ctx.user.id, snapshot.dailyMinutes);
       }
@@ -3643,6 +3659,7 @@ export const appRouter = router({
     ensureDaily: protectedProcedure
       .input(z.object({
         dailyMinutes: z.number().int().min(20).max(600).optional(),
+        forceRebuild: z.boolean().default(false),
       }).optional())
       .mutation(async ({ ctx, input }) => {
         const profile = await getStudentProfile(ctx.user.id);
@@ -3652,7 +3669,7 @@ export const appRouter = router({
             ? Math.trunc(configuredMinutes)
             : 120
         );
-        const result = await ensureDailyPlanForStudent(ctx.user.id, dailyMinutes);
+        const result = await ensureDailyPlanForStudent(ctx.user.id, dailyMinutes, Boolean(input?.forceRebuild));
         if (result.generated) {
           await logStudentActivity(ctx.user.id, "plan.daily_generated", "ai_plan", null, "أنشأ المخطط الذكي خطة اليوم تلقائيًا", {
             title: result.plan.title,
