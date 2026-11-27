@@ -257,6 +257,7 @@ export default function Planner() {
   const [approved, setApproved] = useState(false);
   const [loadedSavedDraft, setLoadedSavedDraft] = useState(false);
   const historyInitialized = useRef(false);
+  const initialDailyGenerationStarted = useRef(false);
   const plannerPreferencesInitialized = useRef(false);
   const [plannerTab, setPlannerTab] = useState<"overview" | "schedule" | "curriculum" | "tasks" | "history">("overview");
 
@@ -489,6 +490,33 @@ export default function Planner() {
     profile.data?.subjectIds,
     activeDailyPlan.isLoading,
     activeDailyPlan.data?.plan,
+  ]);
+
+  useEffect(() => {
+    // Preserve autonomous first-plan setup without making the currentDaily GET
+    // endpoint perform writes. Trigger one idempotent mutation after all read
+    // queries and saved-plan history have settled.
+    if (initialDailyGenerationStarted.current || ensureDaily.isPending || !historyInitialized.current) return;
+    if (profile.isLoading || profile.isError || !profile.data?.subjectIds?.length) return;
+    if (history.isLoading || history.isError) return;
+    if (activeDailyPlan.isLoading || activeDailyPlan.isError || !activeDailyPlan.data) return;
+    if (activeDailyPlan.data.plan || activeDailyPlan.data.generatedAt || savedPlans.length > 0 || plan) return;
+
+    initialDailyGenerationStarted.current = true;
+    ensureDaily.mutate({ dailyMinutes, forceRebuild: false });
+  }, [
+    profile.data?.subjectIds,
+    profile.isLoading,
+    profile.isError,
+    history.isLoading,
+    history.isError,
+    savedPlans.length,
+    activeDailyPlan.data,
+    activeDailyPlan.isLoading,
+    activeDailyPlan.isError,
+    plan,
+    dailyMinutes,
+    ensureDaily.isPending,
   ]);
 
   useEffect(() => {
