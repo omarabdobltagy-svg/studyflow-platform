@@ -115,7 +115,6 @@ export default function DashboardLayout({ title, description, children, action }
       void trpcUtils.invalidate();
     },
   });
-  const [location, setLocation] = useLocation();
   const [isMobileNavOpen, setMobileNavOpen] = useState(false);
   const [showLogoutConfirm,setShowLogoutConfirm]=useState(false);
   const pageContentRef = useRef<HTMLDivElement>(null);
