@@ -1911,11 +1911,11 @@ export const appRouter = router({
         gradeYear: z.string().trim().min(2).max(60),
       }))
       .query(async ({ input }) => {
-        const teacher = getSIETeacher(input.teacherId);
+        const teacher = getSIETeacher(teacherId);
         if (!teacher || !teacher.subjectIds.includes(input.subjectId)) {
           throw new TRPCError({ code: "NOT_FOUND", message: "المدرس غير مسجل لهذه المادة في دليل StudyFlow." });
         }
-        return getTeacherCourseFactsWithRefresh({ teacherId: input.teacherId, subjectId: input.subjectId, educationSystem: input.systemId, gradeYear: input.gradeYear });
+        return getTeacherCourseFactsWithRefresh({ teacherId: teacherId, subjectId: input.subjectId, educationSystem: input.systemId, gradeYear: input.gradeYear });
       }),
   }),
 
@@ -1983,7 +1983,7 @@ export const appRouter = router({
         const systemId = selection.systemId === "EG_GENERAL_SECONDARY" || profile.educationSystem === "general_secondary"
           ? "EG_GENERAL_SECONDARY"
           : "EG_BACCALAUREATE";
-        const teacherId = input.teacherId && input.teacherId !== "__SKIP__" ? input.teacherId : null;
+        const teacherId = teacherId && teacherId !== "__SKIP__" ? teacherId : null;
         const teacher = teacherId ? getSIETeacher(teacherId) : undefined;
         if (teacherId) {
           const eligible = getSIETeachersForSubject(input.subjectId, systemId);
@@ -2650,7 +2650,7 @@ export const appRouter = router({
           throw new TRPCError({ code: "BAD_REQUEST", message: "فرع المنهج غير موجود في الفهرس الحالي." });
         }
         const selection = (profile.selection ?? {}) as Record<string, any>;
-        const selectedTeacherId = input.teacherId || selection.teacherChoices?.[input.subjectId] || profile.teacherSelections?.[input.subjectId];
+        const selectedTeacherId = teacherId || selection.teacherChoices?.[input.subjectId] || profile.teacherSelections?.[input.subjectId];
         const selectedTeacher = selectedTeacherId ? getSIETeacher(selectedTeacherId) : undefined;
         if (selectedTeacher && !selectedTeacher.subjectIds.includes(input.subjectId)) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "المدرس المحدد لا يرتبط بهذه المادة." });
@@ -2743,6 +2743,25 @@ export const appRouter = router({
               : "هوية المدرس معروفة، لكن تطابق الفرع غير مؤكد من العنوان؛ سيُفحص محتوى الفيديو بعد موافقتك",
           }];
         }).sort((a, b) => Number(b.accepted) - Number(a.accepted) || b.matchedSignals - a.matchedSignals).slice(0, 10);
+        const latestSearchProfile = await getStudentProfile(ctx.user.id);
+        if (latestSearchProfile) {
+          const latestSearchSelection = (latestSearchProfile.selection ?? {}) as Record<string, any>;
+          const previousPending = Array.isArray(latestSearchSelection.pendingAlternativeReviewCandidates)
+            ? latestSearchSelection.pendingAlternativeReviewCandidates as Array<Record<string, any>>
+            : [];
+          const savedAt = new Date().toISOString();
+          const nextPending = [
+            ...items.map(item => ({ ...item, subjectId: input.subjectId, branchId: input.branchId, searchedAt: savedAt })),
+            ...previousPending.filter(candidate =>
+              !items.some(item => item.externalId === candidate.externalId)
+              && Date.now() - Date.parse(String(candidate.searchedAt ?? "")) < 7 * 24 * 60 * 60 * 1_000
+            ),
+          ].slice(0, 50);
+          await updateStudentProfileSelection(ctx.user.id, {
+            ...latestSearchSelection,
+            pendingAlternativeReviewCandidates: nextPending,
+          });
+        }
         await logStudentActivity(ctx.user.id, "learning.review_search", "curriculum_branch", input.branchId, "تم البحث عن مراجعات بديلة لمدرس المادة", {
           subjectId: input.subjectId,
           selectedTeacherId: selectedTeacherId ?? null,
@@ -2759,22 +2778,34 @@ export const appRouter = router({
       .input(z.object({
         subjectId: z.string().trim().min(1).max(80),
         branchId: z.string().trim().min(1).max(120),
-        teacherId: z.string().trim().min(1).max(80),
         externalId: z.string().regex(/^youtube:[A-Za-z0-9_-]{6,20}$/),
-        title: z.string().trim().min(3).max(240),
-        channelTitle: z.string().trim().min(2).max(160),
-        url: z.string().url().max(500),
-        description: z.string().max(700).optional(),
-        publishedAt: z.string().max(80).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const profile = await getStudentProfile(ctx.user.id);
         if (!profile || profile.educationSystem !== "baccalaureate" || !profile.subjectIds.includes(input.subjectId)) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "هذه المادة غير موجودة في ملف البكالوريا." });
         }
+        const selection = (profile.selection ?? {}) as Record<string, any>;
+        const pendingCandidates = Array.isArray(selection.pendingAlternativeReviewCandidates)
+          ? selection.pendingAlternativeReviewCandidates as Array<Record<string, any>>
+          : [];
+        const candidate = pendingCandidates.find(item =>
+          item.externalId === input.externalId
+          && item.subjectId === input.subjectId
+          && item.branchId === input.branchId
+          && Number.isFinite(Date.parse(String(item.searchedAt ?? "")))
+          && Date.now() - Date.parse(String(item.searchedAt)) <= 7 * 24 * 60 * 60 * 1_000
+        );
+        if (!candidate) throw new TRPCError({ code: "CONFLICT", message: "انتهت صلاحية نتيجة البحث. أعد البحث ثم وافق على الفيديو." });
+        const teacherId = String(candidate.teacherId ?? "");
+        const title = String(candidate.title ?? "").trim();
+        const channelTitle = String(candidate.channelTitle ?? "").trim();
+        const url = String(candidate.url ?? "").trim();
+        const description = String(candidate.description ?? "").slice(0, 700);
+        const publishedAt = String(candidate.publishedAt ?? "");
         const branch = getSIECheckpointBranches(input.subjectId).find(item => item.branchId === input.branchId);
-        const teacher = getSIETeacher(input.teacherId);
-        if (!branch || !teacher || !teacher.subjectIds.includes(input.subjectId)
+        const teacher = getSIETeacher(teacherId);
+        if (!title || !channelTitle || !branch || !teacher || !teacher.subjectIds.includes(input.subjectId)
           || !teacher.systemCourseVerification?.EG_BACCALAUREATE
           || teacher.systemCourseVerification.EG_BACCALAUREATE === "not_verified_for_2026_2027") {
           throw new TRPCError({ code: "BAD_REQUEST", message: "المدرس أو الفرع غير معتمد لهذه المادة." });
@@ -2787,7 +2818,7 @@ export const appRouter = router({
           .replace(/[ً-ٰٟـ]/g, "")
           .replace(/[^\p{L}\p{N}]+/gu, " ")
           .trim();
-        const channelIdentity = normalizeIdentity(input.channelTitle);
+        const channelIdentity = normalizeIdentity(channelTitle);
         const catalogIdentities = [teacher.nameAr, teacher.brandName]
           .map(value => typeof value === "string" ? normalizeIdentity(value) : "")
           .filter(identity => identity.length >= 4);
@@ -2795,14 +2826,13 @@ export const appRouter = router({
           || channelIdentity.includes(identity) || identity.includes(channelIdentity))) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "اسم قناة الفيديو لا يطابق المدرس المسجل في دليل المنصة." });
         }
-        const selection = (profile.selection ?? {}) as Record<string, any>;
         const selectedTeacherId = selection.teacherChoices?.[input.subjectId] || profile.teacherSelections?.[input.subjectId];
-        if (selectedTeacherId === input.teacherId) {
+        if (selectedTeacherId === teacherId) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "هذا هو مدرسك المحدد بالفعل، وليس مراجعة بديلة." });
         }
         const externalIdFromUrl = (() => {
           try {
-            const parsed = new URL(input.url);
+            const parsed = new URL(url);
             if (parsed.protocol !== "https:") return null;
             if (parsed.hostname === "youtu.be" || parsed.hostname === "www.youtu.be") return parsed.pathname.replace(/^\/+/, "").split("/")[0];
             if (!["youtube.com", "www.youtube.com", "m.youtube.com", "www.youtube-nocookie.com"].includes(parsed.hostname.toLowerCase())) return null;
@@ -2830,18 +2860,18 @@ export const appRouter = router({
           ? latestSelection.teacherPublicUpdates as TeacherPublicUpdate[]
           : [];
         const existingUpdate = updates.find(update => update.externalId === input.externalId);
-        if (existingUpdate && existingUpdate.teacherId !== input.teacherId) {
+        if (existingUpdate && existingUpdate.teacherId !== teacherId) {
           throw new TRPCError({ code: "CONFLICT", message: "معرّف الفيديو مرتبط بمصدر آخر بالفعل." });
         }
-        const publishedDate = input.publishedAt && Number.isFinite(Date.parse(input.publishedAt))
-          ? new Date(input.publishedAt).toISOString() : new Date().toISOString();
+        const publishedDate = publishedAt && Number.isFinite(Date.parse(publishedAt))
+          ? new Date(publishedAt).toISOString() : new Date().toISOString();
         const acceptedUpdate: TeacherPublicUpdate = existingUpdate
           ? {
               ...existingUpdate,
-              teacherId: input.teacherId,
+              teacherId: teacherId,
               teacherName: teacher.nameAr,
-              title: input.title,
-              description: input.description ?? existingUpdate.description ?? "",
+              title: title,
+              description: description ?? existingUpdate.description ?? "",
               url: "https://www.youtube.com/watch?v=" + externalIdFromUrl,
               announcementType: "revision",
               confidence: "medium",
@@ -2853,11 +2883,11 @@ export const appRouter = router({
             }
           : {
               externalId: input.externalId,
-              teacherId: input.teacherId,
+              teacherId: teacherId,
               teacherName: teacher.nameAr,
               sourceType: "youtube",
-              title: input.title,
-              description: input.description ?? "",
+              title: title,
+              description: description ?? "",
               url: "https://www.youtube.com/watch?v=" + externalIdFromUrl,
               publishedAt: publishedDate,
               observedAt: new Date().toISOString(),
@@ -2868,6 +2898,9 @@ export const appRouter = router({
           ? updates.map(update => update.externalId === input.externalId ? acceptedUpdate : update)
           : [acceptedUpdate, ...updates].slice(0, 60);
         const acceptedVideoIds = [...new Set([...accepted, input.externalId])].slice(-120);
+        const remainingPendingCandidates = (Array.isArray(latestSelection.pendingAlternativeReviewCandidates)
+          ? latestSelection.pendingAlternativeReviewCandidates as Array<Record<string, any>>
+          : []).filter(candidate => candidate.externalId !== input.externalId);
         const acceptedContexts = latestSelection.acceptedAlternativeReviewContext
           && typeof latestSelection.acceptedAlternativeReviewContext === "object"
           && !Array.isArray(latestSelection.acceptedAlternativeReviewContext)
@@ -2876,6 +2909,7 @@ export const appRouter = router({
         await updateStudentProfileSelection(ctx.user.id, {
           ...latestSelection,
           acceptedAlternativeReviewVideoIds: acceptedVideoIds,
+          pendingAlternativeReviewCandidates: remainingPendingCandidates,
           acceptedAlternativeReviewContext: {
             ...acceptedContexts,
             [input.externalId]: { subjectId: input.subjectId, branchId: input.branchId, acceptedAt: new Date().toISOString() },
@@ -2887,7 +2921,7 @@ export const appRouter = router({
           eventType: "teacher.alternative_review_accepted",
           entityType: "teacher_video",
           summary: "وافق الطالب على تحليل مراجعة من مدرس بديل",
-          metadata: { externalId: input.externalId, teacherId: input.teacherId, subjectId: input.subjectId, branchId: input.branchId },
+          metadata: { externalId: input.externalId, teacherId: teacherId, subjectId: input.subjectId, branchId: input.branchId },
         });
         if (isTeacherVideoAnalysisConfigured()) queueTeacherVideoAnalyses(ctx.user.id, [acceptedUpdate]);
         if (acceptedUpdate.contentAnalysis?.status === "complete") {
@@ -2974,7 +3008,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const result = await createTask(ctx.user.id, input);
         await logStudentActivity(ctx.user.id, "task.created", "task", null, "أُضيفت مهمة جديدة", {
-          title: input.title, category: input.category ?? "عام", priority: input.priority ?? "medium", dueAt: input.dueAt?.toISOString() ?? null,
+          title: title, category: input.category ?? "عام", priority: input.priority ?? "medium", dueAt: input.dueAt?.toISOString() ?? null,
         });
         queueDailyPlanReconciliation(ctx.user.id);
         return result;
@@ -3035,7 +3069,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const result = await updateTask(ctx.user.id, input.id, input);
         await logStudentActivity(ctx.user.id, "task.updated", "task", input.id, "تم تعديل مهمة", {
-          title: input.title, category: input.category, priority: input.priority, dueAt: input.dueAt?.toISOString() ?? null,
+          title: title, category: input.category, priority: input.priority, dueAt: input.dueAt?.toISOString() ?? null,
         });
         queueDailyPlanReconciliation(ctx.user.id);
         return result;
@@ -3589,8 +3623,8 @@ export const appRouter = router({
         const existingSubjectRecord = courseProgress[input.subjectId] ?? {};
         const existingBranchRecord = branch ? existingSubjectRecord.branches?.[branch.branchId] ?? {} : {};
         const courseMode = input.courseMode ?? selection.courseModes?.[input.subjectId] ?? existingSubjectRecord.courseMode ?? "online";
-        const teacherId = input.teacherId !== undefined
-          ? input.teacherId
+        const teacherId = teacherId !== undefined
+          ? teacherId
           : selection.teacherChoices?.[input.subjectId] ?? profile.teacherSelections?.[input.subjectId] ?? null;
         const chosenTeacher = teacherId && teacherId !== "__SKIP__" ? getSIETeacher(teacherId) : undefined;
         if (teacherId && teacherId !== "__SKIP__") {
@@ -3600,7 +3634,7 @@ export const appRouter = router({
         }
         const savedCustomTeacherName = selection.customTeacherNames?.[input.subjectId] ?? existingBranchRecord.teacherName ?? existingSubjectRecord.teacherName ?? "";
         const teacherName = input.teacherName?.trim()
-          ?? (input.teacherId === null ? "" : savedCustomTeacherName || chosenTeacher?.nameAr || "");
+          ?? (teacherId === null ? "" : savedCustomTeacherName || chosenTeacher?.nameAr || "");
         if (input.teacherTeachingFrontierId !== "__UNKNOWN__" && !teacherName.trim() && !chosenTeacher) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "اكتب اسم المدرس أو اختره قبل تسجيل موضع شرحه." });
         }
@@ -3671,7 +3705,7 @@ export const appRouter = router({
         const nextCustomTeacherNames = { ...((latestSelection.customTeacherNames ?? {}) as Record<string, string>) };
         if (!chosenTeacher && teacherName.trim()) nextCustomTeacherNames[input.subjectId] = teacherName.trim();
         else delete nextCustomTeacherNames[input.subjectId];
-        if (input.teacherId !== undefined) {
+        if (teacherId !== undefined) {
           const chosenTeacher = teacherId && teacherId !== "__SKIP__" ? getSIETeacher(teacherId) : undefined;
           const previousTeacherState = nextTeacherStates[input.subjectId] ?? {};
           const sameTeacher = previousTeacherState.teacherId === teacherId;
@@ -3697,7 +3731,7 @@ export const appRouter = router({
         }
         await updateStudentProfileSelection(ctx.user.id, {
           ...latestSelection,
-          ...(input.teacherId !== undefined ? {
+          ...(teacherId !== undefined ? {
             teacherChoices: nextTeacherChoices,
             teacherProgressState: nextTeacherStates,
           } : {}),
@@ -4003,7 +4037,7 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         const result = await createCalendarEvent(ctx.user.id, input);
-        await logStudentActivity(ctx.user.id, "calendar.event_created", "calendar_event", null, "أُضيف موعد إلى التقويم", { title: input.title, startAt: input.startAt.toISOString() });
+        await logStudentActivity(ctx.user.id, "calendar.event_created", "calendar_event", null, "أُضيف موعد إلى التقويم", { title: title, startAt: input.startAt.toISOString() });
         queueDailyPlanReconciliation(ctx.user.id);
         return result;
       }),
@@ -4011,7 +4045,7 @@ export const appRouter = router({
       .input(z.object({ id: z.number().int().positive(), title: z.string().trim().min(1).max(180), type: z.enum(["event", "study", "goal"]), startAt: z.coerce.date(), endAt: dateInput, allDay: z.boolean(), color: z.string().trim().min(1).max(20) }))
       .mutation(async ({ ctx, input }) => {
         const result = await updateCalendarEvent(ctx.user.id, input.id, input);
-        await logStudentActivity(ctx.user.id, "calendar.event_updated", "calendar_event", input.id, "تم تعديل موعد في التقويم", { title: input.title, startAt: input.startAt.toISOString() });
+        await logStudentActivity(ctx.user.id, "calendar.event_updated", "calendar_event", input.id, "تم تعديل موعد في التقويم", { title: title, startAt: input.startAt.toISOString() });
         queueDailyPlanReconciliation(ctx.user.id);
         return result;
       }),
