@@ -15,6 +15,13 @@ export type TeacherPublicUpdate = {
   confidence?: "high" | "medium" | "low";
   affectedDate?: string;
   contentAnalysis?: TeacherVideoContentAnalysis;
+  /** Scoped verification derived only from a substantive public YouTube description. */
+  descriptionMatch?: {
+    subjectId: string;
+    branchId: string;
+    topics: string[];
+    verifiedAt: string;
+  };
 };
 
 export type TeacherVideoTopicSegment = {
