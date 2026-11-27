@@ -159,6 +159,37 @@ try {
   const requiredTeacherFactColumns = ["id", "teacherId", "teacherName", "subjectId", "educationSystem", "gradeYear", "availableModesJson", "homeworkPolicy", "homeworkRequiredBeforeNextLecture", "preLectureExamRequired", "evidenceJson", "confidence", "verificationStatus", "checkedAt", "expiresAt", "createdAt", "updatedAt"];
   const missingTeacherFactColumns = requiredTeacherFactColumns.filter(column => !teacherFactColumnNames.has(column));
   if (missingTeacherFactColumns.length) throw new Error("teacherCourseFacts is missing required columns: " + missingTeacherFactColumns.join(", ") + ".");
+  // Shared teacher directory is global to the Preview workspace, scoped by
+  // subject, education system and grade year. The unique key prevents duplicate
+  // records when multiple students submit the same teacher.
+  await connection.query(
+    "CREATE TABLE IF NOT EXISTS `teacherDirectoryEntries` (" +
+    "`id` int NOT NULL AUTO_INCREMENT, `normalizedName` varchar(180) NOT NULL, " +
+    "`teacherName` varchar(120) NOT NULL, `brandName` varchar(180) NOT NULL, " +
+    "`subjectId` varchar(80) NOT NULL, `educationSystem` varchar(40) NOT NULL, `gradeYear` varchar(60) NOT NULL, " +
+    "`sourceUrl` text NOT NULL, `availableModesJson` text NOT NULL, `confidence` varchar(20) NOT NULL DEFAULT 'low', " +
+    "`evidenceJson` text NOT NULL, `notes` text NULL, `confirmationCount` int NOT NULL DEFAULT 1, `submittedBy` int DEFAULT NULL, " +
+    "`createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, " +
+    "PRIMARY KEY (`id`), UNIQUE KEY `teacher_directory_scope_unique` (`normalizedName`, `subjectId`, `educationSystem`, `gradeYear`), " +
+    "KEY `teacher_directory_subject_idx` (`subjectId`, `educationSystem`, `gradeYear`, `updatedAt`), " +
+    "CONSTRAINT `teacher_directory_submitted_by_fk` FOREIGN KEY (`submittedBy`) REFERENCES `users` (`id`) ON DELETE SET NULL" +
+    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+  );
+  const [teacherDirectoryColumns] = await connection.query(
+    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'teacherDirectoryEntries'"
+  );
+  const teacherDirectoryColumnNames = new Set(teacherDirectoryColumns.map(row => row.COLUMN_NAME));
+  const requiredTeacherDirectoryColumns = [
+    "id", "normalizedName", "teacherName", "brandName", "subjectId", "educationSystem", "gradeYear",
+    "sourceUrl", "availableModesJson", "confidence", "evidenceJson", "notes", "confirmationCount",
+    "submittedBy", "createdAt", "updatedAt",
+  ];
+  const missingTeacherDirectoryColumns = requiredTeacherDirectoryColumns.filter(column => !teacherDirectoryColumnNames.has(column));
+  if (missingTeacherDirectoryColumns.length) {
+    throw new Error("teacherDirectoryEntries is missing required columns: " + missingTeacherDirectoryColumns.join(", ") + ".");
+  }
+
+  await connection.query("INSERT IGNORE INTO `studyflow_migrations` (id) VALUES (?)", ["2026-11-teacher-directory"]);
   await connection.query("INSERT IGNORE INTO `studyflow_migrations` (id) VALUES (?)", ["2026-11-planner-reconciliation"]);
   await connection.query("INSERT IGNORE INTO `studyflow_migrations` (id) VALUES (?)", ["2026-11-task-estimates-nullable"]);
   await connection.query("INSERT IGNORE INTO `studyflow_migrations` (id) VALUES (?)", ["2026-11-teacher-course-facts"]);
