@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
+import { getNextOpenPlanStep } from "@/lib/plan-actions";
 import { getSIEStudentVisibleBranches, getSIECheckpointProgressBranches, getSIESubject, matchSIECheckpointTask, normalizeSIECheckpointFrontier } from "@shared/sie-catalog";
 import {
   ArrowLeft, BarChart3, BookOpenText, CalendarDays, Check, CheckCircle2,
@@ -25,6 +26,9 @@ type Priority = {
   priorityReason?: string;
   taskId?: number;
   taskTitle?: string;
+  planStepTitle?: string;
+  planStepDetail?: string;
+  planStepCategory?: string;
 };
 type ExternalSession = {
   sessionId: string; subjectId: string; branchId: string; lessonId: string;
@@ -264,39 +268,58 @@ export default function Home() {
   }, [mappedOpenTasks]);
 
   const dailyPlanPriority = useMemo<Priority | null>(() => {
-    const steps = dailyPlan.data?.plan?.steps ?? [];
+    const step = getNextOpenPlanStep(dailyPlan.data?.plan?.steps as any[] | undefined);
+    if (!step) return null;
+    const curriculumNodeIds = Array.isArray(step.curriculumNodeIds) ? step.curriculumNodeIds : [];
     const subjectIds = profile.data?.subjectIds ?? [];
-    for (const step of steps as any[]) {
-      const curriculumNodeIds = Array.isArray(step.curriculumNodeIds) ? step.curriculumNodeIds : [];
-      for (const subjectId of subjectIds) {
-        for (const branch of getSIECheckpointProgressBranches(subjectId)) {
-          const gap = (learning.data as any)?.gapByBranch?.[subjectId]?.[branch.branchId];
-          if (typeof gap?.studentPosition !== "number" || gap.referencePosition === null
-            || gap.referencePosition <= gap.studentPosition) continue;
-          const nextChoice = branch.choices[gap.studentPosition];
-          if (!nextChoice || !curriculumNodeIds.includes(nextChoice.nodeId)) continue;
-          return {
-            subjectId,
-            subjectName: getSIESubject(subjectId)?.nameAr ?? subjectId,
-            branchId: branch.branchId,
-            branchTitle: branch.branchId === "ARB_READING" ? "نصوص الوحدة" : branch.branchTitle,
-            gapCount: gap.gapCount ?? 0,
-            pointLabel: branch.branchType === "official_section" ? "موضوع" : "درس",
-            nextLesson: { nodeId: nextChoice.nodeId, title: nextChoice.title },
-            source: "daily_plan",
-            priority: step.priority ?? "medium",
-            priorityScore: typeof step.priorityScore === "number" ? step.priorityScore : undefined,
-            priorityReason: step.priorityReason,
-          };
-        }
+    for (const subjectId of subjectIds) {
+      for (const branch of getSIECheckpointProgressBranches(subjectId)) {
+        const nextChoice = branch.choices.find(choice => curriculumNodeIds.includes(choice.nodeId));
+        if (!nextChoice) continue;
+        const gap = (learning.data as any)?.gapByBranch?.[subjectId]?.[branch.branchId];
+        return {
+          subjectId,
+          subjectName: getSIESubject(subjectId)?.nameAr ?? subjectId,
+          branchId: branch.branchId,
+          branchTitle: branch.branchId === "ARB_READING" ? "نصوص الوحدة" : branch.branchTitle,
+          gapCount: typeof gap?.gapCount === "number" ? gap.gapCount : 0,
+          pointLabel: branch.branchType === "official_section" ? "موضوع" : "درس",
+          nextLesson: { nodeId: nextChoice.nodeId, title: nextChoice.title },
+          source: "daily_plan",
+          priority: step.priority ?? "medium",
+          priorityScore: typeof step.priorityScore === "number" ? step.priorityScore : undefined,
+          priorityReason: step.priorityReason ?? step.detail,
+        };
       }
     }
-    return null;
-  }, [dailyPlan.data, profile.data?.subjectIds, learning.data]);
 
-  const activePriority = taskPriority ?? nextTopicInTaskBranch ?? (dailyPlan.data?.needsRefresh
-    ? priority ?? dailyPlanPriority
-    : dailyPlanPriority ?? priority);
+    // A plan may begin with an open obligation that is not linked to a curriculum
+    // node. Show that exact same first action instead of inventing another lesson.
+    return {
+      subjectId: "__PLAN_STEP__",
+      subjectName: "خطة المذاكرة",
+      branchId: "__PLAN_STEP__",
+      branchTitle: step.category || "خطوة تنفيذ",
+      gapCount: 0,
+      pointLabel: "خطوة",
+      nextLesson: null,
+      source: "daily_plan",
+      priority: step.priority ?? "medium",
+      priorityScore: typeof step.priorityScore === "number" ? step.priorityScore : undefined,
+      priorityReason: step.detail,
+      planStepTitle: step.title,
+      planStepDetail: step.detail,
+      planStepCategory: step.category,
+    };
+  }, [dailyPlan.data?.plan?.steps, profile.data?.subjectIds, learning.data]);
+
+  // The active daily plan is the source of truth. Do not let a separate task
+  // heuristic replace its first unfinished action on the dashboard.
+  const activePriority = dailyPlan.data?.needsRefresh
+    ? null
+    : dailyPlan.data?.plan
+      ? dailyPlanPriority
+      : taskPriority ?? nextTopicInTaskBranch ?? priority;
   const completedTaskProgressConflicts = mappedOpenTasks.filter(item => item.isAlreadyCompleted);
 
   const teacherScheduleAnnouncements = useMemo(() => {
@@ -492,16 +515,25 @@ export default function Home() {
                       : <Badge variant="secondary">{activePriority.gapCount} {activePriority.pointLabel} في الفجوة</Badge>
                 )}
               </div>
-              {learning.isLoading || (dailyPlan.isLoading && !priority) ? (
+              {learning.isLoading || dailyPlan.isLoading ? (
                 <div className="mt-8 space-y-3"><div className="h-5 w-32 animate-pulse rounded bg-muted" /><div className="h-8 w-3/4 animate-pulse rounded bg-muted" /><div className="h-4 w-full animate-pulse rounded bg-muted" /></div>
-              ) : activePriority?.nextLesson ? (
+              ) : dailyPlan.data?.needsRefresh ? (
+                <div className="mt-6 rounded-2xl bg-muted/45 p-5">
+                  <span className="flex size-11 items-center justify-center rounded-2xl bg-background text-primary"><RefreshCw className="size-5 animate-spin" /></span>
+                  <h3 className="mt-4 text-lg font-bold">بنحدّث أولوياتك من بياناتك الأخيرة</h3>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">لن نعرض درسًا قديمًا كخطوة قادمة أثناء إعادة بناء الخطة.</p>
+                  <Button variant="outline" onClick={() => setLocation("/planner")} className="mt-4 rounded-xl">افتح خريطة خطة المذاكرة <ArrowLeft className="size-4" /></Button>
+                </div>
+              ) : activePriority?.nextLesson || activePriority?.planStepTitle ? (
                 <>
                   <p className="mt-6 text-xs font-semibold text-muted-foreground">{activePriority.subjectName} · {activePriority.branchTitle}</p>
-                  <h3 className="mt-2 text-2xl font-bold leading-tight sm:text-3xl">{activePriority.nextLesson.title}</h3>
+                  <h3 className="mt-2 text-2xl font-bold leading-tight sm:text-3xl">{activePriority.nextLesson?.title ?? activePriority.planStepTitle}</h3>
                   <p className="mt-3 max-w-2xl text-sm leading-7 text-muted-foreground">
                     {activePriority.source === "task"
                       ? "لديك مهمة مفتوحة بالفعل لهذا الموضوع؛ سنوجّهك إلى المهمة الموجودة بدل إنشاء نسخة مكررة."
-                      : "دي الخطوة التالية حسب موضعك المسجل وموضع التدريس. ابدأ جلسة، وبعدها حدّث تقدمك الفعلي."}
+                      : activePriority.source === "daily_plan"
+                        ? activePriority.planStepDetail ?? "دي أول خطوة غير مكتملة في خطة المذاكرة الحالية."
+                        : "دي الخطوة التالية حسب موضعك المسجل وموضع التدريس. ابدأ جلسة، وبعدها حدّث تقدمك الفعلي."}
                   </p>
                   {activePriority.priorityReason && (
                     <p className="mt-2 rounded-xl border border-primary/15 bg-primary/[0.04] px-3 py-2 text-xs leading-6 text-muted-foreground">
@@ -511,16 +543,21 @@ export default function Home() {
                   )}
                   {activePriority.taskTitle && <p className="mt-2 text-xs text-muted-foreground">المهمة المسجلة: {activePriority.taskTitle}</p>}
                   <div className="mt-6 flex flex-wrap gap-2">
-                    <Button
-                      onClick={() => startSession.mutate({ subjectId: activePriority.subjectId, branchId: activePriority.branchId, lessonId: activePriority.nextLesson!.nodeId })}
-                      disabled={Boolean(session) || startSession.isPending}
-                      className="rounded-xl px-5"
-                    >
-                      {startSession.isPending ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
-                      {session ? "أنهِ الجلسة الحالية أولًا" : "ابدأ جلسة مذاكرة"}
-                    </Button>
+                    {activePriority.nextLesson && (
+                      <>
+                        <Button
+                          onClick={() => startSession.mutate({ subjectId: activePriority.subjectId, branchId: activePriority.branchId, lessonId: activePriority.nextLesson!.nodeId })}
+                          disabled={Boolean(session) || startSession.isPending}
+                          className="rounded-xl px-5"
+                        >
+                          {startSession.isPending ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
+                          {session ? "أنهِ الجلسة الحالية أولًا" : "ابدأ جلسة مذاكرة"}
+                        </Button>
+                        <Button variant="outline" onClick={() => openStudySteps(activePriority.subjectId, activePriority.branchId, activePriority.nextLesson!.nodeId)} className="rounded-xl">افتح تقدم الموضوع</Button>
+                      </>
+                    )}
                     {activePriority.taskId && <Button variant="outline" onClick={() => setLocation("/tasks")} className="rounded-xl">فتح المهمة الموجودة</Button>}
-                    <Button variant="outline" onClick={() => openStudySteps(activePriority.subjectId, activePriority.branchId, activePriority.nextLesson!.nodeId)} className="rounded-xl">افتح تقدم الموضوع</Button>
+                    {activePriority.source === "daily_plan" && <Button variant="outline" onClick={() => setLocation("/planner")} className="rounded-xl">افتح الخطوة في خريطة الخطة</Button>}
                   </div>
                 </>
               ) : (
