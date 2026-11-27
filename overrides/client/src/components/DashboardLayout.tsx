@@ -95,6 +95,7 @@ function isValidAccountPhone(value: string) {
 export default function DashboardLayout({ title, description, children, action }: DashboardLayoutProps) {
   const { user, loading, logout, error: authError, refresh: refreshAuth } = useAuth();
   const trpcUtils = trpc.useUtils();
+  const [location, setLocation] = useLocation();
   const [loginUsername, setLoginUsername] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
