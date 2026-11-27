@@ -88,6 +88,24 @@ export function getPlannerStepCurriculum<TStep extends CurriculumStepLike>(
   return match ? locateNode(match.subjectId, match.nodeId) : null;
 }
 
+export function getTeacherSessionPreparationSteps<TStep extends CurriculumStepLike & {
+  phaseId?: string;
+  existingTask?: { status?: "todo" | "done" };
+  plannerTaskStatus?: "todo" | "done";
+}>(
+  steps: TStep[],
+  sessionSubjectId: string,
+  subjectIds: string[],
+  limit = 2,
+): TStep[] {
+  return steps.filter(step => {
+    const completed = step.plannerTaskStatus === "done" || step.existingTask?.status === "done";
+    const isBacklog = Boolean(step.existingTask) || step.phaseId === "backlog";
+    if (completed || !isBacklog) return false;
+    return getPlannerStepCurriculum(step, subjectIds)?.subjectId === sessionSubjectId;
+  }).slice(0, Math.max(0, limit));
+}
+
 export function buildPlannerCurriculumLanes<TStep extends CurriculumStepLike>(
   entries: PlannerMapEntry<TStep>[],
   subjectIds: string[],
