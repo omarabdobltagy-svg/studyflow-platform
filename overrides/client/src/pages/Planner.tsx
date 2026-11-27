@@ -360,7 +360,7 @@ export default function Planner() {
         const gap = gaps[subjectId]?.[branch.branchId];
         const studentPosition = typeof gap?.studentPosition === "number" ? gap.studentPosition : null;
         const studentFrontierId = gap?.studentFrontierId ?? "__UNKNOWN__";
-        let branchHasKnownState = false;
+        let branchHasUnknownState = false;
 
         for (const [index, choice] of branch.choices.entries()) {
           const saved = savedLessonStates[choice.nodeId];
@@ -379,16 +379,12 @@ export default function Planner() {
           const completedBySq3r = Array.isArray(lessonRecord?.completedSteps)
             && new Set(lessonRecord.completedSteps).size === 5;
           if (completedBySq3r) state = "studied";
-          if (state === "studied") {
-            branchHasKnownState = true;
-            continue;
-          }
+          if (state === "studied") continue;
           if (state === "not_recorded") {
             unknownLessons += 1;
+            branchHasUnknownState = true;
             continue;
           }
-
-          branchHasKnownState = true;
           const item: PathLesson = {
             key: subjectId + "::" + branch.branchId + "::" + choice.nodeId,
             subject: subjectLabel,
@@ -400,12 +396,13 @@ export default function Planner() {
           else if (state === "watched_only" || state === "needs_review") deferred.push(item);
         }
 
-        if (!branchHasKnownState && branch.choices.length > 0) unknownBranches += 1;
+        if (branchHasUnknownState && branch.choices.length > 0) unknownBranches += 1;
       }
     }
 
     return { unseen, deferred, unknownBranches, unknownLessons };
-  }, [profile.data?.selection, profile.data?.subjectIds, learning.data]);\n  const curriculumLinkedTasks = mappedOpenTasks.filter(item => item.match);
+  }, [profile.data?.selection, profile.data?.subjectIds, learning.data]);
+  const curriculumLinkedTasks = mappedOpenTasks.filter(item => item.match);
   const taskProgressConflicts = curriculumLinkedTasks.filter(({ task, match }) => {
     if (!match) return false;
     const branch = getSIECheckpointProgressBranches(match.subjectId).find(item => item.branchId === match.branchId);
@@ -924,12 +921,12 @@ export default function Planner() {
               <div className="sf-sp-board-metrics">
                 <article><span>شرح لم يُشاهد</span><strong>{progressivePath.unseen.length.toLocaleString("ar-EG")}</strong></article>
                 <article><span>مذاكرة أو مراجعة مؤجلة</span><strong>{progressivePath.deferred.length.toLocaleString("ar-EG")}</strong></article>
-                <article><span>فروع تحتاج تحديد الموضع</span><strong>{progressivePath.unknownBranches.toLocaleString("ar-EG")}</strong></article>
+                <article><span>دروس حالتها غير مسجلة</span><strong>{progressivePath.unknownLessons.toLocaleString("ar-EG")}</strong></article>
               </div>
 
-              {progressivePath.unknownBranches > 0 && (
+              {progressivePath.unknownLessons > 0 && (
                 <div className="sf-sp-empty-inline" role="status">
-                  موضعك غير محدد في {progressivePath.unknownBranches.toLocaleString("ar-EG")} فروع. حدّد آخر درس وصلت إليه حتى لا يعتبر النظام المنهج كله متراكمًا بالتخمين.
+                  هناك {progressivePath.unknownLessons.toLocaleString("ar-EG")} درس لم تُسجّل حالته في {progressivePath.unknownBranches.toLocaleString("ar-EG")} فروع. حدّد آخر موضع وصلت إليه حتى لا نخمن المتراكم أو نعتبر المنهج كله جديدًا.
                 </div>
               )}
 
@@ -944,7 +941,7 @@ export default function Planner() {
                     </div>
                     {progressivePath.unseen.length ? (
                       <div className="sf-sp-task-list">
-                        {progressivePath.unseen.map((item, index) => (
+                        {progressivePath.unseen.map(item => (
                           <article key={item.key} className="sf-sp-task-row">
                             <span className="sf-sp-task-check" aria-hidden="true" />
                             <div className="min-w-0 flex-1">
