@@ -80,7 +80,6 @@ export default function Study() {
     relevance: string;
   }>>([]);
   const [reviewSearchNote, setReviewSearchNote] = useState("");
-  const lastAutoReviewSearchKey = useRef("");
   useEffect(() => {
     if (!branchTransition) return;
     const timer = window.setTimeout(() => setBranchTransition(null), 3_200);
@@ -96,7 +95,7 @@ export default function Study() {
       setReviewCandidates(result.items as typeof reviewCandidates);
       setReviewSearchNote(result.note);
     },
-    onError: error => toast.error(error.message || "تعذّر البحث عن مراجعات بديلة."),
+    onError: error => setReviewSearchNote("تعذّر جلب المراجعات الآن. تسجيل تقدمك ومذاكرة الدروس لا يتأثران بهذا العطل."),
   });
   const acceptAlternativeReview = trpc.teachers.acceptAlternativeReview.useMutation({
     onSuccess: async (result, variables) => {
@@ -116,15 +115,10 @@ export default function Study() {
     onError: error => toast.error(error.message || "تعذّر رفض المراجعة."),
   });
   useEffect(() => {
+    // Changing a branch resets suggestions, but never calls an optional
+    // external search provider as a side effect of opening the curriculum.
     setReviewCandidates([]);
     setReviewSearchNote("");
-    if (!subjectId || !currentBranchId) return;
-    const searchKey = subjectId + ":" + currentBranchId + ":" + (selectedTeacherId || "");
-    if (lastAutoReviewSearchKey.current === searchKey) return;
-    lastAutoReviewSearchKey.current = searchKey;
-    // Discover alternative teachers' reviews as soon as a student opens a
-    // curriculum branch; manual refresh remains available for later updates.
-    reviewSearch.mutate({ subjectId, branchId: currentBranchId, teacherId: selectedTeacherId });
   }, [subjectId, currentBranchId, selectedTeacherId]);
   const currentBranchPointLabel = currentBranch?.branchType === "official_section" ? "موضوع" : "درس";
   const isLinearSubject = subjectId === "HIS_G2_BAC" || subjectId === "PROG_AI_G2_BAC";
@@ -648,18 +642,20 @@ export default function Study() {
                         <div className="sf-english-unit-lessons grid gap-2">
                           {unitSkillLessons.map(choice => {
                             const lessonKind = choice.lessonType === "vocabulary" ? "Vocabulary" : "Grammar";
-                            const lessonLabel = `Lesson ${choice.lessonNumber} · ${lessonKind}`;
                             const helperText = choice.lessonType === "vocabulary"
                               ? "مفردات وتعبيرات الوحدة"
-                              : choice.title;
+                              : displayCurriculumTitle(choice.title);
                             return (
                               <button key={choice.nodeId} type="button" onClick={() => {
                                 setBranchTransition(null);
                                 setBranchId(choice.displayBranchId);
                                 setStudyViewMode("lessons");
-                              }} className="sf-english-lesson-row flex w-full min-w-0 items-center gap-2 rounded-xl border border-border/60 bg-card px-3 py-2.5 text-right transition-colors hover:border-primary/40 hover:bg-accent/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
-                                <span className="sf-english-lesson-type shrink-0 rounded-lg bg-secondary px-2.5 py-1 text-[10px] font-extrabold text-secondary-foreground">{lessonLabel}</span>
-                                <span className="min-w-0 flex-1 text-xs font-semibold leading-6 text-foreground">{helperText}</span>
+                              }} className="sf-english-lesson-row sf-english-lesson-row-stacked flex w-full min-w-0 items-center gap-3 rounded-xl border border-border/60 bg-card px-3 py-3 text-right transition-colors hover:border-primary/40 hover:bg-accent/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+                                <span className="sf-english-lesson-copy min-w-0 flex-1">
+                                  <strong className="sf-english-lesson-sequence">Lesson {choice.lessonNumber}</strong>
+                                  <span className="sf-english-lesson-name">{helperText}</span>
+                                </span>
+                                <span className="sf-english-lesson-type shrink-0 rounded-lg bg-secondary px-2.5 py-1 text-[10px] font-extrabold text-secondary-foreground">{lessonKind}</span>
                                 <span className="shrink-0 text-[10px] font-semibold text-primary">متابعة</span>
                               </button>
                             );
@@ -680,9 +676,11 @@ export default function Study() {
                                   setBranchTransition(null);
                                   setBranchId(choice.displayBranchId);
                                   setStudyViewMode("lessons");
-                                }} className="sf-english-lesson-row flex w-full min-w-0 items-start gap-2 rounded-xl border border-border/60 bg-card px-3 py-2 text-right transition-colors hover:border-primary/40 hover:bg-accent/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
-                                  <span className="sf-english-section-tag shrink-0 rounded-md border border-border bg-muted px-2 py-1 text-[9px] font-semibold text-muted-foreground">{"Lesson " + (String(choice.lessonNumber || "").match(/^\\d+\\.(\\d+)$/)?.[1] ?? choice.lessonNumber) + (/^\\d+\\.\\d+$/.test(String(choice.lessonNumber || "")) ? " (" + choice.lessonNumber + ")" : "")}</span>
-                                  <span className="min-w-0 flex-1 text-xs leading-6 text-foreground">{choice.title}</span>
+                                }} className="sf-english-lesson-row sf-english-lesson-row-stacked flex w-full min-w-0 items-center gap-3 rounded-xl border border-border/60 bg-card px-3 py-3 text-right transition-colors hover:border-primary/40 hover:bg-accent/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+                                  <span className="sf-english-lesson-copy min-w-0 flex-1">
+                                    <strong className="sf-english-lesson-sequence">Lesson {choice.lessonNumber}</strong>
+                                    <span className="sf-english-lesson-name">{displayCurriculumTitle(choice.title)}</span>
+                                  </span>
                                   {sectionLabel && <span className="sf-english-section-tag shrink-0 rounded-md border border-border bg-muted px-2 py-1 text-[9px] font-semibold text-muted-foreground">{sectionLabel}</span>}
                                 </button>
                               );
@@ -836,13 +834,13 @@ export default function Study() {
                           <p className="text-[10px] font-bold tracking-[0.12em] text-primary">مصادر إضافية</p>
                           <h4 className="mt-1 text-sm font-bold">مراجعات مناسبة للمتراكم</h4>
                           <p className="mt-1 max-w-2xl text-xs leading-6 text-muted-foreground">
-                            نبحث لدى مدرسك المختار أولًا، ثم نلجأ لمدرس آخر للمادة عند عدم وجود مراجعة مناسبة. لا يدخل أي فيديو الخطة لمجرد عنوانه؛ يجب تحليل محتواه ومطابقة موضوعاته مع الدروس التي تحتاج مراجعة.
+                            البحث عن المراجعات اختياري ولا يؤثر على تسجيل تقدمك. عند تشغيله نبحث لدى مدرسك المختار أولًا، ثم لدى مدرس بديل، ولا يدخل أي فيديو الخطة قبل تحليل محتواه ومطابقته مع المنهج.
                           </p>
                         </div>
                         <Button type="button" size="sm" variant="outline" className="shrink-0 rounded-xl"
                           disabled={reviewSearch.isPending || !subjectId || !currentBranchId}
                           onClick={() => reviewSearch.mutate({ subjectId, branchId: currentBranchId, teacherId: selectedTeacherId })}>
-                          {reviewSearch.isPending ? "جارٍ البحث..." : "تحديث نتائج المراجعات"}
+                          {reviewSearch.isPending ? "جارٍ البحث..." : reviewSearch.data ? "تحديث نتائج المراجعات" : "ابحث عن مراجعات"}
                         </Button>
                       </div>
                       {reviewSearchNote && <p className="mt-3 rounded-xl bg-muted/40 px-3 py-2 text-[11px] leading-5 text-muted-foreground">{reviewSearchNote}</p>}
@@ -1014,7 +1012,8 @@ export default function Study() {
                                   {state === "not_recorded" ? "؟" : state === "not_watched" ? <X className="size-3.5" /> : <Check className="size-4" />}
                                 </span>
                                 <div className="min-w-0 flex-1">
-                                  <p className="break-words text-xs font-bold leading-6">{choice.title}</p>
+                                  <p className="break-words text-xs font-bold leading-6">{subjectId === "ENG1_G2_BAC" && choice.lessonNumber ? "Lesson " + choice.lessonNumber : displayCurriculumTitle(choice.title)}</p>
+                                  {subjectId === "ENG1_G2_BAC" && choice.lessonNumber && <p className="mt-0.5 break-words text-[11px] leading-5 text-muted-foreground">{displayCurriculumTitle(choice.title)}</p>}
                                   <div className="mt-1 flex flex-wrap items-center gap-1.5">
                                     <span className={"rounded-md px-2 py-1 text-[10px] font-semibold " + (state === "studied" ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-300" : state === "watched_only" ? "bg-primary/10 text-primary" : state === "needs_review" ? "bg-amber-500/10 text-amber-700 dark:text-amber-300" : "bg-muted text-muted-foreground")}>{getStudentLessonStateLabel(state)}</span>
                                     {isFrontier && <span className="sf-lesson-frontier-badge rounded-md border border-primary/25 bg-primary/10 px-2 py-1 text-[10px] font-bold text-primary">آخر نقطة وصلت لها</span>}
