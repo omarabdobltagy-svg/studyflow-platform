@@ -20,9 +20,9 @@ const kindLabels: Record<string, string> = {
   teacher_monitor: "متابعة المدرسين",
 };
 function getStatus(eventType: string, metadata: Record<string, unknown>): ActivityFilter | "update" {
-  if (eventType.endsWith(".failed") || metadata.status === "failed") return "failed";
+  if (eventType.endsWith(".failed") || eventType.endsWith("_failed") || metadata.status === "failed") return "failed";
   if (eventType.endsWith(".started") || metadata.status === "running") return "running";
-  if (eventType.endsWith(".completed") || metadata.status === "complete") return "complete";
+  if (eventType.endsWith(".completed") || eventType.endsWith("_completed") || metadata.status === "complete" || metadata.status === "completed") return "complete";
   return "update";
 }
 function statusLabel(status: ReturnType<typeof getStatus>) {
@@ -46,10 +46,48 @@ export default function AIActivityHistory() {
     refetchInterval: query => query.state.data?.some(event => event.metadata?.status === "running") ? 3_000 : false,
   });
   const events = history.data ?? [];
-  const visible = useMemo(() => events.filter(event => {
+  const timeline = useMemo(() => {
+    type Event = (typeof events)[number] & { historyKey: string; historyDate: Date | string };
+    const standalone: Event[] = [];
+    const operations = new Map<string, { latest: Event; startedAt: Date | string }>();
+
+    for (const event of events) {
+      const isBackgroundLifecycle = event.entityType === "ai_background" && event.entityId !== null;
+      if (!isBackgroundLifecycle) {
+        standalone.push({ ...event, historyKey: String(event.id), historyDate: event.createdAt });
+        continue;
+      }
+      const key = String(event.entityId);
+      const existing = operations.get(key);
+      if (!existing) {
+        operations.set(key, {
+          latest: { ...event, historyKey: key, historyDate: event.createdAt },
+          startedAt: event.createdAt,
+        });
+        continue;
+      }
+      const eventTime = new Date(event.createdAt as unknown as string).getTime();
+      const latestTime = new Date(existing.latest.createdAt as unknown as string).getTime();
+      if (event.eventType === "ai.background.started") existing.startedAt = event.createdAt;
+      if (Number.isFinite(eventTime) && (!Number.isFinite(latestTime) || eventTime > latestTime)) {
+        existing.latest = { ...event, historyKey: key, historyDate: existing.startedAt };
+      } else {
+        existing.latest.historyDate = existing.startedAt;
+      }
+    }
+
+    const grouped = [...operations.values()].map(operation => ({
+      ...operation.latest,
+      historyDate: operation.startedAt,
+    }));
+    return [...standalone, ...grouped].sort((left, right) =>
+      new Date(right.historyDate as unknown as string).getTime() - new Date(left.historyDate as unknown as string).getTime()
+    );
+  }, [events]);
+  const visible = useMemo(() => timeline.filter(event => {
     const status = getStatus(event.eventType, event.metadata ?? {});
     return filter === "all" || status === filter;
-  }), [events, filter]);
+  }), [timeline, filter]);
 
   return (
     <DashboardLayout title="أنشطة الذكاء الاصطناعي" description="سجل العمليات الخلفية التي ينفذها StudyFlow لخدمة خطتك ومتابعة مصادر المدرسين.">
@@ -99,10 +137,10 @@ export default function AIActivityHistory() {
             {visible.map(event => {
               const status = getStatus(event.eventType, event.metadata ?? {});
               const kind = String(event.metadata?.kind ?? "");
-              const date = event.createdAt instanceof Date ? event.createdAt : new Date(event.createdAt as unknown as string);
-              const title = eventLabels[event.eventType] ?? "نشاط في StudyFlow";
+              const date = event.historyDate instanceof Date ? event.historyDate : new Date(event.historyDate as unknown as string);
+              const title = kindLabels[kind] ?? eventLabels[event.eventType] ?? "نشاط في StudyFlow";
               return (
-                <article key={event.id} className="app-card rounded-2xl border border-border p-4 sm:p-5">
+                <article key={event.historyKey} className="app-card rounded-2xl border border-border p-4 sm:p-5">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
