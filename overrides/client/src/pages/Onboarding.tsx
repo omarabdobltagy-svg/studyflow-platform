@@ -25,7 +25,6 @@ import {
   BookOpen,
   Check,
   CircleHelp,
-  ExternalLink,
   GraduationCap,
   Loader2,
   Pencil,
@@ -48,6 +47,7 @@ type FormState = {
   studentName: string;
   phone: string;
   systemId: SIESystemId | "";
+  gradeYear: string;
   trackId: string;
   electiveSubjectId: string;
   teacherSelections: TeacherChoiceMap;
@@ -83,7 +83,7 @@ function resetTeacherSpecificChoices(current: FormState, subjectId: string): For
   };
 }
 
-const steps = ["بياناتك", "النظام الدراسي", "المسار", "المواد", "المدرس ومواعيد المحاضرات"];
+const steps = ["بياناتك", "النظام الدراسي", "السنة الدراسية", "المسار", "المواد", "المدرس ومواعيد المحاضرات"];
 const SKIP_TEACHER = "__SKIP__";
 const CHECKPOINT_NOT_STARTED = "__NOT_STARTED__";
 const CHECKPOINT_UNKNOWN = "__UNKNOWN__";
@@ -139,6 +139,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
     studentName: "",
     phone: "",
     systemId: "",
+    gradeYear: "",
     trackId: "",
     electiveSubjectId: "",
     teacherSelections: {},
@@ -176,6 +177,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
       studentName: current.studentName || (profile.data as any)?.studentName || auth.data?.name || "",
       phone: current.phone || auth.data?.phone || "",
       systemId: current.systemId || saved?.systemId || "",
+      gradeYear: current.gradeYear || (profile.data as any)?.gradeYear || saved?.gradeYear || "",
       trackId: current.trackId || saved?.trackId || "",
       electiveSubjectId: current.electiveSubjectId || saved?.electiveSubjectId || "",
       teacherSelections,
@@ -199,6 +201,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
 
   const system = SIE_SYSTEMS.find(item => item.systemId === form.systemId);
   const tracks = form.systemId ? getSIETracks(form.systemId) : [];
+  const supportedGradeYears = Array.from(new Set(tracks.map(item => item.gradeYear)));
   const track = form.trackId ? getSIETrack(form.trackId) : undefined;
   const electiveGroups = track ? getSIEElectiveGroups(track.trackId) : [];
   const firstElectiveGroup = electiveGroups[0] ?? [];
@@ -222,14 +225,11 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
   const setupTeacherOptions = currentSetupSubjectId && form.systemId ? getSIETeachersForSubject(currentSetupSubjectId, form.systemId) : [];
   const selectedSetupTeacherId = form.teacherSelections[currentSetupSubjectId] && form.teacherSelections[currentSetupSubjectId] !== SKIP_TEACHER
     ? form.teacherSelections[currentSetupSubjectId] : "";
-  const selectedSetupTeacher = selectedSetupTeacherId
-    ? setupTeacherOptions.find(teacher => teacher.teacherId === selectedSetupTeacherId) ?? getSIETeacher(selectedSetupTeacherId) ?? null
-    : null;
   const teacherFacts = trpc.teacherDirectory.facts.useQuery({
     teacherId: selectedSetupTeacherId || "__none__",
     subjectId: currentSetupSubjectId || "__none__",
     systemId: (form.systemId || "EG_BACCALAUREATE") as "EG_BACCALAUREATE" | "EG_GENERAL_SECONDARY",
-    gradeYear: SIE_CATALOG_META.gradeYear,
+    gradeYear: form.gradeYear || SIE_CATALOG_META.gradeYear,
   }, {
     enabled: Boolean(selectedSetupTeacherId && currentSetupSubjectId && form.systemId),
     refetchInterval: query => query.state.data?.state === "researching" ? 4_000 : false,
@@ -265,8 +265,6 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
     onError: error => toast.error(error.message || "تعذر البحث عن المدرس الآن."),
   });
   const customTeacherProfile = form.customTeacherProfiles[currentSetupSubjectId];
-  const selectedPublicCheckpoint = selectedSetupTeacher?.latestPublicCheckpoint ?? "";
-  const selectedCheckpointIsReview = /مراجعة|شامل شهر|review|revision/i.test(selectedPublicCheckpoint);
   const researchedModes = customTeacherProfile
     ? (customTeacherProfile.confidence === "low" ? [] : customTeacherProfile.availableModes)
     : ((teacherFacts.data?.state === "verified" || teacherFacts.data?.state === "partial")
@@ -293,7 +291,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
   }, [teacherFacts.data, currentSetupSubjectId]);
 
   useEffect(() => {
-    if (step !== 3 || firstElectiveGroup.length !== 1) return;
+    if (step !== 4 || firstElectiveGroup.length !== 1) return;
     const onlyElectiveId = firstElectiveGroup[0].subjectId;
     if (form.electiveSubjectId !== onlyElectiveId) {
       setForm(current => ({ ...current, electiveSubjectId: onlyElectiveId }));
@@ -309,24 +307,27 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
     : step === 1
       ? Boolean(form.systemId)
       : step === 2
-        ? Boolean(form.trackId)
+        ? Boolean(form.gradeYear && supportedGradeYears.includes(form.gradeYear))
         : step === 3
-          ? Boolean(track && (track.fixedSubjectIds || firstElectiveGroup.length === 0 || firstElectiveGroup.some(item => item.subjectId === form.electiveSubjectId)))
-          : Boolean(currentSetupSubject && form.courseModes[currentSetupSubject.subjectId]
-            && (form.teacherScheduleUnfixed[currentSetupSubject.subjectId]
-              || (form.teacherSchedules[currentSetupSubject.subjectId] ?? []).length > 0)
-            );
+          ? Boolean(track && track.gradeYear === form.gradeYear)
+          : step === 4
+            ? Boolean(track && (track.fixedSubjectIds || firstElectiveGroup.length === 0 || firstElectiveGroup.some(item => item.subjectId === form.electiveSubjectId)))
+            : Boolean(currentSetupSubject && form.courseModes[currentSetupSubject.subjectId]
+              && (form.teacherScheduleUnfixed[currentSetupSubject.subjectId]
+                || (form.teacherSchedules[currentSetupSubject.subjectId] ?? []).length > 0)
+              );
 
   const next = () => {
     if (!stepValid) {
       if (step === 0) toast.error("اكتب اسمك ورقم هاتف صحيحًا أولًا.");
       else if (step === 1) toast.error("اختر النظام الدراسي.");
-      else if (step === 2) toast.error("اختر المسار أو الشعبة.");
-      else if (step === 3) toast.error("اختر المادة التخصصية المطلوبة لمسارك.");
-      else if (step === 4) toast.error("أضف موعد محاضرة واحدًا على الأقل لهذه المادة، أو حدّد أن مواعيدها غير ثابتة حاليًا.");
+      else if (step === 2) toast.error("اختر السنة الدراسية المتاحة للنظام.");
+      else if (step === 3) toast.error("اختر المسار أو الشعبة.");
+      else if (step === 4) toast.error("اختر المادة التخصصية المطلوبة لمسارك.");
+      else if (step === 5) toast.error("أضف موعد محاضرة واحدًا على الأقل لهذه المادة، أو حدّد أن مواعيدها غير ثابتة حاليًا.");
       return;
     }
-    if (step === 4) {
+    if (step === 5) {
       if (subjectSetupIndex < selectedSubjects.length - 1) setSubjectSetupIndex(index => index + 1);
       else save();
       return;
@@ -335,14 +336,14 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
   };
 
   const previous = () => {
-    if (step === 4 && subjectSetupIndex > 0) { setSubjectSetupIndex(index => Math.max(0, index - 1)); return; }
+    if (step === 5 && subjectSetupIndex > 0) { setSubjectSetupIndex(index => Math.max(0, index - 1)); return; }
     setStep(current => Math.max(identityStepRequired ? 0 : 1, current - 1));
   };
 
   const chooseSystem = (systemId: SIESystemId) => {
     setSubjectSetupIndex(0);
     setForm(current => ({
-      ...current, systemId, trackId: "", electiveSubjectId: "", teacherSelections: {}, checkpointSelections: {}, courseModes: {}, customTeacherNames: {}, teacherSchedules: {}, teacherScheduleUnfixed: {},
+      ...current, systemId, gradeYear: "", trackId: "", electiveSubjectId: "", teacherSelections: {}, checkpointSelections: {}, courseModes: {}, customTeacherNames: {}, teacherSchedules: {}, teacherScheduleUnfixed: {},
       teacherAccessRequirements: {}, teacherHomeworkPolicy: {}, teacherHomeworkRequiredBeforeNextLecture: {}, teacherPreLectureExamRequired: {},
     }));
   };
@@ -382,6 +383,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
       studentName: form.studentName.trim(),
       phone: normalizeEgyptianPhone(form.phone),
       systemId: form.systemId as SIESystemId,
+      gradeYear: form.gradeYear,
       trackId: track.trackId,
       subjectIds: selectedSubjects.map(subject => subject.subjectId),
       teacherSelections,
@@ -528,6 +530,33 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
 
               {step === 2 && (
                 <div className="space-y-4">
+                  <div className="rounded-2xl border border-primary/20 bg-primary/[.035] p-4">
+                    <p className="eyebrow text-primary">تحديد السنة الدراسية</p>
+                    <h3 className="mt-1 text-xl font-bold">أنت في سنة كام؟</h3>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">نُظهر هنا السنوات التي يوجد لها فهرس ومسارات متاحة فعليًا داخل StudyFlow. لا نختار سنة غير مدعومة تلقائيًا.</p>
+                  </div>
+                  {supportedGradeYears.length ? (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {supportedGradeYears.map(gradeYear => (
+                        <ChoiceCard
+                          key={gradeYear}
+                          selected={form.gradeYear === gradeYear}
+                          onClick={() => setForm(current => ({ ...current, gradeYear, trackId: "", electiveSubjectId: "" }))}
+                          icon={<GraduationCap className="size-5" />}
+                          title={gradeYear}
+                          subtitle="منهج متاح في فهرس StudyFlow"
+                          note="سيتم استخدام هذه السنة في اختيار المدرسين وبناء خطة المذاكرة."
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">لا توجد سنوات مرتبطة بفهرس متاح لهذا النظام حتى الآن.</p>
+                  )}
+                </div>
+              )}
+
+              {step === 3 && (
+                <div className="space-y-4">
                   <p className="text-sm leading-7 text-muted-foreground">اختر المسار المرتبط بنظامك. ستظهر لك المواد المناسبة له تلقائيًا.</p>
                   <div className="grid gap-3 sm:grid-cols-2">
                     {tracks.map(item => (
@@ -544,7 +573,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                 </div>
               )}
 
-              {step === 3 && track && (
+              {step === 4 && track && (
                 <div className="space-y-5">
                   <div className="rounded-2xl border border-border bg-muted/20 p-4">
                     <p className="text-sm font-semibold">{system?.nameAr} · {track.nameAr}</p>
@@ -611,7 +640,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                 </div>
               )}
 
-              {step === 4 && currentSetupSubject && (
+              {step === 5 && currentSetupSubject && (
                 <div className="space-y-6">
                   <div className="flex flex-col gap-3 rounded-2xl border border-primary/15 bg-secondary/25 p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
@@ -707,7 +736,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                           teacherName: (form.customTeacherNames[currentSetupSubjectId] ?? "").trim(),
                           subjectId: currentSetupSubjectId,
                           systemId: form.systemId as "EG_BACCALAUREATE" | "EG_GENERAL_SECONDARY",
-                          gradeYear: SIE_CATALOG_META.gradeYear,
+                          gradeYear: form.gradeYear || SIE_CATALOG_META.gradeYear,
                         })}>
                         {discoverTeacher.isPending ? <Loader2 className="ml-2 size-4 animate-spin" /> : <CircleHelp className="ml-2 size-4" />}
                         {discoverTeacher.isPending ? "بنبحث عن المدرس..." : "ابحث عنه بالذكاء الاصطناعي"}
@@ -724,31 +753,6 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                         </div>
                       )}
                     </div>
-
-                    {selectedSetupTeacher && (
-                      <section className="sf-teacher-frontier" aria-label={"آخر محتوى عام للمدرس " + selectedSetupTeacher.nameAr}>
-                        <div className="sf-teacher-frontier-heading">
-                          <span className="eyebrow">معلومات المدرس العامة</span>
-                          {!selectedCheckpointIsReview && <span className="sf-teacher-frontier-date">{selectedSetupTeacher.latestCheckpointDate || "تاريخ غير محدد"}</span>}
-                        </div>
-                        <strong>{selectedCheckpointIsReview
-                          ? "لا توجد نقطة درس عادية موثقة تحدد آخر محاضرة داخل الكورس."
-                          : selectedSetupTeacher.latestPublicCheckpoint || "لم يُعثر على نقطة تقدم عامة موثوقة حتى الآن."}</strong>
-                        <p>{selectedCheckpointIsReview
-                          ? "المراجعات الشاملة لا تكشف ترتيب الدروس داخل الكورس، لذلك لا نعرضها كموضع المدرس الحالي."
-                          : selectedSetupTeacher.evidenceNote || "هذا مؤشر عام، وليس سجلًا لما شاهدته أنت أو ترتيبًا مضمونًا للكورس المدفوع."}</p>
-                        <div className="sf-teacher-frontier-links">
-                          <a href={selectedSetupTeacher.profileUrl} target="_blank" rel="noreferrer">افتح قناة أو منصة المدرس <ExternalLink className="size-3" /></a>
-                          {(selectedSetupTeacher.socialProfiles ?? []).map((item, index) => (
-                            <a key={item.url + index} href={item.url} target="_blank" rel="noreferrer">متابعة {item.platform} <ExternalLink className="size-3" /></a>
-                          ))}
-                          {selectedSetupTeacher.paidCourseCatalogFrontier?.courseUrl && (
-                            <a href={selectedSetupTeacher.paidCourseCatalogFrontier.courseUrl} target="_blank" rel="noreferrer">افتح فهرس الكورس <ExternalLink className="size-3" /></a>
-                          )}
-                        </div>
-                        <small>هذا مؤشر عام فقط؛ تقدمك الشخصي يُسجل من داخل StudyFlow ولا يُستنتج من فيديو منشور.</small>
-                      </section>
-                    )}
 
                     <button type="button"
                       aria-pressed={form.teacherSelections[currentSetupSubjectId] === SKIP_TEACHER && !form.customTeacherNames[currentSetupSubjectId]?.trim()}
