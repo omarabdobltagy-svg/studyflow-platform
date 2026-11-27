@@ -821,7 +821,7 @@ export async function syncDailyPlanGoalTree(
       minutes: number;
       category: string;
       priority?: "critical" | "high" | "medium" | "low";
-      existingTask?: { id: number; title: string; status: "todo" | "done"; confidence: "exact" | "strong" };
+      existingTask?: { id: number; title: string; status: "todo" | "done"; confidence: "exact" | "strong"; dueAt?: string | null };
       resourceRecommendation?: { title: string; url: string; teacherName?: string; reason: string };
       scheduleState?: "scheduled" | "deferred";
       dayIndex?: number | null;
@@ -844,17 +844,26 @@ export async function syncDailyPlanGoalTree(
   if (!plan.title.trim() || steps.length === 0) {
     throw new Error("لا يمكن إنشاء مهام يومية من خطة بلا خطوات عملية.");
   }
-  const dueDates = steps.map(() => null);
+  const startDate = new Date(schedule.startDate + "T12:00:00.000Z");
+  if (!Number.isFinite(startDate.getTime())) throw new Error("تاريخ بداية الخطة غير صالح.");
+  const dueDates = steps.map(step => {
+    if (step.scheduleState === "deferred") return null;
+    if (step.existingTask?.dueAt) {
+      const sourceDate = new Date(step.existingTask.dueAt);
+      if (Number.isFinite(sourceDate.getTime())) return sourceDate;
+    }
+    if (Number.isInteger(step.dateOffsetDays) && (step.dateOffsetDays ?? -1) >= 0) {
+      const date = new Date(startDate);
+      date.setUTCDate(date.getUTCDate() + (step.dateOffsetDays as number));
+      return date;
+    }
+    return null;
+  });
   const taskNotes = (step: typeof steps[number]) => [
-    step.detail,
-    ...(step.studyMethod ? [formatStudyMethodNotes(step.studyMethod)] : []),
-    ...(step.scheduleNote ? [step.scheduleNote] : []),
-    ...(step.resourceRecommendation ? [
-      "مشاهدة إضافية موصى بها من " + (step.resourceRecommendation.teacherName || "المدرس") + ": " + step.resourceRecommendation.title,
-      step.resourceRecommendation.url,
-      "سبب التوصية: " + step.resourceRecommendation.reason,
-    ] : []),
-  ].filter(Boolean).join("\n\n");
+    String(step.detail || "").trim().slice(0, 420),
+    ...(step.scheduleNote ? [String(step.scheduleNote).trim().slice(0, 160)] : []),
+    ...(step.resourceRecommendation ? [step.resourceRecommendation.url] : []),
+  ].filter(Boolean).join("\n");
 
   return db.transaction(async tx => {
     // Retire open tasks from older AI-generated plans before writing the new one.
@@ -989,12 +998,8 @@ export async function syncDailyPlanGoalTree(
             .where(and(eq(tasks.id, step.existingTask.id), eq(tasks.userId, userId)))
             .limit(1))[0]
         : undefined;
-      if (linkedExistingTask && step.studyMethod && !linkedExistingTask.notes?.includes("طريقة المذاكرة:")) {
-        const methodNotes = formatStudyMethodNotes(step.studyMethod);
-        await tx.update(tasks).set({
-          notes: [linkedExistingTask.notes, methodNotes].filter(Boolean).join("\n\n"),
-        }).where(and(eq(tasks.id, linkedExistingTask.id), eq(tasks.userId, userId)));
-      }
+      // Existing teacher/source task details are authoritative and are never
+      // expanded with generated study-method text during plan synchronization.
 
       if (stage) {
         await tx.update(goals).set({
