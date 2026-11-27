@@ -1754,3 +1754,48 @@ body[data-studyflow-sections-open="true"] .sf-hub-root {
   .sf-sp-flow-selection-actions { display: grid; grid-template-columns: minmax(0,1fr); }
   .sf-sp-flow-selection-actions > a { justify-content: center; }
 }
+
+
+/* Make the map's route and current action immediately legible. */
+.sf-sp-flow-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 14px;
+  width: 100%;
+  padding: 17px 0 2px;
+}
+.sf-sp-flow-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted-foreground);
+  font-size: 9px;
+  font-weight: 750;
+}
+.sf-sp-flow-legend i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--primary);
+  border-radius: 50%;
+  background: var(--primary);
+}
+.sf-sp-flow-legend i.is-review { border-color: #D1A44B; background: #D1A44B; }
+.sf-sp-flow-legend i.is-obligation { border-color: #6D8BB6; background: #6D8BB6; }
+.sf-sp-flow-legend i.is-done { border-color: #72977a; background: #72977a; }
+.sf-sp-flow-node.is-next .sf-sp-flow-node-index {
+  border: 2px solid var(--primary);
+  color: var(--primary);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 12%, var(--card)), 0 0 18px -7px var(--primary);
+}
+.sf-sp-flow-node.is-next .sf-sp-flow-node-card {
+  border-color: color-mix(in srgb, var(--primary) 48%, var(--border));
+}
+.sf-sp-flow-node.is-next .sf-sp-flow-node-topline span:nth-child(2) {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, var(--background));
+}
+@media (max-width: 640px) {
+  .sf-sp-flow-legend { justify-content: flex-start; gap: 7px 11px; }
+}
