@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
 import { getNextOpenPlanStep } from "@/lib/plan-actions";
+import { getPlannerStepCurriculum } from "@/lib/planner-curriculum";
 import { getSIEStudentVisibleBranches, getSIECheckpointProgressBranches, getSIESubject, matchSIECheckpointTask, normalizeSIECheckpointFrontier } from "@shared/sie-catalog";
 import {
   ArrowLeft, BarChart3, BookOpenText, CalendarDays, Check, CheckCircle2, Clock3,
@@ -83,7 +84,7 @@ export default function Home() {
   });
   const dailyPlan = trpc.plans.currentDaily.useQuery(undefined, {
     staleTime: 10_000,
-    refetchInterval: query => query.state.data?.needsRefresh || !query.state.data?.plan ? 15_000 : 180_000,
+    refetchInterval: query => query.state.data?.needsRefresh ? 1_500 : !query.state.data?.plan ? 15_000 : 180_000,
     refetchOnWindowFocus: true, retry: 1,
   });
   const activeSessionQuery = trpc.learning.activeExternalSession.useQuery(undefined, {
@@ -103,15 +104,33 @@ export default function Home() {
   }, [dailyPlan.data?.generatedAt]);
 
 
+  const autoPlanStarted = useRef(false);
   const ensurePlan = trpc.plans.ensureDaily.useMutation({
-    onSuccess: result => {
-      void utils.plans.currentDaily.invalidate();
-      void utils.dashboard.summary.invalidate();
-      void utils.tasks.list.invalidate();
-      toast.success(result.generated ? "تم تجهيز خطة اليوم وتحديث المهام." : "خطة اليوم جاهزة.");
+    onSuccess: () => {
+      void Promise.all([
+        utils.plans.currentDaily.invalidate(),
+        utils.dashboard.summary.invalidate(),
+        utils.tasks.list.invalidate(),
+      ]);
     },
-    onError: error => toast.error("تعذّر تجهيز الخطة: " + error.message),
+    onError: error => toast.error("تعذّر تجهيز خريطة المذاكرة تلقائيًا: " + error.message, { duration: 7_000 }),
   });
+
+  useEffect(() => {
+    if (autoPlanStarted.current || ensurePlan.isPending || profile.isLoading || profile.isError
+      || !profile.data?.subjectIds?.length || dailyPlan.isLoading || dailyPlan.isError || !dailyPlan.data) return;
+    if (dailyPlan.data.plan || dailyPlan.data.generatedAt || dailyPlan.data.needsRefresh) return;
+    autoPlanStarted.current = true;
+    ensurePlan.mutate({ forceRebuild: false });
+  }, [
+    profile.data?.subjectIds,
+    profile.isLoading,
+    profile.isError,
+    dailyPlan.data,
+    dailyPlan.isLoading,
+    dailyPlan.isError,
+    ensurePlan.isPending,
+  ]);
   const toggleTask = trpc.tasks.toggle.useMutation({
     onSuccess: () => {
       void utils.dashboard.summary.invalidate();
@@ -657,7 +676,7 @@ export default function Home() {
             <div className="sf-home-study-map-title">
               <span>مساحة اليوم · مسار التنفيذ</span>
               <h3>خريطة مذاكرة اليوم</h3>
-              <p>{plan?.title || "خطواتك الدراسية مرتبة في مسار واحد واضح"}</p>
+              <p>اقرأ الدرس وافهمه أولًا، ثم استرجع أفكاره وحلّ عليه. كل خطوة هنا توصلك للخطوة اللي بعدها.</p>
             </div>
             <Button variant="outline" size="sm" className="sf-home-study-map-open" onClick={() => setLocation("/planner")}>
               الخريطة الكاملة <ArrowLeft className="size-4" />
@@ -700,7 +719,32 @@ export default function Home() {
                             {isDone ? <strong>مكتملة</strong> : isNext ? <strong>ابدأ من هنا</strong> : <span>قادمة</span>}
                           </div>
                           <h4>{step.title}</h4>
-                          <p>{step.detail}</p>
+                          <p>{step.detail || "ابدأ بقراءة الجزء المطلوب بهدوء، واربط الأفكار ببعضها قبل الانتقال للحل."}</p>
+                          {Array.isArray(step.studyMethod?.stages) && step.studyMethod.stages.length > 0 && (
+                            <ol className="sf-home-study-step-stages" aria-label="مراحل تنفيذ المهمة">
+                              {step.studyMethod.stages.slice(0, 3).map((stage: any, stageIndex: number) => (
+                                <li key={stageIndex}>
+                                  <span>{(stageIndex + 1).toLocaleString("ar-EG")}</span>
+                                  <b>{stage.title}</b>
+                                </li>
+                              ))}
+                            </ol>
+                          )}
+                          {(() => {
+                            const curriculum = getPlannerStepCurriculum(step, profile.data?.subjectIds ?? []);
+                            const nodeId = step.curriculumNodeIds?.[0];
+                            const branch = curriculum && nodeId
+                              ? getSIECheckpointProgressBranches(curriculum.subjectId).find(item => item.choices.some(choice => choice.nodeId === nodeId))
+                              : null;
+                            return curriculum && branch && nodeId ? (
+                              <a className="sf-home-study-step-action"
+                                href={"/study?subject=" + encodeURIComponent(curriculum.subjectId)
+                                  + "&branch=" + encodeURIComponent(branch.branchId)
+                                  + "&lesson=" + encodeURIComponent(nodeId)}>
+                                افتح الدرس وابدأ القراءة <ArrowLeft className="size-3.5" />
+                              </a>
+                            ) : null;
+                          })()}
                         </div>
                       </article>
                     );
@@ -723,25 +767,31 @@ export default function Home() {
                 </Button>
               </footer>
               {dailyPlan.data?.needsRefresh && (
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/20 bg-amber-500/[0.04] px-3 py-2.5">
-                  <p className="text-xs leading-5 text-muted-foreground">تغير تقدمك أو مهامك منذ آخر إنشاء للخطة؛ الأولوية القديمة لن تُعرض باعتبارها الحالية.</p>
-                  <Button size="sm" variant="outline" className="rounded-lg" onClick={() => ensurePlan.mutate()} disabled={ensurePlan.isPending}>
-                    {ensurePlan.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
-                    تحديث خطة اليوم
-                  </Button>
+                <div className="sf-home-study-map-sync" role="status" aria-live="polite">
+                  <Loader2 className="size-4 animate-spin" />
+                  <div>
+                    <strong>StudyFlow بيحدّث ترتيب خطواتك تلقائيًا</strong>
+                    <span>نطابق آخر تقدمك والمهام الجديدة قبل اعتماد المسار المحدّث.</span>
+                  </div>
                 </div>
               )}
             </div>
           ) : (
-            <div className="sf-home-study-map-empty">
-              <Sparkles className="size-8" />
-              <strong>جهّز خريطة مذاكرتك</strong>
-              <p>{profile.data?.subjectIds?.length
-                ? "أنشئ خطة المذاكرة وراجع توزيع الخطوات قبل البدء."
-                : "أكمل المواد ومواعيد المحاضرات في ملفك الدراسي؛ بعدها نقدر نبني خريطة مذاكرتك."}</p>
-              <Button onClick={() => setLocation(profile.data?.subjectIds?.length ? "/planner" : "/settings/academic")} variant="outline" className="rounded-xl">
-                {profile.data?.subjectIds?.length ? "إنشاء خطة المذاكرة" : "إكمال الملف الدراسي"} <ArrowLeft className="size-4" />
-              </Button>
+            <div className="sf-home-study-map-empty" role="status" aria-live="polite">
+              {profile.data?.subjectIds?.length ? (
+                <>
+                  <Loader2 className="size-8 animate-spin" />
+                  <strong>{ensurePlan.isPending ? "محرك التخطيط بيبني خريطة يومك" : "بنجهّز مسار مذاكرتك تلقائيًا"}</strong>
+                  <p>بنراجع موادك وآخر تقدمك والمهام المسجلة، وبعدها هتظهر لك أول خطوة ومكان القراءة والمراجعة بوضوح.</p>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="size-8" />
+                  <strong>كمّل ملفك الدراسي عشان نفتح لك المسار</strong>
+                  <p>أكمل المواد ومواعيد المحاضرات مرة واحدة، وبعدها StudyFlow هيبني خريطة مذاكرتك تلقائيًا.</p>
+                  <Button onClick={() => setLocation("/settings/academic")} variant="outline" className="rounded-xl">إكمال الملف الدراسي <ArrowLeft className="size-4" /></Button>
+                </>
+              )}
             </div>
           )}
         </section>
