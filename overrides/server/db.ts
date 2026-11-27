@@ -672,6 +672,7 @@ export type ApprovedPlanStep = {
   priority?: "critical" | "high" | "medium" | "low";
   existingTask?: { id: number; title: string; status: "todo" | "done"; confidence: "exact" | "strong"; dueAt?: string | null };
   resourceRecommendation?: { title: string; url: string; teacherName?: string; reason: string };
+  subtasks?: Array<{ id: string; title: string; detail: string; curriculumNodeIds?: string[]; startSeconds?: number }>;
   scheduleState?: "scheduled" | "deferred";
   dayIndex?: number | null;
   dateOffsetDays?: number | null;
@@ -685,7 +686,7 @@ export function normalizeApprovedPlanSteps(steps: ApprovedPlanStep[]) {
       day: Number.isFinite(step.day) && step.day > 0 ? Math.floor(step.day) : index + 1,
       title: step.title.trim(),
       detail: step.detail.trim(),
-      minutes: Math.min(480, Math.max(5, Math.round(step.minutes || 25))),
+      minutes: Number.isFinite(step.minutes) ? Math.min(480, Math.max(0, Math.round(step.minutes))) : 25,
       category: step.category.trim() || "دراسة",
     }))
     .filter(step => step.title.length > 0);
@@ -823,6 +824,7 @@ export async function syncDailyPlanGoalTree(
       priority?: "critical" | "high" | "medium" | "low";
       existingTask?: { id: number; title: string; status: "todo" | "done"; confidence: "exact" | "strong"; dueAt?: string | null };
       resourceRecommendation?: { title: string; url: string; teacherName?: string; reason: string };
+      subtasks?: ApprovedPlanStep["subtasks"];
       scheduleState?: "scheduled" | "deferred";
       dayIndex?: number | null;
       dateOffsetDays?: number | null;
@@ -859,11 +861,59 @@ export async function syncDailyPlanGoalTree(
     }
     return null;
   });
-  const taskNotes = (step: typeof steps[number]) => [
-    String(step.detail || "").trim().slice(0, 420),
-    ...(step.scheduleNote ? [String(step.scheduleNote).trim().slice(0, 160)] : []),
-    ...(step.resourceRecommendation ? [step.resourceRecommendation.url] : []),
-  ].filter(Boolean).join("\n");
+  const compositeTaskMarker = "\n\n<!-- STUDYFLOW_COMPOSITE_TASK_V1 -->\n";
+  const readCompositeTask = (notes: string | null | undefined): any | null => {
+    const value = String(notes ?? "");
+    const markerIndex = value.lastIndexOf(compositeTaskMarker);
+    if (markerIndex < 0) return null;
+    try {
+      const parsed = JSON.parse(value.slice(markerIndex + compositeTaskMarker.length));
+      return parsed?.version === 1 && parsed?.kind === "youtube_review" && Array.isArray(parsed.subtasks)
+        ? parsed
+        : null;
+    } catch {
+      return null;
+    }
+  };
+  const taskNotes = (step: typeof steps[number], previousNotes?: string | null) => {
+    const baseNotes = [
+      String(step.detail || "").trim().slice(0, 420),
+      ...(step.scheduleNote ? [String(step.scheduleNote).trim().slice(0, 160)] : []),
+    ].filter(Boolean).join("\n");
+    if (!step.subtasks?.length || !step.resourceRecommendation) return [
+      baseNotes,
+      ...(step.resourceRecommendation ? [step.resourceRecommendation.url] : []),
+    ].filter(Boolean).join("\n");
+
+    const previous = readCompositeTask(previousNotes);
+    const previousCompletion = new Map<string, boolean>(
+      (previous?.subtasks ?? []).map((item: any) => [String(item.id), item.completed === true]),
+    );
+    const metadata = {
+      version: 1,
+      kind: "youtube_review",
+      videoTitle: String(step.resourceRecommendation.title || step.title).slice(0, 180),
+      videoUrl: String(step.resourceRecommendation.url || "").slice(0, 700),
+      teacherName: String(step.resourceRecommendation.teacherName || "").slice(0, 120),
+      subtasks: step.subtasks.slice(0, 12).map(item => ({
+        id: String(item.id).slice(0, 150),
+        title: String(item.title).slice(0, 140),
+        detail: String(item.detail).slice(0, 320),
+        completed: previousCompletion.get(String(item.id)) ?? false,
+        startSeconds: Number.isInteger(item.startSeconds) ? Math.max(0, Number(item.startSeconds)) : 0,
+        curriculumNodeIds: (item.curriculumNodeIds ?? []).slice(0, 8),
+      })),
+    };
+    let serialized = JSON.stringify(metadata);
+    while (baseNotes.length + compositeTaskMarker.length + serialized.length > 7_800 && metadata.subtasks.length > 1) {
+      metadata.subtasks.pop();
+      serialized = JSON.stringify(metadata);
+    }
+    if (baseNotes.length + compositeTaskMarker.length + serialized.length > 8_000) {
+      throw new Error("تعذّر حفظ خطوات المراجعة الفرعية بالحجم المسموح للمهمة.");
+    }
+    return baseNotes + compositeTaskMarker + serialized;
+  };
 
   return db.transaction(async tx => {
     // Retire open tasks from older AI-generated plans before writing the new one.
@@ -1027,7 +1077,7 @@ export async function syncDailyPlanGoalTree(
         if (task && !linkedExistingTask) {
           await tx.update(tasks).set({
             title: step.title,
-            notes: taskNotes(step),
+            notes: taskNotes(step, task?.notes ?? null),
             category: step.category || "دراسة",
             priority,
             estimatedMinutes: null,
