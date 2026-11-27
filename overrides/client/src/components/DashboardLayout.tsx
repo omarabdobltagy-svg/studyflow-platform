@@ -291,15 +291,11 @@ export default function DashboardLayout({ title, description, children, action }
   }, [location, setLocation, studentProfile.data, studentProfile.isSuccess, user]);
 
   if (loading) return (
-    <div className="sf-auth-screen sf-shell-v3">
-      <div className="sf-auth-frame sf-auth-loading" role="status" aria-live="polite">
-        <div className="sf-auth-logo"><BrandMark className="size-7" /></div>
-        <p className="sf-auth-eyebrow">STUDYFLOW / YOUR SPACE</p>
-        <h1>نجهّز مساحتك الدراسية</h1>
-        <p>يتم تحميل بيانات مساحتك الآن.</p>
-        <div className="sf-loading-line" />
-      </div>
-    </div>
+    <main className="sf-page-loading" role="status" aria-live="polite" aria-busy="true">
+      <div className="sf-page-loading-mark"><span /></div>
+      <p>بنجهّز الصفحة ومساحتك الدراسية…</p>
+      <span className="sf-page-loading-track"><span /></span>
+    </main>
   );
 
   if (!user && authError) return (
