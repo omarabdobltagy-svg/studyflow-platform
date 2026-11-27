@@ -31,9 +31,8 @@ function dateInputValue(date: Date | null) {
 }
 
 
-function isEnglishOnlyTaskText(value: string | null | undefined) {
-  const text = String(value ?? "").trim();
-  return /[A-Za-z]{3,}/.test(text) && !/[\\u0600-\\u06FF]/.test(text);
+function hasEnglishWords(value: string | null | undefined) {
+  return /[A-Za-z]{3,}/.test(String(value ?? ""));
 }
 
 function taskArabicPresentation(task: { title: string; category: string; notes: string | null }, subjectIds: string[]) {
@@ -43,13 +42,13 @@ function taskArabicPresentation(task: { title: string; category: string; notes: 
     return {
       title: subject + " · " + displayBranchTitle(match.branchTitle) + " · " + displayCurriculumTitle(match.title),
       category: subject + " · " + displayBranchTitle(match.branchTitle),
-      notes: isEnglishOnlyTaskText(task.notes) ? "تفاصيل التكليف محفوظة في المصدر الأصلي. راجع شرح المدرس أو المنصة المرتبطة." : task.notes,
+      notes: hasEnglishWords(task.notes) ? "التفاصيل محفوظة في التكليف الأصلي. راجع المصدر المرتبط قبل التنفيذ." : task.notes,
     };
   }
   return {
-    title: isEnglishOnlyTaskText(task.title) ? "مهمة دراسية مسجلة" : task.title,
-    category: isEnglishOnlyTaskText(task.category) ? "مهمة عامة" : task.category,
-    notes: isEnglishOnlyTaskText(task.notes) ? "تفاصيل المهمة محفوظة باللغة الأصلية في السجل." : task.notes,
+    title: hasEnglishWords(task.title) ? "مهمة دراسية مسجلة" : task.title,
+    category: hasEnglishWords(task.category) ? "مهمة عامة" : task.category,
+    notes: hasEnglishWords(task.notes) ? "التفاصيل محفوظة في السجل الأصلي. راجع المصدر قبل التنفيذ." : task.notes,
   };
 }
 
