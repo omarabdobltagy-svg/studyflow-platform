@@ -1295,23 +1295,66 @@ type ExistingPlannerTask = {
   dueAt: Date | null;
 };
 
+export function interleavePlannerItemsBySubject<T>(
+  items: readonly T[],
+  subjectOrder: readonly string[],
+  getSubjectId: (item: T) => string | null | undefined,
+): T[] {
+  const orderedSubjects = [...new Set(subjectOrder)];
+  const queues = new Map(orderedSubjects.map(subjectId => [subjectId, [] as T[]]));
+  const unassigned: T[] = [];
+
+  for (const item of items) {
+    const subjectId = getSubjectId(item);
+    const queue = subjectId ? queues.get(subjectId) : undefined;
+    if (queue) queue.push(item);
+    else unassigned.push(item);
+  }
+
+  const ordered: T[] = [];
+  while (true) {
+    let added = false;
+    for (const subjectId of orderedSubjects) {
+      const next = queues.get(subjectId)?.shift();
+      if (next !== undefined) {
+        ordered.push(next);
+        added = true;
+      }
+    }
+    if (!added) break;
+  }
+
+  return [...ordered, ...unassigned];
+}
+
 function applyDailyPlanDepth(
   plan: GeneratedPlan,
   profile: NonNullable<Awaited<ReturnType<typeof getStudentProfile>>>,
   existingTasks: ExistingPlannerTask[],
   dailyMinutes: number,
 ): GeneratedPlan {
-  const targetCount = dailyMinutes <= 60 ? 3 : dailyMinutes <= 150 ? 4 : 5;
+  const baseTargetCount = dailyMinutes <= 60 ? 3 : dailyMinutes <= 150 ? 4 : 6;
+  const openTasks = existingTasks.filter(task => task.status !== "done");
+  // Every selected subject with an eligible lesson gets a place in the plan.
+  // Up to two confirmed open obligations may expand the workload beyond the base pace.
+  const targetCount = Math.min(
+    10,
+    Math.max(baseTargetCount, (profile.subjectIds ?? []).length) + Math.min(2, openTasks.length),
+  );
   const snapshot = buildPlannerProgressSnapshot(profile);
   const selection = (profile.selection ?? {}) as Record<string, any>;
   const teacherChoices = (selection.teacherChoices ?? profile.teacherSelections ?? {}) as Record<string, string>;
   const teacherSchedules = (selection.teacherSchedules ?? {}) as Record<string, Array<{ dayOfWeek: number; startTime: string }>>;
   const subjectForStep = (step: GeneratedPlan["steps"][number]) => {
     const nodeIds = new Set(step.curriculumNodeIds ?? []);
-    return (profile.subjectIds ?? []).find(subjectId =>
+    const linkedSubject = (profile.subjectIds ?? []).find(subjectId =>
       getPlanningBranches(subjectId).some(branch => branch.choices.some(choice => nodeIds.has(choice.nodeId)))
     );
+    if (linkedSubject) return linkedSubject;
+    const match = matchSIECheckpointTask(profile.subjectIds, [step.title, step.detail, step.category].join(" "));
+    return match?.subjectId;
   };
+
   const steps: GeneratedPlan["steps"] = plan.steps.map(step => {
     if (step.phaseId || step.existingTask) {
       return { ...step, phaseId: step.phaseId ?? "backlog" as const };
@@ -1324,14 +1367,13 @@ function applyDailyPlanDepth(
       && teacherSchedules[subjectId].length > 0);
     return { ...step, phaseId: isTeacherSync ? "teacher_sync" as const : "steady" as const };
   });
+
   const usedTaskIds = new Set(steps.map(step => step.existingTask?.id).filter((id): id is number => typeof id === "number"));
   const representedNodeIds = new Set(steps.flatMap(step => step.curriculumNodeIds ?? []));
   const usedTitles = new Set(steps.map(step => normalizePlannerLessonText(step.title)));
 
-  // Attach already-existing open obligations first. These are student-entered records,
-  // never generated homework or exams.
-  const sortedOpenTasks = existingTasks
-    .filter(task => task.status !== "done" && !usedTaskIds.has(task.id))
+  // Add current obligations as candidates before selecting new curriculum work.
+  const sortedOpenTasks = openTasks
     .slice()
     .sort((left, right) => {
       const leftDue = left.dueAt?.getTime() ?? Number.POSITIVE_INFINITY;
@@ -1341,8 +1383,9 @@ function applyDailyPlanDepth(
       return rank(right.priority) - rank(left.priority);
     });
 
+  const openTaskSteps: GeneratedPlan["steps"] = [];
   for (const task of sortedOpenTasks) {
-    if (steps.length >= targetCount) break;
+    if (usedTaskIds.has(task.id)) continue;
     const normalizedTitle = normalizePlannerLessonText(task.title);
     if (usedTitles.has(normalizedTitle)) continue;
     const match = matchSIECheckpointTask(profile.subjectIds, [task.title, task.notes ?? ""].join(" "));
@@ -1352,7 +1395,7 @@ function applyDailyPlanDepth(
     const dueAt = task.dueAt instanceof Date && !Number.isNaN(task.dueAt.getTime())
       ? task.dueAt.toISOString()
       : null;
-    steps.push(planSchema.shape.steps.element.parse({
+    const taskStep = planSchema.shape.steps.element.parse({
       day: "",
       title: task.title,
       detail: task.notes?.trim()
@@ -1369,15 +1412,15 @@ function applyDailyPlanDepth(
       difficultyConfidence: "low",
       sourcePages: [],
       phaseId: "backlog",
-    }));
+    });
+    openTaskSteps.push(taskStep);
     usedTaskIds.add(task.id);
     usedTitles.add(normalizedTitle);
     if (linkedNodeId) representedNodeIds.add(linkedNodeId);
   }
 
-  // If the student has fewer open obligations than the chosen workload allows,
-  // add only the next eligible official checkpoint in each branch. Never invent
-  // teacher homework; a lesson-follow-up task is not a homework assignment.
+  // Find the next eligible checkpoint in each branch. The branch state and
+  // curriculum IDs remain authoritative; the model cannot invent a new node.
   const nextChoices: Array<{
     subjectId: string;
     branchId: string;
@@ -1388,6 +1431,7 @@ function applyDailyPlanDepth(
     teacherSelected: boolean;
     learningState: StudentLessonState;
   }> = [];
+
   for (const subjectId of profile.subjectIds ?? []) {
     for (const branch of getPlanningBranches(subjectId)) {
       const progress = snapshot.branches.get(plannerBranchKey(subjectId, branch.branchId));
@@ -1407,22 +1451,23 @@ function applyDailyPlanDepth(
       });
     }
   }
+
+  // Keep branch priority within each subject, then round-robin across subjects.
   nextChoices.sort((left, right) =>
-    Number(right.isNext) - Number(left.isNext)
-    || Number(right.teacherSelected) - Number(left.teacherSelected)
-    || left.subjectId.localeCompare(right.subjectId)
-    || left.branchId.localeCompare(right.branchId)
+    left.subjectId === right.subjectId
+      ? Number(right.isNext) - Number(left.isNext)
+        || Number(right.teacherSelected) - Number(left.teacherSelected)
+        || left.branchId.localeCompare(right.branchId)
+      : (profile.subjectIds ?? []).indexOf(left.subjectId) - (profile.subjectIds ?? []).indexOf(right.subjectId)
   );
 
-  for (const item of nextChoices) {
-    if (steps.length >= targetCount) break;
-    if (representedNodeIds.has(item.nodeId)) continue;
+  const nextChoiceSteps: GeneratedPlan["steps"] = nextChoices.map(item => {
     const subjectName = getSIESubject(item.subjectId)?.nameAr ?? item.subjectId;
     const hasTeacherSchedule = Array.isArray(teacherSchedules[item.subjectId]) && teacherSchedules[item.subjectId].length > 0;
     const phaseId = item.learningState === "watched_only" || item.learningState === "needs_review"
       ? "backlog" as const
       : item.teacherSelected && hasTeacherSchedule ? "teacher_sync" as const : "steady" as const;
-    steps.push(planSchema.shape.steps.element.parse({
+    return planSchema.shape.steps.element.parse({
       day: "",
       title: subjectName + " — " + item.branchTitle + " — " + item.title,
       detail: item.learningState === "watched_only"
@@ -1444,13 +1489,35 @@ function applyDailyPlanDepth(
       difficultyConfidence: "low",
       sourcePages: [],
       phaseId,
-    }));
-    representedNodeIds.add(item.nodeId);
-  }
+    });
+  });
 
-  return { ...plan, steps };
+  // Prefer one meaningful item from every selected subject before adding a
+  // second branch from any subject. This prevents alphabetical subject order
+  // from letting Arabic (ARB_...) fill the whole list.
+  const candidates: GeneratedPlan["steps"] = [...openTaskSteps, ...steps, ...nextChoiceSteps];
+  const seenTaskIds = new Set<number>();
+  const seenNodes = new Set<string>();
+  const deduplicated = candidates.filter(step => {
+    const taskId = step.existingTask?.id;
+    if (typeof taskId === "number") {
+      if (seenTaskIds.has(taskId)) return false;
+      seenTaskIds.add(taskId);
+    }
+    const nodeIds = step.curriculumNodeIds ?? [];
+    if (nodeIds.length && nodeIds.some(nodeId => seenNodes.has(nodeId))) return false;
+    nodeIds.forEach(nodeId => seenNodes.add(nodeId));
+    return true;
+  });
+
+  const balancedSteps = interleavePlannerItemsBySubject(
+    deduplicated,
+    profile.subjectIds ?? [],
+    subjectForStep,
+  ).slice(0, targetCount);
+
+  return { ...plan, steps: balancedSteps };
 }
-
 function buildStudentExecutionStrategy(
   plan: GeneratedPlan,
   profile: NonNullable<Awaited<ReturnType<typeof getStudentProfile>>>,
@@ -1619,6 +1686,9 @@ export async function generatePersonalPlan(
     : "لم يطلب المستخدم تخصيص الخطة بالملف الدراسي.").slice(0, 18_000);
   const system = [
     "أنت محرك التخطيط الدراسي داخل StudyFlow، ولست مساعد دردشة عام.",
+    "اللغة المعروضة للطالب إلزامية: اكتب العنوان والملخص وكل تفاصيل المهام والتصنيفات وأسباب الأولوية والمراحل والإرشادات والعادات بالعربية المصرية الواضحة. لا تكتب عناوين أو جملًا إنجليزية. اترك اسم لغة برمجة أو مصطلح علمي أصليًا بالإنجليزية فقط عندما يكون جزءًا ضروريًا من المادة، واشرحه بالعربية.",
+    "تغطية المواد إلزامية: اقرأ كل المواد المختارة في ملف الطالب. إذا كان لكل مادة درس مؤهل غير مكتمل أو التزام مفتوح، أدرج خطوة واحدة على الأقل من كل مادة قبل إضافة خطوات ثانية من مادة أخرى. وزّع الخطوات بالتناوب بين المواد ولا تجعل كثرة فروع مادة واحدة تستحوذ على الخطة. إذا لم توجد خطوة مؤهلة لمادة بعينها، لا تخترع درسًا واذكر نقص البيانات بوضوح.",
+    "اجعل أسماء الدروس مطابقة لعناوين المنهج الرسمية، لكن اعرضها بالعربية. لا تنقل أسماء الوحدات أو الدروس الإنجليزية كما هي في واجهة الطالب؛ استخدم معرفات curriculumNodeIds الصحيحة لربط الخطوة بعنوانها العربي الرسمي.",
     "جودة الخطة لا تعتمد على قوة صياغة الطالب أو طول طلبه. استخرج النية حتى لو كان الطلب قصيرًا أو عاميًا أو غير مرتب، ثم استعن تلقائيًا ببيانات الملف والمنهج والتراكم والتقدم وسجل تنفيذ المهام والصعوبة التي صرّح بها الطالب والسياق المتاح.",
     "لا تطلب من الطالب إعادة كتابة بيانات موجودة في ملفه، ولا تنتظر منه هندسة برومبت احترافي. افترض أقل قدر ممكن، واذكر الافتراضات المؤثرة فقط داخل الملخص، ولا تخترع بيانات ناقصة.",
     "حلّل فجوة المنهج لكل فرع مستقل، وموضع الطالب مقابل موضع المدرس في الفرع نفسه، وما أكمله الطالب وما أجّله فعليًا، والصعوبة المسجلة من الطالب. لا تجمع فجوات الفروع المستقلة ولا تستنتج سلوكًا من غياب البيانات.",
@@ -1634,7 +1704,7 @@ export async function generatePersonalPlan(
     "في النمط الذكي الافتراضي: ابدأ بالمهام المفتوحة والمتأخرة التي تخص المنهج، ثم أضف الموضوع التالي الذي يشرحه المدرس قريبًا بما يسمح للطالب بالاستعداد قبل الحصة. لا تسمح للمتراكم أن يمحو مواكبة المدرس، ولا تسمح للجديد أن يزيح التزامًا متأخرًا عاجلًا.",
     "اجعل الخطة مفهومة للطالب قبل تنفيذها: اكتب executionStrategy.objective وexecutionStrategy.rationale بالعربية الواضحة، وحدد مراحلها بترتيب واضح: backlog لإغلاق الالتزامات المفتوحة المؤكدة، teacher_sync لمواكبة شرح المدرس، steady لاستكمال التقدم. اربط كل مهمة بمرحلتها عبر phaseId. لا تكتب استراتيجية عامة لا تطابق المهام الفعلية؛ كل مرحلة تذكر ما سنفعله ولماذا ومتى نعتبرها قد تقدمت.",
     "إذا كانت هناك مهام مفتوحة مسجلة في البيانات، فلا تتجاهلها ولا تنشئ نسخة ثانية منها. ابدأ بالأقرب استحقاقًا والأعلى أولوية، ثم أضف الدرس التالي المتاح في الفروع المسجلة. لا تقل إننا سننهي كل المتراكم إذا كان حجمه أكبر من قدرة الأفق؛ اشرح ما الذي سنبدأ به وما الذي سيبقى للدورة التالية.",
-    "عند تكوين قائمة الخطة اليومية، استهدف عددًا عمليًا من المهام يتناسب مع انشغال الطالب: نحو 3 عند ساعة متاحة، و4 عند ساعتين، و5 عند ثلاث ساعات أو أكثر. هذا هدف أدنى مرن وليس إلزامًا لاختلاق مهام؛ إذا لم توجد التزامات أو نقاط منهج متاحة، أظهر أن البيانات لا تتيح مهامًا إضافية بدل اختراعها.",
+    "عند تكوين قائمة الخطة اليومية، اجعل الإيقاع المرن نحو 3 خطوات، والمتوازن نحو 4، والمكثف نحو 6 خطوات. ارفع العدد عند الحاجة لتغطية المواد المختارة والالتزامات المفتوحة المؤكدة، بحد أقصى عملي، ولا تسمح بأن تملأ مادة واحدة القائمة إذا كانت مواد أخرى لديها دروس مؤهلة. هذه أهداف مرنة وليست إلزامًا لاختلاق مهام؛ إذا لم توجد التزامات أو نقاط منهج متاحة، أظهر ذلك بدل اختراعها.",
     "في نمط المتراكم فقط: ركّز على المهام القديمة المفتوحة والفجوة الحالية التي يؤكدها سجل الطالب والمدرس، ولا تضف دروسًا جديدة لمجرد أنها لاحقة في الفهرس إلا إذا كانت لازمة لإكمال التزام متراكم.",
     "في نمط مواكبة المدرس: احجز وقتًا قبل أقرب حصة مسجلة لمراجعة ما سيشرحه المدرس أو استكمال متطلباته، ووزّع موضوعات ما بعد الحصة بعد موعدها المتوقع. لا تعتبر الحصة قد حدثت أو اتلغت إلا بإعلان موثوق أو تحديث مؤكد.",
     "اقرأ teacherSchedules لكل مادة كموعد أسبوعي محلي متكرر يتضمن اليوم ووقت البداية فقط، وليس فترة زمنية. لا تفترض مدة الحصة أو وقت انتهائها، ولا تحجز فترة بعدها دون معلومة موثقة. استخدم قائمة المواعيد التالية المحسوبة بالتاريخ والساعة: " + formatUpcomingTeacherSessions(profile, constraints.startDate ?? new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date()), horizonDays) + ". قدّم التحضير للموضوع القادم قبل موعده متى أمكن، ولا تضع بداية مهمة عند الساعة المسجلة نفسها.",
@@ -1687,7 +1757,7 @@ export async function generatePersonalPlan(
     "مؤشرات التخطيط:",
     "إيقاع الخطة: " + paceLabel,
     "درجة الإيقاع: " + paceLevel + " من 3 — " + paceLevelLabel + ". " + paceLevelInstruction,
-    "مستوى الوقت المتاح (إشارة انشغال وليست مدة مهام): " + (dailyMinutes <= 60 ? "منخفض جدًا — ساعة تقريبًا؛ قلّل عدد المهام بوضوح" : dailyMinutes <= 120 ? "متوسط — ساعتان تقريبًا" : "مرتفع نسبيًا — ثلاث ساعات أو أكثر"),
+    "إيقاع العمل المختار (لا تعرض ساعات أو دقائق للطالب): " + (selectedPace === "relaxed" ? "مرنة — خطوات أقل ومرونة أكبر" : selectedPace === "intensive" ? "مكثفة — خطوات أكثر لتقليل التراكم" : "متوازنة — توزيع بين المتراكم والجديد"),
     "الموعد الشخصي الإضافي: " + (constraints.deadline || "لا يوجد"),
     "مواعيد المحاضرات المدرسية المسجلة (للتعرف على أقرب متطلبات المدرس فقط، ولا تُستخدم لتعيين وقت للمهام): " + formatUpcomingTeacherSessions(profile, constraints.startDate ?? new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date()), horizonDays),
     existingCurriculumTasks.length
