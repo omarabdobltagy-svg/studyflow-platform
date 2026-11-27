@@ -1,6 +1,6 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
-import { displayBranchTitle } from "@/lib/curriculum-display";
+import { displayBranchTitle, displayCurriculumTitle } from "@/lib/curriculum-display";
 import { Input } from "@/components/ui/input";
 
 import { trpc } from "@/lib/trpc";
