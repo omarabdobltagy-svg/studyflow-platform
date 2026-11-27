@@ -982,7 +982,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                               </div>
                               {(() => {
                                 const parts = getScheduleTimeParts(slot.startTime);
-                                const minuteOptions = Array.from({ length: 12 }, (_, index) => String(index * 5).padStart(2, "0"));
+                                const minuteOptions = Array.from({ length: 60 }, (_, index) => String(index).padStart(2, "0"));
                                 if (!minuteOptions.includes(parts.minute)) minuteOptions.push(parts.minute);
                                 minuteOptions.sort((a, b) => Number(a) - Number(b));
                                 const updateTime = (hour: string, minute: string, period: "am" | "pm") => setForm(current => ({
