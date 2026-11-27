@@ -20,6 +20,7 @@ const Planner = lazy(() => import("@/pages/Planner"));
 const Reminders = lazy(() => import("@/pages/Reminders"));
 const Routines = lazy(() => import("@/pages/Routines"));
 const Study = lazy(() => import("@/pages/Study"));
+const YouTubeReviews = lazy(() => import("@/pages/YouTubeReviews"));
 const SQ3R = lazy(() => import("@/pages/SQ3R"));
 const Tasks = lazy(() => import("@/pages/Tasks"));
 const Home = lazy(() => import("./pages/Home"));
@@ -82,6 +83,7 @@ function Router() {
         <Route path={"/books/:id"} component={Books} />
         <Route path={"/books"} component={Books} />
         <Route path={"/study"} component={Study} />
+        <Route path={"/reviews"} component={YouTubeReviews} />
         <Route path={"/sq3r"} component={SQ3R} />
         <Route path={"/learning-map"} component={CurriculumMap} />
         <Route path={"/routines"} component={Routines} />

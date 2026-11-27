@@ -30,12 +30,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 
-function youtubeThumbnailId(externalId: string) {
-  const id = externalId.replace(/^youtube:/, "");
-  return /^[A-Za-z0-9_-]{6,20}$/.test(id) ? id : null;
-}
-
-export default function Study() {
+remove YouTube helperexport default function Study() {
   const reduceMotion = useReducedMotion();
   const utils = trpc.useUtils();
   const profile = trpc.studentProfile.get.useQuery(undefined, {
@@ -101,29 +96,6 @@ export default function Study() {
     [units],
   );
   const [branchTransition, setBranchTransition] = useState<{ from: string; to: string } | null>(null);
-  const [reviewCandidates, setReviewCandidates] = useState<Array<{
-    externalId: string;
-    teacherId: string;
-    teacherName: string;
-    teacherBrand: string;
-    title: string;
-    channelTitle: string;
-    url: string;
-    publishedAt: string;
-    description: string;
-    matchedSignals: number;
-    matchedTopics?: string[];
-    isSelectedTeacher?: boolean;
-    analysisStatus?: string;
-    accepted: boolean;
-    verificationState: string;
-    relevance: string;
-  }>>([]);
-  const [reviewSearchNote, setReviewSearchNote] = useState("");
-  const [reviewPanelOpen, setReviewPanelOpen] = useState(false);
-  const reviewSearchContextRef = useRef("");
-  const autoReviewSearchKeyRef = useRef("");
-  const refreshedReviewStatusesRef = useRef(new Set<string>());
   useEffect(() => {
     if (!branchTransition) return;
     const timer = window.setTimeout(() => setBranchTransition(null), 3_200);
@@ -146,84 +118,6 @@ export default function Study() {
       setStudyViewMode("lessons");
     }
   }, [setupCoachmarkVersion, selection.progressPickerGuideCompletedAt, branches.length, studyViewMode]);
-  const reviewSearch = trpc.teachers.recommendReviews.useMutation({
-    onSuccess: result => {
-      setReviewCandidates(result.items as typeof reviewCandidates);
-      setReviewSearchNote(result.note);
-    },
-    onError: error => setReviewSearchNote("تعذّر جلب المراجعات الآن. تسجيل تقدمك ومذاكرة الدروس لا يتأثران بهذا العطل."),
-  });
-  const acceptAlternativeReview = trpc.teachers.acceptAlternativeReview.useMutation({
-    onSuccess: async (result, variables) => {
-      setReviewCandidates(current => current.map(item =>
-        item.externalId === variables.externalId ? { ...item, accepted: true, analysisStatus: "processing" } : item
-      ));
-      await Promise.all([utils.studentProfile.get.invalidate(), utils.ai.activity.invalidate()]);
-      toast.success(result.message);
-    },
-    onError: error => toast.error(error.message || "تعذّر قبول المراجعة."),
-  });
-  const declineAlternativeReview = trpc.teachers.declineAlternativeReview.useMutation({
-    onSuccess: (_result, variables) => {
-      setReviewCandidates(current => current.filter(item => item.externalId !== variables.externalId));
-      toast.success("تم إخفاء هذه المراجعة ولن تدخل في خطتك.");
-    },
-    onError: error => toast.error(error.message || "تعذّر رفض المراجعة."),
-  });
-  useEffect(() => {
-    reviewSearchContextRef.current = "";
-    refreshedReviewStatusesRef.current.clear();
-    setReviewCandidates([]);
-    setReviewSearchNote("");
-    setReviewPanelOpen(false);
-  }, [subjectId, currentBranchId, selectedTeacherId]);
-
-  useEffect(() => {
-    if (!reviewPanelOpen || profile.isLoading || profile.isError || profile.data?.educationSystem !== "baccalaureate"
-      || !profile.data.subjectIds?.includes(subjectId) || !/_G2_BAC$/.test(subjectId)
-      || !currentBranchId || reviewSearch.isPending) return;
-    const searchKey = subjectId + "::" + currentBranchId + "::" + (selectedTeacherId || "no-teacher");
-    if (autoReviewSearchKeyRef.current === searchKey) return;
-    autoReviewSearchKeyRef.current = searchKey;
-    reviewSearchContextRef.current = subjectId + "::" + currentBranchId;
-    reviewSearch.mutate({ subjectId, branchId: currentBranchId, teacherId: selectedTeacherId });
-  }, [
-    profile.data?.educationSystem,
-    profile.data?.subjectIds,
-    profile.isLoading,
-    profile.isError,
-    subjectId,
-    currentBranchId,
-    selectedTeacherId,
-    reviewPanelOpen,
-    reviewSearch.isPending,
-  ]);
-
-  useEffect(() => {
-    const activeContext = subjectId + "::" + currentBranchId;
-    if (!reviewPanelOpen || !currentBranchId || reviewSearchContextRef.current !== activeContext || reviewSearch.isPending) return;
-    const savedUpdates = Array.isArray(selection.teacherPublicUpdates) ? selection.teacherPublicUpdates : [];
-    const acceptedIds = new Set(Array.isArray(selection.acceptedAlternativeReviewVideoIds)
-      ? selection.acceptedAlternativeReviewVideoIds.filter((value: unknown): value is string => typeof value === "string")
-      : []);
-    const completedAcceptedCandidates = reviewCandidates.filter(candidate => {
-      const isEligibleForAutomaticRefresh = candidate.isSelectedTeacher === true
-        || (candidate.accepted && acceptedIds.has(candidate.externalId));
-      if (!isEligibleForAutomaticRefresh) return false;
-      const update = savedUpdates.find((item: any) => item.externalId === candidate.externalId);
-      const status = String(update?.contentAnalysis?.status ?? "");
-      return status === "complete" || status === "failed";
-    });
-    const refreshCandidates = completedAcceptedCandidates.filter(candidate => {
-      const key = activeContext + "::" + candidate.externalId;
-      if (refreshedReviewStatusesRef.current.has(key)) return false;
-      refreshedReviewStatusesRef.current.add(key);
-      return true;
-    });
-    if (refreshCandidates.length) {
-      reviewSearch.mutate({ subjectId, branchId: currentBranchId, teacherId: selectedTeacherId });
-    }
-  }, [selection.teacherPublicUpdates, selection.acceptedAlternativeReviewVideoIds, reviewCandidates, currentBranchId, subjectId, selectedTeacherId, reviewPanelOpen, reviewSearch.isPending]);
   const currentBranchPointLabel = currentBranch?.branchType === "official_section" ? "موضوع" : "درس";
   const isLinearSubject = subjectId === "HIS_G2_BAC" || subjectId === "PROG_AI_G2_BAC";
   const legacyLinearRecords = isLinearSubject ? Object.values(branchProgressMap) : [];
@@ -1008,110 +902,6 @@ export default function Study() {
                       animate={{ width: (visibleBranchPosition / Math.max(branches.length, 1) * 100) + "%" }}
                       transition={{ type: "spring", stiffness: 110, damping: 22 }} />
                   </div>
-                  {branchChoices.length > 0 && (
-                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-card px-3 py-3">
-                      <div className="min-w-0">
-                        <p className="text-sm font-bold">مراجعات YouTube</p>
-                        <p className="mt-1 text-xs text-muted-foreground">افتح المصادر عند الحاجة؛ لن نبحث أو نعرض ترشيحات أثناء تحديد موضعك في المنهج.</p>
-                      </div>
-                      <Button type="button" variant="outline" size="sm" data-testid="study-open-youtube-reviews"
-                        aria-expanded={reviewPanelOpen}
-                        onClick={() => setReviewPanelOpen(value => !value)}>
-                        {reviewPanelOpen ? "إخفاء المراجعات" : "فتح مراجعات هذا الفرع"}
-                      </Button>
-                    </div>
-                  )}
-                  {branchChoices.length > 0 && reviewPanelOpen && (
-                    <section className="rounded-2xl border border-border/80 bg-card p-4 sm:p-5">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="text-[10px] font-bold tracking-[0.12em] text-primary">مركز المراجعات</p>
-                          <h4 className="mt-1 text-sm font-bold">مراجعات YouTube المرتبطة بهذا الفرع</h4>
-                          <p className="mt-1 max-w-2xl text-xs leading-6 text-muted-foreground">
-                            StudyFlow يفحص قناة مدرسك تلقائيًا، ويبحث عن المراجعات المرتبطة بالفرع الحالي. فيديوهات مدرسك المختار تُحلّل مباشرةً عند توافر Gemini، أما المدرسون البدلاء فلا يدخل محتواهم المسار قبل اعتمادك له. لا نربط أي فيديو بالمنهج لمجرد عنوانه.
-                          </p>
-                        </div>
-                        <span className="sf-review-auto-state" role="status" aria-live="polite">
-                          {reviewSearch.isPending
-                            ? <><Loader2 className="size-3.5 animate-spin" /> جارٍ فحص مراجعات هذا الفرع</>
-                            : reviewSearch.data
-                              ? <><Check className="size-3.5" /> يتم تحديث المصادر تلقائيًا</>
-                              : <><Sparkles className="size-3.5" /> البحث يبدأ تلقائيًا عند فتح الفرع</>}
-                        </span>
-                      </div>
-                      {reviewSearchNote && (
-                        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted/40 px-3 py-2">
-                          <p className="text-[11px] leading-5 text-muted-foreground">{reviewSearchNote}</p>
-                          <Button type="button" size="sm" variant="outline" className="rounded-lg"
-                            disabled={reviewSearch.isPending}
-                            onClick={() => {
-                              reviewSearchContextRef.current = subjectId + "::" + currentBranchId;
-                              reviewSearch.mutate({ subjectId, branchId: currentBranchId, teacherId: selectedTeacherId });
-                            }}>
-                            {reviewSearch.isPending ? "جارٍ البحث..." : "إعادة المحاولة"}
-                          </Button>
-                        </div>
-                      )}
-                      {!reviewSearch.isPending && reviewSearch.data && reviewSearchContextRef.current === subjectId + "::" + currentBranchId && reviewCandidates.length === 0 && (
-                        <p className="mt-3 text-xs text-muted-foreground">لم نعثر على مراجعة مناسبة لهذا الفرع من مدرسك أو من مدرس بديل مسجل للمادة.</p>
-                      )}
-                      {reviewCandidates.length > 0 && (
-                        <div className="mt-3 grid gap-3">
-                          {reviewCandidates.map(item => (
-                            <article key={item.externalId} className="sf-youtube-review-card">
-                              {youtubeThumbnailId(item.externalId) && (
-                                <div className="sf-youtube-review-thumb">
-                                  <img src={"https://i.ytimg.com/vi/" + youtubeThumbnailId(item.externalId) + "/hqdefault.jpg"} alt="" loading="lazy" />
-                                  <span>YouTube</span>
-                                </div>
-                              )}
-                              <div className="sf-youtube-review-content">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="rounded-md bg-primary/10 px-2 py-1 text-[10px] font-bold text-primary">{item.isSelectedTeacher ? "مدرسك المختار" : "مدرس بديل"}</span>
-                                <span className="text-[10px] text-muted-foreground">{item.teacherName} · {item.teacherBrand}</span>
-                                {item.accepted && !item.isSelectedTeacher && <span className="rounded-md bg-emerald-500/10 px-2 py-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">تمت الموافقة على التحليل</span>}
-                                {item.verificationState === "content_verified" && <span className="rounded-md bg-emerald-500/10 px-2 py-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">مطابقة من تحليل الفيديو</span>}
-                                {item.verificationState === "description_verified" && <span className="rounded-md bg-emerald-500/10 px-2 py-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">الوصف يحدد درسًا من هذا الفرع</span>}
-                                {item.analysisStatus === "processing" && <span className="rounded-md bg-amber-500/10 px-2 py-1 text-[10px] font-bold text-amber-700 dark:text-amber-300">الوصف غير كافٍ · جارٍ تحليل الفيديو</span>}
-                              {item.analysisStatus === "analysis_unavailable" && <span className="rounded-md bg-muted px-2 py-1 text-[10px] font-bold text-muted-foreground">تحليل Gemini غير متاح حاليًا</span>}
-                                {item.analysisStatus === "awaiting_consent" && <span className="rounded-md bg-muted px-2 py-1 text-[10px] font-bold text-muted-foreground">مرشح أولي · ينتظر موافقتك على التحليل</span>}
-                                {item.analysisStatus === "failed" && <span className="rounded-md bg-destructive/10 px-2 py-1 text-[10px] font-bold text-destructive">تعذر تحليل الفيديو</span>}
-                              </div>
-                              <h5 className="mt-2 break-words text-sm font-bold leading-6">{item.title}</h5>
-                              <p className="mt-1 break-words text-[11px] leading-5 text-muted-foreground">القناة: {item.channelTitle}</p>
-                              {item.description && <p className="mt-2 line-clamp-3 break-words text-xs leading-5 text-muted-foreground">{item.description}</p>}
-                              {item.matchedTopics?.length ? <p className="mt-2 text-[10px] leading-5 text-emerald-700 dark:text-emerald-300">موضوعات طابقت المنهج: {item.matchedTopics.join("، ")}</p> : null}
-                              <p className="mt-2 text-[10px] leading-5 text-muted-foreground">{item.relevance}</p>
-                              <div className="mt-3 flex flex-wrap items-center gap-2">
-                                <a href={item.url} target="_blank" rel="noreferrer" className="inline-flex min-h-9 items-center rounded-lg border border-border px-3 text-xs font-semibold text-foreground hover:border-primary/40">فتح الفيديو</a>
-                                {!item.accepted ? (
-                                  <>
-                                    <Button type="button" size="sm" className="rounded-lg"
-                                      disabled={acceptAlternativeReview.isPending || declineAlternativeReview.isPending}
-                                      onClick={() => acceptAlternativeReview.mutate({
-                                        subjectId,
-                                        branchId: currentBranchId,
-                                        externalId: item.externalId,
-                                      })}>
-                                      حلّل الفيديو وطابقه مع منهجي
-                                    </Button>
-                                    <Button type="button" size="sm" variant="ghost" className="rounded-lg text-muted-foreground"
-                                      disabled={acceptAlternativeReview.isPending || declineAlternativeReview.isPending}
-                                      onClick={() => declineAlternativeReview.mutate({ externalId: item.externalId })}>
-                                      رفض
-                                    </Button>
-                                  </>
-                                ) : (
-                                  <span className="text-[11px] font-medium text-emerald-700 dark:text-emerald-300">سيُضاف فقط ما يجتاز تحليل المحتوى ومطابقة المنهج.</span>
-                                )}
-                              </div>
-                              </div>
-                            </article>
-                          ))}
-                        </div>
-                      )}
-                    </section>
-                  )}
                   {branchChoices.length === 0 ? (
                     <div className="rounded-xl border border-dashed border-border bg-muted/10 p-4">
                       <div className="flex items-start gap-3">
