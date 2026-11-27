@@ -6,8 +6,46 @@ import {
   applyTeacherLedPlanningGuard,
   getDailyPlanFeasibilityNote,
   parseGeneratedPlan,
+  interleavePlannerItemsBySubject,
 } from "./planGenerator";
 import { getSIECheckpointBranches, getSIECheckpointProgressBranches } from "@shared/sie-catalog";
+
+describe("daily plan subject coverage", () => {
+  it("interleaves curriculum tasks across selected subjects before repeating a subject", () => {
+    const items = [
+      { subjectId: "ARB_G2_BAC", title: "نحو 1" },
+      { subjectId: "ARB_G2_BAC", title: "نحو 2" },
+      { subjectId: "ARB_G2_BAC", title: "نحو 3" },
+      { subjectId: "ENG1_G2_BAC", title: "English 1" },
+      { subjectId: "ENG1_G2_BAC", title: "English 2" },
+      { subjectId: "HIS_G2_BAC", title: "تاريخ 1" },
+      { subjectId: "PROG_AI_G2_BAC", title: "برمجة 1" },
+    ];
+    const ordered = interleavePlannerItemsBySubject(
+      items,
+      ["ARB_G2_BAC", "ENG1_G2_BAC", "HIS_G2_BAC", "PROG_AI_G2_BAC"],
+      item => item.subjectId,
+    );
+    expect(ordered.slice(0, 4).map(item => item.subjectId)).toEqual([
+      "ARB_G2_BAC", "ENG1_G2_BAC", "HIS_G2_BAC", "PROG_AI_G2_BAC",
+    ]);
+    expect(ordered.slice(4).map(item => item.title)).toEqual(["نحو 2", "English 2", "نحو 3"]);
+  });
+
+  it("keeps unlinked obligations after distributing curriculum-linked items", () => {
+    const items = [
+      { subjectId: "ARB_G2_BAC", title: "مهمة العربي" },
+      { subjectId: null, title: "مهمة عامة" },
+      { subjectId: "ENG1_G2_BAC", title: "مهمة الإنجليزي" },
+    ];
+    const ordered = interleavePlannerItemsBySubject(
+      items,
+      ["ARB_G2_BAC", "ENG1_G2_BAC"],
+      item => item.subjectId,
+    );
+    expect(ordered.map(item => item.title)).toEqual(["مهمة العربي", "مهمة الإنجليزي", "مهمة عامة"]);
+  });
+});
 
 describe("annual plan curriculum coverage and progress alignment", () => {
   it("uses explicit study confirmations before treating earlier Arabic grammar lessons as completed", () => {
