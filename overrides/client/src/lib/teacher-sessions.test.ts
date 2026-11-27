@@ -211,3 +211,53 @@ describe("legacy teacher schedule maps and weekly groups", () => {
     expect(groups[0].sessions.map(item => item.endTime)).toEqual(["22:30", "22:30"]);
   });
 });
+
+
+describe("complete weekly teacher schedule rendering", () => {
+  it("preserves multiple start times on the same weekday and gives every slot a unique key", () => {
+    const sessions = getPlannerTeacherSessions({
+      subjectIds: ["ENG1_G2_BAC"],
+      selection: {
+        teacherChoices: { ENG1_G2_BAC: "T_EN_MAHMOUD_RADWAN" },
+        teacherSchedules: {
+          ENG1_G2_BAC: [
+            { dayOfWeek: 0, startTime: "09:00", endTime: "10:00" },
+            { dayOfWeek: 0, startTime: "12:30", endTime: "13:30" },
+            { dayOfWeek: 3, startTime: "18:00", endTime: "19:00" },
+          ],
+        },
+      },
+    }, new Date("2026-11-27T12:00:00.000Z"));
+
+    expect(sessions).toHaveLength(3);
+    expect(sessions.map(item => [item.dayOfWeek, item.time])).toEqual([
+      [0, "09:00"],
+      [0, "12:30"],
+      [3, "18:00"],
+    ]);
+    expect(new Set(sessions.map(item => item.key)).size).toBe(3);
+    expect(groupPlannerTeacherSessions(sessions)).toHaveLength(1);
+    expect(groupPlannerTeacherSessions(sessions)[0].sessions).toHaveLength(3);
+  });
+
+  it("filters invalid weekly slots without losing valid appointments", () => {
+    const sessions = getPlannerTeacherSessions({
+      subjectIds: ["ENG1_G2_BAC"],
+      selection: {
+        teacherChoices: { ENG1_G2_BAC: "__SKIP__" },
+        customTeacherNames: { ENG1_G2_BAC: "مدرس المادة" },
+        teacherSchedules: {
+          ENG1_G2_BAC: [
+            { dayOfWeek: 7, startTime: "09:00" },
+            { dayOfWeek: 2, startTime: "25:00" },
+            { dayOfWeek: 4, startTime: "10:30", endTime: "29:90" },
+          ],
+        },
+      },
+    }, new Date("2026-11-27T12:00:00.000Z"));
+
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]).toMatchObject({ dayOfWeek: 4, time: "10:30" });
+    expect(sessions[0].endTime).toBeUndefined();
+  });
+});
