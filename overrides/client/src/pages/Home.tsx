@@ -10,9 +10,9 @@ import { trpc } from "@/lib/trpc";
 import { getNextOpenPlanStep } from "@/lib/plan-actions";
 import { getSIEStudentVisibleBranches, getSIECheckpointProgressBranches, getSIESubject, matchSIECheckpointTask, normalizeSIECheckpointFrontier } from "@shared/sie-catalog";
 import {
-  ArrowLeft, BarChart3, BookOpenText, CalendarDays, Check, CheckCircle2,
+  ArrowLeft, BarChart3, BookOpenText, CalendarDays, Check, CheckCircle2, Clock3,
   Compass, GraduationCap, ListChecks, Loader2, MessageCircle,
-  Play, RefreshCw, Sparkles, Target, Timer,
+  Play, RefreshCw, Sparkles, Target, Timer, X,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
@@ -128,6 +128,7 @@ export default function Home() {
     onError: error => toast.error(error.message || "تعذّر بدء الجلسة."),
   });
   const [markComplete, setMarkComplete] = useState(false);
+  const [showFinishSessionDialog, setShowFinishSessionDialog] = useState(false);
   const finishSession = trpc.learning.finishExternalSession.useMutation({
     onSuccess: async result => {
       await Promise.all([
@@ -136,6 +137,7 @@ export default function Home() {
       ]);
       toast.success(result.lessonMarkedCompleted ? "انتهت الجلسة وتم تحديث تقدم الدرس." : "انتهت الجلسة وتم حفظ مدتها.");
       setMarkComplete(false);
+      setShowFinishSessionDialog(false);
     },
     onError: error => toast.error(error.message || "تعذّر إنهاء الجلسة."),
   });
@@ -368,8 +370,14 @@ export default function Home() {
     setLocation("/sq3r?" + params.toString());
   };
   const finishCurrentSession = () => {
+    if (session) setShowFinishSessionDialog(true);
+  };
+  const confirmFinishCurrentSession = () => {
     if (session) finishSession.mutate({ sessionId: session.sessionId, markLessonCompleted: markComplete });
   };
+  const finishTimeLabel = new Intl.DateTimeFormat("ar-EG", {
+    timeZone: "Africa/Cairo", hour: "2-digit", minute: "2-digit",
+  }).format(new Date(now));
 
   const welcomeGuide = [
     {
@@ -461,7 +469,7 @@ export default function Home() {
         {learning.isError && <QueryErrorNotice onRetry={() => void learning.refetch()} label="تعذّر تحميل تقدم المنهج. يمكنك متابعة مهامك أثناء إعادة المحاولة." />}
         {dailyPlan.isError && <QueryErrorNotice onRetry={() => void dailyPlan.refetch()} label="تعذّر تحميل خطة اليوم." />}
         {session && (
-          <section className="overflow-hidden rounded-3xl border border-primary/30 bg-primary/5">
+          <section className="sf-active-study-session overflow-hidden rounded-3xl border border-primary/30 bg-primary/5">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-primary/15 px-5 py-4 sm:px-6">
               <div className="flex items-center gap-3">
                 <span className="flex size-10 items-center justify-center rounded-2xl bg-primary text-primary-foreground"><Timer className="size-5" /></span>
@@ -476,12 +484,7 @@ export default function Home() {
                 <p className="mt-1 text-sm text-muted-foreground">كمّل مذاكرتك أو افتح خطوات الفهم والاسترجاع، ثم أنهِ الجلسة لحفظ مدتها.</p>
                 <div className="mt-4 flex flex-wrap items-center gap-3">
                   <Button variant="outline" className="rounded-xl" onClick={() => openStudySteps(session.subjectId, session.branchId, session.lessonId)}>خطوات المذاكرة <ArrowLeft className="size-4" /></Button>
-                  <div className="flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-2">
-                    <label htmlFor="mark-session-lesson" className="flex cursor-pointer items-center gap-2 text-xs font-medium">
-                      <input id="mark-session-lesson" type="checkbox" checked={markComplete} onChange={event => setMarkComplete(event.target.checked)} className="size-4 accent-primary" />
-                      سجّل الدرس كمكتمل
-                    </label>
-                  </div>
+                  <span className="text-xs text-muted-foreground">عند الإنهاء ستختار هل الدرس اكتمل أم تحفظ الوقت فقط.</span>
                 </div>
               </div>
               <div className="flex min-w-[175px] flex-col items-center gap-3 rounded-2xl border border-primary/15 bg-background p-4">
@@ -494,6 +497,68 @@ export default function Home() {
             </div>
           </section>
         )}
+
+        <AnimatePresence>
+          {showFinishSessionDialog && session && (
+            <motion.div
+              className="sf-session-finish-overlay"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              role="presentation"
+              onClick={event => {
+                if (event.target === event.currentTarget && !finishSession.isPending) setShowFinishSessionDialog(false);
+              }}
+            >
+              <motion.section
+                className="sf-session-finish-dialog"
+                role="dialog" aria-modal="true" aria-labelledby="sf-session-finish-title"
+                initial={{ opacity: 0, y: 24, scale: .97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 16, scale: .98 }}
+                transition={{ duration: .22, ease: "easeOut" }}
+              >
+                <header className="sf-session-finish-header">
+                  <div className="sf-session-finish-heading">
+                    <span className="sf-session-finish-mark"><CheckCircle2 className="size-5" /></span>
+                    <div>
+                      <span>مراجعة الجلسة</span>
+                      <h2 id="sf-session-finish-title">خلصت مذاكرتك؟</h2>
+                      <p>{sessionInfo?.subject} · {sessionInfo?.lesson}</p>
+                    </div>
+                  </div>
+                  <button type="button" className="sf-session-finish-close" aria-label="إغلاق" disabled={finishSession.isPending} onClick={() => setShowFinishSessionDialog(false)}>
+                    <X className="size-4" />
+                  </button>
+                </header>
+                <div className="sf-session-finish-stats">
+                  <div><span><Clock3 className="size-4" /> الوقت المسجل</span><strong dir="ltr">{durationLabel(elapsed)}</strong></div>
+                  <div><span>وقت الإنهاء</span><strong>{finishTimeLabel}</strong></div>
+                </div>
+                <div className="sf-session-finish-question">
+                  <strong>حدّد حالة الدرس قبل الحفظ</strong>
+                  <p>اختَر ما حدث فعلًا. لن نضع علامة اكتمال على الدرس من دون اختيارك.</p>
+                </div>
+                <div className="sf-session-finish-options" role="group" aria-label="حالة الدرس بعد الجلسة">
+                  <button type="button" aria-pressed={markComplete} className={markComplete ? "is-selected" : ""} onClick={() => setMarkComplete(true)}>
+                    <span className="sf-session-finish-option-icon"><CheckCircle2 className="size-5" /></span>
+                    <span><b>أنهيت الدرس</b><small>احفظ الوقت وسجّل الدرس كمكتمل في تقدمك.</small></span>
+                    <i>{markComplete ? <Check className="size-4" /> : null}</i>
+                  </button>
+                  <button type="button" aria-pressed={!markComplete} className={!markComplete ? "is-selected" : ""} onClick={() => setMarkComplete(false)}>
+                    <span className="sf-session-finish-option-icon"><Timer className="size-5" /></span>
+                    <span><b>احفظ الوقت فقط</b><small>احتفظ بمدة الجلسة، واترك حالة الدرس كما هي.</small></span>
+                    <i>{!markComplete ? <Check className="size-4" /> : null}</i>
+                  </button>
+                </div>
+                <footer className="sf-session-finish-footer">
+                  <Button type="button" variant="outline" disabled={finishSession.isPending} onClick={() => setShowFinishSessionDialog(false)}>العودة للجلسة</Button>
+                  <Button type="button" disabled={finishSession.isPending} onClick={confirmFinishCurrentSession}>
+                    {finishSession.isPending ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />} حفظ وإنهاء الجلسة
+                  </Button>
+                </footer>
+              </motion.section>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(300px,.75fr)]">
           <section className="sf-next-action-card relative overflow-hidden rounded-3xl border border-border bg-card shadow-sm">

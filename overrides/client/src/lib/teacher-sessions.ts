@@ -1,5 +1,27 @@
 import { getSIESubject, getSIETeacher } from "@shared/sie-catalog";
 
+export type TeacherScheduleSlot = { dayOfWeek: number; startTime: string };
+
+const isValidTeacherScheduleSlot = (slot: Partial<TeacherScheduleSlot>): slot is TeacherScheduleSlot =>
+  Number.isInteger(slot.dayOfWeek) && Number(slot.dayOfWeek) >= 0 && Number(slot.dayOfWeek) <= 6
+  && typeof slot.startTime === "string" && /^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(slot.startTime);
+
+/** Fill missing default weekdays without overriding a time the student has changed. */
+export function mergeSuggestedTeacherScheduleSlots(
+  existing: TeacherScheduleSlot[] | undefined,
+  suggested: TeacherScheduleSlot[] | undefined,
+): TeacherScheduleSlot[] {
+  const merged = (Array.isArray(existing) ? existing : []).filter(isValidTeacherScheduleSlot)
+    .map(slot => ({ dayOfWeek: slot.dayOfWeek, startTime: slot.startTime }));
+  const occupiedDays = new Set(merged.map(slot => slot.dayOfWeek));
+  for (const slot of Array.isArray(suggested) ? suggested : []) {
+    if (!isValidTeacherScheduleSlot(slot) || occupiedDays.has(slot.dayOfWeek)) continue;
+    merged.push({ dayOfWeek: slot.dayOfWeek, startTime: slot.startTime });
+    occupiedDays.add(slot.dayOfWeek);
+  }
+  return merged.sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startTime.localeCompare(b.startTime));
+}
+
 export type PlannerTeacherSession = {
   key: string;
   subjectId: string;
@@ -17,10 +39,21 @@ export function getPlannerTeacherSessions(profile?: {
   selection?: unknown;
 } | null, now = new Date()): PlannerTeacherSession[] {
   if (!profile?.subjectIds?.length) return [];
-  const selection = (profile.selection ?? {}) as Record<string, any>;
-  const schedules = (selection.teacherSchedules ?? {}) as Record<string, Array<{ dayOfWeek: number; startTime: string }>>;
-  const teacherChoices = (selection.teacherChoices ?? profile.teacherSelections ?? {}) as Record<string, string>;
+  const rawSelection = profile.selection ?? {};
+  const selection = (typeof rawSelection === "string"
+    ? (() => { try { return JSON.parse(rawSelection) as Record<string, any>; } catch { return {}; } })()
+    : rawSelection) as Record<string, any>;
+  const schedules = (selection.teacherSchedules ?? (profile as any).teacherSchedules ?? {}) as Record<string, TeacherScheduleSlot[]>;
+  const teacherChoices = {
+    ...((profile.teacherSelections ?? {}) as Record<string, string>),
+    ...((selection.teacherChoices ?? {}) as Record<string, string>),
+  };
   const customTeacherNames = (selection.customTeacherNames ?? {}) as Record<string, string>;
+  const unfixedSubjects = new Set<string>([
+    ...(Array.isArray(selection.teacherScheduleUnfixedSubjectIds) ? selection.teacherScheduleUnfixedSubjectIds : []),
+    ...Object.entries((selection.teacherScheduleUnfixed ?? {}) as Record<string, boolean>)
+      .filter(([, value]) => Boolean(value)).map(([subjectId]) => subjectId),
+  ]);
   const today = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit",
   }).format(now);
@@ -34,11 +67,14 @@ export function getPlannerTeacherSessions(profile?: {
   const sessions: PlannerTeacherSession[] = [];
 
   for (const subjectId of profile.subjectIds) {
-    const slots = schedules[subjectId];
-    if (!Array.isArray(slots)) continue;
     const subjectName = getSIESubject(subjectId)?.nameAr ?? subjectId;
-    const teacherId = teacherChoices[subjectId] ?? profile.teacherSelections?.[subjectId] ?? "";
-    const teacherName = getSIETeacher(teacherId)?.nameAr || customTeacherNames[subjectId] || "مدرس المادة";
+    const teacherId = teacherChoices[subjectId] ?? "";
+    const teacher = getSIETeacher(teacherId);
+    const savedSlots = Array.isArray(schedules[subjectId]) ? schedules[subjectId] : [];
+    const suggestedSlots = unfixedSubjects.has(subjectId) ? [] : teacher?.suggestedDefaultSchedule ?? [];
+    const slots = mergeSuggestedTeacherScheduleSlots(savedSlots, suggestedSlots);
+    if (!slots.length) continue;
+    const teacherName = teacher?.nameAr || customTeacherNames[subjectId] || "مدرس المادة";
     for (const slot of slots) {
       if (!Number.isInteger(slot.dayOfWeek) || slot.dayOfWeek < 0 || slot.dayOfWeek > 6
         || !/^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(slot.startTime)) continue;

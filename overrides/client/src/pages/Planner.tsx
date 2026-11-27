@@ -8,6 +8,7 @@ import { getPlannerTeacherSessions, type PlannerTeacherSession } from "@/lib/tea
 import { buildPlannerCurriculumLanes, getPlannerStepCurriculum as getPlanStepCurriculum, getTeacherSessionPreparationSteps } from "@/lib/planner-curriculum";
 import { ENGLISH_CURRICULUM_LABELS, displayBranchTitle, displayCurriculumTitle } from "@/lib/curriculum-display";
 import {
+  SIE_CATALOG_META,
   getSIECheckpointProgressBranches,
   getSIEStudentVisibleBranches,
   getSIESubject,
@@ -284,6 +285,8 @@ export default function Planner() {
   const dailyMinutes = PACE_DAILY_CAPACITY[selectedPace];
   const [approved, setApproved] = useState(false);
   const [loadedSavedDraft, setLoadedSavedDraft] = useState(false);
+  const [showGenerationModal, setShowGenerationModal] = useState(false);
+  const [generationModalHiddenForRun, setGenerationModalHiddenForRun] = useState(false);
   const historyInitialized = useRef(false);
   const initialDailyGenerationStarted = useRef(false);
   const plannerPreferencesInitialized = useRef(false);
@@ -503,6 +506,15 @@ export default function Planner() {
     refetchOnWindowFocus: false,
   });
 
+  useEffect(() => {
+    if (ensureDaily.isPending) {
+      if (!generationModalHiddenForRun) setShowGenerationModal(true);
+      return;
+    }
+    setShowGenerationModal(false);
+    setGenerationModalHiddenForRun(false);
+  }, [ensureDaily.isPending, generationModalHiddenForRun]);
+
   const aiActivity = trpc.ai.activity.useQuery(undefined, {
     enabled: Boolean(profile.data?.subjectIds?.length),
     refetchInterval: query => {
@@ -577,10 +589,9 @@ export default function Planner() {
   });
 
   const runGeneration = () => {
-    ensureDaily.mutate({
-      dailyMinutes,
-      forceRebuild: true,
-    });
+    setGenerationModalHiddenForRun(false);
+    setShowGenerationModal(true);
+    ensureDaily.mutate({ dailyMinutes, forceRebuild: true });
   };
 
   useEffect(() => {
@@ -741,6 +752,26 @@ export default function Planner() {
   return (
     <DashboardLayout title="خطة المذاكرة" description="مساحة واحدة لفهم أولوياتك، وتنظيم جلساتك، ومتابعة ما أنجزته.">
       <div className="sf-study-plan-v2">
+        {showGenerationModal && ensureDaily.isPending && (
+          <div className="sf-plan-generation-overlay" role="presentation">
+            <section className="sf-plan-generation-dialog" role="dialog" aria-modal="true" aria-labelledby="sf-generation-dialog-title">
+              <header className="sf-plan-generation-dialog-header">
+                <div>
+                  <span>إعادة بناء الخطة بالذكاء الاصطناعي</span>
+                  <h2 id="sf-generation-dialog-title">StudyFlow يعيد ترتيب خطتك</h2>
+                  <p>أنت في: <strong>{SIE_CATALOG_META.gradeYear}</strong></p>
+                </div>
+                <button type="button" className="sf-plan-generation-hide" onClick={() => {
+                  setGenerationModalHiddenForRun(true);
+                  setShowGenerationModal(false);
+                }}>
+                  إخفاء هذه المرة <X className="size-4" />
+                </button>
+              </header>
+              <PlanLoading progress={generationProgress.data ?? null} gradeLabel={SIE_CATALOG_META.gradeYear} />
+            </section>
+          </div>
+        )}
         {history.isError && <QueryErrorNotice onRetry={() => void history.refetch()} label="تعذّر تحميل خططك المحفوظة." />}
         {profile.isError && <QueryErrorNotice onRetry={() => void profile.refetch()} label="تعذّر تحميل ملفك الدراسي. أعد المحاولة قبل إنشاء الخطة." />}
 
@@ -841,7 +872,12 @@ export default function Planner() {
               </aside>
             </section>
 
-            {ensureDaily.isPending && <PlanLoading progress={generationProgress.data ?? null} />}
+            {ensureDaily.isPending && (
+              <PlanGenerationInlineStatus progress={generationProgress.data ?? null} onShow={() => {
+                setGenerationModalHiddenForRun(false);
+                setShowGenerationModal(true);
+              }} />
+            )}
 
             {profile.data?.subjectIds?.length && aiCapabilities.data && (
               <section className="app-card flex flex-wrap items-start gap-3 rounded-2xl p-4" aria-live="polite">
@@ -932,13 +968,19 @@ export default function Planner() {
                 <h2>الخريطة السابقة لم تعد مطابقة لبياناتك</h2>
                 <p>بنحدّث ترتيب الدروس وفق موضع المدرس وحالة كل درس. لن نعرض الخريطة القديمة كأنها الأولوية الحالية.</p>
                 {ensureDaily.isPending ? (
-                  <PlanLoading progress={generationProgress.data ?? null} />
+                  <PlanGenerationInlineStatus progress={generationProgress.data ?? null} onShow={() => {
+                    setGenerationModalHiddenForRun(false);
+                    setShowGenerationModal(true);
+                  }} />
                 ) : (
                   <Button type="button" onClick={runGeneration}>إعادة بناء خريطة المذاكرة الآن</Button>
                 )}
               </section>
             ) : ensureDaily.isPending ? (
-              <PlanLoading progress={generationProgress.data ?? null} />
+              <PlanGenerationInlineStatus progress={generationProgress.data ?? null} onShow={() => {
+                setGenerationModalHiddenForRun(false);
+                setShowGenerationModal(true);
+              }} />
             ) : activeDailyPlan.isLoading || history.isLoading ? (
               <section className="sf-sp-empty" role="status" aria-live="polite">
                 <h2>بنحمّل خريطة خطتك</h2>
@@ -1087,7 +1129,20 @@ export default function Planner() {
 }
 
 
-function PlanLoading({ progress }: { progress: GenerationProgress | null }) {
+function PlanGenerationInlineStatus({ progress, onShow }: { progress: GenerationProgress | null; onShow: () => void }) {
+  return (
+    <section className="sf-plan-generation-inline" role="status" aria-live="polite">
+      <span className="sf-plan-generation-inline-mark"><Loader2 className="size-4 animate-spin" /></span>
+      <div>
+        <strong>إعادة بناء الخطة جارية</strong>
+        <p>{progress?.detail || "نراجع الصف والمواد والمهام ومواعيد المدرسين قبل ترتيب التوزيع الجديد."}</p>
+      </div>
+      <Button type="button" size="sm" variant="outline" onClick={onShow}>عرض التقدم</Button>
+    </section>
+  );
+}
+
+function PlanLoading({ progress, gradeLabel }: { progress: GenerationProgress | null; gradeLabel?: string }) {
   const stages: Array<{ id: GenerationProgress["currentStage"]; title: string; detail: string }> = [
     { id: "profile", title: "مراجعة ملفك وتقدمك", detail: "قراءة المواد المختارة وآخر موضع مؤكد لكل فرع وما أنجزته بالفعل." },
     { id: "curriculum", title: "مطابقة خريطة المنهج", detail: "ربط المهام بالدروس والوحدات، واستبعاد الخطوات التي لم تعد مؤهلة." },
@@ -1107,6 +1162,7 @@ function PlanLoading({ progress }: { progress: GenerationProgress | null }) {
         <div>
           <p>محرك التخطيط الذكي</p>
           <h3>بنكوّن خطة مبنية على بياناتك</h3>
+          {gradeLabel && <span className="sf-plan-loading-grade">أنت في: {gradeLabel}</span>}
           <span>{progress?.detail || "نراجع ملفك الدراسي والمهام وتقدم المنهج قبل ترتيب الأولويات."}</span>
         </div>
         <Loader2 className="sf-plan-loading-spinner size-5" />
@@ -1157,6 +1213,13 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
     );
     return firstOpen >= 0 ? firstOpen : plan.steps.length > 0 ? 0 : null;
   });
+  useEffect(() => {
+    if (viewMode !== "map" || selectedMapStepIndex === null) return;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById("sf-sp-flow-selection-panel")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [selectedMapStepIndex, viewMode]);
   const completedCount = plan.steps.filter(step => step.plannerTaskStatus === "done" || step.existingTask?.status === "done").length;
     const subjectCount = new Set(plan.steps.map(step => getPlanStepCurriculum(step, subjectIds)?.subjectId).filter(Boolean)).size;
   const confirmedTaskCount = plan.steps.filter(step => Boolean(step.existingTask)).length;
@@ -1270,8 +1333,8 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
       {teacherSessions.length > 0 && (
         <section className="sf-sp-teacher-schedule" aria-label="مواعيد الحصص القادمة">
           <header>
-            <div><span>المواعيد القادمة</span><h3>الحصص القادمة والمتراكم المرتبط بها</h3></div>
-            <small>موعد البداية المسجل فقط</small>
+            <div><span>الجدول الأسبوعي</span><h3>كل مواعيد المدرسين القادمة</h3></div>
+            <small>{teacherSessions.length.toLocaleString("ar-EG")} موعدًا قادمًا</small>
           </header>
           <div className="sf-sp-teacher-session-list">
             {teacherSessions.map(session => {
@@ -1373,7 +1436,15 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
           </div>
           {mapLanes.length ? (
             <div className="sf-sp-flow-lanes">
-              {mapLanes.map(lane => (
+              {mapLanes.map(lane => {
+                const laneDoneCount = lane.items.filter(({ step }) =>
+                  step.plannerTaskStatus === "done" || step.existingTask?.status === "done"
+                ).length;
+                const laneProgress = lane.items.length ? Math.round(laneDoneCount / lane.items.length * 100) : 0;
+                const laneNext = lane.items.find(({ step }) =>
+                  step.plannerTaskStatus !== "done" && step.existingTask?.status !== "done"
+                );
+                return (
                 <section className="sf-sp-flow-lane" key={lane.key}>
                   <header className="sf-sp-flow-lane-header">
                     <span className="sf-sp-flow-lane-port" />
@@ -1388,6 +1459,16 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
                     </div>
                     <strong>{lane.items.length.toLocaleString("ar-EG")} خطوة</strong>
                   </header>
+                  <div className="sf-sp-flow-lane-progress">
+                    <div className="sf-sp-flow-lane-progress-top">
+                      <span>تقدم هذه الوحدة</span>
+                      <strong>{laneDoneCount.toLocaleString("ar-EG")} من {lane.items.length.toLocaleString("ar-EG")} · {laneProgress.toLocaleString("ar-EG")}%</strong>
+                    </div>
+                    <div className="sf-sp-flow-lane-progress-rail" aria-label={"تقدم الوحدة " + lane.title}>
+                      <i style={{ width: laneProgress + "%" }} />
+                    </div>
+                    <small>{laneNext ? "الخطوة التالية: " + displayPlanStepTitle(laneNext.step, subjectIds) : "اكتملت كل خطوات هذه الوحدة"}</small>
+                  </div>
                   <div className="sf-sp-flow-track">
                     {lane.items.map(({step,index,curriculum}, laneIndex) => {
                       const isDone = step.plannerTaskStatus === "done" || step.existingTask?.status === "done";
@@ -1423,7 +1504,7 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
                               onClick={() => setSelectedMapStepIndex(current => current === index ? null : index)}
                             >
                               <h5>{titleText}</h5>
-                              <span>{selectedMapStepIndex === index ? "محددة الآن" : "اختر العقدة لعرض تفاصيلها"}</span>
+                              <span>{selectedMapStepIndex === index ? "محددة الآن" : "عرض تفاصيل الخطوة"}</span>
                             </button>
                             {curriculum?.branch && curriculum.branch !== "الدروس" && <small className="sf-sp-flow-node-branch">{curriculum.branch}</small>}
                             <details className="sf-sp-flow-node-details">
@@ -1472,13 +1553,14 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
                     })}
                   </div>
                 </section>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="sf-sp-empty-inline">{filter === "done" ? "لا توجد خطوات مكتملة." : filter === "open" ? "لا توجد خطوات متبقية." : "لا توجد خطوات في الخطة بعد."}</div>
           )}
           {selectedMapStep && (
-            <aside className="sf-sp-flow-selection" aria-live="polite">
+            <aside id="sf-sp-flow-selection-panel" className="sf-sp-flow-selection" aria-live="polite">
               <header>
                 <div>
                   <span>العقدة المحددة</span>

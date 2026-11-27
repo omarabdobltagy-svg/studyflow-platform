@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
+import { mergeSuggestedTeacherScheduleSlots } from "@/lib/teacher-sessions";
 import {
   SIE_CATALOG_META,
   SIE_SYSTEMS,
@@ -161,12 +162,13 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
       ...form.teacherScheduleUnfixed,
     };
     const teacherSchedules: TeacherScheduleMap = { ...((saved?.teacherSchedules as TeacherScheduleMap | undefined) ?? {}), ...form.teacherSchedules };
-    // Fill only empty slots; existing student edits always win over the suggested defaults.
+    // Backfill missing default weekdays only. Existing student-edited times always win.
     for (const [subjectId, teacherId] of Object.entries(teacherSelections)) {
       if (teacherScheduleUnfixed[subjectId]) continue;
-      if (Array.isArray(teacherSchedules[subjectId]) && teacherSchedules[subjectId].length > 0) continue;
-      const suggested = getSIETeacher(teacherId)?.suggestedDefaultSchedule;
-      if (suggested?.length) teacherSchedules[subjectId] = suggested.map(slot => ({ ...slot }));
+      const suggested = getSIETeacher(teacherId)?.suggestedDefaultSchedule ?? [];
+      if (suggested.length) {
+        teacherSchedules[subjectId] = mergeSuggestedTeacherScheduleSlots(teacherSchedules[subjectId], suggested);
+      }
     }
     setForm(current => ({
       ...current,
@@ -262,6 +264,8 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
     onError: error => toast.error(error.message || "تعذر البحث عن المدرس الآن."),
   });
   const customTeacherProfile = form.customTeacherProfiles[currentSetupSubjectId];
+  const selectedPublicCheckpoint = selectedSetupTeacher?.latestPublicCheckpoint ?? "";
+  const selectedCheckpointIsReview = /مراجعة|شامل شهر|review|revision/i.test(selectedPublicCheckpoint);
   const researchedModes = customTeacherProfile
     ? (customTeacherProfile.confidence === "low" ? [] : customTeacherProfile.availableModes)
     : ((teacherFacts.data?.state === "verified" || teacherFacts.data?.state === "partial")
@@ -638,13 +642,17 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                                   if (current.teacherSelections[currentSetupSubjectId] === teacher.teacherId) return current;
                                   const next = resetTeacherSpecificChoices(current, currentSetupSubjectId);
                                   const suggestedSchedule = teacher.suggestedDefaultSchedule ?? [];
+                                  const mergedSchedule = mergeSuggestedTeacherScheduleSlots(
+                                    next.teacherSchedules[currentSetupSubjectId],
+                                    suggestedSchedule,
+                                  );
                                   return {
                                     ...next,
                                     teacherSelections: { ...current.teacherSelections, [currentSetupSubjectId]: teacher.teacherId },
                                     customTeacherNames: { ...current.customTeacherNames, [currentSetupSubjectId]: "" },
                                     customTeacherProfiles: withoutSubject(current.customTeacherProfiles, currentSetupSubjectId),
-                                    teacherSchedules: suggestedSchedule.length
-                                      ? { ...next.teacherSchedules, [currentSetupSubjectId]: suggestedSchedule.map(slot => ({ ...slot })) }
+                                    teacherSchedules: mergedSchedule.length
+                                      ? { ...next.teacherSchedules, [currentSetupSubjectId]: mergedSchedule }
                                       : next.teacherSchedules,
                                   };
                                 })}
@@ -718,11 +726,15 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                     {selectedSetupTeacher && (
                       <section className="sf-teacher-frontier" aria-label={"آخر محتوى عام للمدرس " + selectedSetupTeacher.nameAr}>
                         <div className="sf-teacher-frontier-heading">
-                          <span className="eyebrow">تقدم المدرس — من المصادر العامة</span>
-                          <span className="sf-teacher-frontier-date">{selectedSetupTeacher.latestCheckpointDate || "تاريخ غير محدد"}</span>
+                          <span className="eyebrow">معلومات المدرس العامة</span>
+                          {!selectedCheckpointIsReview && <span className="sf-teacher-frontier-date">{selectedSetupTeacher.latestCheckpointDate || "تاريخ غير محدد"}</span>}
                         </div>
-                        <strong>{selectedSetupTeacher.latestPublicCheckpoint || "لم يُعثر على نقطة تقدم عامة موثوقة حتى الآن."}</strong>
-                        <p>{selectedSetupTeacher.evidenceNote || "هذا ملخص محتوى عام، وليس سجلًا لما شاهدته أنت أو ترتيبًا مضمونًا للكورس المدفوع."}</p>
+                        <strong>{selectedCheckpointIsReview
+                          ? "لا توجد نقطة درس عادية موثقة تحدد آخر محاضرة داخل الكورس."
+                          : selectedSetupTeacher.latestPublicCheckpoint || "لم يُعثر على نقطة تقدم عامة موثوقة حتى الآن."}</strong>
+                        <p>{selectedCheckpointIsReview
+                          ? "المراجعات الشاملة لا تكشف ترتيب الدروس داخل الكورس، لذلك لا نعرضها كموضع المدرس الحالي."
+                          : selectedSetupTeacher.evidenceNote || "هذا مؤشر عام، وليس سجلًا لما شاهدته أنت أو ترتيبًا مضمونًا للكورس المدفوع."}</p>
                         <div className="sf-teacher-frontier-links">
                           <a href={selectedSetupTeacher.profileUrl} target="_blank" rel="noreferrer">افتح قناة أو منصة المدرس <ExternalLink className="size-3" /></a>
                           {(selectedSetupTeacher.socialProfiles ?? []).map((item, index) => (
@@ -732,7 +744,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                             <a href={selectedSetupTeacher.paidCourseCatalogFrontier.courseUrl} target="_blank" rel="noreferrer">افتح فهرس الكورس <ExternalLink className="size-3" /></a>
                           )}
                         </div>
-                        <small>لا نعتبر المراجعة العامة درسًا شاهدته، ولا نحدد آخر عنصر مدفوع ما لم يظهر فهرسه بوضوح.</small>
+                        <small>هذا مؤشر عام فقط؛ تقدمك الشخصي يُسجل من داخل StudyFlow ولا يُستنتج من فيديو منشور.</small>
                       </section>
                     )}
 
@@ -788,15 +800,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                       </>
                     )}
                     {!form.courseModes[currentSetupSubjectId] && <p className="sf-method-required">اختَر طريقة المتابعة للانتقال للخطوة التالية.</p>}
-                    {customTeacherProfile?.evidence?.length ? (
-                      <details className="sf-method-evidence"><summary>مصادر البحث عن المدرس</summary>
-                        <ul>{customTeacherProfile.evidence.slice(0, 4).map((source, index) => <li key={index}><a href={source.url} target="_blank" rel="noreferrer">{source.title}</a></li>)}</ul>
-                      </details>
-                    ) : teacherFacts.data?.facts.evidence?.length ? (
-                      <details className="sf-method-evidence"><summary>مصادر التحقق</summary>
-                        <ul>{teacherFacts.data.facts.evidence.slice(0, 4).map((source, index) => <li key={index}><a href={source.url} target="_blank" rel="noreferrer">{source.title}</a></li>)}</ul>
-                      </details>
-                    ) : null}
+
                   </section>
 
                                     <section className="sf-schedule-panel" aria-labelledby="sf-schedule-heading">
