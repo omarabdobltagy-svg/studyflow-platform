@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getPlannerTeacherSessions, getTeacherLectureDuration, groupPlannerTeacherSessions, mergeSuggestedTeacherScheduleSlots } from "./teacher-sessions";
+import { getPlannerTeacherSessions, groupPlannerTeacherSessions, mergeSuggestedTeacherScheduleSlots } from "./teacher-sessions";
 
 describe("getPlannerTeacherSessions", () => {
   it("keeps both default weekly sessions for one teacher", () => {
@@ -108,73 +108,31 @@ describe("mergeSuggestedTeacherScheduleSlots", () => {
 });
 
 
-describe("teacher lecture time ranges", () => {
-  it("preserves an optional end time when merging suggested weekdays", () => {
+describe("single-time teacher appointments", () => {
+  it("ignores the legacy endTime value when reading an older profile", () => {
+    const profile = {
+      subjectIds: ["ENG1_G2_BAC"],
+      selection: {
+        teacherChoices: { ENG1_G2_BAC: "T_EN_MAHMOUD_RADWAN" },
+        teacherSchedules: {
+          ENG1_G2_BAC: [{ dayOfWeek: 0, startTime: "21:00", endTime: "22:30" }],
+        },
+      },
+    };
+    const session = getPlannerTeacherSessions(profile, new Date("2026-11-27T12:00:00.000Z"))
+      .find(item => item.sortDate === "2026-11-29");
+    expect(session).toMatchObject({ time: "21:00" });
+    expect(session && Object.hasOwn(session, "endTime")).toBe(false);
+  });
+
+  it("drops legacy endTime when merging suggested weekdays", () => {
     expect(mergeSuggestedTeacherScheduleSlots(
       [{ dayOfWeek: 0, startTime: "09:00", endTime: "10:30" }],
       [{ dayOfWeek: 0, startTime: "09:00" }, { dayOfWeek: 3, startTime: "09:00" }],
     )).toEqual([
-      { dayOfWeek: 0, startTime: "09:00", endTime: "10:30" },
+      { dayOfWeek: 0, startTime: "09:00" },
       { dayOfWeek: 3, startTime: "09:00" },
     ]);
-  });
-
-  it("returns the lecture end time to planner session cards", () => {
-    const profile = {
-      subjectIds: ["ENG1_G2_BAC"],
-      selection: {
-        teacherChoices: { ENG1_G2_BAC: "T_EN_MAHMOUD_RADWAN" },
-        teacherSchedules: {
-          ENG1_G2_BAC: [
-            { dayOfWeek: 0, startTime: "21:00", endTime: "22:30" },
-            { dayOfWeek: 3, startTime: "21:00" },
-          ],
-        },
-      },
-    };
-    const sessions = getPlannerTeacherSessions(profile, new Date("2026-11-27T12:00:00.000Z"));
-    expect(sessions.find(item => item.sortDate === "2026-11-29")?.endTime).toBe("22:30");
-    expect(sessions.find(item => item.sortDate === "2026-12-02")?.endTime).toBeUndefined();
-  });
-
-  it("ignores an invalid end time without dropping a valid start appointment", () => {
-    const profile = {
-      subjectIds: ["ENG1_G2_BAC"],
-      selection: {
-        teacherChoices: { ENG1_G2_BAC: "T_EN_MAHMOUD_RADWAN" },
-        teacherSchedules: {
-          ENG1_G2_BAC: [{ dayOfWeek: 0, startTime: "21:00", endTime: "29:90" }],
-        },
-      },
-    };
-    const sessions = getPlannerTeacherSessions(profile, new Date("2026-11-27T12:00:00.000Z"));
-    expect(sessions.find(item => item.sortDate === "2026-11-29")).toMatchObject({ time: "21:00" });
-    expect(sessions.find(item => item.sortDate === "2026-11-29")?.endTime).toBeUndefined();
-  });
-});
-
-
-describe("getTeacherLectureDuration", () => {
-  it("calculates lecture duration from start and end", () => {
-    expect(getTeacherLectureDuration("09:00", "10:30")).toContain("١ ساعة و ٣٠ دقيقة");
-  });
-
-  it("supports a lecture that finishes after midnight", () => {
-    const result = getTeacherLectureDuration("23:30", "01:00");
-    expect(result).toContain("١ ساعة و ٣٠ دقيقة");
-    expect(result).toContain("لليوم التالي");
-  });
-
-  it("does not invent a duration when no end time has been selected", () => {
-    expect(getTeacherLectureDuration("09:00")).toBeNull();
-  });
-
-  it("warns when start and end times are identical", () => {
-    expect(getTeacherLectureDuration("09:00", "09:00")).toBe("وقت النهاية لازم يختلف عن البداية");
-  });
-
-  it("rejects malformed time values", () => {
-    expect(getTeacherLectureDuration("29:00", "30:00")).toBeNull();
   });
 });
 
