@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getCuratedTeacherDeliveryFacts, normalizeTeacherSearchText, teacherSourceMatches } from "./teacher-course-research";
+import { getCuratedTeacherDeliveryFacts, normalizeSocialSearchItems, normalizeTeacherSearchText, teacherSourceMatches } from "./teacher-course-research";
 
 describe("teacher source matching", () => {
   it("normalizes common Arabic spelling variants", () => {
@@ -23,6 +23,11 @@ describe("teacher source matching", () => {
 
 
 describe("curated public teacher delivery modes", () => {
+  it("offers online and center for both official Arabic teacher announcements for the 2027 cohort", () => {
+    expect(getCuratedTeacherDeliveryFacts("T_AR_MOHAMED_SALAH")?.availableModes).toEqual(["online", "center"]);
+    expect(getCuratedTeacherDeliveryFacts("T_AR_REDA_FAROUK")?.availableModes).toEqual(["online", "center"]);
+  });
+
   it("offers only online for teachers whose current public course is online", () => {
     expect(getCuratedTeacherDeliveryFacts("T_AR_MOHAMED_SALAH")?.availableModes).toEqual(["online"]);
     expect(getCuratedTeacherDeliveryFacts("T_EN_SHERIF")?.availableModes).toEqual(["online"]);
@@ -40,5 +45,26 @@ describe("curated public teacher delivery modes", () => {
 
   it("does not invent modes for an unreviewed teacher", () => {
     expect(getCuratedTeacherDeliveryFacts("T_NOT_IN_CATALOG")).toBeNull();
+  });
+});
+
+
+describe("public social teacher-source matching", () => {
+  it("accepts Facebook search results that identify the named teacher", () => {
+    const matches = normalizeSocialSearchItems("رضا الفاروق", "رضا الفاروق", [{
+      title: "رضا الفاروق — مواعيد السنة الجديدة ونظام الأونلاين والسنتر",
+      link: "https://www.facebook.com/RedaElfaroukOfficial/posts/123456",
+      snippet: "تفاصيل دفعة 2027 مع الأستاذ رضا الفاروق.",
+    }]);
+    expect(matches).toHaveLength(1);
+    expect(matches[0].source).toContain("Facebook");
+  });
+
+  it("rejects generic social posts that do not identify the teacher and non-social URLs", () => {
+    const matches = normalizeSocialSearchItems("رضا الفاروق", "رضا الفاروق", [
+      { title: "مواعيد سنتر اللغة العربية", link: "https://www.facebook.com/center/posts/123", snippet: "حجز مجموعات اللغة العربية" },
+      { title: "رضا الفاروق الرسمي", link: "https://example.com/reda", snippet: "حساب المدرس" },
+    ]);
+    expect(matches).toHaveLength(0);
   });
 });

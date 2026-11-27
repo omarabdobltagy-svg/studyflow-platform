@@ -1145,3 +1145,19 @@ html body .sf-login-screen.sf-shell-v3:has(.sf-login-3d canvas) .sf-login-graphi
 .sf-schedule-empty{margin:0;padding:12px;border:1px dashed var(--border);border-radius:12px;color:var(--muted-foreground);font-size:11px;text-align:center}
 .sf-schedule-footnote{margin:12px 0 0;color:var(--muted-foreground);font-size:10px;line-height:1.8}
 @media(max-width:520px){.sf-onboarding-shell{padding-inline:0}.sf-onboarding-hero{border-radius:22px!important}.sf-onboarding-panel{border-radius:20px!important}.sf-schedule-panel,.sf-method-panel{padding:14px}.sf-schedule-day-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}.sf-schedule-day-grid button{min-height:40px;padding-inline:3px;font-size:10px}.sf-teacher-mode-grid{gap:8px}.sf-teacher-mode-choice{min-height:108px;padding:12px}}
+
+
+/* Teacher directory: visible search state and public syllabus frontier */
+.sf-teacher-discover-button{min-height:48px;border:1.5px dashed var(--border)!important;color:var(--muted-foreground)!important;background:var(--card)!important;transition:background .18s ease,border-color .18s ease,box-shadow .18s ease,color .18s ease}
+.sf-teacher-discover-button.is-ready{border-style:solid!important;border-color:var(--primary)!important;color:var(--primary-foreground)!important;background:var(--primary)!important;box-shadow:0 10px 24px -18px var(--primary)}
+.sf-teacher-discover-button:disabled{opacity:.55;cursor:not-allowed}
+.sf-teacher-discovered-choice{border-color:var(--primary)!important;background:color-mix(in srgb,var(--primary) 8%,var(--card))!important}
+.sf-teacher-frontier{display:grid;gap:10px;padding:16px;border:1px solid color-mix(in srgb,var(--primary) 30%,var(--border));border-radius:18px;background:color-mix(in srgb,var(--primary) 5%,var(--card))}
+.sf-teacher-frontier-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.sf-teacher-frontier-date{color:var(--muted-foreground);font-size:10px;white-space:nowrap}
+.sf-teacher-frontier>strong{color:var(--foreground);font-size:13px;line-height:1.9}
+.sf-teacher-frontier>p{margin:0;color:var(--muted-foreground);font-size:11px;line-height:1.85}
+.sf-teacher-frontier>small{color:var(--muted-foreground);font-size:10px;line-height:1.7}
+.sf-teacher-frontier-links{display:flex;flex-wrap:wrap;gap:8px}
+.sf-teacher-frontier-links a{display:inline-flex;align-items:center;gap:5px;min-height:32px;padding:6px 9px;border:1px solid var(--border);border-radius:10px;color:var(--primary);background:var(--card);font-size:10px;font-weight:800}
+@media(max-width:520px){.sf-teacher-frontier{padding:13px}.sf-teacher-frontier-heading{align-items:flex-start;flex-direction:column;gap:4px}}

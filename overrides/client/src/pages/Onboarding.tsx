@@ -154,6 +154,20 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
 
   useEffect(() => {
     const saved = (profile.data as any)?.selection ?? null;
+    const teacherSelections = { ...(saved?.teacherChoices ?? {}), ...form.teacherSelections };
+    const teacherScheduleUnfixed = {
+      ...Object.fromEntries((saved?.teacherScheduleUnfixedSubjectIds ?? []).map((subjectId: string) => [subjectId, true])),
+      ...(saved?.teacherScheduleUnfixed ?? {}),
+      ...form.teacherScheduleUnfixed,
+    };
+    const teacherSchedules = { ...(saved?.teacherSchedules ?? {}), ...form.teacherSchedules };
+    // Fill only empty slots; existing student edits always win over the suggested defaults.
+    for (const [subjectId, teacherId] of Object.entries(teacherSelections)) {
+      if (teacherScheduleUnfixed[subjectId]) continue;
+      if (Array.isArray(teacherSchedules[subjectId]) && teacherSchedules[subjectId].length > 0) continue;
+      const suggested = getSIETeacher(teacherId)?.suggestedDefaultSchedule;
+      if (suggested?.length) teacherSchedules[subjectId] = suggested.map(slot => ({ ...slot }));
+    }
     setForm(current => ({
       ...current,
       studentName: current.studentName || (profile.data as any)?.studentName || auth.data?.name || "",
@@ -161,23 +175,17 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
       systemId: current.systemId || saved?.systemId || "",
       trackId: current.trackId || saved?.trackId || "",
       electiveSubjectId: current.electiveSubjectId || saved?.electiveSubjectId || "",
-      teacherSelections: Object.keys(current.teacherSelections).length
-        ? current.teacherSelections
-        : (saved?.teacherChoices ?? {}),
-      checkpointSelections: Object.keys(current.checkpointSelections).length
-        ? current.checkpointSelections
-        : (saved?.teacherFrontiers ?? {}),
-      courseModes: Object.keys(current.courseModes).length ? current.courseModes : (saved?.courseModes ?? {}),
-      customTeacherNames: Object.keys(current.customTeacherNames).length ? current.customTeacherNames : (saved?.customTeacherNames ?? {}),
-      customTeacherProfiles: Object.keys(current.customTeacherProfiles).length ? current.customTeacherProfiles : (saved?.customTeacherProfiles ?? {}),
-      teacherSchedules: Object.keys(current.teacherSchedules).length ? current.teacherSchedules : (saved?.teacherSchedules ?? {}),
-      teacherScheduleUnfixed: Object.keys(current.teacherScheduleUnfixed).length
-        ? current.teacherScheduleUnfixed
-        : Object.fromEntries((saved?.teacherScheduleUnfixedSubjectIds ?? []).map((subjectId: string) => [subjectId, true])),
-      teacherAccessRequirements: Object.keys(current.teacherAccessRequirements).length ? current.teacherAccessRequirements : (saved?.teacherAccessRequirements ?? {}),
-      teacherHomeworkPolicy: Object.keys(current.teacherHomeworkPolicy).length ? current.teacherHomeworkPolicy : (saved?.teacherHomeworkPolicy ?? {}),
-      teacherHomeworkRequiredBeforeNextLecture: Object.keys(current.teacherHomeworkRequiredBeforeNextLecture).length ? current.teacherHomeworkRequiredBeforeNextLecture : (saved?.teacherHomeworkRequiredBeforeNextLecture ?? {}),
-      teacherPreLectureExamRequired: Object.keys(current.teacherPreLectureExamRequired).length ? current.teacherPreLectureExamRequired : (saved?.teacherPreLectureExamRequired ?? {}),
+      teacherSelections,
+      checkpointSelections: { ...(saved?.teacherFrontiers ?? {}), ...current.checkpointSelections },
+      courseModes: { ...(saved?.courseModes ?? {}), ...current.courseModes },
+      customTeacherNames: { ...(saved?.customTeacherNames ?? {}), ...current.customTeacherNames },
+      customTeacherProfiles: { ...(saved?.customTeacherProfiles ?? {}), ...current.customTeacherProfiles },
+      teacherSchedules,
+      teacherScheduleUnfixed,
+      teacherAccessRequirements: { ...(saved?.teacherAccessRequirements ?? {}), ...current.teacherAccessRequirements },
+      teacherHomeworkPolicy: { ...(saved?.teacherHomeworkPolicy ?? {}), ...current.teacherHomeworkPolicy },
+      teacherHomeworkRequiredBeforeNextLecture: { ...(saved?.teacherHomeworkRequiredBeforeNextLecture ?? {}), ...current.teacherHomeworkRequiredBeforeNextLecture },
+      teacherPreLectureExamRequired: { ...(saved?.teacherPreLectureExamRequired ?? {}), ...current.teacherPreLectureExamRequired },
     }));
   }, [auth.data, profile.data]);
 
@@ -211,6 +219,9 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
   const setupTeacherOptions = currentSetupSubjectId && form.systemId ? getSIETeachersForSubject(currentSetupSubjectId, form.systemId) : [];
   const selectedSetupTeacherId = form.teacherSelections[currentSetupSubjectId] && form.teacherSelections[currentSetupSubjectId] !== SKIP_TEACHER
     ? form.teacherSelections[currentSetupSubjectId] : "";
+  const selectedSetupTeacher = selectedSetupTeacherId
+    ? setupTeacherOptions.find(teacher => teacher.teacherId === selectedSetupTeacherId) ?? getSIETeacher(selectedSetupTeacherId) ?? null
+    : null;
   const teacherFacts = trpc.teacherDirectory.facts.useQuery({
     teacherId: selectedSetupTeacherId || "__none__",
     subjectId: currentSetupSubjectId || "__none__",
@@ -623,11 +634,20 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                             const selected = form.teacherSelections[currentSetupSubjectId] === teacher.teacherId;
                             return (
                               <button key={teacher.teacherId} type="button" aria-pressed={selected}
-                                onClick={() => setForm(current => ({
-                                  ...resetTeacherSpecificChoices(current, currentSetupSubjectId),
-                                  teacherSelections: { ...current.teacherSelections, [currentSetupSubjectId]: teacher.teacherId },
-                                  customTeacherNames: { ...current.customTeacherNames, [currentSetupSubjectId]: "" },
-                                }))}
+                                onClick={() => setForm(current => {
+                                  if (current.teacherSelections[currentSetupSubjectId] === teacher.teacherId) return current;
+                                  const next = resetTeacherSpecificChoices(current, currentSetupSubjectId);
+                                  const suggestedSchedule = teacher.suggestedDefaultSchedule ?? [];
+                                  return {
+                                    ...next,
+                                    teacherSelections: { ...current.teacherSelections, [currentSetupSubjectId]: teacher.teacherId },
+                                    customTeacherNames: { ...current.customTeacherNames, [currentSetupSubjectId]: "" },
+                                    customTeacherProfiles: withoutSubject(current.customTeacherProfiles, currentSetupSubjectId),
+                                    teacherSchedules: suggestedSchedule.length
+                                      ? { ...next.teacherSchedules, [currentSetupSubjectId]: suggestedSchedule.map(slot => ({ ...slot })) }
+                                      : next.teacherSchedules,
+                                  };
+                                })}
                                 className={"sf-teacher-choice flex min-h-16 items-center justify-between gap-3 rounded-2xl border p-4 text-right transition " + (selected ? "is-selected border-primary bg-secondary/45 ring-1 ring-primary/20" : "border-border bg-card hover:border-primary/40")}>
                                 <span className="sf-teacher-choice-copy min-w-0">
                                   <b>{teacher.nameAr}</b>
@@ -642,6 +662,22 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                       ) : (
                         <p className="rounded-xl border border-dashed border-border bg-muted/20 p-3 text-xs leading-6 text-muted-foreground">لا توجد أسماء مدرسين مُدرجة لهذه المادة في القائمة حاليًا. يمكنك كتابة الاسم يدويًا؛ فهرس المنهج يظل المرجع للمحتوى.</p>
                       )}
+                      {customTeacherProfile && (
+                        <button type="button" aria-pressed="true"
+                          onClick={() => setForm(current => ({
+                            ...current,
+                            teacherSelections: { ...current.teacherSelections, [currentSetupSubjectId]: SKIP_TEACHER },
+                            customTeacherNames: { ...current.customTeacherNames, [currentSetupSubjectId]: customTeacherProfile.nameAr },
+                          }))}
+                          className="sf-teacher-choice sf-teacher-discovered-choice mt-3 flex w-full items-center justify-between gap-3 rounded-2xl border p-4 text-right is-selected">
+                          <span className="sf-teacher-choice-copy min-w-0">
+                            <b>{customTeacherProfile.nameAr}</b>
+                            {customTeacherProfile.brandName !== customTeacherProfile.nameAr && <small className="sf-teacher-brand">{customTeacherProfile.brandName}</small>}
+                            <small>تم العثور عليه وإضافته لاختيارات هذه المادة</small>
+                          </span>
+                          <span className="sf-teacher-choice-check"><Check className="size-4" /></span>
+                        </button>
+                      )}
                     </div>
 
                     <div className="sf-teacher-custom-field">
@@ -655,7 +691,7 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                         }))}
                         placeholder="اكتب الاسم المعروف بيه" maxLength={120}
                         className="sf-teacher-custom-input mt-2 h-12 rounded-xl bg-background" />
-                      <Button type="button" variant="outline" className="sf-teacher-discover-button mt-3 w-full rounded-xl"
+                      <Button type="button" variant="outline" className={"sf-teacher-discover-button mt-3 w-full rounded-xl " + ((form.customTeacherNames[currentSetupSubjectId] ?? "").trim().length >= 2 && !discoverTeacher.isPending ? "is-ready" : "")}
                         disabled={discoverTeacher.isPending || (form.customTeacherNames[currentSetupSubjectId] ?? "").trim().length < 2}
                         onClick={() => discoverTeacher.mutate({
                           teacherName: (form.customTeacherNames[currentSetupSubjectId] ?? "").trim(),
@@ -678,6 +714,27 @@ export default function Onboarding({ editMode = false }: Partial<RouteComponentP
                         </div>
                       )}
                     </div>
+
+                    {selectedSetupTeacher && (
+                      <section className="sf-teacher-frontier" aria-label={"آخر محتوى عام للمدرس " + selectedSetupTeacher.nameAr}>
+                        <div className="sf-teacher-frontier-heading">
+                          <span className="eyebrow">تقدم المدرس — من المصادر العامة</span>
+                          <span className="sf-teacher-frontier-date">{selectedSetupTeacher.latestCheckpointDate || "تاريخ غير محدد"}</span>
+                        </div>
+                        <strong>{selectedSetupTeacher.latestPublicCheckpoint || "لم يُعثر على نقطة تقدم عامة موثوقة حتى الآن."}</strong>
+                        <p>{selectedSetupTeacher.evidenceNote || "هذا ملخص محتوى عام، وليس سجلًا لما شاهدته أنت أو ترتيبًا مضمونًا للكورس المدفوع."}</p>
+                        <div className="sf-teacher-frontier-links">
+                          <a href={selectedSetupTeacher.profileUrl} target="_blank" rel="noreferrer">افتح قناة أو منصة المدرس <ExternalLink className="size-3" /></a>
+                          {(selectedSetupTeacher.socialProfiles ?? []).map((item, index) => (
+                            <a key={item.url + index} href={item.url} target="_blank" rel="noreferrer">متابعة {item.platform} <ExternalLink className="size-3" /></a>
+                          ))}
+                          {selectedSetupTeacher.paidCourseCatalogFrontier?.courseUrl && (
+                            <a href={selectedSetupTeacher.paidCourseCatalogFrontier.courseUrl} target="_blank" rel="noreferrer">افتح فهرس الكورس <ExternalLink className="size-3" /></a>
+                          )}
+                        </div>
+                        <small>لا نعتبر المراجعة العامة درسًا شاهدته، ولا نحدد آخر عنصر مدفوع ما لم يظهر فهرسه بوضوح.</small>
+                      </section>
+                    )}
 
                     <button type="button"
                       aria-pressed={form.teacherSelections[currentSetupSubjectId] === SKIP_TEACHER && !form.customTeacherNames[currentSetupSubjectId]?.trim()}
