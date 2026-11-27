@@ -10,6 +10,7 @@ import {
   getSIECheckpointProgressOptions,
   getSIECheckpointUnits,
   getSIESubject,
+  getSIETeacher,
   normalizeSIECheckpointFrontier,
 } from "@shared/sie-catalog";
 import {
@@ -538,7 +539,7 @@ export default function Study() {
       {selectedTeacherId || teacherReferenceNameBase ? (
         <div className="sf-study-teacher-summary" role="status">
           <span className="sf-study-teacher-summary-mark"><BookOpenText className="size-4" /></span>
-          <span><strong>{selectedTeacherId ? "المدرس المسجل" : "المدرس المضاف إلى ملفك"}</strong><small>{selectedTeacherId || teacherReferenceNameBase}</small></span>
+          <span><strong>{selectedTeacherId ? "المدرس المسجل" : "المدرس المضاف إلى ملفك"}</strong><small>{(selectedTeacherId ? getSIETeacher(selectedTeacherId)?.nameAr : null) || teacherReferenceNameBase || selectedTeacherId}</small></span>
         </div>
       ) : null}
 
