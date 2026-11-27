@@ -172,12 +172,18 @@ async function processTeacherVideoAnalysis(userId: number, externalId: string, a
   }
   const existing = video.contentAnalysis;
   if (existing?.status === "complete" || existing?.status === "failed") {
-    if (activityId) completeAIActivity(userId, activityId, "هذا الفيديو سبق تحليله أو تعذّر تحليله؛ لم نكرر الطلب.");
+    if (activityId) completeAIActivity(userId, activityId, "هذا الفيديو سبق تحليله أو انتهت محاولاته التلقائية؛ لم نكرر الطلب.");
+    return;
+  }
+  if (existing?.status === "retry_wait" && Date.parse(existing.nextRetryAt || "") > Date.now()) {
+    if (activityId) completeAIActivity(userId, activityId, "تأجلت إعادة المحاولة إلى الموعد المحدد لتجنب تكرار طلب فاشل.");
     return;
   }
 
   if (activityId) updateAIActivity(userId, activityId, "فهم محتوى الفيديو", "يفحص الفيديو نفسه لاستخراج الموضوعات التعليمية والطوابع الزمنية والتعليمات الصريحة للمدرس.");
-  let interactionId = existing?.interactionId;
+  // A terminal Gemini interaction cannot be resumed. Retry by creating a new
+  // interaction only after the bounded backoff period has elapsed.
+  let interactionId = existing?.status === "retry_wait" ? undefined : existing?.interactionId;
   let model = existing?.model || process.env.GEMINI_VIDEO_MODEL || "gemini-3.8-flash";
   if (!interactionId) {
     const selectedSubjects = (profile.subjectIds ?? []).map(subjectId => getSIESubject(subjectId)?.nameAr ?? subjectId);
@@ -235,16 +241,37 @@ async function processTeacherVideoAnalysis(userId: number, externalId: string, a
       return;
     }
     if (state.status === "failed") {
+      const previousRetryCount = Math.max(0, Math.trunc(Number(existing?.retryCount) || 0));
+      const retryCount = previousRetryCount + 1;
+      const shouldRetry = state.retryable && retryCount <= 2;
+      const retryDelayMs = Math.min(15 * 60_000 * (2 ** (retryCount - 1)), 6 * 60 * 60_000);
+      const nextRetryAt = shouldRetry ? new Date(Date.now() + retryDelayMs).toISOString() : undefined;
       await persistTeacherVideoAnalysis(userId, externalId, {
-        status: "failed",
-        interactionId,
+        status: shouldRetry ? "retry_wait" : "failed",
+        interactionId: shouldRetry ? undefined : interactionId,
         model: state.model || model,
         startedAt: existing?.startedAt || new Date().toISOString(),
         completedAt: new Date().toISOString(),
+        retryCount,
+        ...(nextRetryAt ? { nextRetryAt } : {}),
         error: state.error,
       });
-      console.warn("[StudyFlow video analysis] Gemini interaction failed:", state.error);
-      if (activityId) failAIActivity(userId, activityId, "فشل تحليل الفيديو: " + state.error);
+      console.warn("[StudyFlow video analysis] Gemini interaction failed", {
+        externalId,
+        model: state.model || model,
+        errorCode: state.errorCode || null,
+        retryable: state.retryable,
+        retryCount,
+        nextRetryAt: nextRetryAt || null,
+        message: state.error.slice(0, 360),
+      });
+      if (activityId) {
+        if (shouldRetry) {
+          completeAIActivity(userId, activityId, "تعثر تحليل الفيديو مؤقتًا؛ ستتم إعادة المحاولة تلقائيًا بعد فترة تهدئة.");
+        } else {
+          failAIActivity(userId, activityId, "تعذّر تحليل الفيديو بعد المحاولات المتاحة: " + state.error);
+        }
+      }
       return;
     }
     await pauseForVideoAnalysis(5_000);
@@ -265,7 +292,9 @@ function queueTeacherVideoAnalyses(userId: number, updates: TeacherPublicUpdate[
     .filter(update => update.sourceType === "youtube"
       && Boolean(update.externalId && update.url)
       && update.contentAnalysis?.status !== "complete"
-      && update.contentAnalysis?.status !== "failed")
+      && update.contentAnalysis?.status !== "failed"
+      && !(update.contentAnalysis?.status === "retry_wait"
+        && Date.parse(update.contentAnalysis.nextRetryAt || "") > Date.now()))
     .sort((left, right) => Date.parse(String(right.publishedAt)) - Date.parse(String(left.publishedAt)))
     .slice(0, 36);
   let queued = 0;
