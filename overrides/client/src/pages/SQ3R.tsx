@@ -293,7 +293,10 @@ export default function SQ3R() {
               </Button>
               <p className="mt-3 text-[11px] leading-5 text-muted-foreground">
                 {currentProgress?.updatedAt
-                  ? "آخر حفظ: " + new Intl.DateTimeFormat("ar-EG", { dateStyle: "medium", timeStyle: "short" }).format(new Date(currentProgress.updatedAt))
+                  ? "آخر حفظ: " + new Intl.DateTimeFormat("ar-EG", {
+                    day: "numeric", month: "short", year: "numeric",
+                    hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Africa/Cairo",
+                  }).format(new Date(currentProgress.updatedAt))
                   : "لم يُسجّل تقدم لهذه الجلسة بعد."}
               </p>
             </aside>

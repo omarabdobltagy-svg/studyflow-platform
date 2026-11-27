@@ -745,7 +745,7 @@ export default function Planner() {
   const taskRows = tasksQuery.data ?? [];
   const openTaskRows = taskRows.filter(task => task.status !== "done");
   const overdueTaskRows = openTaskRows.filter(task => task.dueAt && new Date(task.dueAt).getTime() < Date.now());
-  const todayTaskRows = openTaskRows.filter(task => task.dueAt && new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date(task.dueAt)) === todayCairo);
+  const todayTaskRows = openTaskRows.filter(task => task.dueAt && getDateKeyInTimeZone(task.dueAt instanceof Date ? task.dueAt : new Date(String(task.dueAt)), "Africa/Cairo") === todayCairo);
   const planSubjectCount = plan
     ? new Set(plan.steps.map(step => getPlanStepCurriculum(step, profile.data?.subjectIds ?? [])?.subjectId).filter(Boolean)).size
     : 0;

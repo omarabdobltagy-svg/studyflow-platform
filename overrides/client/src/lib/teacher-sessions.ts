@@ -1,4 +1,5 @@
 import { getSIESubject, getSIETeacher } from "@shared/sie-catalog";
+import { getDateKeyInTimeZone } from "@shared/date-time";
 
 // endTime is accepted only for older saved profiles; it is intentionally ignored.
 export type TeacherScheduleSlot = { dayOfWeek: number; startTime: string; endTime?: string };
@@ -65,9 +66,7 @@ export function getPlannerTeacherSessions(profile?: {
     ...Object.entries((selection.teacherScheduleUnfixed ?? {}) as Record<string, boolean>)
       .filter(([, value]) => Boolean(value)).map(([subjectId]) => subjectId),
   ]);
-  const today = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit",
-  }).format(now);
+  const today = getDateKeyInTimeZone(now, "Africa/Cairo");
   const weekday = new Intl.DateTimeFormat("en-US", { timeZone: "Africa/Cairo", weekday: "short" }).format(now);
   const weekdayIndex: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
   const todayIndex = weekdayIndex[weekday] ?? 0;

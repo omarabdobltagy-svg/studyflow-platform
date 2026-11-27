@@ -746,7 +746,10 @@ export default function DashboardLayout({ title, description, children, action }
                       {message.answered ? "تم الرد" : message.read ? "مقروءة" : "تحتاج ردك"}
                     </span>
                     <time dateTime={new Date(message.createdAt).toISOString()}>
-                      {new Date(message.createdAt).toLocaleString("ar-EG", { dateStyle: "medium", timeStyle: "short" })}
+                      {new Intl.DateTimeFormat("ar-EG", {
+                        day: "numeric", month: "short", year: "numeric",
+                        hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Africa/Cairo",
+                      }).format(new Date(message.createdAt))}
                     </time>
                   </div>
                   <h3>{message.title}</h3>

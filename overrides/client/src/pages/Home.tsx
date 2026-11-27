@@ -12,6 +12,7 @@ import { getPlannerStepCurriculum } from "@/lib/planner-curriculum";
 import { CAIRO_BAC_EXAM_CALENDAR_NOTICE, getCairoSecondYearBaccalaureateExams } from "@shared/cairo-baccalaureate-exam-calendar";
 import { getSIEStudentVisibleBranches, getSIECheckpointProgressBranches, getSIESubject, matchSIECheckpointTask, normalizeSIECheckpointFrontier } from "@shared/sie-catalog";
 import { formatTime12Hour, getCalendarDaysBetween, getDateKeyInTimeZone } from "@shared/date-time";
+import { buildMonthlyExamCoveredScope } from "@shared/monthly-exam-scope";
 import {
   ArrowLeft, BarChart3, BookOpenText, CalendarDays, Check, CheckCircle2, Clock3,
   Compass, GraduationCap, ListChecks, Loader2, MessageCircle,
@@ -394,6 +395,14 @@ export default function Home() {
       .filter(exam => exam.date >= cairoExamDate),
     [profile.data?.educationSystem, profile.data?.gradeYear, profile.data?.subjectIds, cairoExamDate],
   );
+  const monthlyExamCoveredScope = useMemo(() => {
+    const selection = (profile.data?.selection ?? {}) as Record<string, any>;
+    return buildMonthlyExamCoveredScope(
+      profile.data?.subjectIds ?? [],
+      (selection.learningCourseProgress ?? {}) as Record<string, any>,
+      (selection.courseModes ?? {}) as Record<string, string>,
+    );
+  }, [profile.data?.subjectIds, profile.data?.selection]);
   const daysUntilExam = (date: string) => Math.max(0, getCalendarDaysBetween(cairoExamDate, date));
   const homeNextStepIndex = homeNextStep ? homeStudySteps.indexOf(homeNextStep) : -1;
   const tasks = summary.data?.tasks ?? [];
@@ -828,6 +837,8 @@ export default function Home() {
                 const dateLabel = new Intl.DateTimeFormat("ar-EG", {
                   day: "numeric", month: "long", timeZone: "Africa/Cairo",
                 }).format(new Date(exam.date + "T12:00:00Z"));
+                const examScope = monthlyExamCoveredScope.filter(item => item.subjectId === exam.subjectId);
+                const coveredLessonCount = examScope.reduce((total, branch) => total + branch.lessonTitles.length, 0);
                 return (
                   <article key={exam.subjectId} className="sf-home-exam-item">
                     <div className="sf-home-exam-item-date">
@@ -842,6 +853,31 @@ export default function Home() {
                     <span className="sf-home-exam-countdown">
                       {days === 0 ? "اليوم" : days === 1 ? "غدًا" : "بعد " + days.toLocaleString("ar-EG") + " يوم"}
                     </span>
+                    <details className="sf-home-exam-scope" data-testid={"home-exam-scope-" + exam.subjectId}>
+                      <summary>
+                        دروس المراجعة المسجلة
+                        <span>{coveredLessonCount.toLocaleString("ar-EG")} درس</span>
+                      </summary>
+                      {examScope.length ? (
+                        <div className="sf-home-exam-scope-content">
+                          {examScope.map(branch => (
+                            <section key={branch.branchId}>
+                              <strong>{branch.branchTitle}</strong>
+                              <ul>{branch.lessonTitles.map((title, lessonIndex) => (
+                                <li key={branch.lessonIds[lessonIndex] || title}>{title}</li>
+                              ))}</ul>
+                            </section>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="sf-home-exam-scope-empty">
+                          لا يوجد موضع مدرس أو سنتر مؤكد لهذه المادة بعد. حدّث الموضع في صفحة المذاكرة حتى نعرض الدروس دون تخمين.
+                        </p>
+                      )}
+                      <p className="sf-home-exam-scope-note">
+                        النطاق مبني على آخر موضع شرح مسجل، وهو إطار مراجعة مقترح وليس إعلانًا رسميًا بمحتوى الامتحان.
+                      </p>
+                    </details>
                   </article>
                 );
               })}

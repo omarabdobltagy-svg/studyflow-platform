@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { getSIECheckpointProgressBranches, getSIESubject, getSIETeacher, matchSIECheckpointTask, normalizeSIECheckpointFrontier, type SIECheckpointTaskMatch } from "@shared/sie-catalog";
 import { calculateLearningGap } from "@shared/sie-learning-progress";
+import { getDateKeyInTimeZone } from "@shared/date-time";
 import { invokeLLM, invokeNvidiaLLM } from "./_core/llm";
 import { isPrimaryProviderFallbackEligible } from "./_core/llmFallback";
 import { updateAIActivity } from "./aiActivity";
@@ -1364,7 +1365,7 @@ function formatUpcomingTeacherSessions(
   const selection = (profile.selection ?? {}) as Record<string, any>;
   const schedules = (selection.teacherSchedules ?? {}) as Record<string, Array<{ dayOfWeek: number; startTime: string }>>;
   const teacherChoices = (selection.teacherChoices ?? profile.teacherSelections ?? {}) as Record<string, string>;
-  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
+  const today = getDateKeyInTimeZone(new Date(), "Africa/Cairo");
   const currentTime = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Africa/Cairo",
     hour: "2-digit",
@@ -2128,7 +2129,7 @@ export async function generatePersonalPlan(
     "عند تكوين قائمة الخطة اليومية، اجعل الإيقاع المرن نحو 3 خطوات، والمتوازن نحو 4، والمكثف نحو 6 خطوات. ارفع العدد عند الحاجة لتغطية المواد المختارة والالتزامات المفتوحة المؤكدة، بحد أقصى عملي، ولا تسمح بأن تملأ مادة واحدة القائمة إذا كانت مواد أخرى لديها دروس مؤهلة. هذه أهداف مرنة وليست إلزامًا لاختلاق مهام؛ إذا لم توجد التزامات أو نقاط منهج متاحة، أظهر ذلك بدل اختراعها.",
     "في جميع الحالات، لا تجعل وجود مهام مراجعة أو مهام دروس شوهد شرحها يزيح الدروس التي لم يُشاهد شرحها. الالتزامات المفتوحة المرتبطة بدرس غير مشاهد يمكن ربطها بالدرس نفسه ومنع تكرارها.",
     "في نمط مواكبة المدرس: احجز وقتًا قبل أقرب حصة مسجلة لمراجعة ما سيشرحه المدرس أو استكمال متطلباته، ووزّع موضوعات ما بعد الحصة بعد موعدها المتوقع. لا تعتبر الحصة قد حدثت أو اتلغت إلا بإعلان موثوق أو تحديث مؤكد.",
-    "اقرأ teacherSchedules لكل مادة كموعد أسبوعي محلي متكرر يتضمن اليوم ووقت البداية فقط، وليس فترة زمنية. لا تفترض مدة الحصة أو وقت انتهائها، ولا تحجز فترة بعدها دون معلومة موثقة. استخدم قائمة المواعيد التالية المحسوبة بالتاريخ والساعة واسم المدرس المختار: " + formatUpcomingTeacherSessions(profile, constraints.startDate ?? new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date()), horizonDays) + ". قدّم التحضير للموضوع القادم قبل موعده متى أمكن، ولا تضع بداية مهمة عند الساعة المسجلة نفسها. إذا كان موعد الحصة معروفًا ومحتواها غير معروف، اذكر الموعد كما هو ولا تخترع درسًا قادمًا؛ اجعل التحضير مزيجًا من مراجعة آخر موضع معروف ومهمة متراكمة مناسبة من المادة، واترك موضوع الحصة الجديدة غير محدد حتى يتوفر مصدر موثوق.",
+    "اقرأ teacherSchedules لكل مادة كموعد أسبوعي محلي متكرر يتضمن اليوم ووقت البداية فقط، وليس فترة زمنية. لا تفترض مدة الحصة أو وقت انتهائها، ولا تحجز فترة بعدها دون معلومة موثقة. استخدم قائمة المواعيد التالية المحسوبة بالتاريخ والساعة واسم المدرس المختار: " + formatUpcomingTeacherSessions(profile, constraints.startDate ?? getDateKeyInTimeZone(new Date(), "Africa/Cairo"), horizonDays) + ". قدّم التحضير للموضوع القادم قبل موعده متى أمكن، ولا تضع بداية مهمة عند الساعة المسجلة نفسها. إذا كان موعد الحصة معروفًا ومحتواها غير معروف، اذكر الموعد كما هو ولا تخترع درسًا قادمًا؛ اجعل التحضير مزيجًا من مراجعة آخر موضع معروف ومهمة متراكمة مناسبة من المادة، واترك موضوع الحصة الجديدة غير محدد حتى يتوفر مصدر موثوق.",
     "تفضيل توزيع الوقت القريب: خفّض أولوية القصة في العربي والإنجليزي وتمارين GRE مقارنة بالنحو والنصوص والجرامر والفوكاب. هذا تفضيل تخطيطي وليس معلومة رسمية عن أوزان الدرجات أو عدد الأسئلة. لا تحذف هذه الفروع من التغطية طويلة المدى، ولا تتجاهل واجبًا أو تسليمًا أو اختبارًا مؤكدًا بسبب هذا التفضيل.",
     "مهام الطالب الحالية ليست مجرد قائمة للتجاهل: إذا كانت مهمة مفتوحة ومطابقة لموضوع غير مكتمل، احتفظ بها واربط خطوة الخطة بها. لا تنشئ مهمة ثانية لنفس الموضوع. إذا لم تتطابق مهمة مع موضوع منهجي بثقة، اعرضها كالتزام مستقل ولا تخترع لها معرف منهج.",
     "المهام الحالية المعلّمة بأنها موجودة في بيانات السياق لا تُنشأ مرة ثانية. اربط كل خطوة بالموضوعات الصحيحة في curriculumNodeIds، وأعد existingTask فقط عند وجود مهمة مطابقة موثوقة في السياق؛ لا تخمن رقم مهمة أو حالتها.",
@@ -2182,7 +2183,7 @@ export async function generatePersonalPlan(
     "درجة الإيقاع: " + paceLevel + " من 3 — " + paceLevelLabel + ". " + paceLevelInstruction,
     "إيقاع العمل المختار (لا تعرض ساعات أو دقائق للطالب): " + (selectedPace === "relaxed" ? "مرنة — خطوات أقل ومرونة أكبر" : selectedPace === "intensive" ? "مكثفة — خطوات أكثر لتقليل التراكم" : "متوازنة — توزيع بين المتراكم والجديد"),
     "الموعد الشخصي الإضافي: " + (constraints.deadline || "لا يوجد"),
-    "مواعيد المحاضرات المدرسية المسجلة (للتعرف على أقرب متطلبات المدرس فقط، ولا تُستخدم لتعيين وقت للمهام): " + formatUpcomingTeacherSessions(profile, constraints.startDate ?? new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date()), horizonDays),
+    "مواعيد المحاضرات المدرسية المسجلة (للتعرف على أقرب متطلبات المدرس فقط، ولا تُستخدم لتعيين وقت للمهام): " + formatUpcomingTeacherSessions(profile, constraints.startDate ?? getDateKeyInTimeZone(new Date(), "Africa/Cairo"), horizonDays),
     existingCurriculumTasks.length
       ? "مهام حالية مرتبطة بالمنهج (وجود المهمة لا يعني اكتمال الدرس):\n" + existingCurriculumTasks.map(item =>
           [item.taskTitle, item.subjectId, item.branchTitle, item.title, item.nodeId, "الحالة: " + item.status, "المطابقة: " + item.confidence, "معرف المهمة: " + item.taskId].join(" | ")
@@ -2448,7 +2449,7 @@ export async function generatePersonalPlan(
     const pace = constraints.pace ?? "balanced";
     const dailyTopicCapacity = pace === "relaxed" ? 1 : pace === "intensive" ? 3 : 2;
     const weeklyDays = constraints.daysPerWeek ?? 6;
-    const startDate = constraints.startDate ?? new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
+    const startDate = constraints.startDate ?? getDateKeyInTimeZone(new Date(), "Africa/Cairo");
     const start = new Date(startDate + "T12:00:00.000Z");
     const formatStudyDate = (date: Date) => new Intl.DateTimeFormat("ar-EG", {
       weekday: "long", day: "numeric", month: "long", timeZone: "Africa/Cairo",
@@ -2541,7 +2542,7 @@ export async function generatePersonalPlan(
   if (planScope === "annual") {
     const examDeadline = SECOND_YEAR_BAC_EXAM_WINDOW_2026_2027.planningReadyBy;
     const effectiveDeadline = constraints.deadline && constraints.deadline < examDeadline ? constraints.deadline : examDeadline;
-    const planningStart = constraints.startDate || new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
+    const planningStart = constraints.startDate || getDateKeyInTimeZone(new Date(), "Africa/Cairo");
     const startUtc = Date.parse(planningStart + "T00:00:00.000Z");
     const endUtc = Date.parse(effectiveDeadline + "T00:00:00.000Z");
     const calendarDays = Number.isFinite(startUtc) && Number.isFinite(endUtc) ? Math.max(0, Math.floor((endUtc - startUtc) / 86_400_000) + 1) : 0;

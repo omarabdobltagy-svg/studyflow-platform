@@ -918,7 +918,7 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number, f
     const daysPerWeek: 5 | 6 | 7 = configuredDays === 5 || configuredDays === 6 || configuredDays === 7
       ? configuredDays
       : 6;
-    const startDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
+    const startDate = getDateKeyInTimeZone(new Date(), "Africa/Cairo");
     const currentTasks = await listTasks(userId);
     const currentGoals = await listGoals(userId);
     const goalsById = new Map(currentGoals.map(goal => [goal.id, goal]));
@@ -968,7 +968,7 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number, f
     const expectedPromptPrefix = DAILY_PLAN_PREFIX + sourceFingerprint + ":";
     const latestDailyPlan = await getLatestAiPlanByPromptPrefix(userId, DAILY_PLAN_PREFIX);
     const latestPlanDay = latestDailyPlan
-      ? new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date(latestDailyPlan.createdAt))
+      ? getDateKeyInTimeZone(latestDailyPlan.createdAt instanceof Date ? latestDailyPlan.createdAt : new Date(String(latestDailyPlan.createdAt)), "Africa/Cairo")
       : null;
 
     updateAIActivity(userId, activityId, "مقارنة الخطة الحالية", "يقارن بصمة بياناتك بالخطة المحفوظة لتحديد هل يلزم إعادة بنائها.");
@@ -1106,7 +1106,7 @@ async function getCurrentDailyPlanForStudent(userId: number) {
   const selection = (profile.selection ?? {}) as Record<string, any>;
   const conditions = (selection.studyConditions ?? {}) as Record<string, unknown>;
   const dailyMinutes = Math.max(20, Math.min(600, Math.trunc(Number(conditions.dailyMinutes) || 120)));
-  const startDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
+  const startDate = getDateKeyInTimeZone(new Date(), "Africa/Cairo");
 
   // Resolve the active record before building a fingerprint. Students with no
   // approved plan should not trigger five extra table reads on each Home poll.
@@ -1146,7 +1146,7 @@ async function getCurrentDailyPlanForStudent(userId: number) {
   }
 
   const latestPlanDay = hasValidTimestamp
-    ? new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(generatedAt)
+    ? getDateKeyInTimeZone(generatedAt, "Africa/Cairo")
     : null;
   const isCurrent = saved.prompt.startsWith(DAILY_PLAN_PREFIX + sourceFingerprint + ":")
     && latestPlanDay === startDate
@@ -1237,7 +1237,7 @@ async function reconcileDailyPlanTaskState(userId: number) {
   const profile = await getStudentProfile(userId);
   const conditions = (profile?.selection as Record<string, any> | undefined)?.studyConditions;
   const dailyMinutes = Math.max(20, Math.min(600, Math.trunc(Number(conditions?.dailyMinutes) || 120)));
-  const startDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
+  const startDate = getDateKeyInTimeZone(new Date(), "Africa/Cairo");
   const fingerprint = await getDailyPlanSourceFingerprint(userId, dailyMinutes, startDate);
   await updateAiPlanPrompt(userId, activePlan.id, DAILY_PLAN_PREFIX + fingerprint + ":");
   await logStudentActivity(userId, "planner.local_sync", "daily_plan", activePlan.id, "تم تحديث حالة مهام الخطة والذاكرة المنظمة دون إعادة توليدها أو تغيير تقدم المنهج");
@@ -4953,7 +4953,7 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         const startDate = input.startDate
-          ?? new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
+          ?? getDateKeyInTimeZone(new Date(), "Africa/Cairo");
         if (input.deadline && input.deadline < startDate) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "الموعد الشخصي لا يمكن أن يكون قبل تاريخ اليوم." });
         }
