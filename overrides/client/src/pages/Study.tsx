@@ -93,7 +93,7 @@ export default function Study() {
   const currentBranchId = currentBranch?.branchId ?? "";
   const reviewSearch = trpc.teachers.recommendReviews.useMutation({
     onSuccess: result => {
-      setReviewCandidates(result.items);
+      setReviewCandidates(result.items as typeof reviewCandidates);
       setReviewSearchNote(result.note);
     },
     onError: error => toast.error(error.message || "تعذّر البحث عن مراجعات بديلة."),
