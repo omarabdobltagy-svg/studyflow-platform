@@ -527,11 +527,11 @@ export default function Study() {
           </header>
           <div className="space-y-3 p-4 sm:p-5">
             <div className="relative"><Search className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input value={subjectSearch} onChange={event => setSubjectSearch(event.target.value)} placeholder="ابحث عن مادة..." aria-label="البحث عن مادة" className="h-11 rounded-xl pr-9 text-sm" />
+              <Input value={subjectSearch} onChange={event => setSubjectSearch(event.target.value)} placeholder="ابحث عن مادة..." aria-label="البحث عن مادة" data-testid="study-subject-search" className="h-11 rounded-xl pr-9 text-sm" />
               {subjectSearch && <button type="button" aria-label="مسح البحث" onClick={() => setSubjectSearch("")} className="absolute left-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground hover:bg-muted"><X className="size-3.5" /></button>}
             </div>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {visibleSubjects.map(id => { const active = id === subjectId; return <motion.button key={id} type="button" aria-pressed={active} onClick={() => { setSubjectId(id); setBranchId(""); setStudyViewMode("units"); setBranchTransition(null); }} whileTap={{ scale: 0.98 }}
+              {visibleSubjects.map(id => { const active = id === subjectId; return <motion.button key={id} type="button" data-testid={"study-subject-" + id} aria-pressed={active} onClick={() => { setSubjectId(id); setBranchId(""); setStudyViewMode("units"); setBranchTransition(null); }} whileTap={{ scale: 0.98 }}
                 className={"min-h-12 rounded-xl border px-3 py-3 text-sm font-semibold transition " + (active ? "border-primary bg-primary/10 text-foreground ring-2 ring-primary/15" : "border-border bg-background text-muted-foreground hover:border-primary/35")}>{getSIESubject(id)?.nameAr || id}</motion.button>; })}
             </div>
             {!visibleSubjects.length && <p className="rounded-xl bg-muted/30 p-4 text-center text-sm text-muted-foreground">لا توجد مادة مطابقة لبحثك.</p>}
@@ -571,13 +571,31 @@ export default function Study() {
               <h2 className="mt-1 text-xl font-bold">تصفّح المنهج حسب الوحدة أو الدرس</h2>
               <p className="mt-1 text-sm leading-6 text-muted-foreground">{subjectId === "ENG1_G2_BAC" ? "الوحدات الرسمية العشر، وداخل كل وحدة دروس المفردات (Vocabulary) والقواعد (Grammar) بأرقامها، ثم موضوعات الكتاب." : "الوحدات الرسمية مرتبة حسب الكتاب، والفروع الإضافية تظهر كمسارات مستقلة. افتح تبويب الدروس للوصول إلى تفاصيل كل درس وتحديث حالته."}</p>
             </div>
-            <div className="sf-study-view-tabs" role="tablist" aria-label="عرض المنهج">
+            <div
+              className="sf-study-view-tabs"
+              role="tablist"
+              aria-label="عرض المنهج"
+              onKeyDown={event => {
+                if (event.key !== "ArrowLeft" && event.key !== "ArrowRight" && event.key !== "Home" && event.key !== "End") return;
+                event.preventDefault();
+                const next = event.key === "Home" ? "units"
+                  : event.key === "End" ? "lessons"
+                    : event.key === "ArrowLeft"
+                      ? (studyViewMode === "units" ? "lessons" : "units")
+                      : (studyViewMode === "units" ? "lessons" : "units");
+                setBranchTransition(null);
+                setStudyViewMode(next);
+                window.requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[data-testid="study-view-${next}"]`)?.focus());
+              }}
+            >
               <button
                 type="button"
                 role="tab"
                 data-testid="study-view-units"
+                id="sf-study-units-tab"
+                tabIndex={studyViewMode === "units" ? 0 : -1}
                 aria-selected={studyViewMode === "units"}
-                aria-controls="sf-study-units-panel"
+                aria-controls="sf-study-units-panel" aria-label={"الوحدات، " + units.length.toLocaleString("ar-EG") + " وحدة"}
                 onClick={() => { setBranchTransition(null); setStudyViewMode("units"); }}
                 className={"sf-study-view-tab " + (studyViewMode === "units" ? "is-active" : "")}
               >
@@ -588,8 +606,10 @@ export default function Study() {
                 type="button"
                 role="tab"
                 data-testid="study-view-lessons"
+                id="sf-study-lessons-tab"
+                tabIndex={studyViewMode === "lessons" ? 0 : -1}
                 aria-selected={studyViewMode === "lessons"}
-                aria-controls="sf-study-lessons-panel"
+                aria-controls="sf-study-lessons-panel" aria-label={"الدروس، " + curriculumLessonCount.toLocaleString("ar-EG") + " درس"}
                 onClick={() => { setBranchTransition(null); setStudyViewMode("lessons"); }}
                 className={"sf-study-view-tab " + (studyViewMode === "lessons" ? "is-active" : "")}
               >
@@ -600,7 +620,7 @@ export default function Study() {
           </div>
         </header>
         {studyViewMode === "units" ? (
-          <div id="sf-study-units-panel" role="tabpanel" aria-label="وحدات المنهج" className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5 xl:grid-cols-3">
+          <div id="sf-study-units-panel" role="tabpanel" aria-labelledby="sf-study-units-tab" aria-label="وحدات المنهج" className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5 xl:grid-cols-3">
             {units.map((unit, unitIndex) => {
               const unitChoices = unit.branches.flatMap(unitBranch => unitBranch.choices.map(choice => ({
                 ...choice,
@@ -744,7 +764,7 @@ export default function Study() {
                     <div className="mt-4 grid grid-cols-2 gap-2">
                       <Button type="button" data-testid={"study-open-unit-" + unit.unitId} variant="outline" className="rounded-xl text-xs" onClick={() => openUnitLessons(unit)}>عرض الدروس</Button>
                       <Button type="button" className="rounded-xl text-xs" disabled={frontierComplete || saveUnitFrontier.isPending}
-                        onClick={() => void completeUnit(unit)}>
+                        data-testid={"study-complete-unit-" + unit.unitId} onClick={() => void completeUnit(unit)}>
                         {frontierComplete ? "وصلت لنهاية الشرح" : saveUnitFrontier.isPending ? "جارٍ الحفظ…" : "سجّل وصولك لنهاية الشرح"}
                       </Button>
                     </div>
@@ -755,7 +775,7 @@ export default function Study() {
             {!units.length && <p className="col-span-full rounded-xl bg-muted/30 p-4 text-center text-sm text-muted-foreground">لم يتم ربط وحدات معتمدة لهذه المادة حتى الآن.</p>}
           </div>
         ) : (
-          <div id="sf-study-lessons-panel" role="tabpanel" aria-label="دروس المنهج" className="flex flex-wrap items-center justify-between gap-3 p-4 sm:p-5">
+          <div id="sf-study-lessons-panel" role="tabpanel" aria-labelledby="sf-study-lessons-tab" aria-label="دروس المنهج" className="flex flex-wrap items-center justify-between gap-3 p-4 sm:p-5">
             <p className="text-xs leading-6 text-muted-foreground">عرض الدروس التفصيلية. اختيار آخر درس مكتمل يحدّث الموضوع التالي عليك مباشرةً.</p>
             <Button type="button" data-testid="study-back-to-units" variant="outline" size="sm" className="rounded-xl" onClick={() => { setBranchTransition(null); setStudyViewMode("units"); }}>العودة إلى الوحدات</Button>
           </div>
@@ -967,7 +987,7 @@ export default function Study() {
                       </div>
                       <div className="mt-4 grid gap-6 md:grid-cols-2">
                         <div className="min-w-0 rounded-xl border border-border/70 bg-background/70 p-3">
-                          <SearchableFrontierPicker label="آخر درس وصلت له في الشرح" hint="اختَر آخر محاضرة حضرتها أو درس وصل له شرح المدرس. هنعرض الدروس السابقة بعلامة مشاهدة، لكن المذاكرة والفهم حالة منفصلة."
+                          <SearchableFrontierPicker testId="student-frontier" label="آخر درس وصلت له في الشرح" hint="اختَر آخر محاضرة حضرتها أو درس وصل له شرح المدرس. هنعرض الدروس السابقة بعلامة مشاهدة، لكن المذاكرة والفهم حالة منفصلة."
                             value={hasStudentFrontierSelection ? lastCompletedLessonId : ""} onChange={setLastCompletedLessonId} disabled={saveBranchFrontier.isPending}
                             onPrevious={() => setLastCompletedLessonId(stepFrontier(lastCompletedLessonId, "previous"))}
                             onNext={() => setLastCompletedLessonId(stepFrontier(lastCompletedLessonId || "__UNKNOWN__", "next"))}
@@ -979,7 +999,7 @@ export default function Study() {
                           </div>}
                         </div>
                         <div className="min-w-0 rounded-xl border border-border/70 bg-background/70 p-3">
-                          <SearchableFrontierPicker label="موضع المدرس في هذا الفرع"
+                          <SearchableFrontierPicker testId="teacher-frontier" label="موضع المدرس في هذا الفرع"
                             hint="آخر نقطة وصل إليها المدرس في شرحه لهذا الفرع."
                             value={teacherTeachingFrontierId} onChange={setTeacherFrontier}
                             disabled={saveBranchFrontier.isPending}
@@ -1064,6 +1084,7 @@ export default function Study() {
                               <label className="block w-full sm:w-[230px]">
                                 <span className="sr-only">حالة مذاكرتك: {choice.title}</span>
                                 <select
+                                  data-testid={"study-lesson-state-" + choice.nodeId}
                                   value={state}
                                   disabled={pending}
                                   onChange={event => updateLessonLearningState.mutate({
@@ -1183,10 +1204,10 @@ function normalizeFrontierSearch(value: string) {
 }
 
 function SearchableFrontierPicker({
-  label, hint, value, onChange, options, disabled = false, visibleOptionLimit = 6,
+  testId, label, hint, value, onChange, options, disabled = false, visibleOptionLimit = 6,
   onPrevious, onNext, previousDisabled = false, nextDisabled = false,
 }: {
-  label: string; hint?: string; value: string; onChange: (value: string) => void;
+  testId?: string; label: string; hint?: string; value: string; onChange: (value: string) => void;
   options: ChoiceButtonOption[]; disabled?: boolean; visibleOptionLimit?: number;
   onPrevious?: () => void; onNext?: () => void;
   previousDisabled?: boolean; nextDisabled?: boolean;
@@ -1221,7 +1242,7 @@ function SearchableFrontierPicker({
       </div>
       <div className="relative">
         <Search className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input value={query} onChange={event => setQuery(event.target.value)} disabled={disabled}
+        <Input data-testid={testId ? testId + "-search" : undefined} value={query} onChange={event => setQuery(event.target.value)} disabled={disabled}
           placeholder="ابحث باسم الدرس أو رقمه..." aria-label={"البحث في " + label} className="h-11 rounded-xl pr-9 pl-9 text-xs" />
         {query && <button type="button" aria-label="مسح البحث" onClick={() => setQuery("")}
           className="absolute left-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground hover:bg-muted"><X className="size-3.5" /></button>}
@@ -1229,7 +1250,7 @@ function SearchableFrontierPicker({
       <div className="grid max-h-[430px] gap-2 overflow-y-auto overscroll-contain pr-1 sm:grid-cols-2">
         {visibleOptions.map(option => {
           const selected = value === option.value;
-          return <button key={option.value} type="button" aria-pressed={selected} disabled={disabled}
+          return <button key={option.value} type="button" data-testid={testId ? testId + "-option-" + option.value : undefined} aria-pressed={selected} disabled={disabled}
             onClick={() => onChange(option.value)}
             className={"flex min-h-14 min-w-0 items-center justify-between gap-2 rounded-xl border px-3 py-3 text-right transition disabled:cursor-not-allowed disabled:opacity-50 " + (selected ? "border-primary bg-primary/10 text-foreground ring-2 ring-primary/10" : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground")}>
             <span className="min-w-0"><span className="block break-words text-sm font-semibold leading-5">{option.label}</span>
