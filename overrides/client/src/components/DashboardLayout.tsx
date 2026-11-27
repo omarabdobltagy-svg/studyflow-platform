@@ -356,7 +356,7 @@ export default function DashboardLayout({ title, description, children, action }
                   whileHover={{ x: -3 }}
                   whileTap={{ scale: 0.98 }}
                 >
-                  <item.icon className="sf-nav-icon" />
+                  <item.icon className="sf-nav-icon" color={active ? "#C9ED62" : "#A7B09E"} strokeWidth={1.9} />
                   <span>{item.label}</span>
                 </motion.button>
               );
@@ -419,7 +419,7 @@ export default function DashboardLayout({ title, description, children, action }
                     whileTap={{ scale: 0.92 }}
                     transition={{ type: "spring", stiffness: 340, damping: 18 }}
                   >
-                    <span className="sf-dock-icon"><item.icon size={18} strokeWidth={1.8} /></span>
+                    <span className="sf-dock-icon"><item.icon size={18} strokeWidth={1.9} color={active ? "#C9ED62" : "#A7B09E"} /></span>
                     <span className="sf-dock-tooltip"><b>{item.label}</b><small>{item.group}</small></span>
                     {active && <motion.i layoutId="sf-active-dock" className="sf-dock-active" transition={{ type: "spring", stiffness: 380, damping: 28 }} />}
                   </motion.button>
@@ -488,7 +488,7 @@ export default function DashboardLayout({ title, description, children, action }
               aria-current={active ? "page" : undefined}
               className={cn("sf-mobile-dock-item", active && "is-active")}
             >
-              <item.icon className="size-[18px]" />
+              <item.icon className="size-[18px]" color={active ? "#C9ED62" : "#A7B09E"} strokeWidth={1.9} />
               <span>{item.label}</span>
             </button>
           );
