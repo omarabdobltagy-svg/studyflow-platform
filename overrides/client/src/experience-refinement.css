@@ -697,7 +697,7 @@ body[data-studyflow-sections-open="true"] .sf-hub-root {
 
 /* Quality pass — a single navigation accent for desktop, sidebar and mobile. */
 :root {
-  --sf-navigation-accent: #d1b89f;
+  --sf-navigation-accent: #9BAAFF;
   --sf-navigation-active: rgba(167, 183, 255, .16);
   --sf-navigation-hover: rgba(255, 255, 255, .075);
 }
@@ -718,7 +718,7 @@ body[data-studyflow-sections-open="true"] .sf-hub-root {
 .sf-shell-v3 .sf-dock-item.is-active { color:#fff !important; background:var(--sf-navigation-active) !important; }
 .sf-shell-v3 .sf-dock-active { background:var(--sf-navigation-accent) !important; }
 .sf-shell-v3 .sf-mobile-dock {
-  background:rgba(40,32,25,.96) !important;
+  background:rgba(16,25,34,.96) !important;
   border-color:rgba(167, 183, 255,.25) !important;
 }
 .sf-shell-v3 .sf-mobile-dock-item { color:rgba(248,244,240,.72) !important; background:transparent !important; }
