@@ -1124,9 +1124,12 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
     const subjectCount = new Set(plan.steps.map(step => getPlanStepCurriculum(step, subjectIds)?.subjectId).filter(Boolean)).size;
   const confirmedTaskCount = plan.steps.filter(step => Boolean(step.existingTask)).length;
   const coveredCurriculumCount = new Set(plan.steps.flatMap(step => step.curriculumNodeIds ?? [])).size;
-  const plannedReviewCount = plan.steps.filter(step =>
-    Boolean(step.resourceRecommendation && /مراجعة|review|revision/i.test(step.resourceRecommendation.reason || ""))
-  ).length;
+  const plannedReviewCount = new Set(plan.steps.flatMap(step => {
+    const resource = step.resourceRecommendation;
+    return resource && /مراجعة|review|revision/i.test(resource.reason || "") && resource.url
+      ? [resource.url.split("#")[0]]
+      : [];
+  })).size;
   const phaseLabels: Record<string,string> = {
     backlog: "التزامات مفتوحة",
     teacher_sync: "شرح قبل الحصة",
