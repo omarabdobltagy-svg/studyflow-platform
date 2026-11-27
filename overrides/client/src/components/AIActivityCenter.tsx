@@ -13,7 +13,7 @@ type ActivityEvent = {
 
 type Activity = {
   id: string;
-  kind: "assistant" | "planner" | "daily_plan";
+  kind: "assistant" | "planner" | "daily_plan" | "teacher_monitor";
   title: string;
   status: "running" | "complete" | "failed";
   stage: string;
@@ -29,6 +29,7 @@ const kindLabel: Record<Activity["kind"], string> = {
   assistant: "المساعد الدراسي",
   planner: "مخطط المذاكرة",
   daily_plan: "خطة اليوم",
+  teacher_monitor: "متابعة المدرسين",
 };
 
 function eventIcon(status: ActivityEvent["status"]) {
