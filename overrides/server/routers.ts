@@ -46,6 +46,8 @@ import {
   failPlannerReconciliationJob,
   listRecentStudentActivityEvents,
   listStudentTeacherMonitoringProfiles,
+  listTeacherDirectoryEntries,
+  upsertTeacherDirectoryEntry,
   recordStudentActivityEvent,
   startStudySession,
   finishStudySession,
@@ -2078,6 +2080,22 @@ export const appRouter = router({
   }),
 
   teacherDirectory: router({
+    list: protectedProcedure
+      .input(z.object({
+        subjectId: z.string().trim().min(3).max(80),
+        systemId: z.enum(["EG_BACCALAUREATE", "EG_GENERAL_SECONDARY"]),
+        gradeYear: z.string().trim().min(2).max(60),
+      }))
+      .query(async ({ input }) => {
+        if (!getSIESubject(input.subjectId)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "المادة المحددة غير موجودة." });
+        }
+        return listTeacherDirectoryEntries({
+          subjectId: input.subjectId,
+          educationSystem: input.systemId,
+          gradeYear: input.gradeYear,
+        });
+      }),
     facts: protectedProcedure
       .input(z.object({
         teacherId: z.string().trim().min(3).max(80),
@@ -2099,14 +2117,34 @@ export const appRouter = router({
         systemId: z.enum(["EG_BACCALAUREATE", "EG_GENERAL_SECONDARY"]),
         gradeYear: z.string().trim().min(2).max(60),
       }))
-      .mutation(async ({ input }) => {
-        if (!getSIESubject(input.subjectId)) throw new TRPCError({ code: "BAD_REQUEST", message: "المادة المحددة غير موجودة." });
-        return discoverTeacherForSubject({
+      .mutation(async ({ ctx, input }) => {
+        if (!getSIESubject(input.subjectId)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "المادة المحددة غير موجودة." });
+        }
+        const result = await discoverTeacherForSubject({
           teacherName: input.teacherName,
           subjectId: input.subjectId,
           educationSystem: input.systemId,
           gradeYear: input.gradeYear,
         });
+
+        // Only AI-discovered public identities with evidence are shared.
+        if (result.found && result.sourceUrl && result.evidence.length > 0) {
+          await upsertTeacherDirectoryEntry({
+            teacherName: result.nameAr || input.teacherName,
+            brandName: result.brandName || input.teacherName,
+            subjectId: input.subjectId,
+            educationSystem: input.systemId,
+            gradeYear: input.gradeYear,
+            sourceUrl: result.sourceUrl,
+            availableModes: result.availableModes,
+            confidence: result.confidence,
+            evidence: result.evidence,
+            notes: result.notes,
+          }, ctx.user.id);
+          return { ...result, addedToLibrary: true };
+        }
+        return { ...result, addedToLibrary: false };
       }),
   }),
 
@@ -2397,7 +2435,6 @@ export const appRouter = router({
         teacherSchedules: z.record(z.string(), z.array(z.object({
           dayOfWeek: z.number().int().min(0).max(6),
           startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
-          endTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
         })).max(14)).default({}),
         teacherScheduleUnfixedSubjectIds: z.array(z.string().trim().min(1).max(120)).max(20).default([]),
         teacherFrontierReports: z.record(z.string(), z.string().trim().min(1).max(120)).default({}),
