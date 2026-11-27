@@ -104,6 +104,7 @@ export default function Study() {
   }>>([]);
   const [reviewSearchNote, setReviewSearchNote] = useState("");
   const reviewSearchContextRef = useRef("");
+  const autoReviewSearchKeyRef = useRef("");
   const refreshedReviewStatusesRef = useRef(new Set<string>());
   useEffect(() => {
     if (!branchTransition) return;
@@ -140,13 +141,31 @@ export default function Study() {
     onError: error => toast.error(error.message || "تعذّر رفض المراجعة."),
   });
   useEffect(() => {
-    // Changing a branch resets suggestions, but never calls an optional
-    // external search provider as a side effect of opening the curriculum.
     reviewSearchContextRef.current = "";
     refreshedReviewStatusesRef.current.clear();
     setReviewCandidates([]);
     setReviewSearchNote("");
   }, [subjectId, currentBranchId, selectedTeacherId]);
+
+  useEffect(() => {
+    if (profile.isLoading || profile.isError || profile.data?.educationSystem !== "baccalaureate"
+      || !profile.data.subjectIds?.includes(subjectId) || !/_G2_BAC$/.test(subjectId)
+      || !currentBranchId || reviewSearch.isPending) return;
+    const searchKey = subjectId + "::" + currentBranchId + "::" + (selectedTeacherId || "no-teacher");
+    if (autoReviewSearchKeyRef.current === searchKey) return;
+    autoReviewSearchKeyRef.current = searchKey;
+    reviewSearchContextRef.current = subjectId + "::" + currentBranchId;
+    reviewSearch.mutate({ subjectId, branchId: currentBranchId, teacherId: selectedTeacherId });
+  }, [
+    profile.data?.educationSystem,
+    profile.data?.subjectIds,
+    profile.isLoading,
+    profile.isError,
+    subjectId,
+    currentBranchId,
+    selectedTeacherId,
+    reviewSearch.isPending,
+  ]);
 
   useEffect(() => {
     const activeContext = subjectId + "::" + currentBranchId;
@@ -941,17 +960,16 @@ export default function Study() {
                           <p className="text-[10px] font-bold tracking-[0.12em] text-primary">مصادر إضافية</p>
                           <h4 className="mt-1 text-sm font-bold">ترشيحات YouTube الذكية للدروس المتراكمة</h4>
                           <p className="mt-1 max-w-2xl text-xs leading-6 text-muted-foreground">
-                            نبحث لدى مدرسك المختار ومدرسين بدلاء معروفين للمادة في الوقت نفسه. بعد موافقتك، يحلل الذكاء الاصطناعي محتوى الفيديو ومقاطع الشرح ثم يربط التوقيت بالدرس المتراكم المطابق. ترتيب الترشيحات يعتمد على تطابق المحتوى، وليس اسم المدرس وحده.
+                            StudyFlow يفحص قناة مدرسك تلقائيًا، ويبحث عن المراجعات المرتبطة بالفرع الحالي. فيديوهات مدرسك المختار تُحلّل مباشرةً عند توافر Gemini، أما المدرسون البدلاء فلا يدخل محتواهم المسار قبل اعتمادك له. لا نربط أي فيديو بالمنهج لمجرد عنوانه.
                           </p>
                         </div>
-                        <Button type="button" size="sm" variant="outline" className="shrink-0 rounded-xl"
-                          disabled={reviewSearch.isPending || !subjectId || !currentBranchId}
-                          onClick={() => {
-                            reviewSearchContextRef.current = subjectId + "::" + currentBranchId;
-                            reviewSearch.mutate({ subjectId, branchId: currentBranchId, teacherId: selectedTeacherId });
-                          }}>
-                          {reviewSearch.isPending ? "نحلل مصادر الفيديو..." : reviewSearch.data ? "تحديث الترشيحات" : "رشّح فيديوهات مناسبة"}
-                        </Button>
+                        <span className="sf-review-auto-state" role="status" aria-live="polite">
+                          {reviewSearch.isPending
+                            ? <><Loader2 className="size-3.5 animate-spin" /> جارٍ فحص مراجعات هذا الفرع</>
+                            : reviewSearch.data
+                              ? <><Check className="size-3.5" /> يتم تحديث المصادر تلقائيًا</>
+                              : <><Sparkles className="size-3.5" /> البحث يبدأ تلقائيًا عند فتح الفرع</>}
+                        </span>
                       </div>
                       {reviewSearchNote && <p className="mt-3 rounded-xl bg-muted/40 px-3 py-2 text-[11px] leading-5 text-muted-foreground">{reviewSearchNote}</p>}
                       {!reviewSearch.isPending && reviewSearch.data && reviewSearchContextRef.current === subjectId + "::" + currentBranchId && reviewCandidates.length === 0 && (
@@ -974,6 +992,7 @@ export default function Study() {
                                 {item.accepted && !item.isSelectedTeacher && <span className="rounded-md bg-emerald-500/10 px-2 py-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">تمت الموافقة على التحليل</span>}
                                 {item.verificationState === "content_verified" && <span className="rounded-md bg-emerald-500/10 px-2 py-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">مطابقة مؤكدة لدروس متراكمة</span>}
                                 {item.analysisStatus === "processing" && <span className="rounded-md bg-amber-500/10 px-2 py-1 text-[10px] font-bold text-amber-700 dark:text-amber-300">الذكاء الاصطناعي يحلل المحتوى</span>}
+                              {item.analysisStatus === "analysis_unavailable" && <span className="rounded-md bg-muted px-2 py-1 text-[10px] font-bold text-muted-foreground">تحليل Gemini غير متاح حاليًا</span>}
                                 {item.analysisStatus === "awaiting_consent" && <span className="rounded-md bg-muted px-2 py-1 text-[10px] font-bold text-muted-foreground">مرشح أولي · ينتظر موافقتك على التحليل</span>}
                                 {item.analysisStatus === "failed" && <span className="rounded-md bg-destructive/10 px-2 py-1 text-[10px] font-bold text-destructive">تعذر تحليل الفيديو</span>}
                               </div>
