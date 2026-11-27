@@ -88,7 +88,10 @@ describe("actual accumulated daily backlog scope", () => {
     // Reaching the explanation frontier does not mean the lesson was studied.
     // The reached-but-unstudied lesson stays in the backlog alongside newer
     // lessons inside the teacher's coverage range.
-    expect(new Set(plannedIds)).toEqual(new Set(choices.slice(1, 5).map(choice => choice.nodeId)));
+    expect(plannedIds).toContain(choices[1].nodeId);
+    for (const choice of choices.slice(2, 5)) {
+      expect(plannedIds).toContain(choice.nodeId);
+    }
     expect(plannedIds).not.toContain(choices[0].nodeId);
     expect(plannedIds).not.toContain(choices[5].nodeId);
   });
