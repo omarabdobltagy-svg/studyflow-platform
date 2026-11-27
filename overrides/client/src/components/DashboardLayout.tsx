@@ -105,7 +105,7 @@ export default function DashboardLayout({ title, description, children, action }
   const loginMutation = trpc.auth.login.useMutation({
     onSuccess: (authenticatedUser) => {
       trpcUtils.auth.me.setData(undefined, authenticatedUser);
-      void trpcUtils.invalidate();
+      void trpcUtils.invalidate().then(() => setLocation("/"), () => setLocation("/"));
     },
   });
   const registerMutation = trpc.auth.register.useMutation({
