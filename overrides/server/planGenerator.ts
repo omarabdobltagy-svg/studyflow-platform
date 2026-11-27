@@ -11,7 +11,7 @@ import { buildExamBlueprintContext, SECOND_YEAR_BAC_EXAM_WINDOW_2026_2027 } from
 import { acceptedAlternativeReviewVideoIds, getAcceptedAlternativeReviewContext, isHighConfidenceScheduleAnnouncement, isSecondYearBaccalaureateProfile, isSecondYearBaccalaureateUpdate, selectedTeacherIds } from "./teacher-content-monitor";
 import { buildLessonStudyMethod, isFirstLearningTask, type TeacherRequirementState } from "./study-method";
 import { getTeacherCourseFactsWithRefresh } from "./teacher-course-research";
-import { getEffectiveStudentLessonState, isStudentLessonStudyComplete, type StudentLessonState } from "@shared/sie-lesson-state";
+import { getEffectiveStudentLessonState, isStudentLessonStudyComplete, isStudentLessonState, type StudentLessonState } from "@shared/sie-lesson-state";
 
 
 export type PlanGenerationStage = "profile" | "curriculum" | "model" | "validation" | "saving" | "complete";
