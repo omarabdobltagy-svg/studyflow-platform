@@ -941,7 +941,17 @@ export default function Planner() {
 
         {plannerTab === "schedule" && (
           <div className="sf-sp-panel" data-scroll-reveal>
-            {activeDailyPlan.isLoading || history.isLoading ? (
+            {planNeedsRefresh && approved ? (
+              <section className="sf-sp-empty" role="status" aria-live="polite">
+                <h2>الخريطة السابقة لم تعد مطابقة لبياناتك</h2>
+                <p>بنحدّث ترتيب الدروس وفق موضع المدرس وحالة كل درس. لن نعرض الخريطة القديمة كأنها الأولوية الحالية.</p>
+                {ensureDaily.isPending ? (
+                  <PlanLoading progress={generationProgress.data ?? null} />
+                ) : (
+                  <Button type="button" onClick={runGeneration}>إعادة بناء خريطة المذاكرة الآن</Button>
+                )}
+              </section>
+            ) : activeDailyPlan.isLoading || history.isLoading ? (
               <section className="sf-sp-empty" role="status" aria-live="polite">
                 <h2>بنحمّل خريطة خطتك</h2>
                 <p>نقرأ آخر نسخة محفوظة ونربط خطواتها بالمواد والفروع وحالة التنفيذ.</p>
@@ -1223,6 +1233,8 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
   const selectedMapStep = selectedMapStepIndex === null
     ? null
     : plan.steps[selectedMapStepIndex] ?? null;
+  const firstOpenMapStep = getNextOpenPlanStep(plan.steps);
+  const currentStepIndex = firstOpenMapStep ? plan.steps.indexOf(firstOpenMapStep) : -1;
   const selectedMapCurriculum = selectedMapStep
     ? getPlanStepCurriculum(selectedMapStep, subjectIds)
     : null;
@@ -1326,6 +1338,12 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
             <strong>موضعك الدراسي الحالي</strong>
             <small>{mapLanes.length.toLocaleString("ar-EG")} مسارات تنفيذ · {plan.steps.length.toLocaleString("ar-EG")} خطوة في الخطة{backlogCoverageLabel !== "غير متاح" ? " · المتراكم المؤكد " + backlogCoverageLabel : ""}</small>
           </div>
+          <div className="sf-sp-flow-legend" aria-label="دليل ألوان الخريطة">
+            <span><i className="is-learning" /> مذاكرة وشرح</span>
+            <span><i className="is-review" /> مراجعة مؤجلة</span>
+            <span><i className="is-obligation" /> التزام مسجل</span>
+            <span><i className="is-done" /> مكتمل</span>
+          </div>
           {mapLanes.length ? (
             <div className="sf-sp-flow-lanes">
               {mapLanes.map(lane => (
@@ -1343,7 +1361,9 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
                       const isDone = step.plannerTaskStatus === "done" || step.existingTask?.status === "done";
                       const isReview = Boolean(step.resourceRecommendation && /مراجعة|review|revision/i.test(step.resourceRecommendation.reason || ""));
                       const isDeferred = step.phaseId === "review_later" || step.scheduleState === "deferred";
-                      const nodeState = isDone ? "is-done" : isReview || isDeferred ? "is-review" : step.existingTask ? "is-obligation" : "is-learning";
+                      const isCurrentStep = index === currentStepIndex;
+                      const nodeState = (isDone ? "is-done" : isReview || isDeferred ? "is-review" : step.existingTask ? "is-obligation" : "is-learning")
+                        + (isCurrentStep ? " is-next" : "");
                       const titleText = displayPlanStepTitle(step, subjectIds);
                       const detailText = displayPlanStepDetail(step, subjectIds);
                       const stageTitles = ["معاينة الدرس", "تحديد المطلوب", "القراءة والفهم", "الاسترجاع من الذاكرة", "المراجعة والتثبيت"];
@@ -1353,7 +1373,7 @@ function PlanCard({ plan, subjectIds, title, studentName, editable, onChange, on
                           <div className="sf-sp-flow-node-card">
                             <div className="sf-sp-flow-node-topline">
                               <span>{step.day || "اليوم غير محدد"}</span>
-                              <span>{isDone ? "مكتملة" : isReview || isDeferred ? "مراجعة" : step.existingTask ? "التزام" : "مذاكرة"}</span>
+                              <span>{isCurrentStep ? "الخطوة التالية" : isDone ? "مكتملة" : isReview || isDeferred ? "مراجعة" : step.existingTask ? "التزام" : "مذاكرة"}</span>
                               {step.minutes > 0 && <span>{step.minutes.toLocaleString("ar-EG")} دقيقة</span>}
                             </div>
                             <button
