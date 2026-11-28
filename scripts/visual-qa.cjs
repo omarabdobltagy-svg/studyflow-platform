@@ -145,8 +145,8 @@ async function run() {
       }
 
       assert(initialState.themeClass.split(/\\s+/).includes("dark"), viewport.name + ": expected dark premium theme");
-      assert(initialState.primary.toUpperCase() === "#F28B65", viewport.name + ": ember primary token is missing");
-      assert(initialState.ember.toUpperCase() === "#EB7B57", viewport.name + ": ember brand token is missing");
+      assert(initialState.primary.toUpperCase() === "#F0784B", viewport.name + ": ember primary token is missing");
+      assert(initialState.ember.toUpperCase() === "#F0784B", viewport.name + ": ember brand token is missing");
       assert(initialState.brass.toUpperCase() === "#E6BD86", viewport.name + ": brass brand token is missing");
       assert(
         initialState.loginCardSurface
@@ -154,18 +154,18 @@ async function run() {
         viewport.name + ": login card surface is not rendered",
       );
       assert(
-        initialState.loginCardSurface.image.includes("37, 43, 40")
+        initialState.loginCardSurface.image.includes("35, 41, 51")
           && !initialState.loginCardSurface.image.includes("27, 35, 23"),
         viewport.name + ": legacy green login card palette is still active: " + JSON.stringify(initialState.loginCardSurface),
       );
       assert(
-        initialState.loginSubmitSurface?.image.includes("242, 139, 101")
+        initialState.loginSubmitSurface?.image.includes("240, 120, 75")
           && !initialState.loginSubmitSurface.image.includes("86, 111, 230")
           && !initialState.loginSubmitSurface.image.includes("216, 241, 124"),
         viewport.name + ": login button is not using the ember palette: " + JSON.stringify(initialState.loginSubmitSurface),
       );
       assert(
-        initialState.loginActiveTabSurface?.background.includes("199, 91, 59"),
+        initialState.loginActiveTabSurface?.background.includes("215, 92, 53"),
         viewport.name + ": active auth tab is not using the ember palette: " + JSON.stringify(initialState.loginActiveTabSurface),
       );
       assert(
