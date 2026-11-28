@@ -3320,6 +3320,7 @@ export const appRouter = router({
       .input(z.object({
         subjectId: z.string().trim().min(1).max(80),
         branchId: z.string().trim().min(1).max(120),
+        nodeId: z.string().trim().max(120).optional(),
         teacherId: z.string().trim().max(80).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -3331,6 +3332,10 @@ export const appRouter = router({
         const branch = getSIECheckpointBranches(input.subjectId).find(item => item.branchId === input.branchId);
         if (!subject || !branch || !/_G2_BAC$/.test(input.subjectId)) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "فرع المنهج غير موجود في الفهرس الحالي." });
+        }
+        const exactLesson = input.nodeId ? branch.choices.find(choice => choice.nodeId === input.nodeId) : undefined;
+        if (input.nodeId && !exactLesson) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "الدرس المحدد لا ينتمي إلى هذا الفرع." });
         }
         const selection = (profile.selection ?? {}) as Record<string, any>;
         const selectedTeacherId = input.teacherId || selection.teacherChoices?.[input.subjectId] || profile.teacherSelections?.[input.subjectId];
@@ -3372,7 +3377,7 @@ export const appRouter = router({
         const acceptedIds = new Set(Array.isArray(selection.acceptedAlternativeReviewVideoIds)
           ? selection.acceptedAlternativeReviewVideoIds.filter((value: unknown): value is string => typeof value === "string")
           : []);
-        const branchNodeIds = new Set(branch.choices.map(choice => choice.nodeId));
+        const branchNodeIds = new Set(exactLesson ? [exactLesson.nodeId] : branch.choices.map(choice => choice.nodeId));
         const matchedBranchTopics = (update: Record<string, any>) => {
           const analysisStatus = String(update.contentAnalysis?.status ?? "");
           if (analysisStatus === "complete") {
@@ -3509,7 +3514,7 @@ export const appRouter = router({
 
         let selectedTeacherItems = storedSelectedTeacherItems;
         let reviewSearchUnavailable = false;
-        const query = [subject.nameAr, branch.branchTitle, "مراجعة", "البكالوريا المصرية", SIE_CATALOG_META.academicYear].join(" ");
+        const query = [subject.nameAr, branch.branchTitle, exactLesson?.title, "مراجعة", "البكالوريا المصرية", SIE_CATALOG_META.academicYear].filter(Boolean).join(" ");
         let cachedReviewQuery = "";
         let cachedReviewResult: { items: Array<Record<string, unknown>>; videos: Array<Record<string, unknown>> } | null = null;
         const searchTeacherReviews = async (searchQuery: string) => {

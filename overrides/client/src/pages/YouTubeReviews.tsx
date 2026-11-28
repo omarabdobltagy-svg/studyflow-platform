@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import {
   getSIEStudentVisibleBranches,
+  getSIECheckpointProgressBranches,
   getSIESubject,
 } from "@shared/sie-catalog";
 import { ArrowUpRight, Check, ExternalLink, Loader2, RefreshCw, Search, Youtube } from "lucide-react";
@@ -41,8 +42,11 @@ export default function YouTubeReviews() {
     () => (profile.data?.subjectIds ?? []).filter(id => /_G2_BAC$/.test(id)),
     [profile.data?.subjectIds],
   );
-  const [subjectId, setSubjectId] = useState("");
-  const [branchId, setBranchId] = useState("");
+  const [initialSearch] = useState(() => typeof window === "undefined" ? "" : window.location.search);
+  const initialParams = new URLSearchParams(initialSearch);
+  const requestedNodeId = initialParams.get("nodeId") || undefined;
+  const [subjectId, setSubjectId] = useState(initialParams.get("subjectId") || "");
+  const [branchId, setBranchId] = useState(initialParams.get("branchId") || "");
   const [items, setItems] = useState<ReviewCandidate[]>([]);
   const [note, setNote] = useState("");
   const [hasSearched, setHasSearched] = useState(false);
@@ -122,7 +126,7 @@ export default function YouTubeReviews() {
     if (profile.isLoading || !subjectId || !branchId || searchReviews.isPending) return;
     setHasSearched(false);
     setNote("");
-    searchReviews.mutate({ subjectId, branchId, teacherId: selectedTeacherId });
+    searchReviews.mutate({ subjectId, branchId, ...(requestedNodeId ? { nodeId: requestedNodeId } : {}), teacherId: selectedTeacherId });
   };
 
   const canSearch = !profile.isLoading && !profile.isError
@@ -188,7 +192,7 @@ export default function YouTubeReviews() {
               >
                 {searchReviews.isPending
                   ? <><Loader2 className="size-4 animate-spin" /> جارٍ البحث والتحقق</>
-                  : <><Search className="size-4" /> ابحث عن مراجعات هذا الفرع</>}
+                  : <><Search className="size-4" /> {requestedNodeId ? "ابحث عن مراجعة لهذا الدرس" : "ابحث عن مراجعات هذا الفرع"}</>}
               </Button>
               {hasSearched && (
                 <Button
@@ -203,6 +207,7 @@ export default function YouTubeReviews() {
               )}
               <span className="text-[11px] text-muted-foreground">
                 {currentSubjectName}{currentBranch ? " · " + currentBranch.branchTitle : ""}
+                {requestedNodeId ? " · " + (getSIECheckpointProgressBranches(subjectId).flatMap(branch => branch.choices).find(choice => choice.nodeId === requestedNodeId)?.title ?? "درس محدد") : ""}
               </span>
             </div>
           </div>
