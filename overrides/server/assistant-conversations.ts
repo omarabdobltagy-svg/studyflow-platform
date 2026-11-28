@@ -7,7 +7,7 @@ export type AssistantConversationDraft = {
 };
 
 const MAX_MESSAGES_PER_CONVERSATION = 40;
-const MAX_MESSAGE_LENGTH = 6_000;
+const MAX_MESSAGE_LENGTH = 12_000;
 const MAX_TITLE_LENGTH = 80;
 const MAX_CLIENT_ID_LENGTH = 80;
 
