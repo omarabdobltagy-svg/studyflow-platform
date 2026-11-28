@@ -52,7 +52,7 @@
   --sf-text: #262329;
   --sf-text-muted: #6F6872;
   --sf-line: #D8D0C5;
-  --sf-success: #69856F;
+  --sf-success: #8E7348;
   --sf-warning: #A88954;
   --sf-danger: #A9444D;
   --sf-shadow: 0 18px 48px -38px rgba(35, 28, 25, .22);
@@ -112,7 +112,7 @@ html.dark {
   --sf-text: #F3EFE6;
   --sf-text-muted: #B6AEB6;
   --sf-line: #39353F;
-  --sf-success: #91A18E;
+  --sf-success: #B99A64;
   --sf-warning: #D6BC83;
   --sf-danger: #C7656B;
   --sf-shadow: 0 18px 48px -34px rgba(0, 0, 0, .66);
