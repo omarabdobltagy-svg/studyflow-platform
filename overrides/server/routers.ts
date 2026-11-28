@@ -100,6 +100,7 @@ import { decodeAndValidateAttachment } from "./attachments";
 import { parse as parseCookie } from "cookie";
 import { createHeartbeatJob, updateHeartbeatJob } from "./_core/heartbeat";
 import { callDataApi } from "./_core/dataApi";
+import { searchYoutubeVideos } from "./youtube-search";
 import { invokeLLMWithNvidiaFallback, invokeLLMWithNvidiaFallbackStream } from "./_core/llmFallback";
 import type { InvokeParams } from "./_core/llm";
 import { formatTextbookEvidence, retrieveTextbookEvidence } from "./textbook-retrieval";
@@ -3155,22 +3156,27 @@ export const appRouter = router({
 
         let selectedTeacherItems = storedSelectedTeacherItems;
         let reviewSearchUnavailable = false;
+        const query = [subject.nameAr, branch.branchTitle, "مراجعة", "البكالوريا المصرية", SIE_CATALOG_META.academicYear].join(" ");
+        let cachedReviewQuery = "";
+        let cachedReviewResult: { items: Array<Record<string, unknown>>; videos: Array<Record<string, unknown>> } | null = null;
         const searchTeacherReviews = async (searchQuery: string) => {
+          if (cachedReviewResult && cachedReviewQuery === searchQuery) return cachedReviewResult;
           try {
-            return await callDataApi("Youtube/search", {
-              query: { gl: "EG", hl: "ar", q: searchQuery },
-            }) as { items?: Array<Record<string, unknown>>; videos?: Array<Record<string, unknown>> };
+            const items = await searchYoutubeVideos(searchQuery, { maxResults: 50 });
+            cachedReviewQuery = searchQuery;
+            cachedReviewResult = { items: items as unknown as Array<Record<string, unknown>>, videos: items as unknown as Array<Record<string, unknown>> };
+            return cachedReviewResult;
           } catch (error) {
             reviewSearchUnavailable = true;
-            console.warn("[TeacherReviews] Optional external review search is unavailable:", error instanceof Error ? error.message : String(error));
+            console.warn("[TeacherReviews] YouTube Data API search is unavailable:", error instanceof Error ? error.message : String(error));
             return { items: [], videos: [] };
           }
         };
-        if (selectedTeacher && selectedTeacherItems.length === 0) {
-          const ownQuery = [selectedTeacher.nameAr, subject.nameAr, branch.branchTitle, "مراجعة", "البكالوريا المصرية", SIE_CATALOG_META.academicYear].join(" ");
+        if (selectedTeacher) {
+          const ownQuery = query;
           const ownResult = await searchTeacherReviews(ownQuery);
           const ownRawItems = Array.isArray(ownResult?.items) ? ownResult.items : Array.isArray(ownResult?.videos) ? ownResult.videos : [];
-          selectedTeacherItems = ownRawItems.flatMap(item => {
+          const discoveredSelectedTeacherItems = ownRawItems.flatMap(item => {
             const title = String(item.title ?? item.videoTitle ?? item.name ?? "").trim().slice(0, 240);
             const channelTitle = String(item.channelTitle ?? item.channel_name ?? item.channel ?? "").trim().slice(0, 160);
             const rawUrl = String(item.url ?? item.link ?? item.videoUrl ?? "").trim();
@@ -3232,10 +3238,10 @@ export const appRouter = router({
                   : "الوصف غير كافٍ لتأكيد الدرس، وتحليل Gemini غير متاح حاليًا.",
             }];
           }).slice(0, 5);
+          selectedTeacherItems = [...storedSelectedTeacherItems, ...discoveredSelectedTeacherItems].slice(0, 10);
         }
 
         let alternativeItems: Array<Record<string, any>> = [];
-        let query = [subject.nameAr, branch.branchTitle, "مراجعة", "البكالوريا المصرية", SIE_CATALOG_META.academicYear].join(" ");
         // Search other teachers only when the selected teacher has no candidate
         // for this branch. An unmatched, fully analyzed review is not treated as useful.
         if (!reviewSearchUnavailable) {
