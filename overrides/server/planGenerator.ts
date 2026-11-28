@@ -617,15 +617,18 @@ export function applyPlannerProgressGuard(
 
 function plannerProviderError(error: unknown): Error {
   const message = error instanceof Error ? error.message : String(error);
-  const isNvidia = /NVIDIA LLM invoke failed/i.test(message);
-  if (/NVIDIA_API_KEY is not configured/i.test(message)) {
-    return new Error("استجابة المزوّد الأساسي غير صالحة أو غير مكتملة، ومفتاح NVIDIA الاحتياطي غير مهيأ. أضف NVIDIA_API_KEY كمتغير سرّي على خدمة StudyFlow Preview 360 في Railway، وليس كمتغير Shared.");
+  const isOpenRouter = /OpenRouter/i.test(message);
+  const isGemini = /Gemini/i.test(message);
+  const providerLabel = isOpenRouter ? "OpenRouter" : isGemini ? "Gemini" : "المزوّد الأساسي";
+
+  if (/GEMINI_API_KEY is not configured/i.test(message)) {
+    return new Error("مفتاح Gemini غير مهيأ، ولم يتمكن مسار OpenRouter الاحتياطي من إكمال الطلب. راجع GEMINI_API_KEY وOPENROUTER_API_KEY أو AI_API_KEY في إعدادات الخدمة.");
   }
-  if (/AI_API_KEY is not configured/i.test(message)) {
-    return new Error("مفتاح المزوّد الأساسي غير مهيأ، كما أن مسار NVIDIA الاحتياطي غير متاح. راجع AI_API_KEY وNVIDIA_API_KEY في إعدادات خدمة التشغيل.");
+  if (/OPENROUTER_API_KEY.*not configured|AI_API_KEY is not configured/i.test(message)) {
+    return new Error("مفتاح OpenRouter الاحتياطي غير مهيأ أو غير صالح. راجع OPENROUTER_API_KEY أو مفتاح AI_API_KEY الحالي في إعدادات الخدمة.");
   }
-  const status = Number(message.match(/(?:NVIDIA )?LLM invoke failed:\s*(\d{3})/i)?.[1] ?? 0);
-  const providerLabel = isNvidia ? "NVIDIA Nemotron 3 Ultra" : "المزوّد الأساسي";
+
+  const status = Number(message.match(/(?:Gemini|OpenRouter|NVIDIA )?LLM invoke failed:\\s*(\\d{3})/i)?.[1] ?? 0);
   if (status === 401 || status === 403) {
     return new Error("رفض " + providerLabel + " بيانات الاعتماد أو الصلاحيات. راجع المفتاح ونطاق صلاحياته.");
   }
@@ -643,6 +646,7 @@ function plannerProviderError(error: unknown): Error {
   }
   return new Error("تعذر توليد الخطة الذكية. لم يتم حفظ خطة ناقصة؛ حاول مرة أخرى.");
 }
+
 function contentAsText(content: any): string {
   return typeof content === "string" ? content : Array.isArray(content)
     ? content.filter(item => item.type === "text").map(item => item.text).join("\n")
