@@ -147,7 +147,7 @@ async function run() {
       assert(initialState.themeClass.split(/\\s+/).includes("dark"), viewport.name + ": expected dark premium theme");
       assert(initialState.primary.toUpperCase() === "#F0784B", viewport.name + ": ember primary token is missing");
       assert(initialState.ember.toUpperCase() === "#F0784B", viewport.name + ": ember brand token is missing");
-      assert(initialState.brass.toUpperCase() === "#E6BD86", viewport.name + ": brass brand token is missing");
+      assert(initialState.brass.toUpperCase() === "#E3B982", viewport.name + ": brass brand token is missing");
       assert(
         initialState.loginCardSurface
           && (initialState.loginCardSurface.image !== "none" || initialState.loginCardSurface.color !== "rgba(0, 0, 0, 0)"),
