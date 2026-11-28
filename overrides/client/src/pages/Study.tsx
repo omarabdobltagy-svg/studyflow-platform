@@ -28,6 +28,7 @@ import {
 import { BookOpenText, Check, ChevronLeft, ChevronRight, Loader2, Search, Sparkles, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { normalizeStudySearch, shouldForceLessonViewForProgressGuide } from "@/lib/study-ui-state";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 
 export default function Study() {
@@ -112,12 +113,16 @@ export default function Study() {
     && !progressGuideDismissed
     && studyViewMode === "lessons"
     && branchChoices.length > 0;
+  const forceLessonViewForProgressGuide = shouldForceLessonViewForProgressGuide({
+    setupCoachmarkVersion,
+    progressPickerGuideCompletedAt: selection.progressPickerGuideCompletedAt,
+    progressGuideDismissed,
+    hasVisibleBranches: branches.length > 0,
+    studyViewMode,
+  });
   useEffect(() => {
-    if (setupCoachmarkVersion >= 1 && !selection.progressPickerGuideCompletedAt
-      && branches.length > 0 && studyViewMode === "units") {
-      setStudyViewMode("lessons");
-    }
-  }, [setupCoachmarkVersion, selection.progressPickerGuideCompletedAt, branches.length, studyViewMode]);
+    if (forceLessonViewForProgressGuide) setStudyViewMode("lessons");
+  }, [forceLessonViewForProgressGuide]);
   const currentBranchPointLabel = currentBranch?.branchType === "official_section" ? "موضوع" : "درس";
   const isLinearSubject = subjectId === "HIS_G2_BAC" || subjectId === "PROG_AI_G2_BAC";
   const legacyLinearRecords = isLinearSubject ? Object.values(branchProgressMap) : [];
@@ -524,12 +529,36 @@ export default function Study() {
     saveBranchFrontier.isPending, profile.isLoading,
   ]);
   const subjectName = (getSIESubject(subjectId)?.nameAr || subjectId);
-  const visibleSubjects = subjects.filter(id => normalizeFrontierSearch(getSIESubject(id)?.nameAr || id).includes(normalizeFrontierSearch(subjectSearch)));
+  const visibleSubjects = subjects.filter(id => normalizeStudySearch(getSIESubject(id)?.nameAr || id).includes(normalizeStudySearch(subjectSearch)));
+
+  const currentStudyPercent = lessonStateSummary.total > 0
+    ? Math.round((lessonStateSummary.studied / lessonStateSummary.total) * 100)
+    : 0;
 
   return (
-    <DashboardLayout title="المذاكرة والتقدم" description="اختر المادة والوحدة، وسجّل حالة الشرح والمذاكرة لكل درس.">
+    <DashboardLayout title="المذاكرة والتقدم" description="مساحة واحدة لمتابعة المنهج، وتسجيل التقدم الحقيقي لكل درس.">
+      <div className="sf-study-page" data-testid="study-page">
       {profile.isError && <div className="rounded-2xl border border-destructive/20 bg-destructive/5 p-4 text-sm">تعذّر تحميل ملفك الدراسي. <button className="font-bold underline" onClick={() => void profile.refetch()}>إعادة المحاولة</button></div>}
-      <section className="grid gap-6">
+      {subjectId && profile.isSuccess && (
+        <section className="sf-study-hero" data-testid="study-overview">
+          <div className="sf-study-hero-copy">
+            <span className="sf-study-eyebrow">مساحة المذاكرة</span>
+            <h2>{subjectName}</h2>
+            <p>{currentBranch?.branchTitle ? displayBranchTitle(currentBranch.branchTitle) : "خريطة المنهج والوحدات والدروس المسجلة في ملفك."}</p>
+            <span className="sf-study-hero-note">بيانات التقدم مأخوذة من سجل مذاكرتك، وليست تقديرًا آليًا.</span>
+          </div>
+          <div className="sf-study-hero-metrics">
+            <div className="sf-study-hero-metric"><strong>{units.length.toLocaleString("ar-EG")}</strong><span>وحدات / مسارات</span></div>
+            <div className="sf-study-hero-metric"><strong>{curriculumLessonCount.toLocaleString("ar-EG")}</strong><span>درسًا في الفهرس</span></div>
+            <div className="sf-study-hero-metric"><strong>{lessonStateSummary.studied.toLocaleString("ar-EG")}</strong><span>ذاكرته وفهمته في الفرع الحالي</span></div>
+            <div className="sf-study-hero-progress">
+              <div><span>إتمام مذاكرة الفرع الحالي</span><b>{currentStudyPercent.toLocaleString("ar-EG")}٪</b></div>
+              <div className="sf-study-hero-track"><i style={{ width: currentStudyPercent + "%" }} /></div>
+            </div>
+          </div>
+        </section>
+      )}
+      <section className="sf-study-subject-section grid gap-6">
         <article className="sf-study-subject-selector app-card min-w-0 overflow-hidden rounded-2xl">
           <header className="border-b border-border/70 bg-gradient-to-l from-secondary/65 to-card p-5">
             <p className="text-[10px] font-bold tracking-[0.12em] text-primary">المادة</p><h2 className="mt-1 text-xl font-bold">اختر المادة</h2>
@@ -542,7 +571,7 @@ export default function Study() {
             </div>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {visibleSubjects.map(id => { const active = id === subjectId; return <motion.button key={id} type="button" data-testid={"study-subject-" + id} aria-pressed={active} onClick={() => { setSubjectId(id); setBranchId(""); setStudyViewMode("units"); setBranchTransition(null); }} whileTap={reduceMotion ? undefined : { scale: 0.98 }}
-                className={"min-h-12 rounded-xl border px-3 py-3 text-sm font-semibold transition " + (active ? "border-primary bg-primary/10 text-foreground ring-2 ring-primary/15" : "border-border bg-background text-muted-foreground hover:border-primary/35")}>{getSIESubject(id)?.nameAr || id}</motion.button>; })}
+                className={"sf-study-subject-option min-h-12 rounded-xl border px-3 py-3 text-sm font-semibold transition " + (active ? "is-active border-primary bg-primary/10 text-foreground ring-2 ring-primary/15" : "border-border bg-background text-muted-foreground hover:border-primary/35")}>{getSIESubject(id)?.nameAr || id}</motion.button>; })}
             </div>
             {!visibleSubjects.length && <p className="rounded-xl bg-muted/30 p-4 text-center text-sm text-muted-foreground">لا توجد مادة مطابقة لبحثك.</p>}
           </div>
@@ -573,7 +602,7 @@ export default function Study() {
         )}
       </AnimatePresence>
 
-      <section className="app-card mb-5 overflow-hidden rounded-[1.7rem]">
+      <section className="sf-study-curriculum-card app-card mb-5 overflow-hidden rounded-[1.7rem]">
         <header className="border-b border-border/70 bg-card p-5 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -630,7 +659,7 @@ export default function Study() {
           </div>
         </header>
         {studyViewMode === "units" ? (
-          <div id="sf-study-units-panel" role="tabpanel" aria-labelledby="sf-study-units-tab" aria-label="وحدات المنهج" className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5 xl:grid-cols-3">
+          <div id="sf-study-units-panel" role="tabpanel" aria-labelledby="sf-study-units-tab" aria-label="وحدات المنهج" className="sf-study-units-grid grid gap-3 p-4 sm:grid-cols-2 sm:p-5 xl:grid-cols-3">
             {units.map((unit, unitIndex) => {
               const unitChoices = unit.branches.flatMap(unitBranch => unitBranch.choices.map(choice => ({
                 ...choice,
@@ -792,8 +821,8 @@ export default function Study() {
         )}
       </section>
 
-      <section className="app-card mb-5 overflow-hidden rounded-2xl">
-        <header className="border-b border-border/70 bg-gradient-to-l from-secondary/55 to-card p-5 sm:p-6">
+      <section className="sf-study-progress-card app-card mb-5 overflow-hidden rounded-2xl">
+        <header className="border-b border-border/70 bg-gradient-to-l from-secondary/55 to-card p-5 sm:p-6>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-[10px] font-bold tracking-[0.12em] text-primary">تقدم المنهج</p>
@@ -845,7 +874,7 @@ export default function Study() {
                     </div>
                     <span className="shrink-0 rounded-full border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-bold tabular-nums">{visibleBranchPosition} / {branches.length}</span>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
+                  <div className="sf-study-branch-grid grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
                     {branches.map((branch, index) => {
                       const rawSavedPosition = branchProgressMap[branch.branchId]?.lastCompletedLessonId;
                       const savedPosition = typeof rawSavedPosition === "string"
@@ -1175,25 +1204,13 @@ export default function Study() {
         </div>
       </section>}
 
+      </div>
     </DashboardLayout>
   );
 }
 
 
 type ChoiceButtonOption = { value: string; label: string; description?: string };
-
-function normalizeFrontierSearch(value: string) {
-  return value
-    .normalize("NFKC")
-    .toLocaleLowerCase()
-    .replace(/[\u064B-\u065F\u0670]/g, "")
-    .replace(/[أإآ]/g, "ا")
-    .replace(/ة/g, "ه")
-    .replace(/ى/g, "ي")
-    .replace(/ـ/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
 
 function SearchableFrontierPicker({
   testId, label, hint, value, onChange, options, disabled = false, visibleOptionLimit = 6,
@@ -1212,13 +1229,13 @@ function SearchableFrontierPicker({
     setShowAllOptions(false);
     setQuery("");
   }, [optionsIdentity]);
-  const normalizedQuery = normalizeFrontierSearch(query);
+  const normalizedQuery = normalizeStudySearch(query);
   const isStatusOption = (option: ChoiceButtonOption) =>
     option.value === "__UNKNOWN__" || option.value === "__NOT_STARTED__";
   const statusOptions = options.filter(isStatusOption);
   const curriculumOptions = options.filter(option => !isStatusOption(option));
   const visibleOptions = normalizedQuery
-    ? options.filter(option => normalizeFrontierSearch(option.label + " " + (option.description ?? "")).includes(normalizedQuery))
+    ? options.filter(option => normalizeStudySearch(option.label + " " + (option.description ?? "")).includes(normalizedQuery))
     : [
         ...statusOptions,
         ...(showAllOptions ? curriculumOptions : curriculumOptions.slice(0, visibleOptionLimit)),
