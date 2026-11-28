@@ -101,7 +101,7 @@ export function markPlanGenerationFailed(userId: number): void {
     completedStages: lastCompletedIndex >= 0 ? PLAN_GENERATION_STAGES.slice(0, lastCompletedIndex + 1) : [],
     detail: "تعذّر إكمال هذه المرحلة. لم يتم اعتماد أو نشر الخطة تلقائيًا.",
     updatedAt: Date.now(),
-    expiresAt: Date.now() + 2 * 60 * 1000,
+    expiresAt: Date.now() + 24 * 60 * 60 * 1_000,
     error: "تعذّر إنشاء المسودة.",
   });
 }

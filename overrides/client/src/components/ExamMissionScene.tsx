@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
 import gsap from "gsap";
 import { CalendarDays, ShieldCheck } from "lucide-react";
-import MonthlyExamScopeManager from "@/components/MonthlyExamScopeManager";
 
 export type PlannerExam = {
   subjectId: string;
@@ -16,12 +15,10 @@ export default function ExamMissionScene({
   exam,
   daysUntil,
   upcomingExams,
-  selection,
 }: {
   exam: PlannerExam;
   daysUntil: number;
   upcomingExams: PlannerExam[];
-  selection?: Record<string, any> | null;
 }) {
   const sceneRef = useRef<HTMLElement | null>(null);
   const dateLabel = new Intl.DateTimeFormat("ar-EG", {
@@ -98,7 +95,7 @@ export default function ExamMissionScene({
         )}
       </div>
       <div className="sf-exam-mission-scope" data-exam-reveal>
-        <MonthlyExamScopeManager subjectId={exam.subjectId} examDate={exam.date} selection={selection ?? undefined} />
+        <p>لم يتوفر حتى الآن نطاق موثّق لهذا الامتحان. سنعرض الموضوعات فقط عند وجود تصريح واضح يمكن الرجوع إلى مصدره.</p>
       </div>
     </section>
   );

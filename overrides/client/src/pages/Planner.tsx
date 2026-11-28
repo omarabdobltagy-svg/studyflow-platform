@@ -400,8 +400,8 @@ export default function Planner() {
     enabled: !profile.isLoading && !profile.isError && Boolean(profile.data?.subjectIds?.length),
     staleTime: 15_000,
     refetchOnWindowFocus: false,
-    // Poll quickly while the durable server-side reconciliation worker rebuilds a stale plan.
-    refetchInterval: query => query.state.data?.needsRefresh ? 900 : query.state.data?.plan ? 15_000 : false,
+    // A stale fingerprint is not proof that generation is running. Check it at a bounded interval.
+    refetchInterval: query => query.state.data?.needsRefresh ? 10_000 : query.state.data?.plan ? 30_000 : false,
   });
 
   const progressPreview = useMemo(() => {
@@ -601,7 +601,7 @@ export default function Planner() {
     refetchInterval: query => {
       const active = query.state.data?.active ?? [];
       const plannerIsRunning = active.some(item => item.kind === "daily_plan");
-      return activeDailyPlan.isLoading || ensureDaily.isPending || plannerIsRunning ? 1_000 : false;
+      return activeDailyPlan.isLoading || ensureDaily.isPending || plannerIsRunning ? 4_000 : false;
     },
     refetchOnWindowFocus: false,
   });
@@ -613,12 +613,11 @@ export default function Planner() {
       || backgroundPlanRunning
       || Boolean(activeDailyPlan.data?.needsRefresh)
       || query.state.data?.status === "running"
-    ) ? 900 : false,
+    ) ? 2_500 : false,
     refetchOnWindowFocus: false,
   });
   const isPlanGenerationRunning = ensureDaily.isPending
     || backgroundPlanRunning
-    || Boolean(activeDailyPlan.data?.needsRefresh)
     || generationProgress.data?.status === "running";
 
   useEffect(() => {
@@ -863,8 +862,8 @@ export default function Planner() {
                 {approved ? "خطة معتمدة" : plan ? "مسودة للمراجعة" : "لم تُنشأ خطة بعد"}
               </span>
             </div>
-            <h1>أولوياتك مرتبة، وخطوتك التالية واضحة.</h1>
-            <p>الخطة تجمع المتراكم والدروس الجديدة والاختبارات ومواعيد المدرسين، ثم تعرض ترتيب التنفيذ وسبب أولوية كل خطوة.</p>
+            <h1>خطة مذاكرتك.</h1>
+            <p>هنا ستجد ما تحتاج إلى إنجازه أولًا، وكيف توزّعت مهامك على الأيام، وما الذي تغيّر في خطتك. ابدأ من أول خطوة مفتوحة.</p>
             <a
               href="/reviews"
               data-testid="planner-youtube-reviews-link"
@@ -894,18 +893,9 @@ export default function Planner() {
             exam={nearestCairoExam}
             daysUntil={nearestExamDays}
             upcomingExams={upcomingCairoExams}
-            selection={profile.data?.selection as Record<string, any> | undefined}
           />
         )}
 
-        {nearestCairoExam && (
-          <ExamMissionScene
-            exam={nearestCairoExam}
-            daysUntil={nearestExamDays}
-            upcomingExams={upcomingCairoExams}
-            selection={profile.data?.selection as Record<string, any> | undefined}
-          />
-        )}
 
         {plan&&<PlanDecisionPanel plan={plan}/>}
         {plan&&<PlanAssistantChat plan={plan} subjectIds={profile.data?.subjectIds??[]} editable={true}
@@ -997,6 +987,15 @@ export default function Planner() {
                 setGenerationDetailsHiddenForRun(false);
                 setShowGenerationDetails(true);
               }} />
+            )}
+            {generationProgress.data?.status === "failed" && !ensureDaily.isPending && (
+              <section className="app-card sf-plan-generation-failed rounded-2xl p-4 sm:p-5" role="alert" aria-live="assertive">
+                <strong className="text-sm">تعذّر تحديث خطة المذاكرة</strong>
+                <p className="mt-2 text-sm text-muted-foreground">{generationProgress.data.detail || generationProgress.data.error || "لم تكتمل عملية التحديث. خطتك المحفوظة لم تُحذف."}</p>
+                <Button type="button" className="mt-3 rounded-xl" onClick={runGeneration} disabled={ensureDaily.isPending}>
+                  إعادة المحاولة
+                </Button>
+              </section>
             )}
 
             {visibleAIActivities.length > 0 && (

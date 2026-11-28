@@ -12,7 +12,6 @@ import { getCairoMonthlyExamCompletionKey, getCairoSecondYearBaccalaureateExams 
 import { matchTeacherReviewDescription } from "./teacher-review-description";
 import { rankTeacherReviewCandidates } from "./teacher-review-ranking";
 import { calculateLearningGap, selectLegacyLinearFrontier } from "@shared/sie-learning-progress";
-import { buildMonthlyExamCoveredScope } from "@shared/monthly-exam-scope";
 import { getDateKeyInTimeZone } from "@shared/date-time";
 import {
   addChapter,
@@ -138,6 +137,8 @@ const DAILY_PLAN_DRAFT_PREFIX = "SIE_DAILY_PLAN_DRAFT_V2:";
 const ANNUAL_PLAN_PREFIX = "SIE_ANNUAL_PLAN_V1:"
 const STUDY_PLAN_PREFIX = "SIE_STUDY_PLAN_V2:";
 const dailyPlanLocks = new Map<number, Promise<DailyPlanResult>>();
+const dailyPlanEnsureAutoState = new Map<number, { attempts: number; retryAt: number; blocked: boolean }>();
+const DAILY_PLAN_AUTO_RETRY_BACKOFF_MS = [60_000, 5 * 60_000, 15 * 60_000] as const;
 const dailyPlanDirtyUsers = new Map<number, "local" | "structural">();
 const teacherSourceScanLocks = new Map<number, Promise<boolean>>();
 const officialEducationScanLocks = new Map<number, Promise<boolean>>();
@@ -812,6 +813,16 @@ function queueTeacherSourceScan(userId: number) {
 
 function queueDailyPlanEnsure(userId: number, _dailyMinutes: number) {
   if (process.env.NODE_ENV === "test") return;
+  const now = Date.now();
+  const previous = dailyPlanEnsureAutoState.get(userId);
+  if (previous?.blocked || (previous && now < previous.retryAt)) return;
+  const attempts = Math.min((previous?.attempts ?? 0) + 1, DAILY_PLAN_AUTO_RETRY_BACKOFF_MS.length);
+  const retryDelay = DAILY_PLAN_AUTO_RETRY_BACKOFF_MS[attempts - 1];
+  dailyPlanEnsureAutoState.set(userId, {
+    attempts,
+    retryAt: now + retryDelay,
+    blocked: attempts >= DAILY_PLAN_AUTO_RETRY_BACKOFF_MS.length,
+  });
   queueDailyPlanReconciliation(userId, "planner.fingerprint.stale", "planner");
 }
 
@@ -845,25 +856,15 @@ async function buildDailyPlanOperationalContext(userId: number) {
   const todayCairo = getDateKeyInTimeZone(now, "Africa/Cairo");
   const cairoExams = getCairoSecondYearBaccalaureateExams(profile)
     .filter(exam => exam.date >= todayCairo);
-  const monthlyExamScopeRecords = (selection.monthlyExamScopes ?? {}) as Record<string, unknown>;
-  const cairoExamContext = cairoExams.map(exam => {
-    const scope = buildMonthlyExamCoveredScope([exam.subjectId], monthlyExamScopeRecords, exam.date);
-    const includedTopics = scope.flatMap(branch => branch.lessonTitles.map(title => branch.branchTitle + ": " + title));
-    const excludedTopics = scope.flatMap(branch => branch.excludedLessonTitles.map(title => branch.branchTitle + ": " + title));
-    const scopeDescription = includedTopics.length
-      ? "نطاق الامتحان الذي حدده الطالب بنفسه (تقرير ذاتي غير مؤكد من المدرسة): " + includedTopics.slice(0, 60).join("، ")
-        + (excludedTopics.length ? "؛ موضوعات قال الطالب إنها خارج النطاق: " + excludedTopics.slice(0, 30).join("، ") : "")
-      : "لم يحدد الطالب نطاق هذا الامتحان بعد. موضع المدرس يوضح آخر ما شرحه، ولا يثبت ما سيدخل الاختبار. لا تستنتج نطاق الامتحان من موضع الشرح.";
-    return [
-      exam.date,
-      exam.dayName,
-      exam.subjectName,
-      exam.category === "specialization" ? "مادة تخصصية حسب المسار" : "مادة أساسية مضافة للمجموع",
-      scopeDescription,
-      exam.schoolConfirmed ? "حالة الجدول: مؤكد من المدرسة" : "حالة الجدول: مقترح مديرية القاهرة، غير مؤكد من المدرسة",
-    ].join(" — ");
-  });
-  const horizon = now.getTime() + 14 * 24 * 60 * 60 * 1_000;
+  const cairoExamContext = cairoExams.map(exam => [
+    exam.date,
+    exam.dayName,
+    exam.subjectName,
+    exam.category === "specialization" ? "مادة تخصصية حسب المسار" : "مادة أساسية مضافة للمجموع",
+    "نطاق هذا الامتحان غير متاح من مصدر موثوق في السياق الحالي. تجاهل أي نطاق يدوي قديم أدخله الطالب، ولا تستنتج الموضوعات الداخلة من آخر درس شرحه المدرس. لا تذكر نطاقًا إلا عند وجود تصريح امتحاني واضح مع مصدر قابل للتحقق.",
+    exam.schoolConfirmed ? "حالة الجدول: مؤكد من المدرسة" : "حالة الجدول: مقترح مديرية القاهرة، غير مؤكد من المدرسة",
+  ].join(" — "));
+  const horizon = now.getTime() + 14 * 24 * 60 * 60 * 1_000;  const horizon = now.getTime() + 14 * 24 * 60 * 60 * 1_000;
   const formatDate = (value: unknown) => {
     if (!value) return "";
     const date = value instanceof Date ? value : new Date(String(value));
@@ -1217,6 +1218,7 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number, f
       try {
         const saved = JSON.parse(latestDailyPlan.planJson) as Awaited<ReturnType<typeof generatePersonalPlan>>;
         if (saved && typeof saved.title === "string" && Array.isArray(saved.steps) && saved.steps.length > 0) {
+          dailyPlanEnsureAutoState.delete(userId);
           completeAIActivity(userId, activityId, "البيانات لم تتغير؛ الخطة الحالية ما زالت متوافقة ولا تحتاج إلى إعادة بناء.");
           await logStudentActivity(userId, "ai.background.completed", "ai_background", activityId,
             "تم فحص البيانات؛ الخطة الحالية ما زالت متوافقة ولا تحتاج إلى إعادة بناء.", { kind: "daily_plan", status: "complete", rebuilt: false });
@@ -1303,6 +1305,7 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number, f
         planJson: JSON.stringify(planWithStrategy),
       });
     }
+    dailyPlanEnsureAutoState.delete(userId);
     completeAIActivity(userId, activityId, "اكتملت إعادة ترتيب الخطة ومزامنة المهام.");
     await logStudentActivity(userId, "ai.background.completed", "ai_background", activityId,
       "اكتملت إعادة ترتيب خطة المذاكرة ومزامنة المهام.", { kind: "daily_plan", status: "complete", rebuilt: true, taskCount: taskSync.taskCount });
@@ -5311,6 +5314,7 @@ export const appRouter = router({
             ? Math.trunc(configuredMinutes)
             : 120
         );
+        dailyPlanEnsureAutoState.delete(ctx.user.id);
         const result = await ensureDailyPlanForStudent(ctx.user.id, dailyMinutes, Boolean(input?.forceRebuild));
         if (result.generated) {
           await logStudentActivity(ctx.user.id, "plan.daily_generated", "ai_plan", null, "أنشأ المخطط الذكي خطة اليوم تلقائيًا", {
