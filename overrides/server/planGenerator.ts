@@ -289,7 +289,7 @@ export function applyTeacherLedPlanningGuard(plan: GeneratedPlan): GeneratedPlan
     throw new Error("المسودة المقترحة تعتمد على اختبارات أو أسئلة ينشئها النظام. لم يتم حفظها؛ المخطط ينظم متابعة شرح المدرس والواجبات المسجلة فقط.");
   }
   if (removedSteps || removedHabits) {
-    console.warn("[StudyFlow planner] Removed model-generated assessment tasks; StudyFlow does not test students.", {
+    console.info("[StudyFlow planner] Removed model-generated assessment tasks; StudyFlow does not test students.", {
       removedSteps,
       removedHabits,
       retainedSteps: steps.length,
@@ -2212,7 +2212,7 @@ export async function generatePersonalPlan(
   });
 
   const invokeNvidiaFallback = async () => {
-    console.warn("[StudyFlow planner] Switching to NVIDIA Nemotron 3 Ultra because the primary provider did not produce a usable plan.");
+    console.info("[StudyFlow planner] Primary provider response was unusable; switching to the validated NVIDIA fallback.");
     return invokeCompact(invokeNvidiaLLM, 6_144, false, true);
   };
 
