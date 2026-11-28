@@ -897,6 +897,15 @@ export default function Planner() {
           />
         )}
 
+        {nearestCairoExam && (
+          <ExamMissionScene
+            exam={nearestCairoExam}
+            daysUntil={nearestExamDays}
+            upcomingExams={upcomingCairoExams}
+            selection={profile.data?.selection as Record<string, any> | undefined}
+          />
+        )}
+
         {plan&&<PlanDecisionPanel plan={plan}/>}
         {plan&&<PlanAssistantChat plan={plan} subjectIds={profile.data?.subjectIds??[]} editable={true}
           onChange={updatePlan} onProposalApplied={()=>setPlannerTab("schedule")}/>}
