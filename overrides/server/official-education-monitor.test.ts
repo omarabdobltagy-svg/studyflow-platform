@@ -19,15 +19,15 @@ const scope = {
 
 describe("official education source monitor", () => {
   it("extracts only same-host HTTPS links and classifies a dated Baccalaureate exam update", () => {
-    const html = \`
-      <article>
-        <time datetime="2026-11-20T09:00:00Z"></time>
-        <a href="/ar/news/exam-schedule">جدول امتحانات البكالوريا المصرية للصف الثاني</a>
-        <p>جدول امتحانات البكالوريا المصرية للصف الثاني من الوزارة.</p>
-      </article>
-      <a href="https://facebook.com/external">جدول امتحانات البكالوريا</a>
-      <a href="javascript:alert(1)">جدول امتحانات البكالوريا</a>
-    \`;
+    const html = [
+      "<article>",
+      '<time datetime="2026-11-20T09:00:00Z"></time>',
+      '<a href="/ar/news/exam-schedule">جدول امتحانات البكالوريا المصرية للصف الثاني</a>',
+      "<p>جدول امتحانات البكالوريا المصرية للصف الثاني من الوزارة.</p>",
+      "</article>",
+      '<a href="https://facebook.com/external">جدول امتحانات البكالوريا</a>',
+      '<a href="javascript:alert(1)">جدول امتحانات البكالوريا</a>',
+    ].join("");
     const updates = parseOfficialEducationPage(html, source, scope, new Date("2026-11-28T00:00:00Z"));
     expect(updates).toHaveLength(1);
     expect(updates[0]).toMatchObject({
