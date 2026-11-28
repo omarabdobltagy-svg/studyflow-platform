@@ -1578,7 +1578,7 @@ export function applyDailyPlanDepth(
       && (update.contentAnalysis?.contentType === "revision"
         || update.announcementType === "revision"
         || /مراجعة|مراجعات|review|revision/i.test(String(update.title ?? "") + " " + String(update.description ?? "")))
-      && update.contentAnalysis?.status === "complete
+      && update.contentAnalysis?.status === "complete"
       && Array.isArray(update.contentAnalysis.topics))
     .sort((left, right) => Date.parse(String(right.publishedAt)) - Date.parse(String(left.publishedAt)));
   for (const video of analyzedVideos) {

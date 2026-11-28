@@ -23,14 +23,15 @@ function cleanText(value: unknown, limit = 180): string {
   return typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, limit) : "";
 }
 function stepKey(step: Record<string, any>, index: number): string {
-  const taskId = Number(step.plannerTaskId ?? step.existingTask?.id);
-  if (Number.isInteger(taskId) && taskId > 0) return "task:" + taskId;
-  const resourceUrl = cleanText(step.resourceRecommendation?.url, 500);
-  if (resourceUrl) return "resource:" + resourceUrl.split("#")[0];
+  // Curriculum identity is stable before/after task synchronization; task IDs may be attached later.
   const nodes = Array.isArray(step.curriculumNodeIds)
     ? step.curriculumNodeIds.filter((item: unknown): item is string => typeof item === "string").sort()
     : [];
   if (nodes.length) return "curriculum:" + nodes.join(",");
+  const taskId = Number(step.plannerTaskId ?? step.existingTask?.id);
+  if (Number.isInteger(taskId) && taskId > 0) return "task:" + taskId;
+  const resourceUrl = cleanText(step.resourceRecommendation?.url, 500);
+  if (resourceUrl) return "resource:" + resourceUrl.split("#")[0];
   return "step:" + cleanText(step.title, 160).toLocaleLowerCase("ar") + ":" + index;
 }
 function snapshotSteps(plan: PlanLike | null | undefined): StrategyStepSnapshot[] {
