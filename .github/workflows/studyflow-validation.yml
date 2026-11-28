@@ -61,3 +61,18 @@ jobs:
         run: pnpm db:push
       - name: Unit tests
         run: pnpm test
+      - name: Install Playwright for live responsive visual QA
+        run: |
+          npm install --no-save --no-package-lock playwright@1.57.0
+          npx playwright install --with-deps chromium
+      - name: Test preview responsive layouts in Chromium
+        env:
+          STUDYFLOW_QA_URL: ${{ github.ref == 'refs/heads/main' && 'https://studyflow-app-production.up.railway.app' || 'https://studyflow-preview-360-production.up.railway.app' }}
+        run: node scripts/visual-qa.cjs
+      - name: Upload desktop, tablet and mobile screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: studyflow-responsive-visual-qa
+          path: artifacts/visual-qa/
+          if-no-files-found: warn
