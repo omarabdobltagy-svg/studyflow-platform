@@ -321,11 +321,10 @@ describe("planner completed-curriculum guard", () => {
 });
 
 describe("smart planner OpenRouter free-model fallback", () => {
-  it("switches to OpenRouter when the primary provider reports exhausted credits", async () => {
-    mocks.invokeLLM.mockRejectedValue(new Error(
-      'LLM invoke failed: 402 Payment Required – {"error":{"message":"Insufficient credits"}}'
-    ));
-    mocks.invokeOpenRouterLLM.mockResolvedValue(validResponse);
+  it("accepts a complete response from the shared Gemini/OpenRouter client after internal quota failover", async () => {
+    // invokeLLM owns Gemini -> OpenRouter failover. Plan generation must not
+    // start another provider request after the shared client returns a valid plan.
+    mocks.invokeLLM.mockResolvedValue(validResponse);
 
     const result = await generatePersonalPlan(
       7,
@@ -335,10 +334,10 @@ describe("smart planner OpenRouter free-model fallback", () => {
     );
 
     expect(mocks.invokeLLM).toHaveBeenCalledOnce();
-    expect(mocks.invokeOpenRouterLLM).toHaveBeenCalledOnce();
-    const nvidiaRequest = mocks.invokeOpenRouterLLM.mock.calls[0][0];
-    expect(nvidiaRequest.maxTokens).toBe(6_144);
-    expect(nvidiaRequest.response_format).toEqual({ type: "json_object" });
+    expect(mocks.invokeOpenRouterLLM).not.toHaveBeenCalled();
+    const primaryRequest = mocks.invokeLLM.mock.calls[0][0];
+    expect(primaryRequest.maxTokens).toBe(4_096);
+    expect(primaryRequest.response_format).toBeUndefined();
     expect(result.title).toBe(validPlan.title);
     expect(mocks.saveAiPlan).toHaveBeenCalledOnce();
   });
@@ -416,17 +415,15 @@ describe("smart planner OpenRouter free-model fallback", () => {
       7,
       "أحتاج خطة لمراجعة التاريخ وحل الأسئلة خلال ثلاثة أيام.",
       false
-    )).rejects.toThrow("لم يصل محتوى نهائي من المزوّد");
+    )).rejects.toThrow("لم يتم حفظ خطة ناقصة");
 
     expect(mocks.invokeOpenRouterLLM).toHaveBeenCalledOnce();
     expect(mocks.saveAiPlan).not.toHaveBeenCalled();
   });
 
-  it("switches to OpenRouter for an explicit insufficient-quota 429 response", async () => {
-    mocks.invokeLLM.mockRejectedValue(new Error(
-      'LLM invoke failed: 429 Too Many Requests – {"error":{"code":"insufficient_quota"}}'
-    ));
-    mocks.invokeOpenRouterLLM.mockResolvedValue(validResponse);
+  it("accepts a valid plan returned by the shared client after a Gemini 429 failover", async () => {
+    // The provider-level tests prove that Gemini quota errors route to OpenRouter.
+    mocks.invokeLLM.mockResolvedValue(validResponse);
 
     await expect(generatePersonalPlan(
       7,
@@ -434,13 +431,12 @@ describe("smart planner OpenRouter free-model fallback", () => {
       false
     )).resolves.toMatchObject({ title: validPlan.title });
 
-    expect(mocks.invokeOpenRouterLLM).toHaveBeenCalledOnce();
+    expect(mocks.invokeOpenRouterLLM).not.toHaveBeenCalled();
     expect(mocks.saveAiPlan).toHaveBeenCalledOnce();
   });
 
-  it("uses OpenRouter when the primary key is not configured", async () => {
-    mocks.invokeLLM.mockRejectedValue(new Error("AI_API_KEY is not configured"));
-    mocks.invokeOpenRouterLLM.mockResolvedValue(validResponse);
+  it("accepts a valid plan when the shared Gemini/OpenRouter client uses its configured fallback key", async () => {
+    mocks.invokeLLM.mockResolvedValue(validResponse);
 
     await expect(generatePersonalPlan(
       7,
@@ -448,7 +444,7 @@ describe("smart planner OpenRouter free-model fallback", () => {
       false
     )).resolves.toMatchObject({ title: validPlan.title });
 
-    expect(mocks.invokeOpenRouterLLM).toHaveBeenCalledOnce();
+    expect(mocks.invokeOpenRouterLLM).not.toHaveBeenCalled();
     expect(mocks.saveAiPlan).toHaveBeenCalledOnce();
   });
 
