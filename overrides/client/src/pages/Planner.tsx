@@ -110,7 +110,7 @@ type PlanQuality = {
     maxSessionMinutes: number;
   };
 };
-type ExecutionStrategyPhase = { id: "backlog" | "teacher_sync" | "steady" | "review_later"; title: string; purpose: string; actions: string[]; completionCriteria: string };
+type ExecutionStrategyPhase = { id: "exam_focus" | "backlog" | "teacher_sync" | "steady" | "review_later"; title: string; purpose: string; actions: string[]; completionCriteria: string };
 type PlanView = {
   title: string;
   summary: string;
@@ -1102,7 +1102,7 @@ export default function Planner() {
                 <div className="sf-sp-skeletons"><span /><span /><span /></div>
               </section>
             ) : plan ? (
-              <PlanCard plan={plan} subjectIds={profile.data?.subjectIds ?? []} teacherSessions={upcomingTeacherSessions} title={approved ? "الخطة المعتمدة" : loadedSavedDraft ? "مسودة محفوظة" : "مقترح للمراجعة"} studentName={profile.data?.studentName} editable={!approved} onChange={updatePlan} onApprove={approveCurrentPlan} onAddStep={addStep} onRemoveStep={removeStep} onMoveStep={moveStep} approving={approvePlan.isPending} approved={approved} />
+              <PlanCard plan={plan} subjectIds={profile.data?.subjectIds ?? []} teacherSessions={upcomingTeacherSessions} teacherChoices={((profile.data?.selection as Record<string, any> | undefined)?.teacherChoices ?? profile.data?.teacherSelections ?? {}) as Record<string, string>} title={approved ? "الخطة المعتمدة" : loadedSavedDraft ? "مسودة محفوظة" : "مقترح للمراجعة"} studentName={profile.data?.studentName} editable={!approved} onChange={updatePlan} onApprove={approveCurrentPlan} onAddStep={addStep} onRemoveStep={removeStep} onMoveStep={moveStep} approving={approvePlan.isPending} approved={approved} />
             ) : (
               <section className="sf-sp-empty">
                 <h2>لم تُنشأ خريطة مذاكرة بعد</h2>
@@ -1315,8 +1315,8 @@ function PlanLoading({ progress, gradeLabel, onHide }: { progress: GenerationPro
   );
 }
 
-function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, editable, onChange, onApprove, onAddStep, onRemoveStep, onMoveStep, approving, approved }: {
-  plan: PlanView; subjectIds: string[]; teacherSessions: PlannerTeacherSession[]; title: string; studentName?: string; editable: boolean;
+function PlanCard({ plan, subjectIds, teacherSessions, teacherChoices, title, studentName, editable, onChange, onApprove, onAddStep, onRemoveStep, onMoveStep, approving, approved }: {
+  plan: PlanView; subjectIds: string[]; teacherSessions: PlannerTeacherSession[]; teacherChoices?: Record<string, string>; title: string; studentName?: string; editable: boolean;
   onChange: (next: PlanView) => void; onApprove: (nextPlan?: PlanView) => void; onAddStep: () => void;
   onRemoveStep: (index: number) => void; onMoveStep: (index: number, direction: -1 | 1) => void;
   approving: boolean; approved: boolean;
@@ -1343,6 +1343,7 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
     : backlogIncludedCount.toLocaleString("ar-EG") + " / " + backlogExpectedCount.toLocaleString("ar-EG");
   const plannedReviewCount = new Set(plan.steps.filter(step=>step.aiReviewBrief||step.subtasks?.length).map(step=>step.existingTask?.id??step.curriculumNodeIds?.[0]??step.title)).size;
   const phaseLabels: Record<string,string> = {
+    exam_focus: "استعداد الامتحان الأقرب",
     backlog: "التزامات مفتوحة",
     teacher_sync: "شرح قبل الحصة",
     steady: "شرح غير مشاهد",
@@ -1547,7 +1548,7 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
                               <PlanReviewSubtasks
                                 step={step}
                                 subjectIds={subjectIds}
-                                teacherId={(profile.data?.selection as Record<string, any> | undefined)?.teacherChoices?.[curriculum?.subjectId ?? ""]}
+                                teacherId={teacherChoices?.[curriculum?.subjectId ?? ""]}
                               />
                               <div className="sf-execution-step-actions">
                                 {curriculum&&branchId&&nodeId&&<a href={"/study?subject="+encodeURIComponent(curriculum.subjectId)+"&branch="+encodeURIComponent(branchId)+"&lesson="+encodeURIComponent(nodeId)}>افتح الدرس في مساحة المذاكرة <ArrowUpRight className="size-3.5"/></a>}

@@ -174,7 +174,7 @@ const planSchema = z.object({
     title: z.string().trim().min(2).max(180),
     detail: z.string().trim().min(5).max(1_200),
     phaseId: z.enum(["exam_focus", "backlog", "teacher_sync", "steady", "review_later"]).optional(),
-    examFocus: z.boolean().default(false),
+    examFocus: z.boolean().optional(),
     examFocusDate: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/).optional(),
     studyMethod: z.object({
       stages: z.array(z.object({

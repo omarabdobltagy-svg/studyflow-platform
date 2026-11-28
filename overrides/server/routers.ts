@@ -1836,7 +1836,7 @@ const plannerAssistantContextSchema = z.object({
     detail: z.string().trim().max(1_200),
     category: z.string().trim().max(80),
     priority: z.enum(["critical", "high", "medium", "low"]).optional(),
-    phaseId: z.enum(["backlog", "teacher_sync", "steady", "review_later"]).optional(),
+    phaseId: z.enum(["exam_focus", "backlog", "teacher_sync", "steady", "review_later"]).optional(),
     completed: z.boolean().default(false),
     linkedTask: z.boolean().default(false),
   })).max(240),
@@ -1877,7 +1877,7 @@ type NormalizedPlannerAssistantPatch = {
       detail?: string;
       category?: string;
       priority?: "critical" | "high" | "medium" | "low";
-      phaseId?: "backlog" | "teacher_sync" | "steady" | "review_later";
+      phaseId?: "exam_focus" | "backlog" | "teacher_sync" | "steady" | "review_later";
     };
   }>;
   removeIndexes: number[];
