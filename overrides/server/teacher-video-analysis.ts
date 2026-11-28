@@ -3,6 +3,7 @@ import { z } from "zod";
 const INTERACTIONS_BASE = "https://generativelanguage.googleapis.com/v1beta/interactions";
 
 export const TeacherVideoAnalysisSchema = z.object({
+  contentType: z.enum(["revision", "lesson", "announcement", "mixed", "unknown"]).default("unknown"),
   summaryAr: z.string().trim().min(10).max(2_000),
   topics: z.array(z.object({
     titleAr: z.string().trim().min(2).max(180),
@@ -122,13 +123,14 @@ export async function startTeacherVideoAnalysis(input: {
     "استخرج التقسيم الحقيقي للمراجعة إلى موضوعات مستقلة ومترابطة. لا تقسّم الفيديو إلى فواصل زمنية ثابتة. كل جزء يجب أن يمثل موضوعًا دراسيًا فعليًا أو انتقالًا واضحًا بين فروع.",
     "لكل موضوع أعد: titleAr، descriptionAr، startSeconds، endSeconds، subjectHints، branchHints، curriculumKeywords، confidence.",
     "استخدم طوابع زمنية تقديرية دقيقة قدر الإمكان من الفيديو. إذا تعذر تحديد بداية أو نهاية موضوع بدقة، قلل الثقة ولا تخترع حدودًا زائفة.",
+    "حدّد contentType من محتوى الفيديو نفسه، لا من العنوان أو الوصف: revision لمراجعة منظمة لدروس سابقة أو استعداد امتحاني، lesson لشرح درس جديد، announcement لإعلان أو تنظيم، mixed إذا جمع الفيديو أكثر من غرض، unknown عند عدم كفاية الدليل. لا تشترط ظهور كلمة مراجعة في العنوان.",
     "استخرج تعليمات المدرس الصريحة فقط: واجب، امتحان، جزء على منصة أخرى، موعد تسليم، نطاق ما يدخل أو لا يدخل. لا تحوّل عبارة عامة أو توقعًا إلى تكليف إلزامي.",
     "ميّز بين ما شرحه المدرس فعلًا، وما ذكر أنه موجود في المنصة، وما لم يتطرق إليه. لا تعتبر كل عنوان في الوصف جزءًا مشروحًا.",
     "لا تنشئ أسئلة أو واجبات أو اختبارات من عندك. لا تضف موضوعًا لم يرد في الفيديو.",
     "بيانات الفيديو: " + input.videoTitle,
     "المدرس: " + input.teacherName,
     "مواد الطالب المحددة: " + input.selectedSubjects.join("، "),
-    "المخطط: {summaryAr:string,topics:[{titleAr,descriptionAr,startSeconds,endSeconds,subjectHints,branchHints,curriculumKeywords,confidence}],teacherInstructions:[{instructionAr,kind,startSeconds?,confidence,explicit}],topicsNotCovered:string[]}.",
+    "المخطط: {contentType:revision|lesson|announcement|mixed|unknown,summaryAr:string,topics:[{titleAr,descriptionAr,startSeconds,endSeconds,subjectHints,branchHints,curriculumKeywords,confidence}],teacherInstructions:[{instructionAr,kind,startSeconds?,confidence,explicit}],topicsNotCovered:string[]}.",
   ].join("\n");
 
   const result = await requestJson(INTERACTIONS_BASE, apiKey, {

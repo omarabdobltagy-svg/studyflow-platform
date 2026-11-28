@@ -113,6 +113,13 @@ type PlanView = {
   habits: { title: string; cue: string }[];
   quality?: PlanQuality;
   memorySnapshot?: Record<string, any>;
+  strategy?: {
+    baseline: { createdAt: string; title: string; summary: string; steps: Array<{ key: string; title: string; dayIndex: number | null; priority: string; phaseId: string; deferred: boolean }> };
+    revision: { number: number; createdAt: string; status: "baseline" | "adapted" | "stable"; headline: string; rationale: string; hasPreviousVersion: boolean; triggers: Array<{ code: string; label: string; detail: string }>;
+      diff: { added: Array<{ key: string; title: string }>; removed: Array<{ key: string; title: string }>; rescheduled: Array<{ key: string; title: string }>; reprioritized: Array<{ key: string; title: string }>; deferred: Array<{ key: string; title: string }>; preservedCount: number };
+    };
+    history: Array<{ number: number; createdAt: string; status: "baseline" | "adapted" | "stable"; headline: string; rationale: string; hasPreviousVersion: boolean; triggers: Array<{ code: string; label: string; detail: string }>; diff: any }>;
+  };
   // Export component compatibility only; deliberately blank so no AI self-test is created.
   reviewQuestion: string;
   taskSync?: { parentGoalId?: number; stageCount: number; taskCount: number; routineId?: number | null };
@@ -187,7 +194,7 @@ function displayPlanStepTitle(step: PlanStep, subjectIds: string[]): string {
       ? "الوحدة " + curriculum.unitNumber.toLocaleString("ar-EG") + (curriculum.unitTitle ? " — " + displayCurriculumTitle(curriculum.unitTitle) : "")
       : curriculum.unitTitle
         ? (curriculum.lessonType === "story" ? "القصة المقررة · " : "") + displayCurriculumTitle(curriculum.unitTitle)
-        : curriculum.branch;
+        : "";
     const lessonSequence = curriculum.lessonNumber
       ? (curriculum.lessonType === "story" ? "الفصل " : "الدرس ") + curriculum.lessonNumber
       : curriculum.courseSequenceNumber
@@ -202,7 +209,7 @@ function displayPlanStepTitle(step: PlanStep, subjectIds: string[]): string {
 }
 function displayPlanStepCategory(step: PlanStep, subjectIds: string[]): string {
   const curriculum = getPlanStepCurriculum(step, subjectIds);
-  if (curriculum) return [curriculum.subject, curriculum.branch === "الدروس" ? "" : curriculum.branch].filter(Boolean).join(" · ");
+  if (curriculum) return curriculum.subject;
   return displayArabicText(step.category, step.existingTask ? "التزامات مسجلة" : "دراسة");
 }
 
@@ -263,6 +270,7 @@ function parseSavedPlan(record: { planJson: string }): PlanView | null {
       habits: Array.isArray(saved.habits) ? saved.habits : [],
       quality: saved.quality,
       memorySnapshot: saved.memorySnapshot,
+      strategy: saved.strategy && typeof saved.strategy === "object" ? saved.strategy as PlanView["strategy"] : undefined,
       reviewQuestion: "",
     };
   } catch {
@@ -497,8 +505,8 @@ export default function Planner() {
     enabled: Boolean(profile.data?.subjectIds?.length),
     refetchInterval: query => {
       const active = query.state.data?.active ?? [];
-      const monitorIsRunning = active.some(item => item.kind === "daily_plan" || item.kind === "teacher_monitor");
-      return activeDailyPlan.isLoading || ensureDaily.isPending || monitorIsRunning ? 1_000 : false;
+      const plannerIsRunning = active.some(item => item.kind === "daily_plan");
+      return activeDailyPlan.isLoading || ensureDaily.isPending || plannerIsRunning ? 1_000 : false;
     },
     refetchOnWindowFocus: false,
   });
@@ -532,7 +540,7 @@ export default function Planner() {
     refetchOnWindowFocus: false,
   });
   const visibleAIActivities = (aiActivity.data?.active ?? [])
-    .filter(item => item.kind === "daily_plan" || item.kind === "teacher_monitor");
+    .filter(item => item.kind === "daily_plan");
 
   const approvePlan = trpc.plans.approve.useMutation({
     onSuccess: async result => {
@@ -1325,12 +1333,35 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
         <PlanExportActions plan={plan} studentName={studentName} />
       </header>
 
+      {plan.strategy && <section className="sf-sp-plan-rationale" data-testid="planner-strategy-delta">
+        <span className="sf-sp-eyebrow">قرار المحرك</span>
+        <h3>{plan.strategy.revision.headline}</h3>
+        <p>{plan.strategy.revision.rationale}</p>
+        <div className="sf-sp-board-metrics">
+          <article><span>الخطة الأساسية</span><strong>{plan.strategy.baseline.steps.length.toLocaleString("ar-EG")}</strong></article>
+          <article><span>المهام الحالية</span><strong>{plan.steps.length.toLocaleString("ar-EG")}</strong></article>
+          {plan.strategy.revision.hasPreviousVersion && <>
+            <article><span>أُضيفت</span><strong>{plan.strategy.revision.diff.added.length.toLocaleString("ar-EG")}</strong></article>
+            <article><span>أُعيد ترتيبها</span><strong>{plan.strategy.revision.diff.rescheduled.length.toLocaleString("ar-EG")}</strong></article>
+            <article><span>تغيّرت أولويتها</span><strong>{plan.strategy.revision.diff.reprioritized.length.toLocaleString("ar-EG")}</strong></article>
+            <article><span>أُجّلت</span><strong>{plan.strategy.revision.diff.deferred.length.toLocaleString("ar-EG")}</strong></article>
+          </>}
+        </div>
+        {plan.strategy.revision.triggers.length > 0 && <div className="sf-sp-phase-summary">
+          {plan.strategy.revision.triggers.map((trigger, index) => <article key={trigger.code + index}><strong>{trigger.label}</strong><p>{trigger.detail}</p></article>)}
+        </div>}
+        {plan.strategy.revision.hasPreviousVersion && <div className="sf-sp-task-list">
+          {plan.strategy.revision.diff.added.slice(0, 3).map(step => <article className="sf-sp-task-row" key={"add-" + step.key}><strong>أُضيفت: {step.title}</strong></article>)}
+          {plan.strategy.revision.diff.deferred.slice(0, 3).map(step => <article className="sf-sp-task-row" key={"defer-" + step.key}><strong>أُجّلت: {step.title}</strong></article>)}
+        </div>}
+      </section>}
+
       <div className="sf-sp-board-metrics">
         <article><span>إجمالي الخطوات</span><strong>{plan.steps.length.toLocaleString("ar-EG")}</strong></article>
         <article><span>المهام المنفذة</span><strong>{completedCount.toLocaleString("ar-EG")}</strong></article>
         <article><span>المتراكم المؤكد المدرج / الإجمالي</span><strong>{backlogCoverageLabel}</strong></article>
         <article><span>نقاط المنهج المرتبطة</span><strong>{coveredCurriculumCount.toLocaleString("ar-EG")}</strong></article>
-        <article><span>فيديوهات مراجعة مطابقة</span><strong>{plannedReviewCount.toLocaleString("ar-EG")}</strong></article>
+        <article><span>مصادر مراجعة اختارها المحرك</span><strong>{plannedReviewCount.toLocaleString("ar-EG")}</strong></article>
         <article><span>التزامات مسجلة</span><strong>{confirmedTaskCount.toLocaleString("ar-EG")}</strong></article>
       </div>
 
@@ -1587,7 +1618,7 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
               <header>
                 <div>
                   <span>العقدة المحددة</span>
-                  <strong>{selectedMapCurriculum?.subject ?? "التزام مسجل"}{selectedMapCurriculum?.branch ? " · " + selectedMapCurriculum.branch : ""}</strong>
+                  <strong>{selectedMapCurriculum?.subject ?? "التزام مسجل"}</strong>
                 </div>
                 <button type="button" data-testid="planner-node-details-close" onClick={() => setSelectedMapStepIndex(null)} aria-label="إغلاق تفاصيل العقدة">إغلاق</button>
               </header>

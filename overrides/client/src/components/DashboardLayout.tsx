@@ -31,7 +31,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import {
   BarChart3, BookOpenCheck, BookOpenText, BrainCircuit, CalendarDays, CalendarRange, MessageCircle, Network, Bell, BellRing, X as XIcon,
   CheckSquare2, ChevronLeft, Goal, LayoutDashboard, LibraryBig, LogOut,
-  Menu, Moon, Settings2, Sparkles, Sun, Youtube,
+  Menu, Moon, Settings2, Sparkles, Sun,
 } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { lazy, Suspense, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
@@ -55,7 +55,6 @@ const navigation: NavigationGroup[] = [
   { label: "التعلّم", items: [
     { label: "المكتبة", path: "/books", icon: LibraryBig },
     { label: "المذاكرة والتقدم", path: "/study", icon: BookOpenText },
-    { label: "مراجعات YouTube", path: "/reviews", icon: Youtube },
     { label: "جلسة SQ3R", path: "/sq3r", icon: BookOpenCheck },
     { label: "خريطة المنهج", path: "/learning-map", icon: Network },
     { label: "المساعد الدراسي الذكي", path: "/assistant", icon: MessageCircle },
@@ -127,7 +126,6 @@ export default function DashboardLayout({ title, description, children, action }
     { label: "المهام", path: "/tasks", icon: CheckSquare2, group: "مساحة اليوم" },
     { label: "المذاكرة", path: "/study", icon: BookOpenText, group: "التعلّم" },
     { label: "المساعد", path: "/assistant", icon: MessageCircle, group: "التعلّم" },
-    { label: "المراجعات", path: "/reviews", icon: Youtube, group: "التعلّم" },
     { label: "الخطة", path: "/planner", icon: CalendarRange, group: "التخطيط" },
   ];
   const studentProfile = trpc.studentProfile.get.useQuery(undefined, { enabled: Boolean(user) });
@@ -452,7 +450,6 @@ export default function DashboardLayout({ title, description, children, action }
     { label: "المهام", path: "/tasks", icon: CheckSquare2 },
     { label: "المذاكرة", path: "/study", icon: BookOpenText },
     { label: "الخريطة", path: "/learning-map", icon: BrainCircuit },
-    { label: "مراجعات", path: "/reviews", icon: Youtube },
   ];
 
   const renderNavigation = (mobile = false) => (

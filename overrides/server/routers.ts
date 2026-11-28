@@ -92,6 +92,7 @@ import { completeAIActivity, failAIActivity, getAIActivitySnapshot, startAIActiv
 import { classifyTeacherPublicUpdate, isHighConfidenceScheduleAnnouncement, isSecondYearBaccalaureateUpdate, isTeacherVideoUpdateAllowed, parseYoutubeAtomFeed, scanSelectedTeacherSources, selectedTeacherIds, type TeacherPublicUpdate } from "./teacher-content-monitor";
 import { getTeacherVideoAnalysis, isTeacherVideoAnalysisConfigured, startTeacherVideoAnalysis } from "./teacher-video-analysis";
 import { isDailyPlanStale } from "./planLifecycle";
+import { buildPlanStrategySnapshot, type PlanDecisionSignals } from "./plan-strategy";
 import { buildPlannerMemorySnapshot, formatPlannerMemorySnapshot } from "./plannerMemory";
 import { classifyPlannerEventImpact, evaluatePlanQuality, schedulePlanSteps } from "./plannerEngine";
 import { createDailyPlanSourceFingerprint } from "./dailyPlanFingerprint";
@@ -296,6 +297,7 @@ async function processTeacherVideoAnalysis(userId: number, externalId: string, a
         model: state.model || model,
         startedAt: existing?.startedAt || new Date().toISOString(),
         completedAt: new Date().toISOString(),
+        contentType: state.analysis.contentType,
         summaryAr: state.analysis.summaryAr,
         topics: state.analysis.topics,
         teacherInstructions: state.analysis.teacherInstructions,
@@ -885,9 +887,30 @@ async function buildDailyPlanOperationalContext(userId: number) {
     "الكتب والموارد المتاحة:",
     availableBooks.length ? availableBooks.join("، ") : "لا توجد كتب محفوظة.",
   ].join("\n").slice(0, 7_800);
+  const toDaysUntil = (dateKey: string) => Math.round((Date.parse(dateKey + "T12:00:00.000Z") - Date.parse(todayCairo + "T12:00:00.000Z")) / 86_400_000);
+  const regionalExamSignals = cairoExams.map(exam => ({ subjectName: exam.subjectName, date: exam.date, daysUntil: toDaysUntil(exam.date), source: "cairo_school_calendar" }));
+  const calendarExamSignals = calendar.flatMap(event => {
+    if (!/امتحان|اختبار|monthly\s*exam|\bexam\b/i.test(String(event.title ?? ""))) return [];
+    const date = getDateKeyInTimeZone(event.startAt, "Africa/Cairo");
+    const daysUntil = toDaysUntil(date);
+    return daysUntil >= 0 && daysUntil <= 30 ? [{ subjectName: String(event.title), date, daysUntil, source: "student_calendar" }] : [];
+  });
+  const examsByKey = new Map([...regionalExamSignals, ...calendarExamSignals]
+    .filter(exam => exam.daysUntil >= 0 && exam.daysUntil <= 30)
+    .map(exam => [exam.date + "::" + exam.subjectName, exam]));
+  const decisionSignals: PlanDecisionSignals = {
+    exams: [...examsByKey.values()].sort((a, b) => a.daysUntil - b.daysUntil).slice(0, 8),
+    energyLevel: String(selection.studyConditions?.energyLevel ?? "unknown"),
+    moraleLevel: String(selection.studyConditions?.moraleLevel ?? "unknown"),
+    dailyMinutes: Number(selection.studyConditions?.dailyMinutes) || 120,
+    openTasksCount: openTasks.length,
+    recentSetbacks: nonCompletionReports.length,
+    obstacle: String(profile?.obstacle ?? ""),
+  };
   return {
     text: readableContext + "\n\nذاكرة الطالب المنظمة مع المصدر ودرجة الثقة لكل معلومة:\n" + formatPlannerMemorySnapshot(memorySnapshot),
     memorySnapshot,
+    decisionSignals,
   };
 }
 
@@ -970,6 +993,15 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number, f
     const sourceFingerprint = await getDailyPlanSourceFingerprint(userId, dailyMinutes, startDate);
     const expectedPromptPrefix = DAILY_PLAN_PREFIX + sourceFingerprint + ":";
     const latestDailyPlan = await getLatestAiPlanByPromptPrefix(userId, DAILY_PLAN_PREFIX);
+    let previousPlanForStrategy: Record<string, any> | null = null;
+    if (latestDailyPlan) {
+      try {
+        const parsedPrevious = JSON.parse(latestDailyPlan.planJson);
+        if (parsedPrevious && typeof parsedPrevious === "object" && Array.isArray(parsedPrevious.steps)) previousPlanForStrategy = parsedPrevious;
+      } catch {
+        previousPlanForStrategy = null;
+      }
+    }
     const latestPlanDay = latestDailyPlan
       ? getDateKeyInTimeZone(latestDailyPlan.createdAt instanceof Date ? latestDailyPlan.createdAt : new Date(String(latestDailyPlan.createdAt)), "Africa/Cairo")
       : null;
@@ -1045,24 +1077,32 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number, f
           : step;
       }),
     };
+    const strategy = buildPlanStrategySnapshot(
+      previousPlanForStrategy,
+      planWithTaskLinks,
+      operationalContext.decisionSignals,
+      new Date(),
+      latestDailyPlan?.createdAt instanceof Date ? latestDailyPlan.createdAt.toISOString() : latestDailyPlan?.createdAt ? String(latestDailyPlan.createdAt) : null,
+    );
+    const planWithStrategy = { ...planWithTaskLinks, strategy };
     const refreshedFingerprint = await getDailyPlanSourceFingerprint(userId, dailyMinutes, startDate);
     const activePrompt = DAILY_PLAN_PREFIX + refreshedFingerprint + ":";
     if (latestDailyPlan) {
       // Rebuild the same canonical record instead of adding another active-plan row.
-      await updateAiPlanContent(userId, latestDailyPlan.id, JSON.stringify(planWithTaskLinks));
+      await updateAiPlanContent(userId, latestDailyPlan.id, JSON.stringify(planWithStrategy));
       await updateAiPlanPrompt(userId, latestDailyPlan.id, activePrompt);
     } else {
       await saveAiPlan(userId, {
         prompt: activePrompt,
         title: plan.title || "خطة المذاكرة",
-        planJson: JSON.stringify(planWithTaskLinks),
+        planJson: JSON.stringify(planWithStrategy),
       });
     }
     completeAIActivity(userId, activityId, "اكتملت إعادة ترتيب الخطة ومزامنة المهام.");
     await logStudentActivity(userId, "ai.background.completed", "ai_background", activityId,
       "اكتملت إعادة ترتيب خطة المذاكرة ومزامنة المهام.", { kind: "daily_plan", status: "complete", rebuilt: true, taskCount: taskSync.taskCount });
     return {
-      plan: planWithTaskLinks,
+      plan: planWithStrategy,
       generatedAt: new Date(),
       generated: true,
       tasksAdded: taskSync.createdTaskCount,

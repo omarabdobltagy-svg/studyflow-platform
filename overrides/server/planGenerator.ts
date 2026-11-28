@@ -1575,8 +1575,10 @@ export function applyDailyPlanDepth(
     .filter(update => typeof update.teacherId === "string"
       && (allowedTeacherIds.has(update.teacherId) || acceptedAlternativeVideoIds.has(String(update.externalId ?? "")))
       && update.sourceType === "youtube"
-      && (update.announcementType === "revision" || /مراجعة|مراجعات|review|revision/i.test(String(update.title ?? "") + " " + String(update.description ?? "")))
-      && update.contentAnalysis?.status === "complete"
+      && (update.contentAnalysis?.contentType === "revision"
+        || update.announcementType === "revision"
+        || /مراجعة|مراجعات|review|revision/i.test(String(update.title ?? "") + " " + String(update.description ?? "")))
+      && update.contentAnalysis?.status === "complete
       && Array.isArray(update.contentAnalysis.topics))
     .sort((left, right) => Date.parse(String(right.publishedAt)) - Date.parse(String(left.publishedAt)));
   for (const video of analyzedVideos) {
@@ -1639,7 +1641,7 @@ export function applyDailyPlanDepth(
       ].join(" ");
       subtasks.push({
         id: (match.nodeId + ":" + String(video.externalId || "youtube").slice(0, 40)).slice(0, 180),
-        title: (subjectName + " — " + match.branchTitle + " — " + topicTitle).slice(0, 160),
+        title: (subjectName + " — " + topicTitle).slice(0, 160),
         detail: topicDetail,
         curriculumNodeIds: [match.nodeId],
         startSeconds,
@@ -1651,11 +1653,11 @@ export function applyDailyPlanDepth(
     if (subtasks.length === 0) continue;
     const parentStep = planSchema.shape.steps.element.parse({
       day: "",
-      title: ("مراجعة: " + videoTitle).slice(0, 180),
-      detail: "مهمة واحدة لفيديو YouTube تم تحليل محتواه، مقسمة إلى " + subtasks.length
-        + " موضوعات فرعية طابقت دروسًا متراكمة لديك. افتح كل جزء من توقيته المحدد، ونفّذ خطوات المراجعة داخل هذه المهمة بدل إنشاء مهام منفصلة لكل مقطع.",
+      title: ("مراجعة موجهة من مدرسك: " + videoTitle).slice(0, 180),
+      detail: "اختار المساعد هذا المصدر بعد تحليل محتواه ومطابقة " + subtasks.length
+        + " موضوعات مع دروس تحتاج مراجعة لديك. افتح كل موضوع من توقيته المحدد ونفّذ المراجعة داخل هذه المهمة.",
       minutes: 0,
-      category: "مراجعة فيديو",
+      category: "مراجعة موجهة",
       curriculumNodeIds: [...new Set(subtasks.flatMap(item => item.curriculumNodeIds))].slice(0, 8),
       priority: "high",
       difficulty: "unknown",

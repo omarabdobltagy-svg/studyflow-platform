@@ -44,6 +44,8 @@ export type TeacherVideoInstruction = {
 };
 
 export type TeacherVideoContentAnalysis = {
+  /** Semantic classification inferred from the video itself, independent of title keywords. */
+  contentType?: "revision" | "lesson" | "announcement" | "mixed" | "unknown";
   status: "processing" | "retry_wait" | "complete" | "failed";
   interactionId?: string;
   model?: string;
