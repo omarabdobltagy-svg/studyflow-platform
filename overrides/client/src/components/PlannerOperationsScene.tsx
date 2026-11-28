@@ -114,9 +114,9 @@ export default function PlannerOperationsScene() {
 
   const nodes = useMemo<SceneNode[]>(() => [
     { id: "overview", label: "اليوم", value: String(openTasks.length), color: 0xc0a06a },
-    { id: "tasks", label: "المهام", value: String(openTasks.length), color: 0x8b9b91 },
+    { id: "tasks", label: "المهام", value: String(openTasks.length), color: 0x9c7469 },
     { id: "goals", label: "الأهداف", value: String(activeGoals.length), color: 0xb98653 },
-    { id: "schedule", label: "الجدول", value: String(upcomingEvents.length), color: 0x8292a3 },
+    { id: "schedule", label: "الجدول", value: String(upcomingEvents.length), color: 0xb99b70 },
     { id: "learning", label: "التعلّم", value: String(profileSubjectIds.length ?? 0), color: 0x9b7772 },
     { id: "insights", label: "الأداء", value: completionRate + "%", color: 0xa19a8b },
   ], [openTasks.length, activeGoals.length, upcomingEvents.length, profileSubjectIds.length, completionRate]);

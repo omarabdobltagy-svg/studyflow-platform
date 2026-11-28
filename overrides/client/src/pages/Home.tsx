@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
+import PlannerOperationsScene from "@/components/PlannerOperationsScene";
 import QueryErrorNotice from "@/components/QueryErrorNotice";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -143,14 +144,6 @@ export default function Home() {
     dailyPlan.isError,
     ensurePlan.isPending,
   ]);
-  const toggleTask = trpc.tasks.toggle.useMutation({
-    onSuccess: () => {
-      void utils.dashboard.summary.invalidate();
-      void utils.tasks.list.invalidate();
-      void utils.plans.currentDaily.invalidate();
-    },
-    onError: error => toast.error(error.message || "تعذّر تحديث المهمة."),
-  });
   const startSession = trpc.learning.startExternalSession.useMutation({
     onSuccess: async () => {
       await Promise.all([utils.learning.activeExternalSession.invalidate(), utils.learning.get.invalidate()]);
@@ -381,7 +374,6 @@ export default function Home() {
   }, [profile.data?.subjectIds, profile.data?.selection]);
   const daysUntilExam = (date: string) => cairoExamDate ? Math.max(0, getCalendarDaysBetween(cairoExamDate, date)) : 0;
   const homeNextStepIndex = homeNextStep ? homeStudySteps.indexOf(homeNextStep) : -1;
-  const tasks = summary.data?.tasks ?? [];
   const taskCount = summary.data?.taskStats.total ?? 0;
   const completed = summary.data?.taskStats.completed ?? 0;
   const remaining = summary.data?.taskStats.remaining ?? 0;
@@ -880,47 +872,7 @@ export default function Home() {
           </section>
         )}
 
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,.85fr)]">
-          <section className="rounded-3xl border border-border bg-card shadow-sm">
-            <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
-              <div><p className="text-xs font-semibold text-muted-foreground">ابدأ بالتنفيذ</p><h3 className="mt-1 text-lg font-bold">المهام القادمة</h3></div>
-              <Button variant="ghost" size="sm" onClick={() => setLocation("/tasks")}>الكل <ArrowLeft className="size-4" /></Button>
-            </div>
-            <div className="divide-y divide-border/70">
-              {summary.isLoading ? (
-                <div className="space-y-3 p-5"><div className="h-5 w-3/4 animate-pulse rounded bg-muted" /><div className="h-5 w-1/2 animate-pulse rounded bg-muted" /></div>
-              ) : tasks.length ? tasks.slice(0, 5).map(task => (
-                <div key={task.id} className="flex items-center gap-3 px-5 py-4">
-                  <button type="button" onClick={() => toggleTask.mutate({ id: task.id, done: true })} disabled={toggleTask.isPending} aria-label={"إكمال " + task.title} className="flex size-6 shrink-0 items-center justify-center rounded-full border border-primary/40 text-primary transition hover:bg-primary hover:text-primary-foreground disabled:opacity-50"><Check className="size-3.5" /></button>
-                  <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{task.title}</p><p className="mt-1 text-xs text-muted-foreground"><span>{task.category || "مهمة دراسية"}</span>{task.dueAt && dueLabel(task.dueAt) && <span> · {dueLabel(task.dueAt)}</span>}</p></div>
-                  <Badge variant={task.priority === "high" ? "destructive" : "secondary"} className="shrink-0">{task.priority === "high" ? "مهمة" : task.priority === "medium" ? "متوسطة" : "مرنة"}</Badge>
-                </div>
-              )) : (
-                <div className="p-5 text-center"><CheckCircle2 className="mx-auto size-8 text-emerald-600" /><p className="mt-2 font-semibold">مفيش مهام معلّقة</p><p className="mt-1 text-xs text-muted-foreground">راجع خطتك أو أضف مهمة جديدة.</p></div>
-              )}
-            </div>
-          </section>
-
-          <section className="rounded-3xl border border-border bg-card p-5 shadow-sm">
-            <div className="flex items-center gap-2 text-sm font-semibold"><Compass className="size-4 text-primary" />وصول سريع</div>
-            <div className="mt-4 grid grid-cols-2 gap-2">
-              {[
-                { label: "خريطة المنهج", description: "المواد والدروس", path: "/learning-map", icon: GraduationCap },
-                { label: "المساعد الدراسي", description: "اسأل وافهم", path: "/assistant", icon: MessageCircle },
-                { label: "مكتبتك", description: "الكتب والمصادر", path: "/books", icon: BookOpenText },
-                { label: "التقويم", description: "مواعيدك", path: "/calendar", icon: CalendarDays },
-              ].map(item => (
-                <button key={item.path} type="button" onClick={() => setLocation(item.path)} className="group rounded-2xl border border-border bg-background p-3 text-right transition hover:border-primary/40 hover:bg-muted/45">
-                  <item.icon className="size-5 text-primary" /><span className="mt-3 block text-sm font-semibold">{item.label}</span><span className="mt-1 block text-[11px] text-muted-foreground">{item.description}</span>
-                </button>
-              ))}
-            </div>
-            <div className="mt-4 rounded-2xl bg-muted/45 p-4">
-              <div className="flex items-center gap-2 text-sm font-semibold"><BarChart3 className="size-4 text-primary" />ملفك الدراسي</div>
-              <p className="mt-1 text-xs leading-6 text-muted-foreground">{profile.data ? String(profile.data.subjectIds.length) + " مواد داخل مسارك الدراسي." : "جارٍ تحميل ملفك الدراسي."}</p>
-              <Button variant="ghost" size="sm" className="mt-2 px-0" onClick={() => setLocation("/settings")}>إدارة الملف <ArrowLeft className="size-4" /></Button>
-            </div>
-          </section>
+        <PlannerOperationsScene />
         </div>
       </div>
         <AnimatePresence>
