@@ -39,9 +39,11 @@ async function readPageState(page) {
       wine: getComputedStyle(document.documentElement).getPropertyValue("--sf-wine").trim(),
       gold: getComputedStyle(document.documentElement).getPropertyValue("--sf-gold-bright").trim(),
       bodyBackground: getComputedStyle(document.body).backgroundColor,
-      loginCardBackground: (() => {
+      loginCardSurface: (() => {
         const card = document.querySelector(".sf-login-form-card");
-        return card ? getComputedStyle(card).backgroundColor : null;
+        if (!card) return null;
+        const style = getComputedStyle(card);
+        return { color: style.backgroundColor, image: style.backgroundImage };
       })(),
       screenWidth: window.innerWidth,
       documentWidth: document.documentElement.scrollWidth,
@@ -128,7 +130,11 @@ async function run() {
       assert(initialState.primary.toUpperCase() === "#D1B77B", viewport.name + ": gold primary token is missing");
       assert(initialState.wine.toUpperCase() === "#A95861", viewport.name + ": wine brand token is missing");
       assert(initialState.gold.toUpperCase() === "#D1B77B", viewport.name + ": gold brand token is missing");
-      assert(initialState.loginCardBackground && initialState.loginCardBackground !== "rgba(0, 0, 0, 0)", viewport.name + ": login card surface is not rendered");
+      assert(
+        initialState.loginCardSurface
+          && (initialState.loginCardSurface.image !== "none" || initialState.loginCardSurface.color !== "rgba(0, 0, 0, 0)"),
+        viewport.name + ": login card surface is not rendered",
+      );
       assert(initialState.inputCount >= 2, viewport.name + ": login fields are missing");
       assert(
         initialState.documentWidth <= viewport.width + 2,
