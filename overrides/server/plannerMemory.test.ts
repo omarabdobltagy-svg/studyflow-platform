@@ -127,3 +127,78 @@ describe("structured planner memory", () => {
     expect(snapshot.curriculumEvidence).toHaveLength(0);
   });
 });
+
+
+describe("evidence freshness and confidence", () => {
+  const now = new Date("2026-11-28T12:00:00.000Z");
+
+  const snapshotFor = (confirmedAt?: string, updatedAt?: string) => buildPlannerMemorySnapshot({
+    now,
+    profile: {
+      subjectIds: ["ARB_G2_BAC"],
+      selection: {
+        learningCourseProgress: {
+          ARB_G2_BAC: {
+            branches: {
+              ARB_NAHW: {
+                lastCompletedLessonId: "ARB_U2_N1",
+                studentFrontierConfirmedAt: confirmedAt,
+                updatedAt,
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  it("labels recently observed evidence as fresh and records its age", () => {
+    const snapshot = snapshotFor("2026-11-25T12:00:00.000Z");
+    expect(snapshot.version).toBe(2);
+    expect(snapshot.curriculumEvidence[0]?.provenance).toMatchObject({
+      confidence: "high",
+      freshness: "fresh",
+      ageDays: 3,
+    });
+  });
+
+  it("keeps confidence separate from freshness for older confirmed evidence", () => {
+    const snapshot = snapshotFor("2026-10-20T12:00:00.000Z");
+    expect(snapshot.curriculumEvidence[0]?.provenance).toMatchObject({
+      confidence: "high",
+      freshness: "aging",
+      ageDays: 39,
+    });
+  });
+
+  it("marks very old evidence stale without converting missing values to fresh or zero age", () => {
+    const stale = snapshotFor("2026-08-01T12:00:00.000Z");
+    expect(stale.curriculumEvidence[0]?.provenance).toMatchObject({
+      confidence: "high",
+      freshness: "stale",
+    });
+
+    const unknown = snapshotFor(undefined, undefined);
+    expect(unknown.curriculumEvidence[0]?.provenance).toMatchObject({
+      freshness: "unknown",
+      ageDays: null,
+    });
+  });
+
+  it("does not treat materially future timestamps as fresh evidence", () => {
+    const snapshot = snapshotFor("2026-12-01T12:00:00.000Z");
+    expect(snapshot.curriculumEvidence[0]?.provenance).toMatchObject({
+      freshness: "unknown",
+      ageDays: null,
+    });
+  });
+
+  it("does not elevate invalid confirmation timestamps to high confidence", () => {
+    const snapshot = snapshotFor("not-a-date");
+    expect(snapshot.curriculumEvidence[0]?.provenance).toMatchObject({
+      confidence: "medium",
+      freshness: "unknown",
+      ageDays: null,
+    });
+  });
+});

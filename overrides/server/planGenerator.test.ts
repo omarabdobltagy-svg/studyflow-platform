@@ -1,13 +1,314 @@
 import { describe, expect, it } from "vitest";
 import {
   applyCurriculumPrioritySignals,
+  getStudentPlanningFocusWeight,
+  applyDailyPlanDepth,
   applyPlannerCurriculumCoverageGuard,
   applyPlannerProgressGuard,
+  buildPlannerProgressSnapshot,
   applyTeacherLedPlanningGuard,
   getDailyPlanFeasibilityNote,
   parseGeneratedPlan,
+  interleavePlannerItemsBySubject,
 } from "./planGenerator";
 import { getSIECheckpointBranches, getSIECheckpointProgressBranches } from "@shared/sie-catalog";
+import {
+  mergeLegacyLinearBranchProgress,
+  selectLegacyLinearFrontier,
+} from "@shared/sie-learning-progress";
+
+describe("student-aware near-term curriculum focus", () => {
+  it("reduces story and GRE practice weight without lowering core grammar, vocabulary, or Arabic texts", () => {
+    expect(getStudentPlanningFocusWeight("ARB_G2_BAC", "ARB_LITERATURE", "القصة")).toBe(0.42);
+    expect(getStudentPlanningFocusWeight("ENG1_G2_BAC", "ENG_STORY", "Story")).toBe(0.42);
+    expect(getStudentPlanningFocusWeight("ARB_G2_BAC", "ARB_TEXTS", "النصوص")).toBe(1);
+    expect(getStudentPlanningFocusWeight("ENG1_G2_BAC", "ENG_GRAMMAR", "Grammar")).toBe(1);
+    expect(getStudentPlanningFocusWeight("ENG1_G2_BAC", "ENG_VOCABULARY", "Vocabulary")).toBe(1);
+    expect(getStudentPlanningFocusWeight(null, null, "GRE Exercises")).toBe(0.42);
+    expect(getStudentPlanningFocusWeight("ENG1_G2_BAC", "ENG_STORY", "The Lost World", true)).toBe(1);
+    expect(getStudentPlanningFocusWeight(null, "ENG_GRE", "مهمة GRE موجودة بالفعل", true)).toBe(1);
+  });
+
+  it("does not downgrade a confirmed teacher obligation just because it mentions a story or GRE", () => {
+    expect(getStudentPlanningFocusWeight("ENG1_G2_BAC", "ENG_STORY", "Story homework")).toBe(1);
+    expect(getStudentPlanningFocusWeight(null, null, "GRE assignment due tomorrow")).toBe(1);
+  });
+});
+
+describe("complete daily plan coverage", () => {
+  it("keeps more than eighteen candidate tasks instead of silently truncating the plan", () => {
+    const steps = Array.from({ length: 24 }, (_, index) => ({
+      day: "",
+      title: "مهمة تراكمية " + (index + 1),
+      detail: "مهمة اختبارية للتحقق من عدم اقتطاع المتراكم.",
+      minutes: 20,
+      category: "تراكم",
+      priority: "medium",
+      difficulty: "unknown",
+      lessonSize: "unknown",
+      sourcePages: [],
+    }));
+    const plan = {
+      title: "خطة اختبار تغطية",
+      summary: "اختبار اكتمال التغطية.",
+      durationLabel: "اختبار",
+      steps,
+      habits: [],
+    } as any;
+    const profile = { subjectIds: [], selection: {} } as any;
+
+    const result = applyDailyPlanDepth(plan, profile, []);
+
+    expect(result.steps).toHaveLength(24);
+    expect(new Set(result.steps.map(step => step.title)).size).toBe(24);
+  });
+});
+
+describe("actual accumulated daily backlog scope", () => {
+  const subjectId = "ENG1_G2_BAC";
+  const grammar = getSIECheckpointProgressBranches(subjectId).find(branch => branch.branchId === "ENG_GRAMMAR")!;
+
+  const emptyPlan = () => ({
+    title: "خطة المتراكم الفعلي",
+    summary: "اختبار نطاق التراكم.",
+    durationLabel: "اختبار",
+    steps: [],
+    habits: [],
+  } as any);
+
+  it("includes reached and teacher-covered lessons but excludes curriculum beyond the teacher frontier", () => {
+    const choices = grammar.choices;
+    const now = "2026-11-27T00:00:00.000Z";
+    const profile = {
+      subjectIds: [subjectId],
+      selection: {
+        learningCourseProgress: {
+          [subjectId]: {
+            branches: {
+              [grammar.branchId]: {
+                lastCompletedLessonId: choices[1].nodeId,
+                studentFrontierConfirmedAt: now,
+                lessonStateModelVersion: 1,
+                teacherTeachingFrontierId: choices[4].nodeId,
+                teacherFrontierConfirmedAt: now,
+                lessonStates: {
+                  [choices[0].nodeId]: { state: "studied", updatedAt: now },
+                },
+              },
+            },
+          },
+        },
+      },
+    } as any;
+
+    const result = applyDailyPlanDepth(emptyPlan(), profile, []);
+    const plannedIds = result.steps.flatMap(step => step.curriculumNodeIds ?? []);
+
+    // Reaching the explanation frontier does not mean the lesson was studied.
+    // The reached-but-unstudied lesson stays in the backlog alongside newer
+    // lessons inside the teacher's coverage range.
+    expect(plannedIds).toContain(choices[1].nodeId);
+    for (const choice of choices.slice(2, 5)) {
+      expect(plannedIds).toContain(choice.nodeId);
+    }
+    expect(plannedIds).not.toContain(choices[0].nodeId);
+    expect(plannedIds).not.toContain(choices[5].nodeId);
+  });
+
+  it("excludes an explicitly recorded lesson that is beyond the teacher coverage frontier", () => {
+    const choices = grammar.choices;
+    const now = "2026-11-27T00:00:00.000Z";
+    const profile = {
+      subjectIds: [subjectId],
+      selection: {
+        learningCourseProgress: {
+          [subjectId]: {
+            branches: {
+              [grammar.branchId]: {
+                lastCompletedLessonId: choices[1].nodeId,
+                studentFrontierConfirmedAt: now,
+                lessonStateModelVersion: 1,
+                teacherTeachingFrontierId: choices[4].nodeId,
+                teacherFrontierConfirmedAt: now,
+                lessonStates: {
+                  [choices[5].nodeId]: { state: "needs_review", updatedAt: now },
+                },
+              },
+            },
+          },
+        },
+      },
+    } as any;
+
+    const result = applyDailyPlanDepth(emptyPlan(), profile, []);
+    const plannedIds = result.steps.flatMap(step => step.curriculumNodeIds ?? []);
+
+    expect(plannedIds).toContain(choices[2].nodeId);
+    expect(plannedIds).toContain(choices[4].nodeId);
+    expect(plannedIds).not.toContain(choices[5].nodeId);
+  });
+
+  it("does not fabricate a one-lesson backlog when the student's position is unknown", () => {
+    const choices = grammar.choices;
+    const now = "2026-11-27T00:00:00.000Z";
+    const profile = {
+      subjectIds: [subjectId],
+      selection: {
+        learningCourseProgress: {
+          [subjectId]: {
+            branches: {
+              [grammar.branchId]: {
+                lastCompletedLessonId: "__UNKNOWN__",
+                teacherTeachingFrontierId: choices[4].nodeId,
+                teacherFrontierConfirmedAt: now,
+              },
+            },
+          },
+        },
+      },
+    } as any;
+
+    const result = applyDailyPlanDepth(emptyPlan(), profile, []);
+    const plannedIds = result.steps.flatMap(step => step.curriculumNodeIds ?? []);
+
+    expect(plannedIds).not.toContain(choices[0].nodeId);
+    expect(plannedIds).not.toContain(choices[1].nodeId);
+    expect(plannedIds).not.toContain(choices[2].nodeId);
+    expect(plannedIds).not.toContain(choices[3].nodeId);
+    expect(plannedIds).not.toContain(choices[4].nodeId);
+  });
+});
+
+describe("official English curriculum sequence", () => {
+  it("labels the Unit 1 Conditional Structures checkpoint as Lesson 4 & 5", () => {
+    const branches = getSIECheckpointBranches("ENG1_G2_BAC");
+    const grammar = branches.find(branch => branch.branchId === "ENG_GRAMMAR");
+    const conditional = grammar?.choices.find(choice => choice.nodeId === "ENG_GRAMMAR_U1_2");
+
+    expect(conditional?.lessonNumber).toBe("4 & 5");
+  });
+
+  it("does not expose GRE as an English curriculum branch", () => {
+    const branches = getSIECheckpointBranches("ENG1_G2_BAC");
+    expect(branches.some(branch => branch.branchId === "ENG_GRE")).toBe(false);
+  });
+});
+
+describe("unknown curriculum position safety", () => {
+  it("does not classify an entire legacy linear subject as accumulated when the student position is unknown", () => {
+    const branch = getSIECheckpointProgressBranches("HIS_G2_BAC")[0];
+    expect(branch.choices.length).toBeGreaterThan(1);
+
+    const snapshot = buildPlannerProgressSnapshot({
+      subjectIds: ["HIS_G2_BAC"],
+      selection: {},
+    } as any);
+    const progress = snapshot.branches.get("HIS_G2_BAC:" + branch.branchId);
+
+    expect(progress?.eligibleChoices).toHaveLength(1);
+    expect(progress?.eligibleChoices[0]).toMatchObject({
+      nodeId: branch.choices[0].nodeId,
+      learningState: "not_recorded",
+    });
+    expect(snapshot.eligibleNodeIds.size).toBe(1);
+  });
+});
+
+describe("English and History legacy progress resolution", () => {
+  const choices = [
+    { nodeId: "HIS_U1_1" },
+    { nodeId: "HIS_U1_2" },
+    { nodeId: "HIS_U2_1" },
+    { nodeId: "HIS_U3_1" },
+  ];
+
+  it("keeps legacy student and school positions when a current History row contains only teacher position", () => {
+    const merged = mergeLegacyLinearBranchProgress(
+      choices,
+      { teacherTeachingFrontierId: "HIS_U2_1", teacherFrontierConfirmedAt: "2026-11-27T00:00:00.000Z" },
+      { lastCompletedLessonId: "HIS_U1_2", schoolClassFrontierId: "HIS_U3_1" },
+    );
+    expect(merged.lastCompletedLessonId).toBe("HIS_U1_2");
+    expect(merged.teacherTeachingFrontierId).toBe("HIS_U2_1");
+    expect(merged.schoolClassFrontierId).toBe("HIS_U3_1");
+  });
+
+  it("preserves a deliberately confirmed unknown position instead of substituting an old value", () => {
+    const merged = mergeLegacyLinearBranchProgress(
+      choices,
+      { lastCompletedLessonId: "__UNKNOWN__", studentFrontierConfirmedAt: "2026-11-27T00:00:00.000Z" },
+      { lastCompletedLessonId: "HIS_U1_2" },
+    );
+    expect(merged.lastCompletedLessonId).toBe("__UNKNOWN__");
+  });
+
+  it("prefers valid consolidated positions and ignores invalid or cross-curriculum legacy IDs", () => {
+    const merged = mergeLegacyLinearBranchProgress(
+      choices,
+      { lastCompletedLessonId: "HIS_U2_1" },
+      { lastCompletedLessonId: "OTHER_SUBJECT_NODE" },
+    );
+    expect(merged.lastCompletedLessonId).toBe("HIS_U2_1");
+    expect(selectLegacyLinearFrontier(choices, [
+      { lastCompletedLessonId: "HIS_U1_2" },
+      { lastCompletedLessonId: "OTHER_SUBJECT_NODE" },
+      { lastCompletedLessonId: "HIS_U2_1" },
+    ], "lastCompletedLessonId")).toBe("HIS_U2_1");
+  });
+
+  it("does not borrow another teacher's position when no teacher is selected", () => {
+    expect(selectLegacyLinearFrontier(choices, [
+      { teacherId: "teacher-a", teacherTeachingFrontierId: "HIS_U3_1" },
+      { teacherId: "teacher-b", teacherTeachingFrontierId: "HIS_U2_1" },
+      { teacherTeachingFrontierId: "HIS_U1_2" },
+    ], "teacherTeachingFrontierId", { teacherOnly: true })).toBe("HIS_U1_2");
+  });
+
+  it("uses only the currently selected teacher's legacy position", () => {
+    expect(selectLegacyLinearFrontier(choices, [
+      { teacherId: "old-teacher", teacherTeachingFrontierId: "HIS_U3_1" },
+      { teacherId: "current-teacher", teacherTeachingFrontierId: "HIS_U1_2" },
+    ], "teacherTeachingFrontierId", { teacherOnly: true, teacherId: "current-teacher" }))
+      .toBe("HIS_U1_2");
+  });
+});
+
+describe("daily plan subject coverage", () => {
+  it("interleaves curriculum tasks across selected subjects before repeating a subject", () => {
+    const items = [
+      { subjectId: "ARB_G2_BAC", title: "نحو 1" },
+      { subjectId: "ARB_G2_BAC", title: "نحو 2" },
+      { subjectId: "ARB_G2_BAC", title: "نحو 3" },
+      { subjectId: "ENG1_G2_BAC", title: "English 1" },
+      { subjectId: "ENG1_G2_BAC", title: "English 2" },
+      { subjectId: "HIS_G2_BAC", title: "تاريخ 1" },
+      { subjectId: "PROG_AI_G2_BAC", title: "برمجة 1" },
+    ];
+    const ordered = interleavePlannerItemsBySubject(
+      items,
+      ["ARB_G2_BAC", "ENG1_G2_BAC", "HIS_G2_BAC", "PROG_AI_G2_BAC"],
+      item => item.subjectId,
+    );
+    expect(ordered.slice(0, 4).map(item => item.subjectId)).toEqual([
+      "ARB_G2_BAC", "ENG1_G2_BAC", "HIS_G2_BAC", "PROG_AI_G2_BAC",
+    ]);
+    expect(ordered.slice(4).map(item => item.title)).toEqual(["نحو 2", "English 2", "نحو 3"]);
+  });
+
+  it("keeps unlinked obligations after distributing curriculum-linked items", () => {
+    const items = [
+      { subjectId: "ARB_G2_BAC", title: "مهمة العربي" },
+      { subjectId: null, title: "مهمة عامة" },
+      { subjectId: "ENG1_G2_BAC", title: "مهمة الإنجليزي" },
+    ];
+    const ordered = interleavePlannerItemsBySubject(
+      items,
+      ["ARB_G2_BAC", "ENG1_G2_BAC"],
+      item => item.subjectId,
+    );
+    expect(ordered.map(item => item.title)).toEqual(["مهمة العربي", "مهمة الإنجليزي", "مهمة عامة"]);
+  });
+});
 
 describe("annual plan curriculum coverage and progress alignment", () => {
   it("uses explicit study confirmations before treating earlier Arabic grammar lessons as completed", () => {

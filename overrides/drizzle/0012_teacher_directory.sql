@@ -1,0 +1,22 @@
+CREATE TABLE IF NOT EXISTS `teacherDirectoryEntries` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `normalizedName` varchar(180) NOT NULL,
+  `teacherName` varchar(120) NOT NULL,
+  `brandName` varchar(180) NOT NULL,
+  `subjectId` varchar(80) NOT NULL,
+  `educationSystem` varchar(40) NOT NULL,
+  `gradeYear` varchar(60) NOT NULL,
+  `sourceUrl` text NOT NULL,
+  `availableModesJson` text NOT NULL,
+  `confidence` varchar(20) NOT NULL DEFAULT 'low',
+  `evidenceJson` text NOT NULL,
+  `notes` text NULL,
+  `confirmationCount` int NOT NULL DEFAULT 1,
+  `submittedBy` int DEFAULT NULL,
+  `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `teacher_directory_scope_unique` (`normalizedName`, `subjectId`, `educationSystem`, `gradeYear`),
+  KEY `teacher_directory_subject_idx` (`subjectId`, `educationSystem`, `gradeYear`, `updatedAt`),
+  CONSTRAINT `teacher_directory_submitted_by_fk` FOREIGN KEY (`submittedBy`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

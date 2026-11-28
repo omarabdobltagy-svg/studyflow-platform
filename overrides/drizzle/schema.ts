@@ -284,6 +284,39 @@ export const aiPlans = mysqlTable(
   table => [index("ai_plans_user_created_idx").on(table.userId, table.createdAt)]
 );
 
+/** Durable per-account assistant conversations; clientId keeps migrated local thread IDs stable. */
+export const assistantConversations = mysqlTable(
+  "assistantConversations",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+    clientId: varchar("clientId", { length: 80 }).notNull(),
+    title: varchar("title", { length: 80 }).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [
+    uniqueIndex("assistant_conversation_user_client_unique").on(table.userId, table.clientId),
+    index("assistant_conversations_user_updated_idx").on(table.userId, table.updatedAt),
+  ],
+);
+
+/** Messages belong to one conversation; ownership is always checked through its parent. */
+export const assistantMessages = mysqlTable(
+  "assistantMessages",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    conversationId: int("conversationId").notNull().references(() => assistantConversations.id, { onDelete: "cascade" }),
+    role: mysqlEnum("role", ["user", "assistant"]).notNull(),
+    content: text("content").notNull(),
+    sortOrder: int("sortOrder").default(0).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => [
+    index("assistant_messages_conversation_order_idx").on(table.conversationId, table.sortOrder),
+  ],
+);
+
 /** صفحة ملاحظة مستقلة مستوحاة من المساحات المنظمة وقوالب الدراسة. */
 export const studyNotes = mysqlTable(
   "studyNotes",
@@ -362,6 +395,32 @@ export const studentActivityEvents = mysqlTable(
   ]
 );
 
+export const teacherDirectoryEntries = mysqlTable(
+  "teacherDirectoryEntries",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    normalizedName: varchar("normalizedName", { length: 180 }).notNull(),
+    teacherName: varchar("teacherName", { length: 120 }).notNull(),
+    brandName: varchar("brandName", { length: 180 }).notNull(),
+    subjectId: varchar("subjectId", { length: 80 }).notNull(),
+    educationSystem: varchar("educationSystem", { length: 40 }).notNull(),
+    gradeYear: varchar("gradeYear", { length: 60 }).notNull(),
+    sourceUrl: text("sourceUrl").notNull(),
+    availableModesJson: text("availableModesJson").notNull(),
+    confidence: varchar("confidence", { length: 20 }).default("low").notNull(),
+    evidenceJson: text("evidenceJson").notNull(),
+    notes: text("notes"),
+    confirmationCount: int("confirmationCount").default(1).notNull(),
+    submittedBy: int("submittedBy").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [
+    uniqueIndex("teacher_directory_scope_unique").on(table.normalizedName, table.subjectId, table.educationSystem, table.gradeYear),
+    index("teacher_directory_subject_idx").on(table.subjectId, table.educationSystem, table.gradeYear, table.updatedAt),
+  ],
+);
+
 export const teacherCourseFacts = mysqlTable(
   "teacherCourseFacts",
   {
@@ -423,3 +482,5 @@ export type RoutineItem = typeof routineItems.$inferSelect;
 export type CalendarEvent = typeof calendarEvents.$inferSelect;
 export type LibraryAttachment = typeof libraryAttachments.$inferSelect;
 export type ReminderSetting = typeof reminderSettings.$inferSelect;
+export type AssistantConversation = typeof assistantConversations.$inferSelect;
+export type AssistantMessage = typeof assistantMessages.$inferSelect;

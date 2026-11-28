@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -7,14 +7,22 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
+import { getNextOpenPlanStep } from "@/lib/plan-actions";
+import { getPlannerStepCurriculum } from "@/lib/planner-curriculum";
+import { displayCurriculumTitle } from "@/lib/curriculum-display";
+import { CAIRO_BAC_EXAM_CALENDAR_NOTICE, getUpcomingCairoSecondYearBaccalaureateExams } from "@shared/cairo-baccalaureate-exam-calendar";
 import { getSIEStudentVisibleBranches, getSIECheckpointProgressBranches, getSIESubject, matchSIECheckpointTask, normalizeSIECheckpointFrontier } from "@shared/sie-catalog";
+import { formatTime12Hour, getCalendarDaysBetween, getDateKeyInTimeZone } from "@shared/date-time";
+import { buildMonthlyExamCoveredScope } from "@shared/monthly-exam-scope";
+import MonthlyExamScopeManager from "@/components/MonthlyExamScopeManager";
 import {
-  ArrowLeft, BarChart3, BookOpenText, CalendarDays, Check, CheckCircle2,
+  ArrowLeft, BarChart3, BookOpenText, CalendarDays, Check, CheckCircle2, Clock3,
   Compass, GraduationCap, ListChecks, Loader2, MessageCircle,
-  Play, RefreshCw, Sparkles, Target, Timer,
+  Play, RefreshCw, Sparkles, Target, Timer, X,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
+import { useServerClock } from "@/lib/server-clock";
 
 type Priority = {
   subjectId: string; subjectName: string; branchId: string; branchTitle: string;
@@ -25,15 +33,20 @@ type Priority = {
   priorityReason?: string;
   taskId?: number;
   taskTitle?: string;
+  planStepTitle?: string;
+  planStepDetail?: string;
+  planStepCategory?: string;
 };
 type ExternalSession = {
   sessionId: string; subjectId: string; branchId: string; lessonId: string;
   startedAt: string; status: "active" | "completed";
 };
 
-const cairoDate = () => new Intl.DateTimeFormat("ar-EG", {
-  weekday: "long", day: "numeric", month: "long", timeZone: "Africa/Cairo",
-}).format(new Date());
+const cairoDate = (value: Date | null) => value
+  ? new Intl.DateTimeFormat("ar-EG", {
+      weekday: "long", day: "numeric", month: "long", timeZone: "Africa/Cairo",
+    }).format(value)
+  : "جارٍ مزامنة التاريخ والوقت من الخادم";
 
 function durationLabel(seconds: number) {
   const value = Math.max(0, Math.floor(seconds));
@@ -61,13 +74,14 @@ function sessionLesson(session: ExternalSession | null) {
 }
 
 export default function Home() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
   const utils = trpc.useUtils();
-  const summary = trpc.dashboard.summary.useQuery({ timeZone: "Africa/Cairo" });
-  const tasksQuery = trpc.tasks.list.useQuery();
-  const learning = trpc.learning.get.useQuery();
-  const profile = trpc.studentProfile.get.useQuery();
+  const { now: serverNow, status: serverClockStatus, refresh: refreshServerClock } = useServerClock();
+  const summary = trpc.dashboard.summary.useQuery({ timeZone: "Africa/Cairo" }, { enabled: Boolean(user) && !authLoading });
+  const tasksQuery = trpc.tasks.list.useQuery(undefined, { enabled: Boolean(user) && !authLoading });
+  const learning = trpc.learning.get.useQuery(undefined, { enabled: Boolean(user) && !authLoading });
+  const profile = trpc.studentProfile.get.useQuery(undefined, { enabled: Boolean(user) && !authLoading });
   const [showWelcomeGuide, setShowWelcomeGuide] = useState(false);
   const [welcomeGuideStep, setWelcomeGuideStep] = useState(0);
   const completeWelcomeGuide = trpc.studentProfile.completeWelcomeGuide.useMutation({
@@ -75,20 +89,25 @@ export default function Home() {
       await utils.studentProfile.get.invalidate();
       setShowWelcomeGuide(false);
     },
-    onError: error => toast.error(error.message || "تعذّر حفظ إكمال دليل البداية."),
+    onError: error => toast.error(error.message || "تعذّر حفظ إكمال إزاي تبدأ؟."),
   });
   const dailyPlan = trpc.plans.currentDaily.useQuery(undefined, {
+    enabled: Boolean(user) && !authLoading,
     staleTime: 10_000,
-    refetchInterval: query => query.state.data?.needsRefresh || !query.state.data?.plan ? 15_000 : 180_000,
+    refetchInterval: query => query.state.data?.needsRefresh ? 1_500 : !query.state.data?.plan ? 15_000 : 180_000,
     refetchOnWindowFocus: true, retry: 1,
   });
   const activeSessionQuery = trpc.learning.activeExternalSession.useQuery(undefined, {
+    enabled: Boolean(user) && !authLoading,
     refetchInterval: query => query.state.data ? 5_000 : false,
     refetchOnWindowFocus: true,
   });
 
   useEffect(() => {
-    if (profile.isSuccess && profile.data && !((profile.data.selection as Record<string, any> | undefined)?.welcomeGuideCompletedAt)) {
+    const selection = (profile.data?.selection ?? {}) as Record<string, any>;
+    if (profile.isSuccess && profile.data
+      && !selection.welcomeGuideCompletedAt
+      && Number(selection.setupCoachmarkVersion ?? 0) < 1) {
       setShowWelcomeGuide(true);
     }
   }, [profile.isSuccess, (profile.data?.selection as Record<string, any> | undefined)?.welcomeGuideCompletedAt]);
@@ -99,23 +118,33 @@ export default function Home() {
   }, [dailyPlan.data?.generatedAt]);
 
 
+  const autoPlanStarted = useRef(false);
   const ensurePlan = trpc.plans.ensureDaily.useMutation({
-    onSuccess: result => {
-      void utils.plans.currentDaily.invalidate();
-      void utils.dashboard.summary.invalidate();
-      void utils.tasks.list.invalidate();
-      toast.success(result.generated ? "تم تجهيز خطة اليوم وتحديث المهام." : "خطة اليوم جاهزة.");
-    },
-    onError: error => toast.error("تعذّر تجهيز الخطة: " + error.message),
-  });
-  const toggleTask = trpc.tasks.toggle.useMutation({
     onSuccess: () => {
-      void utils.dashboard.summary.invalidate();
-      void utils.tasks.list.invalidate();
-      void utils.plans.currentDaily.invalidate();
+      void Promise.all([
+        utils.plans.currentDaily.invalidate(),
+        utils.dashboard.summary.invalidate(),
+        utils.tasks.list.invalidate(),
+      ]);
     },
-    onError: error => toast.error(error.message || "تعذّر تحديث المهمة."),
+    onError: error => toast.error("تعذّر تجهيز خريطة المذاكرة تلقائيًا: " + error.message, { duration: 7_000 }),
   });
+
+  useEffect(() => {
+    if (autoPlanStarted.current || ensurePlan.isPending || profile.isLoading || profile.isError
+      || !profile.data?.subjectIds?.length || dailyPlan.isLoading || dailyPlan.isError || !dailyPlan.data) return;
+    if (dailyPlan.data.plan || dailyPlan.data.generatedAt || dailyPlan.data.needsRefresh) return;
+    autoPlanStarted.current = true;
+    ensurePlan.mutate({ forceRebuild: false });
+  }, [
+    profile.data?.subjectIds,
+    profile.isLoading,
+    profile.isError,
+    dailyPlan.data,
+    dailyPlan.isLoading,
+    dailyPlan.isError,
+    ensurePlan.isPending,
+  ]);
   const startSession = trpc.learning.startExternalSession.useMutation({
     onSuccess: async () => {
       await Promise.all([utils.learning.activeExternalSession.invalidate(), utils.learning.get.invalidate()]);
@@ -124,6 +153,7 @@ export default function Home() {
     onError: error => toast.error(error.message || "تعذّر بدء الجلسة."),
   });
   const [markComplete, setMarkComplete] = useState(false);
+  const [showFinishSessionDialog, setShowFinishSessionDialog] = useState(false);
   const finishSession = trpc.learning.finishExternalSession.useMutation({
     onSuccess: async result => {
       await Promise.all([
@@ -132,18 +162,13 @@ export default function Home() {
       ]);
       toast.success(result.lessonMarkedCompleted ? "انتهت الجلسة وتم تحديث تقدم الدرس." : "انتهت الجلسة وتم حفظ مدتها.");
       setMarkComplete(false);
+      setShowFinishSessionDialog(false);
     },
     onError: error => toast.error(error.message || "تعذّر إنهاء الجلسة."),
   });
 
-  const [now, setNow] = useState(Date.now());
   const session = (activeSessionQuery.data ?? null) as ExternalSession | null;
   const sessionInfo = useMemo(() => sessionLesson(session), [session]);
-  useEffect(() => {
-    if (!session) return;
-    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
-    return () => window.clearInterval(timer);
-  }, [session?.sessionId]);
 
   const priority = useMemo<Priority | null>(() => {
     const gaps = ((learning.data as any)?.gapByBranch ?? {}) as Record<string, Record<string, any>>;
@@ -264,73 +289,101 @@ export default function Home() {
   }, [mappedOpenTasks]);
 
   const dailyPlanPriority = useMemo<Priority | null>(() => {
-    const steps = dailyPlan.data?.plan?.steps ?? [];
+    const step = getNextOpenPlanStep(dailyPlan.data?.plan?.steps as any[] | undefined);
+    if (!step) return null;
+    const curriculumNodeIds = Array.isArray(step.curriculumNodeIds) ? step.curriculumNodeIds : [];
     const subjectIds = profile.data?.subjectIds ?? [];
-    for (const step of steps as any[]) {
-      const curriculumNodeIds = Array.isArray(step.curriculumNodeIds) ? step.curriculumNodeIds : [];
-      for (const subjectId of subjectIds) {
-        for (const branch of getSIECheckpointProgressBranches(subjectId)) {
-          const gap = (learning.data as any)?.gapByBranch?.[subjectId]?.[branch.branchId];
-          if (typeof gap?.studentPosition !== "number" || gap.referencePosition === null
-            || gap.referencePosition <= gap.studentPosition) continue;
-          const nextChoice = branch.choices[gap.studentPosition];
-          if (!nextChoice || !curriculumNodeIds.includes(nextChoice.nodeId)) continue;
-          return {
-            subjectId,
-            subjectName: getSIESubject(subjectId)?.nameAr ?? subjectId,
-            branchId: branch.branchId,
-            branchTitle: branch.branchId === "ARB_READING" ? "نصوص الوحدة" : branch.branchTitle,
-            gapCount: gap.gapCount ?? 0,
-            pointLabel: branch.branchType === "official_section" ? "موضوع" : "درس",
-            nextLesson: { nodeId: nextChoice.nodeId, title: nextChoice.title },
-            source: "daily_plan",
-            priority: step.priority ?? "medium",
-            priorityScore: typeof step.priorityScore === "number" ? step.priorityScore : undefined,
-            priorityReason: step.priorityReason,
-          };
-        }
+    const inferredTaskMatch = curriculumNodeIds.length === 0
+      ? matchSIECheckpointTask(subjectIds, [step.title, step.detail || "", step.category || ""].join(" "))
+      : null;
+    const orderedSubjectIds = inferredTaskMatch
+      ? [inferredTaskMatch.subjectId]
+      : subjectIds;
+    const targetNodeIds = curriculumNodeIds.length
+      ? curriculumNodeIds
+      : inferredTaskMatch ? [inferredTaskMatch.nodeId] : [];
+    for (const subjectId of orderedSubjectIds) {
+      for (const branch of getSIECheckpointProgressBranches(subjectId)) {
+        const nextChoice = branch.choices.find(choice => targetNodeIds.includes(choice.nodeId));
+        if (!nextChoice) continue;
+        const gap = (learning.data as any)?.gapByBranch?.[subjectId]?.[branch.branchId];
+        return {
+          subjectId,
+          subjectName: getSIESubject(subjectId)?.nameAr ?? subjectId,
+          branchId: branch.branchId,
+          branchTitle: branch.branchId === "ARB_READING" ? "نصوص الوحدة" : branch.branchTitle,
+          gapCount: typeof gap?.gapCount === "number" ? gap.gapCount : 0,
+          pointLabel: branch.branchType === "official_section" ? "موضوع" : "درس",
+          nextLesson: { nodeId: nextChoice.nodeId, title: nextChoice.title },
+          source: "daily_plan",
+          priority: step.priority ?? "medium",
+          priorityScore: typeof step.priorityScore === "number" ? step.priorityScore : undefined,
+          priorityReason: step.priorityReason ?? step.detail,
+        };
       }
     }
-    return null;
-  }, [dailyPlan.data, profile.data?.subjectIds, learning.data]);
 
-  const activePriority = taskPriority ?? nextTopicInTaskBranch ?? (dailyPlan.data?.needsRefresh
-    ? priority ?? dailyPlanPriority
-    : dailyPlanPriority ?? priority);
-  const completedTaskProgressConflicts = mappedOpenTasks.filter(item => item.isAlreadyCompleted);
+    // A plan may begin with an open obligation that is not linked to a curriculum
+    // node. Show that exact same first action instead of inventing another lesson.
+    return {
+      subjectId: "__PLAN_STEP__",
+      subjectName: "خطة المذاكرة",
+      branchId: "__PLAN_STEP__",
+      branchTitle: step.category || "خطوة تنفيذ",
+      gapCount: 0,
+      pointLabel: "خطوة",
+      nextLesson: null,
+      source: "daily_plan",
+      priority: step.priority ?? "medium",
+      priorityScore: typeof step.priorityScore === "number" ? step.priorityScore : undefined,
+      priorityReason: step.detail,
+      planStepTitle: step.title,
+      planStepDetail: step.detail,
+      planStepCategory: step.category,
+    };
+  }, [dailyPlan.data?.plan?.steps, profile.data?.subjectIds, learning.data]);
 
-  const teacherScheduleAnnouncements = useMemo(() => {
-    const selection = (profile.data?.selection ?? {}) as Record<string, any>;
-    const updates = Array.isArray(selection.teacherPublicUpdates) ? selection.teacherPublicUpdates : [];
-    return updates
-      .filter((update: any) =>
-        update.confidence === "high"
-        && ["lecture_cancelled", "class_suspended", "schedule_changed"].includes(update.announcementType)
-      )
-      .sort((left: any, right: any) => Date.parse(String(right.publishedAt)) - Date.parse(String(left.publishedAt)))
-      .slice(0, 4) as Array<{
-        externalId: string;
-        teacherId: string;
-        teacherName: string;
-        sourceType: "youtube" | "facebook";
-        title: string;
-        description: string;
-        url: string;
-        publishedAt: string;
-        announcementType: "lecture_cancelled" | "class_suspended" | "schedule_changed";
-        confidence: "high";
-        affectedDate?: string;
-      }>;
-  }, [profile.data?.selection]);
-
+  // The active daily plan is the source of truth. Do not let a separate task
+  // heuristic replace its first unfinished action on the dashboard.
+  const activePriority = dailyPlan.data?.needsRefresh
+    ? null
+    : dailyPlan.data?.plan
+      ? dailyPlanPriority
+      : taskPriority ?? nextTopicInTaskBranch ?? priority;
   const plan = dailyPlan.data?.plan;
-  const tasks = summary.data?.tasks ?? [];
+  const homeStudySteps = plan?.steps ?? [];
+  const homeDoneSteps = homeStudySteps.filter((step: any) =>
+    step.plannerTaskStatus === "done" || step.existingTask?.status === "done"
+  ).length;
+  const homeStudyProgress = homeStudySteps.length ? Math.round(homeDoneSteps / homeStudySteps.length * 100) : 0;
+  const homeNextStep = getNextOpenPlanStep(homeStudySteps as any[] | undefined);
+  const completedMonthlyExamKeys = useMemo(() => {
+    const values = ((profile.data?.selection as Record<string, any> | undefined)?.monthlyExamCompletions ?? {}) as Record<string, unknown>;
+    return Object.entries(values).filter(([, completedAt]) => Boolean(completedAt)).map(([key]) => key);
+  }, [profile.data?.selection]);
+  const markMonthlyExamCompleted = trpc.studentProfile.markMonthlyExamCompleted.useMutation({
+    onSuccess: async () => {
+      await utils.studentProfile.get.invalidate();
+      toast.success("اتسجل انتهاء الامتحان، وشلنا بطاقته من الاختبارات القادمة.");
+    },
+    onError: error => toast.error(error.message || "تعذّر تسجيل انتهاء الامتحان."),
+  });
+  const cairoExamDate = serverNow ? getDateKeyInTimeZone(serverNow, "Africa/Cairo") : null;
+  const upcomingExams = useMemo(
+    () => serverNow ? getUpcomingCairoSecondYearBaccalaureateExams(profile.data, serverNow, completedMonthlyExamKeys) : [],
+    [profile.data?.educationSystem, profile.data?.gradeYear, profile.data?.subjectIds, cairoExamDate, serverNow, completedMonthlyExamKeys],
+  );
+  const monthlyExamScopeRecords = ((profile.data?.selection as Record<string, any> | undefined)?.monthlyExamScopes ?? {}) as Record<string, unknown>;
+  const daysUntilExam = (date: string) => cairoExamDate ? Math.max(0, getCalendarDaysBetween(cairoExamDate, date)) : 0;
+  const homeNextStepIndex = homeNextStep ? homeStudySteps.indexOf(homeNextStep) : -1;
   const taskCount = summary.data?.taskStats.total ?? 0;
   const completed = summary.data?.taskStats.completed ?? 0;
   const remaining = summary.data?.taskStats.remaining ?? 0;
   const completion = taskCount ? Math.round(completed / taskCount * 100) : 0;
   const startedAt = session?.startedAt ? Date.parse(session.startedAt) : NaN;
-  const elapsed = Number.isFinite(startedAt) ? Math.max(0, Math.floor((now - startedAt) / 1000)) : 0;
+  const elapsed = serverNow && Number.isFinite(startedAt)
+    ? Math.max(0, Math.floor((serverNow.getTime() - startedAt) / 1000))
+    : 0;
   const firstName = profile.data?.studentName?.trim().split(/\s+/)[0] || user?.name?.trim().split(/\s+/)[0] || "بك";
 
   const openStudySteps = (subjectId: string, branchId: string, lessonId: string) => {
@@ -338,34 +391,38 @@ export default function Home() {
     setLocation("/sq3r?" + params.toString());
   };
   const finishCurrentSession = () => {
+    if (session) setShowFinishSessionDialog(true);
+  };
+  const confirmFinishCurrentSession = () => {
     if (session) finishSession.mutate({ sessionId: session.sessionId, markLessonCompleted: markComplete });
   };
+  const finishTimeLabel = serverNow ? formatTime12Hour(serverNow, "ar-EG", "Africa/Cairo") : "—";
 
   const welcomeGuide = [
     {
-      title: "خلّي StudyFlow يعرف نظامك الدراسي",
-      body: "من الملف الدراسي اختار الصف والمسار والمواد والمدرس لكل مادة، وسجّل مواعيد المحاضرات الأسبوعية أو حدّد إن المواعيد غير ثابتة. تقدر تعدّل البيانات دي في أي وقت.",
+      title: "سجّل بياناتك الدراسية",
+      body: "اختار الصف والمسار والمواد، ثم حدّد مدرس كل مادة ومواعيد حصصه. تقدر تعدّل البيانات دي لاحقًا.",
       action: "فتح الملف الدراسي",
       path: "/settings",
       icon: GraduationCap,
     },
     {
-      title: "سجّل آخر نقطة وصلت لها",
-      body: "في صفحة المذاكرة اختار المادة والوحدة، وبعدها حدّد آخر موضوع أنهيته وموضع المدرس. المنصة تحسب المتراكم داخل كل فرع وتبدأ من الموضوع التالي، وتقدر تفتح تفاصيل الدروس وقت ما تحتاج.",
+      title: "حدّد موضعك وموضع المدرس",
+      body: "اختار آخر درس ذاكرته، وسجّل آخر درس شرحه المدرس لو تعرفه. هنفصل بين تقدمك الشخصي وبين مرجع المدرس.",
       action: "فتح المذاكرة والتقدم",
       path: "/study",
       icon: BookOpenText,
     },
     {
-      title: "خلّي الخطة ترتّب القديم والجديد",
-      body: "الخطة الذكية توازن بين المهام المتراكمة والاستعداد للمحاضرة القادمة حسب جدول المدرس. تقدر تختار التركيز على المتراكم أو مواكبة المدرس، وتراجع التوزيع قبل اعتماد المهام.",
+      title: "راجع أولويات خطتك",
+      body: "الخطة ترتّب المتراكم والدروس الجديدة حسب الأولوية والاختبارات ومواعيد المدرسين. راجع التوزيع قبل اعتماده.",
       action: "فتح خطة المذاكرة",
       path: "/planner",
       icon: Sparkles,
     },
     {
-      title: "ابدأ من خطوة واحدة",
-      body: "لو فيه مهمة جاهزة ابدأ بها من مساحة اليوم. سجّل جلسة المذاكرة، وحدّث تقدم الدرس بعد ما تخلص. لو المدرس أعلن تغييرًا واضحًا في الموعد، المنصة تستخدم الإعلان في إعادة ترتيب الخطة.",
+      title: "ابدأ من خريطة اليوم",
+      body: "افتح أول خطوة مفتوحة، ذاكر من مصدرها، ثم سجّل تقدمك بعد ما تخلص. بعد الحصة هنطلب منك تأكيد ما شرحه المدرس عند الحاجة.",
       action: "ابدأ من مساحة اليوم",
       path: "/",
       icon: Play,
@@ -388,7 +445,7 @@ export default function Home() {
       <div className="space-y-6 pb-6">
         <header className="sf-home-greeting flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="text-sm font-medium text-muted-foreground">{cairoDate()}</p>
+            <p className="text-sm font-medium text-muted-foreground">{cairoDate(serverNow)}</p>
             <h2 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">أهلًا {firstName}، نبدأ بإيه النهارده؟</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
               ابدأ بخطوة واحدة واضحة. خطتك ومهامك وتقدمك موجودين هنا من غير ما تحتاج تدور بينهم.
@@ -402,49 +459,11 @@ export default function Home() {
           </div>
         </header>
 
-        {teacherScheduleAnnouncements.length > 0 && (
-          <section className="overflow-hidden rounded-[1.6rem] border border-[#C9ED62]/25 bg-[#141B12] text-[#F1F0E8] shadow-[0_24px_70px_-48px_rgba(0,0,0,.8)]">
-            <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3 sm:px-5">
-              <div className="flex items-center gap-2">
-                <span className="flex size-8 items-center justify-center rounded-xl bg-[#C9ED62]/15 text-[#C9ED62]"><CalendarDays className="size-4" /></span>
-                <div><h3 className="text-sm font-bold">تحديثات مهمة من المدرسين</h3><p className="mt-0.5 text-[10px] text-[#AAB09E]">إعلانات عامة واضحة تم التحقق من نوعها</p></div>
-              </div>
-              <Badge className="rounded-full border border-[#C9ED62]/25 bg-[#C9ED62]/10 text-[#DCE8B7]">{teacherScheduleAnnouncements.length} جديد</Badge>
-            </div>
-            <div className="divide-y divide-white/10">
-              {teacherScheduleAnnouncements.map(update => (
-                <article key={update.externalId} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-[#C9ED62]">{update.announcementType === "lecture_cancelled" ? "إلغاء محاضرة" : update.announcementType === "class_suspended" ? "توقف / راحة من المحاضرات" : "تغيير موعد محاضرة"} · {update.teacherName}</p>
-                    <p className="mt-1 text-sm font-bold">{update.title}</p>
-                    {update.description && update.description !== update.title && <p className="mt-1 line-clamp-2 text-xs leading-5 text-[#B9C1AF]">{update.description}</p>}
-                    {update.affectedDate && <p className="mt-1 text-[10px] text-[#AAB09E]">التاريخ المذكور: {update.affectedDate}</p>}
-                  </div>
-                  <a href={update.url} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-[#C9ED62]/25 bg-white/[.04] px-3 py-2 text-[11px] font-bold text-[#DCE8B7] hover:bg-white/[.08]">فتح المصدر <ArrowLeft className="size-3" /></a>
-                </article>
-              ))}
-            </div>
-          </section>
-        )}
-
         {summary.isError && <QueryErrorNotice onRetry={() => void summary.refetch()} label="تعذّر تحميل مهامك. أعد المحاولة؛ بياناتك لم تُحذف." />}
         {learning.isError && <QueryErrorNotice onRetry={() => void learning.refetch()} label="تعذّر تحميل تقدم المنهج. يمكنك متابعة مهامك أثناء إعادة المحاولة." />}
         {dailyPlan.isError && <QueryErrorNotice onRetry={() => void dailyPlan.refetch()} label="تعذّر تحميل خطة اليوم." />}
-        {completedTaskProgressConflicts.length > 0 && (
-          <section className="rounded-2xl border border-amber-500/25 bg-amber-500/[0.045] p-4">
-            <h3 className="text-sm font-bold">فيه مهام مرتبطة بموضوعات مسجلة كمكتملة</h3>
-            <p className="mt-1 text-xs leading-6 text-muted-foreground">المهمة المفتوحة لا تعني أن الموضوع مكتمل، وموضع التقدم لا يتغير بمجرد وجود مهمة. راجع الموضع أو حالة المهمة حتى لا تتعارض البيانات.</p>
-            <div className="mt-2 space-y-1">
-              {completedTaskProgressConflicts.slice(0,3).map(item => (
-                <p key={item.task.id} className="text-xs">{item.task.title} — {item.match.title}</p>
-              ))}
-            </div>
-            <Button variant="outline" size="sm" className="mt-3 rounded-lg" onClick={() => setLocation("/study")}>مراجعة مواضع التقدم</Button>
-          </section>
-        )}
-
         {session && (
-          <section className="overflow-hidden rounded-3xl border border-primary/30 bg-primary/5">
+          <section className="sf-active-study-session overflow-hidden rounded-3xl border border-primary/30 bg-primary/5">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-primary/15 px-5 py-4 sm:px-6">
               <div className="flex items-center gap-3">
                 <span className="flex size-10 items-center justify-center rounded-2xl bg-primary text-primary-foreground"><Timer className="size-5" /></span>
@@ -454,17 +473,12 @@ export default function Home() {
             </div>
             <div className="grid gap-5 p-5 sm:grid-cols-[1fr_auto] sm:items-center sm:px-6">
               <div className="min-w-0">
-                <p className="text-xs font-semibold text-muted-foreground">{sessionInfo?.subject} · {sessionInfo?.branch}</p>
+                <p className="text-xs font-semibold text-muted-foreground">{sessionInfo?.subject}</p>
                 <h3 className="mt-1 text-lg font-bold">{sessionInfo?.lesson}</h3>
                 <p className="mt-1 text-sm text-muted-foreground">كمّل مذاكرتك أو افتح خطوات الفهم والاسترجاع، ثم أنهِ الجلسة لحفظ مدتها.</p>
                 <div className="mt-4 flex flex-wrap items-center gap-3">
                   <Button variant="outline" className="rounded-xl" onClick={() => openStudySteps(session.subjectId, session.branchId, session.lessonId)}>خطوات المذاكرة <ArrowLeft className="size-4" /></Button>
-                  <div className="flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-2">
-                    <label htmlFor="mark-session-lesson" className="flex cursor-pointer items-center gap-2 text-xs font-medium">
-                      <input id="mark-session-lesson" type="checkbox" checked={markComplete} onChange={event => setMarkComplete(event.target.checked)} className="size-4 accent-primary" />
-                      سجّل الدرس كمكتمل
-                    </label>
-                  </div>
+                  <span className="text-xs text-muted-foreground">عند الإنهاء ستختار هل الدرس اكتمل أم تحفظ الوقت فقط.</span>
                 </div>
               </div>
               <div className="flex min-w-[175px] flex-col items-center gap-3 rounded-2xl border border-primary/15 bg-background p-4">
@@ -477,6 +491,68 @@ export default function Home() {
             </div>
           </section>
         )}
+
+        <AnimatePresence>
+          {showFinishSessionDialog && session && (
+            <motion.div
+              className="sf-session-finish-overlay"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              role="presentation"
+              onClick={event => {
+                if (event.target === event.currentTarget && !finishSession.isPending) setShowFinishSessionDialog(false);
+              }}
+            >
+              <motion.section
+                className="sf-session-finish-dialog"
+                role="dialog" aria-modal="true" aria-labelledby="sf-session-finish-title"
+                initial={{ opacity: 0, y: 24, scale: .97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 16, scale: .98 }}
+                transition={{ duration: .22, ease: "easeOut" }}
+              >
+                <header className="sf-session-finish-header">
+                  <div className="sf-session-finish-heading">
+                    <span className="sf-session-finish-mark"><CheckCircle2 className="size-5" /></span>
+                    <div>
+                      <span>مراجعة الجلسة</span>
+                      <h2 id="sf-session-finish-title">خلصت مذاكرتك؟</h2>
+                      <p>{sessionInfo?.subject} · {sessionInfo?.lesson}</p>
+                    </div>
+                  </div>
+                  <button type="button" className="sf-session-finish-close" aria-label="إغلاق" disabled={finishSession.isPending} onClick={() => setShowFinishSessionDialog(false)}>
+                    <X className="size-4" />
+                  </button>
+                </header>
+                <div className="sf-session-finish-stats">
+                  <div><span><Clock3 className="size-4" /> الوقت المسجل</span><strong dir="ltr">{durationLabel(elapsed)}</strong></div>
+                  <div><span>وقت الإنهاء</span><strong>{finishTimeLabel}</strong></div>
+                </div>
+                <div className="sf-session-finish-question">
+                  <strong>حدّد حالة الدرس قبل الحفظ</strong>
+                  <p>اختَر ما حدث فعلًا. لن نضع علامة اكتمال على الدرس من دون اختيارك.</p>
+                </div>
+                <div className="sf-session-finish-options" role="group" aria-label="حالة الدرس بعد الجلسة">
+                  <button type="button" aria-pressed={markComplete} className={markComplete ? "is-selected" : ""} onClick={() => setMarkComplete(true)}>
+                    <span className="sf-session-finish-option-icon"><CheckCircle2 className="size-5" /></span>
+                    <span><b>أنهيت الدرس</b><small>احفظ الوقت وسجّل الدرس كمكتمل في تقدمك.</small></span>
+                    <i>{markComplete ? <Check className="size-4" /> : null}</i>
+                  </button>
+                  <button type="button" aria-pressed={!markComplete} className={!markComplete ? "is-selected" : ""} onClick={() => setMarkComplete(false)}>
+                    <span className="sf-session-finish-option-icon"><Timer className="size-5" /></span>
+                    <span><b>احفظ الوقت فقط</b><small>احتفظ بمدة الجلسة، واترك حالة الدرس كما هي.</small></span>
+                    <i>{!markComplete ? <Check className="size-4" /> : null}</i>
+                  </button>
+                </div>
+                <footer className="sf-session-finish-footer">
+                  <Button type="button" variant="outline" disabled={finishSession.isPending} onClick={() => setShowFinishSessionDialog(false)}>العودة للجلسة</Button>
+                  <Button type="button" disabled={finishSession.isPending} onClick={confirmFinishCurrentSession}>
+                    {finishSession.isPending ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />} حفظ وإنهاء الجلسة
+                  </Button>
+                </footer>
+              </motion.section>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(300px,.75fr)]">
           <section className="sf-next-action-card relative overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
@@ -492,16 +568,25 @@ export default function Home() {
                       : <Badge variant="secondary">{activePriority.gapCount} {activePriority.pointLabel} في الفجوة</Badge>
                 )}
               </div>
-              {learning.isLoading || (dailyPlan.isLoading && !priority) ? (
+              {learning.isLoading || dailyPlan.isLoading ? (
                 <div className="mt-8 space-y-3"><div className="h-5 w-32 animate-pulse rounded bg-muted" /><div className="h-8 w-3/4 animate-pulse rounded bg-muted" /><div className="h-4 w-full animate-pulse rounded bg-muted" /></div>
-              ) : activePriority?.nextLesson ? (
+              ) : dailyPlan.data?.needsRefresh ? (
+                <div className="mt-6 rounded-2xl bg-muted/45 p-5">
+                  <span className="flex size-11 items-center justify-center rounded-2xl bg-background text-primary"><RefreshCw className="size-5 animate-spin" /></span>
+                  <h3 className="mt-4 text-lg font-bold">بنحدّث أولوياتك من بياناتك الأخيرة</h3>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">لن نعرض درسًا قديمًا كخطوة قادمة أثناء إعادة بناء الخطة.</p>
+                  <Button variant="outline" onClick={() => setLocation("/planner")} className="mt-4 rounded-xl">افتح خريطة خطة المذاكرة <ArrowLeft className="size-4" /></Button>
+                </div>
+              ) : activePriority?.nextLesson || activePriority?.planStepTitle ? (
                 <>
-                  <p className="mt-6 text-xs font-semibold text-muted-foreground">{activePriority.subjectName} · {activePriority.branchTitle}</p>
-                  <h3 className="mt-2 text-2xl font-bold leading-tight sm:text-3xl">{activePriority.nextLesson.title}</h3>
+                  <p className="mt-6 text-xs font-semibold text-muted-foreground">{activePriority.subjectName}</p>
+                  <h3 className="mt-2 text-2xl font-bold leading-tight sm:text-3xl">{activePriority.nextLesson?.title ?? activePriority.planStepTitle}</h3>
                   <p className="mt-3 max-w-2xl text-sm leading-7 text-muted-foreground">
                     {activePriority.source === "task"
                       ? "لديك مهمة مفتوحة بالفعل لهذا الموضوع؛ سنوجّهك إلى المهمة الموجودة بدل إنشاء نسخة مكررة."
-                      : "دي الخطوة التالية حسب موضعك المسجل وموضع التدريس. ابدأ جلسة، وبعدها حدّث تقدمك الفعلي."}
+                      : activePriority.source === "daily_plan"
+                        ? activePriority.planStepDetail ?? "دي أول خطوة غير مكتملة في خطة المذاكرة الحالية."
+                        : "دي الخطوة التالية حسب موضعك المسجل وموضع التدريس. ابدأ جلسة، وبعدها حدّث تقدمك الفعلي."}
                   </p>
                   {activePriority.priorityReason && (
                     <p className="mt-2 rounded-xl border border-primary/15 bg-primary/[0.04] px-3 py-2 text-xs leading-6 text-muted-foreground">
@@ -511,16 +596,21 @@ export default function Home() {
                   )}
                   {activePriority.taskTitle && <p className="mt-2 text-xs text-muted-foreground">المهمة المسجلة: {activePriority.taskTitle}</p>}
                   <div className="mt-6 flex flex-wrap gap-2">
-                    <Button
-                      onClick={() => startSession.mutate({ subjectId: activePriority.subjectId, branchId: activePriority.branchId, lessonId: activePriority.nextLesson!.nodeId })}
-                      disabled={Boolean(session) || startSession.isPending}
-                      className="rounded-xl px-5"
-                    >
-                      {startSession.isPending ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
-                      {session ? "أنهِ الجلسة الحالية أولًا" : "ابدأ جلسة مذاكرة"}
-                    </Button>
+                    {activePriority.nextLesson && (
+                      <>
+                        <Button
+                          onClick={() => startSession.mutate({ subjectId: activePriority.subjectId, branchId: activePriority.branchId, lessonId: activePriority.nextLesson!.nodeId })}
+                          disabled={Boolean(session) || startSession.isPending}
+                          className="rounded-xl px-5"
+                        >
+                          {startSession.isPending ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
+                          {session ? "أنهِ الجلسة الحالية أولًا" : "ابدأ جلسة مذاكرة"}
+                        </Button>
+                        <Button variant="outline" onClick={() => openStudySteps(activePriority.subjectId, activePriority.branchId, activePriority.nextLesson!.nodeId)} className="rounded-xl">افتح تقدم الموضوع</Button>
+                      </>
+                    )}
                     {activePriority.taskId && <Button variant="outline" onClick={() => setLocation("/tasks")} className="rounded-xl">فتح المهمة الموجودة</Button>}
-                    <Button variant="outline" onClick={() => openStudySteps(activePriority.subjectId, activePriority.branchId, activePriority.nextLesson!.nodeId)} className="rounded-xl">افتح تقدم الموضوع</Button>
+                    {activePriority.source === "daily_plan" && <Button variant="outline" onClick={() => setLocation("/planner")} className="rounded-xl">افتح الخطوة في خريطة الخطة</Button>}
                   </div>
                 </>
               ) : (
@@ -549,130 +639,273 @@ export default function Home() {
           </section>
         </div>
 
-        <section className="sf-daily-plan-card overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4 sm:px-6">
-            <div><p className="text-xs font-semibold text-muted-foreground">تخطيط تلقائي</p><h3 className="mt-1 text-lg font-bold">{plan?.title ?? "خطة المذاكرة"}</h3></div>
-            <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setLocation("/planner")}>تفاصيل الخطة <ArrowLeft className="size-4" /></Button>
-          </div>
-          {dailyPlan.isLoading ? (
-            <div className="space-y-3 p-5"><div className="h-4 w-2/3 animate-pulse rounded bg-muted" /><div className="h-4 w-full animate-pulse rounded bg-muted" /></div>
-          ) : plan ? (
-            <div className="p-5 sm:p-6">
-              <p className="max-w-3xl text-sm leading-7 text-muted-foreground">{plan.summary}</p>
-              <div className="mt-5 grid gap-3 md:grid-cols-3">
-                {plan.steps.slice(0, 3).map((step: any, index: number) => (
-                  <article key={index} className="rounded-2xl border border-border/75 bg-background p-4">
-                    <div className="flex items-center justify-between gap-2"><Badge variant="secondary" className="max-w-[70%] truncate">{step.category}</Badge></div>
-                    <h4 className="mt-3 font-semibold leading-6">{step.title}</h4>
-                    <p className="mt-1 line-clamp-2 text-xs leading-6 text-muted-foreground">{step.detail}</p>
-                  </article>
-                ))}
+        <section className="sf-daily-plan-card sf-home-study-map">
+          <header className="sf-home-study-map-header">
+            <div className="sf-home-study-map-title">
+              <span>أولوياتك اليوم</span>
+              <h3>خريطة مذاكرة اليوم</h3>
               </div>
+            <Button variant="outline" size="sm" className="sf-home-study-map-open" onClick={() => setLocation("/planner")}>
+              الخريطة الكاملة <ArrowLeft className="size-4" />
+            </Button>
+          </header>
+          {dailyPlan.isLoading ? (
+            <div className="sf-home-study-map-loading" aria-busy="true">
+              <div /><div /><div />
+            </div>
+          ) : plan ? (
+            <div className="sf-home-study-map-body">
+              <div className="sf-home-study-map-summary">
+                <div className="sf-home-study-map-progress">
+                  <div className="sf-home-study-map-progress-copy">
+                    <span>تقدم تنفيذ الخطة</span>
+                    <strong>{homeDoneSteps.toLocaleString("ar-EG")} <small>من {homeStudySteps.length.toLocaleString("ar-EG")}</small></strong>
+                  </div>
+                  <b>{homeStudyProgress.toLocaleString("ar-EG")}%</b>
+                </div>
+                <Progress value={homeStudyProgress} className="sf-home-study-map-progress-rail" />
+              </div>
+              {homeStudySteps.length ? (
+                <div className="sf-home-study-path" aria-label="تسلسل خطوات المذاكرة اليوم">
+                  {homeStudySteps.slice(0, 6).map((step: any, index: number) => {
+                    const isDone = step.plannerTaskStatus === "done" || step.existingTask?.status === "done";
+                    const isNext = index === homeNextStepIndex;
+                    const curriculum = getPlannerStepCurriculum(step, profile.data?.subjectIds ?? []);
+                    const nodeId = step.curriculumNodeIds?.[0];
+                    const branch = curriculum && nodeId
+                      ? getSIECheckpointProgressBranches(curriculum.subjectId).find(item => item.choices.some(choice => choice.nodeId === nodeId))
+                      : null;
+                    const isEnglishCurriculum = curriculum?.subjectId === "ENG1_G2_BAC";
+                    const unitTitle = isEnglishCurriculum ? curriculum?.unitTitle : displayCurriculumTitle(curriculum?.unitTitle);
+                    const unitLabel = isEnglishCurriculum && curriculum?.unitNumber
+                      ? "Unit " + curriculum.unitNumber + (unitTitle ? " — " + unitTitle : "")
+                      : curriculum?.unitNumber
+                        ? "الوحدة " + curriculum.unitNumber.toLocaleString("ar-EG")
+                        : unitTitle || "";
+                    const lessonLabel = curriculum?.subjectId === "ENG1_G2_BAC"
+                      ? curriculum.branchId === "ENG_VOCABULARY" ? "Lesson 1 — Vocabulary"
+                        : curriculum.branchId === "ENG_GRAMMAR" ? "Lesson " + (curriculum.lessonNumber || "2") + " — Grammar"
+                          : curriculum.lessonNumber ? "Lesson " + curriculum.lessonNumber : ""
+                      : curriculum?.lessonNumber ? "الدرس " + curriculum.lessonNumber : "";
+                    const displayStepTitle = curriculum?.subjectId === "ENG1_G2_BAC" ? curriculum.lesson : step.title;
+                    return (
+                      <article key={step.plannerTaskId ?? step.existingTask?.id ?? step.sourceStepIndex ?? index}
+                        className={"sf-home-study-step " + (step.examFocus ? "is-exam-focus " : "") + (isDone ? "is-done" : isNext ? "is-next" : "is-upcoming")}
+                        data-testid={"home-study-step-" + index}>
+                        <div className="sf-home-study-step-marker" aria-hidden="true">
+                          {isDone ? <CheckCircle2 className="size-4" /> : <span>{(index + 1).toLocaleString("ar-EG")}</span>}
+                        </div>
+                        <div className="sf-home-study-step-content">
+                          <div className="sf-home-study-step-meta">
+                            <Badge variant="secondary">{step.category || "خطوة دراسية"}</Badge>
+                            {typeof step.minutes === "number" && step.minutes > 0 && <span><Clock3 className="size-3.5" />{step.minutes.toLocaleString("ar-EG")} دقيقة</span>}
+                            {step.day && <span>{step.day}</span>}
+                            {isDone ? <strong>مكتملة</strong> : isNext ? <strong>ابدأ من هنا</strong> : <span>قادمة</span>}
+                          </div>
+                          {(unitLabel || lessonLabel) && (
+                            <div className="sf-home-study-step-curriculum" aria-label="موضع الدرس في المنهج">
+                              {unitLabel && <span>{unitLabel}</span>}
+                              {lessonLabel && <span>{lessonLabel}</span>}
+                            </div>
+                          )}
+                          <h4>{displayStepTitle}</h4>
+                          {step.detail && <p>{step.detail}</p>}
+                          {Array.isArray(step.studyMethod?.stages) && step.studyMethod.stages.length > 0 && (
+                            <ol className="sf-home-study-step-stages" aria-label="مراحل تنفيذ المهمة">
+                              {step.studyMethod.stages.slice(0, 3).map((stage: any, stageIndex: number) => (
+                                <li key={stageIndex}>
+                                  <span>{(stageIndex + 1).toLocaleString("ar-EG")}</span>
+                                  <b>{stage.title}</b>
+                                </li>
+                              ))}
+                            </ol>
+                          )}
+                          {curriculum && branch && nodeId && (
+                            <a className="sf-home-study-step-action"
+                              href={"/study?subject=" + encodeURIComponent(curriculum.subjectId)
+                                + "&branch=" + encodeURIComponent(branch.branchId)
+                                + "&lesson=" + encodeURIComponent(nodeId)}>
+                              افتح الدرس <ArrowLeft className="size-3.5" />
+                            </a>
+                          )}
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="sf-home-study-map-empty">
+                  <CheckCircle2 className="size-8" />
+                  <strong>الخطة جاهزة، لكن مفيش خطوات ظاهرة لليوم حاليًا.</strong>
+                  <span>افتح الخطة الكاملة لمراجعة توزيعك وتحديثه.</span>
+                </div>
+              )}
+              <footer className="sf-home-study-map-footer">
+                <div>
+                  <strong>{homeNextStep ? "الخطوة التالية: " + homeNextStep.title : "أنهيت كل خطوات الخطة الحالية"}</strong>
+                  <span>{homeNextStep ? "افتح الخطوة، نفّذها من مصدرها، وبعدها سجّل ما أنجزته." : "انتهت خطوات اليوم؛ افتح الخطة الكاملة لمراجعة الأيام القادمة."}</span>
+                </div>
+                <Button onClick={() => setLocation("/planner")} className="rounded-xl">
+                  كل خطوات الخطة <ArrowLeft className="size-4" />
+                </Button>
+              </footer>
               {dailyPlan.data?.needsRefresh && (
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/20 bg-amber-500/[0.04] px-3 py-2.5">
-                  <p className="text-xs leading-5 text-muted-foreground">تغير تقدمك أو مهامك منذ آخر إنشاء للخطة؛ الأولوية القديمة لن تُعرض باعتبارها الحالية.</p>
-                  <Button size="sm" variant="outline" className="rounded-lg" onClick={() => ensurePlan.mutate()} disabled={ensurePlan.isPending}>
-                    {ensurePlan.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
-                    تحديث خطة اليوم
-                  </Button>
+                <div className="sf-home-study-map-sync" role="status" aria-live="polite">
+                  <Loader2 className="size-4 animate-spin" />
+                  <div>
+                    <strong>الخريطة بتُعاد مواءمتها</strong>
+                    <span>وصل تحديث في تقدمك أو مواعيدك؛ لن نعرض الترتيب القديم كأنه نهائي.</span>
+                  </div>
                 </div>
               )}
             </div>
           ) : (
-            <div className="flex flex-col items-start gap-3 p-5 sm:p-6">
-              <p className="max-w-2xl text-sm leading-7 text-muted-foreground">
-                {profile.data?.subjectIds?.length
-                  ? "لا توجد خطة معتمدة حاليًا. افتح خطة المذاكرة لتكوين المقترح ومراجعته؛ بعد اعتماده ستظهر خطواته ومهامه هنا."
-                  : "أكمل المواد ومواعيد المحاضرات في ملفك الدراسي؛ بعدها ستتكوّن خطة المذاكرة تلقائيًا عند دخولك."}
-              </p>
+            <div className="sf-home-study-map-empty" role="status" aria-live="polite">
               {profile.data?.subjectIds?.length ? (
-                <Button onClick={() => setLocation("/planner")} variant="outline" className="rounded-xl">
-                  إنشاء خطة المذاكرة <ArrowLeft className="size-4" />
-                </Button>
+                <>
+                  <Loader2 className="size-8 animate-spin" />
+                  <strong>{ensurePlan.isPending ? "بنرتّب أولويات اليوم" : "خريطة اليوم قيد التجهيز"}</strong>
+                  <p>هنعرض لك أول مهمة واضحة، ثم باقي الخطوات المرتبطة بموضعك في المنهج.</p>
+                </>
               ) : (
-                <Button onClick={() => setLocation("/settings/academic")} variant="outline" className="rounded-xl">
-                  إكمال الملف الدراسي <ArrowLeft className="size-4" />
-                </Button>
+                <>
+                  <Sparkles className="size-8" />
+                  <strong>ابدأ بإعداد ملفك الدراسي</strong>
+                  <p>اختَر موادك ومدرسيك ومواعيد الحصص؛ بعدها نقدر نحدد أولوياتك بدقة.</p>
+                  <Button onClick={() => setLocation("/settings/academic")} variant="outline" className="rounded-xl">إكمال الملف الدراسي <ArrowLeft className="size-4" /></Button>
+                </>
               )}
             </div>
           )}
         </section>
 
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,.85fr)]">
-          <section className="rounded-3xl border border-border bg-card shadow-sm">
-            <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
-              <div><p className="text-xs font-semibold text-muted-foreground">ابدأ بالتنفيذ</p><h3 className="mt-1 text-lg font-bold">المهام القادمة</h3></div>
-              <Button variant="ghost" size="sm" onClick={() => setLocation("/tasks")}>الكل <ArrowLeft className="size-4" /></Button>
-            </div>
-            <div className="divide-y divide-border/70">
-              {summary.isLoading ? (
-                <div className="space-y-3 p-5"><div className="h-5 w-3/4 animate-pulse rounded bg-muted" /><div className="h-5 w-1/2 animate-pulse rounded bg-muted" /></div>
-              ) : tasks.length ? tasks.slice(0, 5).map(task => (
-                <div key={task.id} className="flex items-center gap-3 px-5 py-4">
-                  <button type="button" onClick={() => toggleTask.mutate({ id: task.id, done: true })} disabled={toggleTask.isPending} aria-label={"إكمال " + task.title} className="flex size-6 shrink-0 items-center justify-center rounded-full border border-primary/40 text-primary transition hover:bg-primary hover:text-primary-foreground disabled:opacity-50"><Check className="size-3.5" /></button>
-                  <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{task.title}</p><p className="mt-1 text-xs text-muted-foreground"><span>{task.category || "مهمة دراسية"}</span>{task.dueAt && dueLabel(task.dueAt) && <span> · {dueLabel(task.dueAt)}</span>}</p></div>
-                  <Badge variant={task.priority === "high" ? "destructive" : "secondary"} className="shrink-0">{task.priority === "high" ? "مهمة" : task.priority === "medium" ? "متوسطة" : "مرنة"}</Badge>
-                </div>
-              )) : (
-                <div className="p-5 text-center"><CheckCircle2 className="mx-auto size-8 text-emerald-600" /><p className="mt-2 font-semibold">مفيش مهام معلّقة</p><p className="mt-1 text-xs text-muted-foreground">راجع خطتك أو أضف مهمة جديدة.</p></div>
-              )}
-            </div>
+        {!serverNow && (
+          <section className="app-card flex flex-wrap items-center justify-between gap-3 p-4" role="status" aria-live="polite">
+            <p className="text-sm text-muted-foreground">
+              {serverClockStatus === "unavailable"
+                ? "تعذرت مزامنة التاريخ والوقت من الخادم؛ لم نستخدم ساعة جهازك."
+                : "جارٍ مزامنة التاريخ والوقت من خادم StudyFlow."}
+            </p>
+            {serverClockStatus === "unavailable" && (
+              <Button type="button" size="sm" variant="outline" onClick={() => void refreshServerClock()}>
+                إعادة المحاولة
+              </Button>
+            )}
           </section>
-
-          <section className="rounded-3xl border border-border bg-card p-5 shadow-sm">
-            <div className="flex items-center gap-2 text-sm font-semibold"><Compass className="size-4 text-primary" />وصول سريع</div>
-            <div className="mt-4 grid grid-cols-2 gap-2">
-              {[
-                { label: "خريطة المنهج", description: "المواد والدروس", path: "/learning-map", icon: GraduationCap },
-                { label: "المساعد الدراسي", description: "اسأل وافهم", path: "/assistant", icon: MessageCircle },
-                { label: "مكتبتك", description: "الكتب والمصادر", path: "/books", icon: BookOpenText },
-                { label: "التقويم", description: "مواعيدك", path: "/calendar", icon: CalendarDays },
-              ].map(item => (
-                <button key={item.path} type="button" onClick={() => setLocation(item.path)} className="group rounded-2xl border border-border bg-background p-3 text-right transition hover:border-primary/40 hover:bg-muted/45">
-                  <item.icon className="size-5 text-primary" /><span className="mt-3 block text-sm font-semibold">{item.label}</span><span className="mt-1 block text-[11px] text-muted-foreground">{item.description}</span>
-                </button>
-              ))}
+        )}
+        {upcomingExams.length > 0 && (
+          <section className="sf-home-exam-calendar" aria-labelledby="sf-home-exam-calendar-title">
+            <header className="sf-home-exam-calendar-header">
+              <div>
+                <span className="sf-sp-eyebrow">مواعيد الاختبارات</span>
+                <h3 id="sf-home-exam-calendar-title">اختباراتك القادمة</h3>
+                <p>المواعيد المنشورة للمواد الموجودة في ملفك. راجع إعلان المدرسة للتأكيد النهائي.</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="sf-home-exam-calendar-status">مواعيد مقترحة</span>
+                <Button type="button" variant="outline" size="sm" className="rounded-full"
+                  onClick={() => setLocation("/planner")}>افتح خطة المذاكرة</Button>
+              </div>
+            </header>
+            <div className="sf-home-exam-calendar-track">
+              {upcomingExams.map((exam, index) => {
+                const days = daysUntilExam(exam.date);
+                const dateLabel = new Intl.DateTimeFormat("ar-EG", {
+                  day: "numeric", month: "long", timeZone: "Africa/Cairo",
+                }).format(new Date(exam.date + "T12:00:00Z"));
+                const examScope = buildMonthlyExamCoveredScope([exam.subjectId], monthlyExamScopeRecords, exam.date);
+                const coveredLessonCount = examScope.reduce((total, branch) => total + branch.lessonTitles.length, 0);
+                const excludedLessonCount = examScope.reduce((total, branch) => total + branch.excludedLessonTitles.length, 0);
+                return (
+                  <article key={exam.subjectId} className={"sf-home-exam-item" + (days === 0 ? " is-exam-today" : days === 1 ? " is-exam-tomorrow" : "")} data-exam-date={exam.date}>
+                    <div className="sf-home-exam-item-date">
+                      <span>{exam.dayName}</span>
+                      <strong>{dateLabel}</strong>
+                    </div>
+                    <div className="sf-home-exam-item-subject">
+                      <span className="sf-home-exam-index">{(index + 1).toLocaleString("ar-EG")}</span>
+                      <b>{exam.subjectName}</b>
+                      <small>{exam.category === "specialization" ? "مادة تخصصية حسب مسارك" : "مادة أساسية مضافة للمجموع"}</small>
+                    </div>
+                    <span className="sf-home-exam-countdown">
+                      {days === 0 ? "اليوم" : days === 1 ? "غدًا" : "بعد " + days.toLocaleString("ar-EG") + " يوم"}
+                    </span>
+                    {days === 0 && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="sf-home-exam-complete"
+                        disabled={markMonthlyExamCompleted.isPending}
+                        onClick={() => markMonthlyExamCompleted.mutate({ subjectId: exam.subjectId, date: exam.date })}
+                      >
+                        {markMonthlyExamCompleted.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <CheckCircle2 className="size-3.5" />}
+                        خلصت الامتحان
+                      </Button>
+                    )}
+                    <div className="sf-home-exam-scope" data-testid={"home-exam-scope-" + exam.subjectId}>
+                      <div className="sf-home-exam-scope-heading">
+                        <span>محتوى الامتحان</span>
+                        <b>{coveredLessonCount.toLocaleString("ar-EG")} داخل · {excludedLessonCount.toLocaleString("ar-EG")} خارج</b>
+                      </div>
+                      {examScope.length ? (
+                        <div className="sf-home-exam-scope-preview">
+                          {examScope.flatMap(branch => branch.lessonTitles.map((title, lessonIndex) => ({
+                            id: branch.lessonIds[lessonIndex] || branch.branchId + "-" + lessonIndex,
+                            title,
+                          }))).slice(0, 5).map(lesson => <span key={lesson.id} className="is-included">{lesson.title}</span>)}
+                          {examScope.flatMap(branch => branch.excludedLessonTitles.map((title, lessonIndex) => ({
+                            id: branch.excludedLessonIds[lessonIndex] || branch.branchId + "-excluded-" + lessonIndex,
+                            title,
+                          }))).slice(0, 4).map(lesson => <span key={lesson.id} className="is-excluded">{lesson.title}</span>)}
+                        </div>
+                      ) : (
+                        <p className="sf-home-exam-scope-empty">لم تحدد نطاق هذا الامتحان بعد. آخر موضع للمدرس دليل على ما شرحه فقط، وليس دليلًا على ما سيدخل الاختبار.</p>
+                      )}
+                      <MonthlyExamScopeManager subjectId={exam.subjectId} examDate={exam.date} selection={profile.data?.selection as Record<string, any> | undefined}/>
+                    </div>
+                  </article>
+                );
+              })}
             </div>
-            <div className="mt-4 rounded-2xl bg-muted/45 p-4">
-              <div className="flex items-center gap-2 text-sm font-semibold"><BarChart3 className="size-4 text-primary" />ملفك الدراسي</div>
-              <p className="mt-1 text-xs leading-6 text-muted-foreground">{profile.data ? String(profile.data.subjectIds.length) + " مواد داخل مسارك الدراسي." : "جارٍ تحميل ملفك الدراسي."}</p>
-              <Button variant="ghost" size="sm" className="mt-2 px-0" onClick={() => setLocation("/settings")}>إدارة الملف <ArrowLeft className="size-4" /></Button>
-            </div>
+            <footer className="sf-home-exam-calendar-footer">
+              <p>جدول مديرية القاهرة المقترح وليس تأكيدًا من مدرستك. نطاق كل امتحان يُحفظ على حدة من الدروس التي تحددها أنت؛ لا نستنتجه من موضع المدرس.</p>
+            </footer>
           </section>
-        </div>
-      </div>
+        )}
+</div>
         <AnimatePresence>
           {showWelcomeGuide && (
             <motion.div
-              className="fixed inset-0 z-[90] flex items-center justify-center bg-[#070A06]/75 p-4 backdrop-blur-md"
+              className="fixed inset-0 z-[90] flex items-center justify-center bg-black/75 p-4 backdrop-blur-md"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               role="dialog" aria-modal="true" aria-labelledby="welcome-guide-title"
               onClick={event => { if (event.target === event.currentTarget) setShowWelcomeGuide(false); }}
             >
               <motion.section
-                className="relative w-full max-w-xl overflow-hidden rounded-[1.8rem] border border-[#C9ED62]/25 bg-[#151C13] text-[#F1F0E8] shadow-[0_40px_130px_-45px_rgba(0,0,0,.95)]"
+                className="relative w-full max-w-xl overflow-hidden rounded-[1.8rem] border border-border bg-card text-card-foreground shadow-[0_40px_130px_-45px_rgba(0,0,0,.95)]"
                 initial={{ opacity: 0, y: 28, scale: .96, filter: "blur(8px)" }}
                 animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
                 exit={{ opacity: 0, y: 16, scale: .98, filter: "blur(6px)" }}
                 transition={{ duration: .38, ease: [.22, 1, .36, 1] }}
               >
-                <div className="pointer-events-none absolute -right-20 -top-24 size-72 rounded-full bg-[#C9ED62]/10 blur-3xl" />
+                <div className="pointer-events-none absolute -right-20 -top-24 size-72 rounded-full bg-primary/10 blur-3xl" />
                 <header className="relative flex items-start justify-between gap-3 border-b border-white/10 px-5 py-5 sm:px-7">
                   <div>
-                    <p className="text-[10px] font-bold tracking-[.2em] text-[#C9ED62]">YOUR FIRST 4 STEPS</p>
+                    <p className="text-[10px] font-bold tracking-[.2em] text-primary">ابدأ هنا</p>
                     <h2 id="welcome-guide-title" className="mt-2 text-xl font-bold sm:text-2xl">أهلاً بك في StudyFlow</h2>
-                    <p className="mt-1 text-xs leading-6 text-[#AAB09E]">دليل عملي سريع يوضح تبدأ منين وإزاي تخلي المنصة تشتغل معاك.</p>
+                    <p className="mt-1 text-xs leading-6 text-muted-foreground">٤ خطوات تضبط بيها المنصة وتبدأ مذاكرتك.</p>
                   </div>
-                  <button type="button" onClick={() => finishWelcomeGuide()} className="rounded-lg px-2 py-1 text-xs text-[#AAB09E] transition hover:bg-white/10 hover:text-white">تخطي</button>
+                  <button type="button" onClick={() => finishWelcomeGuide()} className="rounded-lg px-2 py-1 text-xs text-muted-foreground transition hover:bg-white/10 hover:text-white">تخطي</button>
                 </header>
                 <div className="relative px-5 py-6 sm:px-7">
                   <div className="mb-5 flex items-center gap-2">
                     {welcomeGuide.map((item, index) => (
                       <button type="button" key={item.title} onClick={() => setWelcomeGuideStep(index)}
                         aria-label={"الخطوة " + (index + 1)}
-                        className={"h-1.5 flex-1 rounded-full transition-all duration-300 " + (index <= welcomeGuideStep ? "bg-[#C9ED62]" : "bg-white/15")} />
+                        className={"h-1.5 flex-1 rounded-full transition-all duration-300 " + (index <= welcomeGuideStep ? "bg-primary" : "bg-white/15")} />
                     ))}
-                    <span className="mr-1 text-[10px] tabular-nums text-[#AAB09E]">{welcomeGuideStep + 1}/4</span>
+                    <span className="mr-1 text-[10px] tabular-nums text-muted-foreground">{welcomeGuideStep + 1}/4</span>
                   </div>
                   <AnimatePresence mode="wait" initial={false}>
                     {(() => {
@@ -685,12 +918,12 @@ export default function Home() {
                           exit={{ opacity: 0, x: -18, filter: "blur(4px)" }}
                           transition={{ duration: .27, ease: "easeOut" }}
                         >
-                          <div className="flex size-14 items-center justify-center rounded-2xl border border-[#C9ED62]/25 bg-[#C9ED62]/10 text-[#C9ED62]">
+                          <div className="flex size-14 items-center justify-center rounded-2xl border border-[#D1B77B]/25 bg-primary/10 text-primary">
                             <StepIcon className="size-7" />
                           </div>
                           <h3 className="mt-5 text-xl font-bold leading-8">{step.title}</h3>
-                          <p className="mt-3 text-sm leading-8 text-[#C0C7B4]">{step.body}</p>
-                          <Button type="button" variant="outline" className="mt-5 rounded-xl border-[#C9ED62]/30 bg-white/[.04] text-[#DCE8B7] hover:bg-white/[.08] hover:text-white"
+                          <p className="mt-3 text-sm leading-8 text-muted-foreground">{step.body}</p>
+                          <Button type="button" variant="outline" className="mt-5 rounded-xl border-border bg-muted/40 text-foreground hover:bg-muted"
                             onClick={() => { setShowWelcomeGuide(false); completeWelcomeGuide.mutate(undefined, { onSuccess: () => setLocation(step.path) }); }}>
                             {step.action} <ArrowLeft className="size-4" />
                           </Button>
@@ -700,16 +933,16 @@ export default function Home() {
                   </AnimatePresence>
                 </div>
                 <footer className="relative flex items-center justify-between border-t border-white/10 px-5 py-4 sm:px-7">
-                  <Button type="button" variant="ghost" className="text-[#C0C7B4] hover:bg-white/10 hover:text-white"
+                  <Button type="button" variant="ghost" className="text-muted-foreground hover:bg-white/10 hover:text-white"
                     disabled={welcomeGuideStep === 0} onClick={() => setWelcomeGuideStep(value => Math.max(0, value - 1))}>
                     السابق
                   </Button>
                   {welcomeGuideStep < welcomeGuide.length - 1 ? (
-                    <Button type="button" className="rounded-xl bg-[#C9ED62] text-[#111510] hover:bg-[#D8F27C]" onClick={() => setWelcomeGuideStep(value => Math.min(welcomeGuide.length - 1, value + 1))}>
+                    <Button type="button" className="rounded-xl bg-primary text-[#251D1B] hover:bg-[#E1C48A]" onClick={() => setWelcomeGuideStep(value => Math.min(welcomeGuide.length - 1, value + 1))}>
                       التالي <ArrowLeft className="size-4" />
                     </Button>
                   ) : (
-                    <Button type="button" className="rounded-xl bg-[#C9ED62] text-[#111510] hover:bg-[#D8F27C]" disabled={completeWelcomeGuide.isPending}
+                    <Button type="button" className="rounded-xl bg-primary text-[#251D1B] hover:bg-[#E1C48A]" disabled={completeWelcomeGuide.isPending}
                       onClick={() => finishWelcomeGuide()}>
                       {completeWelcomeGuide.isPending ? "جارٍ الحفظ..." : "إنهاء الدليل"}
                       <CheckCircle2 className="size-4" />

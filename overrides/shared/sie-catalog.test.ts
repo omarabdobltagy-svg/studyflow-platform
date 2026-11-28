@@ -393,8 +393,12 @@ describe("subject curriculum layouts", () => {
     expect(branches.find(branch => branch.branchId === "ENG_GRE")?.choices[0].sourceLabel).toContain("خارج المقرر الوزاري");
 
     const visible = getSIEStudentVisibleBranches("ENG1_G2_BAC");
-    expect(visible.map(branch => branch.branchId)).toEqual(["ENG_TEXTBOOK", "ENG_GRE", "ENG_STORY"]);
+    expect(visible.map(branch => branch.branchId)).toEqual([
+      "ENG_TEXTBOOK", "ENG_VOCABULARY", "ENG_GRAMMAR", "ENG_GRE", "ENG_STORY",
+    ]);
     expect(visible[0].branchTitle).toBe("الوحدات (Units)");
+    expect(visible[1].choices[0]).toMatchObject({ lessonNumber: "1", lessonType: "vocabulary", unitNumber: 1 });
+    expect(visible[2].choices[0]).toMatchObject({ lessonNumber: "2", lessonType: "grammar", unitNumber: 1 });
   });
 
   it("shows the English lesson number and skill type in progress picker descriptions", () => {

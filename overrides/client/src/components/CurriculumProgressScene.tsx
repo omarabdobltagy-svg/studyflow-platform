@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 export type SceneNode = {
   nodeId: string;
   title: string;
-  state: "completed" | "gap" | "next" | "future" | "unmapped";
+  state: "completed" | "watched" | "review" | "gap" | "next" | "future" | "unmapped";
 };
 
 export type SceneBranch = {
@@ -20,8 +20,10 @@ type Props = {
 };
 
 const COLORS = {
-  completed: 0x6f4e37,
-  gap: 0xb99272,
+  completed: 0x477a5b,
+  watched: 0x6488a6,
+  review: 0xd19a36,
+  gap: 0xb86a55,
   next: 0x2b211c,
   future: 0xd0cac3,
   unmapped: 0xa89c91,
@@ -260,7 +262,7 @@ export default function CurriculumProgressScene({ branches, onSelectBranch }: Pr
     <div className="sf-curriculum-scene-wrap">
       <div ref={hostRef} className="sf-curriculum-scene" aria-label="مجسم ثلاثي الأبعاد لمسارات المنهج، يمكن سحبه واختيار عقدة منه." />
       <div className="sf-curriculum-scene-focus" aria-live="polite">
-        {hovered ? <><b>{hovered.title}</b><span>{hovered.state === "completed" ? "تم تسجيل إتمامها" : hovered.state === "gap" ? "ضمن الفجوة المرجعية" : hovered.state === "next" ? "الخطوة التالية حسب تقدمك" : hovered.state === "unmapped" ? "موضع الطالب غير محدد" : "نقطة لاحقة في المنهج"}</span></>
+        {hovered ? <><b>{hovered.title}</b><span>{hovered.state === "completed" ? "ذاكرتها وفهمتها" : hovered.state === "watched" ? "شاهدت الشرح ولم تسجل مذاكرتها" : hovered.state === "review" ? "ذاكرتها لكنها تحتاج مراجعة" : hovered.state === "gap" ? "لم تشاهدها داخل نطاق شرح المدرس" : hovered.state === "next" ? "الخطوة التالية حسب موضعك" : hovered.state === "unmapped" ? "حالة مذاكرتها غير مسجلة" : "نقطة لاحقة في المنهج"}</span></>
           : <span>{unsupported ? "عرض المسارات متاح في القائمة أسفل الصفحة." : "اسحب المجسم لتدويره، أو انقر على نقطة لاختيار فرعها."}</span>}
       </div>
     </div>

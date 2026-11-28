@@ -2,17 +2,19 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { AIChatBox } from "@/components/AIChatBox";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
-import { BookOpen, MessageSquare, Plus, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
+import { BookOpen, FileText, MessageSquare, Paperclip, Plus, ShieldCheck, Sparkles, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
+type AssistantTextAttachment = { id: string; name: string; content: string; size: number };
 type ChatThread = { id: string; title: string; messages: ChatMessage[]; updatedAt: number };
 const STORAGE_KEY = "studyflow.assistant.conversations.v2";
-const SELECTED_KEY = "studyflow.assistant.selected.v2";
 const suggestions = [
   "اشرح لي درسًا من منهج المادة التي أدرسها خطوة بخطوة.",
   "وضّح لي فكرة في آخر درس وصلت إليه، واربطها بشرح المدرس.",
+  "فسّر لي سبب ترتيب الخطوة التالية في خطتي.",
+  "هل يوجد التزام أو موعد يحتاج أن أراعيه قبل المحاضرة القادمة؟",
   "ما الفرق بين المفاهيم الأساسية في هذا الموضوع؟",
 ];
 
@@ -21,10 +23,10 @@ function newThread(): ChatThread {
 }
 
 function loadThreads(): ChatThread[] {
-  if (typeof window === "undefined") return [newThread()];
+  if (typeof window === "undefined") return [];
   try {
     const parsed = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || "[]");
-    if (!Array.isArray(parsed)) return [newThread()];
+    if (!Array.isArray(parsed)) return [];
     const valid = parsed.filter((item: unknown) => {
       if (!item || typeof item !== "object") return false;
       const record = item as Record<string, unknown>;
@@ -37,7 +39,7 @@ function loadThreads(): ChatThread[] {
         const entry = message as Record<string, unknown>;
         return ["user", "assistant"].includes(String(entry.role))
           && typeof entry.content === "string"
-          && (entry.content as string).length <= 6_000;
+          && (entry.content as string).length <= 12_000;
       }) as ChatMessage[];
       return {
         id: String(record.id),
@@ -46,9 +48,9 @@ function loadThreads(): ChatThread[] {
         messages: messages.slice(-40),
       };
     }).slice(0, 30);
-    return valid.length ? valid : [newThread()];
+    return valid;
   } catch {
-    return [newThread()];
+    return [];
   }
 }
 
@@ -71,19 +73,106 @@ function updateThreadMessage(
 }
 
 export default function Assistant() {
-  const [threads, setThreads] = useState<ChatThread[]>(loadThreads);
-  const [selectedId, setSelectedId] = useState(() => {
-    if (typeof window === "undefined") return "";
-    return window.localStorage.getItem(SELECTED_KEY) || "";
+  const [initialThreads] = useState<ChatThread[]>(() => {
+    const local = loadThreads();
+    return local.length ? local : [newThread()];
   });
+  const [threads, setThreads] = useState<ChatThread[]>(initialThreads);
+  const [selectedId, setSelectedId] = useState(initialThreads[0]?.id ?? "");
+  const [historyMode, setHistoryMode] = useState<"loading" | "remote" | "local">("loading");
+  const historyHydrationRef = useRef(false);
   const [streamingThreadId, setStreamingThreadId] = useState<string | null>(null);
+  const [pendingAttachments, setPendingAttachments] = useState<AssistantTextAttachment[]>([]);
+  const attachmentInputRef = useRef<HTMLInputElement | null>(null);
+  const assistantThreadsQuery = trpc.ai.threads.list.useQuery(undefined, {
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
+  const saveAssistantThread = trpc.ai.threads.save.useMutation();
+  const deleteAssistantThread = trpc.ai.threads.delete.useMutation();
   const activeThread = useMemo(
     () => threads.find(thread => thread.id === selectedId) || threads[0],
     [threads, selectedId],
   );
   const profile = trpc.studentProfile.get.useQuery();
+  const assistantContextReady = Boolean(profile.data && !profile.isLoading && !profile.isError);
   const abortControllerRef = useRef<AbortController | null>(null);
   const streamingThreadRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (historyHydrationRef.current) return;
+    if (assistantThreadsQuery.isError) {
+      historyHydrationRef.current = true;
+      setHistoryMode("local");
+      toast.error("تعذّر تحميل سجل المحادثات من الحساب؛ سيظل السجل المحلي محفوظًا على هذا الجهاز.");
+      return;
+    }
+    if (!assistantThreadsQuery.isSuccess) return;
+
+    historyHydrationRef.current = true;
+    let cancelled = false;
+    void (async () => {
+      const serverThreads: ChatThread[] = assistantThreadsQuery.data.map(thread => ({
+        id: thread.clientId,
+        title: thread.title,
+        messages: thread.messages,
+        updatedAt: thread.updatedAt instanceof Date
+          ? thread.updatedAt.getTime()
+          : Date.parse(String(thread.updatedAt)) || Date.now(),
+      }));
+      const localThreads = loadThreads();
+      const merged = new Map(serverThreads.map(thread => [thread.id, thread]));
+      const threadsToMigrate: ChatThread[] = [];
+      for (const localThread of localThreads) {
+        const serverVersion = merged.get(localThread.id);
+        if (!serverVersion || localThread.updatedAt > serverVersion.updatedAt) {
+          merged.set(localThread.id, localThread);
+          threadsToMigrate.push(localThread);
+        }
+      }
+      const nextThreads = [...merged.values()]
+        .sort((a, b) => b.updatedAt - a.updatedAt)
+        .slice(0, 30);
+      const resolvedThreads = nextThreads.length ? nextThreads : [newThread()];
+      if (cancelled) return;
+      setThreads(resolvedThreads);
+      setSelectedId(current => resolvedThreads.some(thread => thread.id === current)
+        ? current : resolvedThreads[0].id);
+
+      try {
+        for (const thread of threadsToMigrate) {
+          await saveAssistantThread.mutateAsync({
+            clientId: thread.id,
+            title: thread.title,
+            messages: thread.messages.filter(message => message.content.trim()).slice(-40),
+          });
+        }
+        if (cancelled) return;
+        setHistoryMode("remote");
+        try { window.localStorage.removeItem(STORAGE_KEY); } catch { /* server copy is authoritative */ }
+      } catch {
+        if (cancelled) return;
+        setHistoryMode("local");
+        toast.error("لم يكتمل نقل بعض المحادثات إلى الحساب؛ احتفظنا بالنسخة المحلية ولم نحذفها.");
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [assistantThreadsQuery.data, assistantThreadsQuery.isError, assistantThreadsQuery.isSuccess]);
+
+  const persistThread = async (thread: ChatThread) => {
+    if (historyMode !== "remote") return;
+    try {
+      await saveAssistantThread.mutateAsync({
+        clientId: thread.id,
+        title: thread.title,
+        messages: thread.messages.filter(message => message.content.trim()).slice(-40),
+      });
+    } catch {
+      setHistoryMode("local");
+      toast.error("تعذّر مزامنة هذه المحادثة مع الحساب؛ احتفظنا بها محليًا على هذا الجهاز.");
+    }
+  };
 
   const stopCurrentStream = (preservePartial = true) => {
     const threadId = streamingThreadRef.current;
@@ -102,19 +191,23 @@ export default function Assistant() {
   }, []);
 
   useEffect(() => {
+    if (historyMode === "remote") {
+      try { window.localStorage.removeItem(STORAGE_KEY); } catch { /* remote history is authoritative */ }
+      return;
+    }
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(threads.slice(0, 30)));
-      if (activeThread?.id) window.localStorage.setItem(SELECTED_KEY, activeThread.id);
     } catch {
-      toast.error("تعذّر حفظ المحادثات على هذا الجهاز.");
+      toast.error("تعذّر حفظ النسخة المحلية من المحادثات.");
     }
-  }, [threads, activeThread?.id]);
+  }, [threads, activeThread?.id, historyMode]);
 
   const createConversation = () => {
     stopCurrentStream(true);
     const thread = newThread();
     setThreads(current => [thread, ...current].slice(0, 30));
     setSelectedId(thread.id);
+    void persistThread(thread);
   };
 
   const chooseConversation = (threadId: string) => {
@@ -124,14 +217,27 @@ export default function Assistant() {
     setSelectedId(threadId);
   };
 
-  const deleteConversation = () => {
+  const deleteConversation = async () => {
     if (!activeThread) return;
-    if (streamingThreadRef.current === activeThread.id) stopCurrentStream(false);
-    const remaining = threads.filter(thread => thread.id !== activeThread.id);
+    const deletedThread = activeThread;
+    if (streamingThreadRef.current === deletedThread.id) stopCurrentStream(false);
+    const remaining = threads.filter(thread => thread.id !== deletedThread.id);
     const next = remaining.length ? remaining : [newThread()];
     setThreads(next);
     setSelectedId(next[0].id);
-    toast.success("تم حذف المحادثة من هذا الجهاز.");
+    if (historyMode === "remote") {
+      try {
+        await deleteAssistantThread.mutateAsync({ clientId: deletedThread.id });
+      } catch {
+        setThreads(current => [deletedThread, ...current.filter(thread => thread.id !== deletedThread.id)].slice(0, 30));
+        setSelectedId(deletedThread.id);
+        toast.error("تعذّر حذف المحادثة من الحساب؛ أُعيدت إلى السجل.");
+        return;
+      }
+      toast.success("تم حذف المحادثة من سجل الحساب.");
+      return;
+    }
+    toast.success("حُذفت المحادثة من السجل المحلي على هذا الجهاز.");
   };
 
   const sendMessage = async (content: string) => {
@@ -140,7 +246,14 @@ export default function Assistant() {
 
     stopCurrentStream(true);
     const threadId = activeThread.id;
-    const userMessage: ChatMessage = { role: "user", content: trimmed };
+    const attachments = pendingAttachments.slice(0, 3);
+    const attachmentContext = attachments.map(file =>
+      "اسم الملف: " + file.name + "\nمحتوى الملف:\n" + file.content
+    ).join("\n\n--- ملف آخر ---\n\n").slice(0, 7_500);
+    const userMessage: ChatMessage = {
+      role: "user",
+      content: trimmed + (attachments.length ? "\n\n📎 مرفقات: " + attachments.map(file => file.name).join("، ") : ""),
+    };
     const requestMessages = [...activeThread.messages, userMessage].slice(-20);
     const visibleMessages = [...activeThread.messages, userMessage, { role: "assistant" as const, content: "" }].slice(-40);
 
@@ -154,17 +267,13 @@ export default function Assistant() {
       : thread
     ));
 
-    const memory = threads
-      .filter(thread => thread.id !== threadId && thread.messages.length > 0)
-      .slice()
-      .sort((left, right) => right.updatedAt - left.updatedAt)
-      .slice(0, 5)
-      .map(thread => "محادثة سابقة: " + thread.title + "\n" + thread.messages.slice(-2)
-        .map(message => (message.role === "user" ? "الطالب: " : "المساعد: ") + message.content.slice(0, 500))
-        .join("\n"))
-      .join("\n---\n")
-      .slice(0, 2_400);
-
+    if (attachments.length) setPendingAttachments([]);
+    await persistThread({
+      ...activeThread,
+      title: activeThread.messages.length ? activeThread.title : trimmed.slice(0, 42),
+      messages: [...activeThread.messages, userMessage].slice(-40),
+      updatedAt: Date.now(),
+    });
     const controller = new AbortController();
     abortControllerRef.current = controller;
     streamingThreadRef.current = threadId;
@@ -204,7 +313,10 @@ export default function Assistant() {
           "Content-Type": "application/json",
           Accept: "text/event-stream",
         },
-        body: JSON.stringify({ messages: requestMessages, memory }),
+        body: JSON.stringify({
+          messages: requestMessages,
+          context: attachmentContext || undefined,
+        }),
         signal: controller.signal,
       });
       if (!response.ok) {
@@ -232,11 +344,34 @@ export default function Assistant() {
       buffer += decoder.decode();
       if (buffer.trim()) consumeEvent(buffer);
       if (!streamedText.trim()) throw new Error("وصلت استجابة فارغة. جرّب السؤال مرة أخرى.");
+      const completedMessages: ChatMessage[] = [
+        ...activeThread.messages,
+        userMessage,
+        { role: "assistant" as const, content: streamedText },
+      ].slice(-40);
+      const completedThread = {
+        ...activeThread,
+        title: activeThread.messages.length ? activeThread.title : trimmed.slice(0, 42),
+        messages: completedMessages,
+        updatedAt: Date.now(),
+      };
+      setThreads(current => current.map(thread => thread.id === threadId ? completedThread : thread));
+      await persistThread(completedThread);
     } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") {
-        // A deliberate conversation switch keeps any partial text but stops the request.
-      } else {
-        setThreads(current => updateThreadMessage(current, threadId, streamedText, !streamedText));
+      const finalMessages: ChatMessage[] = [
+        ...activeThread.messages,
+        userMessage,
+        ...(streamedText.trim() ? [{ role: "assistant" as const, content: streamedText }] : []),
+      ].slice(-40);
+      const finalThread = {
+        ...activeThread,
+        title: activeThread.messages.length ? activeThread.title : trimmed.slice(0, 42),
+        messages: finalMessages,
+        updatedAt: Date.now(),
+      };
+      setThreads(current => current.map(thread => thread.id === threadId ? finalThread : thread));
+      void persistThread(finalThread);
+      if (!(error instanceof DOMException && error.name === "AbortError")) {
         toast.error(error instanceof Error ? error.message : "تعذّر الرد الآن. حاول مرة أخرى.");
       }
     } finally {
@@ -251,23 +386,23 @@ export default function Assistant() {
   const activeIsStreaming = Boolean(activeThread && streamingThreadId === activeThread.id);
 
   return (
-    <DashboardLayout title="المساعد الدراسي الذكي" description="ذكاء دراسي متصل بسياق مساحتك، وأنشطتك، والمهام والروتين والتقويم والتقدم المنهجي.">
-      <section className="mb-5 overflow-hidden rounded-[1.5rem] border border-border/70 bg-card">
+    <DashboardLayout title="المساعد المعرفي للمنهج" description="مساحة مستقلة لشرح المفاهيم وفهم الدروس والرجوع إلى مصادر المنهج. لا تدير خطة مذاكرتك ولا تغيّر مهامك.">
+      <section className="sf-assistant-shell mb-5 overflow-hidden rounded-[1.5rem] border border-border/70 bg-card">
         <div className="flex flex-col gap-4 border-b border-border/70 bg-gradient-to-l from-secondary/75 via-card to-card p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
           <div className="flex items-start gap-3">
             <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg"><Sparkles className="size-5" /></span>
             <div>
-              <div className="flex flex-wrap items-center gap-2"><h2 className="text-lg font-bold">مساعد StudyFlow</h2><span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">متصل بالمخطط الدراسي</span></div>
-              <p className="mt-1 text-sm leading-6 text-muted-foreground">اسأل عن الدرس، اطلب شرحًا، وشاهد الرد أثناء تكوّنه بدل انتظار اكتماله.</p>
+              <div className="flex flex-wrap items-center gap-2"><h2 className="text-lg font-bold">مساعد StudyFlow</h2><span className="sf-assistant-live-state"><i/>{assistantContextReady?"فهرس موادك جاهز":profile.isError?"تعذّر تحميل المواد":"جارٍ تحميل موادك"}</span></div>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">اسأل عن درس أو مصطلح أو فكرة في الكتاب. هذه المحادثة مستقلة عن محرك التخطيط ولوحة اليوم.</p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1.5 rounded-xl bg-muted px-3 py-2"><BookOpen className="size-3.5" />{profile.data?.subjects?.length || 0} مواد في ملفك</span>
-            <span className="inline-flex items-center gap-1.5 rounded-xl bg-muted px-3 py-2"><ShieldCheck className="size-3.5" />ذاكرة دراسية خاصة بحسابك</span>
+            <span className="inline-flex items-center gap-1.5 rounded-xl bg-muted px-3 py-2"><BookOpen className="size-3.5"/>{profile.data?.subjectIds?.length ?? 0} مواد في ملفك</span>
+            <span className="inline-flex items-center gap-1.5 rounded-xl bg-muted px-3 py-2"><ShieldCheck className="size-3.5"/>تفضيلاتك الدراسية محفوظة</span>
           </div>
         </div>
         <div className="grid gap-4 p-3 sm:p-4 lg:grid-cols-[250px_minmax(0,1fr)]">
-          <aside className="flex min-w-0 flex-col rounded-2xl border border-border/70 bg-muted/20 p-3">
+          <aside className="sf-assistant-sidebar flex min-w-0 flex-col rounded-2xl border border-border/70 bg-muted/20 p-3">
             <Button type="button" onClick={createConversation} className="mb-3 h-11 w-full justify-center gap-2 rounded-xl bg-primary">
               <Plus className="size-4" />محادثة جديدة
             </Button>
@@ -287,9 +422,9 @@ export default function Assistant() {
                 </button>
               ))}
             </div>
-            <p className="mt-3 hidden text-[11px] leading-5 text-muted-foreground lg:block">سجل المحادثات محفوظ على هذا المتصفح، وخلاصة دراسية مختارة تُحفظ على حسابك لتخصيص المساعد عبر الجلسات.</p>
+            <p className="mt-3 hidden text-[11px] leading-5 text-muted-foreground lg:block">سجل هذه المحادثات محفوظ على هذا الجهاز. تفضيلات الذاكرة الدراسية المختارة محفوظة ضمن ملف حسابك.</p>
           </aside>
-          <div className="min-w-0">
+          <div className="sf-assistant-workspace min-w-0">
             <div className="mb-3 flex items-center justify-between gap-3 px-1">
               <div className="min-w-0">
                 <p className="truncate text-sm font-bold">{activeThread?.title || "محادثة جديدة"}</p>
@@ -300,20 +435,88 @@ export default function Assistant() {
                 <Button type="button" variant="ghost" size="sm" disabled={!activeThread?.messages.length} onClick={deleteConversation} className="gap-2 rounded-xl text-muted-foreground hover:text-destructive"><Trash2 className="size-3.5" />حذف</Button>
               </div>
             </div>
-            <AIChatBox
-              key={activeThread?.id}
-              messages={activeThread?.messages || []}
-              onSendMessage={sendMessage}
-              isLoading={activeIsStreaming}
-              height="min(72vh, 760px)"
-              placeholder="اسأل عن درس أو مفهوم في منهجك..."
-              emptyStateMessage="ابدأ بسؤال عن درس أو مفهوم، أو اطلب توضيحًا لشرح المدرس."
-              suggestedPrompts={suggestions}
-            />
+            <div className="sf-assistant-chat-panel">
+              <AIChatBox
+                key={activeThread?.id}
+                messages={activeThread?.messages || []}
+                onSendMessage={sendMessage}
+                isLoading={activeIsStreaming}
+                height="min(72vh, 760px)"
+                placeholder="اسأل عن درس أو مفهوم في منهجك..."
+                emptyStateMessage="ابدأ بسؤال عن درس أو مفهوم، أو اطلب توضيحًا لشرح المدرس."
+                suggestedPrompts={suggestions}
+                inputAccessory={pendingAttachments.length > 0 ? (
+                  <div className="sf-assistant-attachment-list w-full" aria-label="الملفات المرفقة">
+                    {pendingAttachments.map(file => (
+                      <span className="sf-assistant-attachment-chip" key={file.id}>
+                        <FileText className="size-4" />
+                        <span>{file.name}</span>
+                        <button type="button" onClick={() => setPendingAttachments(current => current.filter(item => item.id !== file.id))} aria-label={"إزالة " + file.name}><X className="size-3.5" /></button>
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+                inputActions={
+                  <>
+                    <input
+                      ref={attachmentInputRef}
+                      type="file"
+                      hidden
+                      multiple
+                      accept=".txt,.md,.csv,.json,.html,.css,.js,.ts,.tsx,.jsx,text/plain,text/markdown,text/csv,application/json,text/html,text/css"
+                      onChange={async event => {
+                        const selected = Array.from(event.currentTarget.files ?? []);
+                        event.currentTarget.value = "";
+                        const supported = /\.(txt|md|csv|json|html|css|js|ts|tsx|jsx)$/i;
+                        const additions: AssistantTextAttachment[] = [];
+                        for (const file of selected.slice(0, 3 - pendingAttachments.length)) {
+                          if (!supported.test(file.name)) {
+                            toast.error(file.name + " غير مدعوم حاليًا. استخدم TXT أو MD أو CSV أو JSON أو HTML أو ملفات الكود.");
+                            continue;
+                          }
+                          if (file.size > 1_500_000) {
+                            toast.error(file.name + " أكبر من الحد المسموح (1.5 MB).");
+                            continue;
+                          }
+                          try {
+                            const content = await file.text();
+                            if (!content.trim()) {
+                              toast.error(file.name + " لا يحتوي على نص قابل للقراءة.");
+                              continue;
+                            }
+                            additions.push({
+                              id: file.name + "-" + file.lastModified + "-" + Math.random().toString(36).slice(2, 7),
+                              name: file.name,
+                              content: content.slice(0, 7_000),
+                              size: file.size,
+                            });
+                          } catch {
+                            toast.error("تعذرت قراءة الملف " + file.name + ".");
+                          }
+                        }
+                        if (additions.length) setPendingAttachments(current => [...current, ...additions].slice(0, 3));
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => attachmentInputRef.current?.click()}
+                      disabled={activeIsStreaming || pendingAttachments.length >= 3}
+                      aria-label="إرفاق ملف نصي"
+                      title="إرفاق ملف نصي"
+                      className="h-[38px] w-[38px] shrink-0 rounded-xl"
+                    >
+                      <Paperclip className="size-4" />
+                    </Button>
+                  </>
+                }
+              />
+            </div>
           </div>
         </div>
       </section>
-      <p className="px-1 text-xs leading-6 text-muted-foreground">يعتمد الرد على ملفك الدراسي وفهارس المنهج ومواضع المدرسين المتاحة في النظام. فهرسة النص الكامل للكتب المرفوعة وربطه بالبحث المعرفي مرحلة منفصلة؛ لا أعتبر اسم الكتاب وحده دليلًا على أن محتواه أصبح متاحًا للمساعد.</p>
+      <p className="sf-assistant-disclosure px-1 text-xs leading-6 text-muted-foreground">المساعد يستطيع قراءة محتوى الملفات النصية المرفقة هنا. ملفات PDF وWord والصور غير مدعومة في هذا المسار بعد؛ لا تُرسل كأنها قُرئت بالفعل. فهرسة الكتب المرفوعة وربطها ببحث معرفي دائم مرحلة منفصلة.</p>
     </DashboardLayout>
   );
 }

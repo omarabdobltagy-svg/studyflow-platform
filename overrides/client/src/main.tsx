@@ -6,6 +6,7 @@ import { createRoot } from "react-dom/client";
 import { toast } from "sonner";
 import superjson from "superjson";
 import App from "./App";
+import { ServerClockProvider } from "./lib/server-clock";
 import "./index.css";
 import "./experience.css";
 import "./workspace-motion.css";
@@ -15,6 +16,10 @@ import "./workspace-interaction-hub.css";
 import "./workspace-transitions.css";
 import "./studyflow-final-theme.css";
 import "./experience-refinement.css";
+import "./feature-experience.css";
+import "./design-quality.css";
+import "./identity-system.css";
+import "./exam-first-planner.css";
 
 // Analytics is optional. Do not emit a broken /umami request when no endpoint is configured.
 const analyticsEndpoint = import.meta.env.VITE_ANALYTICS_ENDPOINT?.trim();
@@ -44,21 +49,50 @@ const queryClient = new QueryClient({
   },
 });
 
+const queryErrorToastIds = new Map<string, string>();
+const queryErrorToastId = (queryKey: readonly unknown[]) => "studyflow-query:" + JSON.stringify(queryKey);
+
+const isExpectedAuthFailure = (error: unknown) => {
+  if (!(error instanceof TRPCClientError)) return false;
+  return error.message === UNAUTHED_ERR_MSG
+    || error.data?.code === "UNAUTHORIZED"
+    || error.data?.httpStatus === 401;
+};
+
 const showQueryError = (error: unknown, queryKey: readonly unknown[]) => {
-  if (error instanceof TRPCClientError && error.message === UNAUTHED_ERR_MSG) return;
-  toast.error("تعذّر تحميل البيانات الآن.", {
-    description: "تحقق من اتصالك ثم أعد المحاولة.",
+  // Protected queries can resolve with 401 while the session is being checked.
+  // This is an expected anonymous state, not a recoverable application failure.
+  if (isExpectedAuthFailure(error)) return;
+  const id = queryErrorToastId(queryKey);
+  if (!queryErrorToastIds.has(id)) queryErrorToastIds.set(id, id);
+  toast.error("تعذّر تحميل جزء من البيانات.", {
+    id,
+    duration: 9_000,
+    dismissible: true,
+    description: "لم نحذف تقدمك. جرّب إعادة المحاولة؛ ولو استمر الخطأ سنعرضه بوضوح بدل اختفائه سريعًا.",
     action: {
       label: "إعادة المحاولة",
-      onClick: () => void queryClient.refetchQueries({ queryKey }),
+      onClick: () => void queryClient.refetchQueries({ queryKey, exact: true }),
     },
   });
 };
 
 queryClient.getQueryCache().subscribe(event => {
   if (event.type === "updated" && event.action.type === "error") {
+    // A stable toast id prevents the same background query from flooding the UI.
     showQueryError(event.query.state.error, event.query.queryKey);
-    console.error("[API Query Error]", event.query.state.error);
+    if (!isExpectedAuthFailure(event.query.state.error)) {
+      console.error("[API Query Error]", event.query.state.error);
+    }
+  }
+  if (event.type === "updated" && event.action.type === "success") {
+    // Remove a transient error as soon as the same query succeeds again.
+    const id = queryErrorToastId(event.query.queryKey);
+    if (queryErrorToastIds.delete(id)) toast.dismiss(id);
+  }
+  if (event.type === "removed") {
+    const id = queryErrorToastId(event.query.queryKey);
+    if (queryErrorToastIds.delete(id)) toast.dismiss(id);
   }
 });
 
@@ -90,7 +124,9 @@ const trpcClient = trpc.createClient({
 createRoot(document.getElementById("root")!).render(
   <trpc.Provider client={trpcClient} queryClient={queryClient}>
     <QueryClientProvider client={queryClient}>
-      <App />
+      <ServerClockProvider>
+        <App />
+      </ServerClockProvider>
     </QueryClientProvider>
   </trpc.Provider>
 );

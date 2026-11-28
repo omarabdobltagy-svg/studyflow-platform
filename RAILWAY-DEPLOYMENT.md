@@ -1,4 +1,4 @@
-# Railway deployment and verified runtime behavior
+# StudyFlow deployment and verified runtime behavior
 
 The StudyFlow application is built from `Dockerfile`, which extracts the source archive and overlays the maintained files under `overrides/` before creating `dist/index.js`.
 
@@ -7,21 +7,23 @@ The StudyFlow application is built from `Dockerfile`, which extracts the source 
 - Railway public domain target port: `8080`.
 - Service environment: `PORT=8080`.
 - Start command: `node dist/index.js`.
-- The current Preview service is attached to `redesign/studyflow-v4-graphite`; this does not authorize changes to the separate `StudyFlow app` production service.
+- The maintained source branch is `main`. The primary StudyFlow app builds from `main`; preview branches are not production deployment targets.
 - Do not run `pnpm db:push` as a startup or automatic pre-deploy command.
 
 ## Database migrations
 
-The Preview service pre-deploy command runs `node scripts/migrate-local-auth.mjs`.
+Both the Preview and Production app services run `node scripts/migrate-local-auth.mjs` as their Railway pre-deploy command, each against its own separate `DATABASE_URL`.
 
 That additive, idempotent script:
 - Adds the local account columns and unique username index if missing.
 - Creates or validates `studentActivityEvents`, including its columns, indexes and user foreign key. This table is used by the activity feed and event logging.
 - Stores migration markers in `studyflow_migrations` and refuses to guess account ownership when legacy account data is ambiguous.
 
-The event table existed in the Drizzle journal, but the Preview pre-deploy command did not run the Drizzle migration runner. The additive check closes that gap without running every historical migration or using `db:push`. Future schema migrations still require review.
+The event table existed in the Drizzle journal, but the app services do not run the full Drizzle migration runner during deployment. This hook applies only the reviewed additive schema checks needed by this application, without replaying historical migrations or using `db:push`. Future schema migrations still require review against the live production schema.
 
 ## Local StudyFlow accounts
+
+Student sign-in uses local accounts and signed HttpOnly session cookies. It does not require the external OAuth portal or `OAUTH_SERVER_URL`. The legacy OAuth adapter is initialized lazily only when an OAuth flow is explicitly used; normal StudyFlow startup must not emit an OAuth configuration error.
 
 StudyFlow uses separate username/password accounts and signed HttpOnly session cookies. Passwords are stored as salted scrypt hashes and are never returned to the browser.
 

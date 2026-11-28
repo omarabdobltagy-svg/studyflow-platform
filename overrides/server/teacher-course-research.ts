@@ -30,6 +30,85 @@ type ResearchResult = {
   };
 };
 
+type CuratedDeliveryFacts = {
+  availableModes: Array<"center" | "online">;
+  confidence: "low" | "medium" | "high";
+  evidence: TeacherCourseFactsInput["evidence"];
+  verified: boolean;
+};
+
+/**
+ * Curated public-profile checks for the current StudyFlow G2 BAC cohort.
+ * Online means an online course/video platform was found; it does not imply live tutoring.
+ * A physical center is included only where the teacher's public first-party page explicitly lists it.
+ */
+const CURATED_DELIVERY_FACTS: Record<string, CuratedDeliveryFacts> = {
+  T_AR_MOHAMED_SALAH: {
+    availableModes: ["online", "center"], confidence: "high", verified: true,
+    evidence: [{ title: "تفاصيل بداية دفعة 2027 — أونلاين وسنتر مع أ. محمد صلاح", url: "https://www.youtube.com/watch?v=H_1-JOKbMW8", source: "قناة بسطتهالك الرسمية", excerpt: "الفيديو الرسمي يذكر صراحة تقديم محمد صلاح للأونلاين والسنتر ضمن دفعة 2027 للبكالوريا والثانوية العامة." }, { title: "صفحة بسطتهالك الرسمية على فيسبوك", url: "https://www.facebook.com/salah.bassthalk", source: "Facebook · بسطتهالك", excerpt: "صفحة اجتماعية مرتبطة بقنوات المدرس الرسمية؛ لا يعتمد عليها وحدها لإثبات نوع الدراسة." }],
+  },
+  T_AR_REDA_FAROUK: {
+    availableModes: ["online", "center"], confidence: "high", verified: true,
+    evidence: [{ title: "مواعيد السنة الجديدة ونظام الأونلاين والسنتر — دفعة 2027", url: "https://youtu.be/8CoIm7Ul5Wo", source: "قناة رضا الفاروق الرسمية", excerpt: "وصف الفيديو الرسمي يذكر تفاصيل الأونلاين والسنتر ضمن إعلان دفعة 2027 للثانوية والبكالوريا." }, { title: "صفحة رضا الفاروق الرسمية على فيسبوك", url: "https://www.facebook.com/RedaElfaroukOfficial/", source: "Facebook · رضا الفاروق", excerpt: "رابط الصفحة الرسمية مذكور ضمن روابط المدرس؛ لا يعتمد عليه وحده لإثبات نوع الدراسة." }],
+  },
+  T_AR_MOHAMED_TAREK: {
+    availableModes: [], confidence: "low", verified: false,
+    evidence: [{ title: "قناة محمد طارق — لم تتأكد مطابقة المنهج الحالي", url: "https://youtube.com/@mr.mohamed_tarek", source: "قناة يوتيوب عامة", excerpt: "لم يظهر دليل كافٍ يثبت تقديمه الحالي لمنهج الصف الثاني بكالوريا 2027 أو وجود سنتر." }],
+  },
+  T_EN_MAHMOUD_RADWAN: {
+    availableModes: ["online"], confidence: "high", verified: true,
+    evidence: [{ title: "Englishawy — مراجعات الصف الثاني بكالوريا 2027", url: "https://www.youtube.com/@MahmoudRadwan.Englishawy", source: "قناة إنجلشاوي", excerpt: "قناة المدرس تعرض محتوى حديثًا للصف الثاني بكالوريا وروابط المنصة؛ لا يوجد دليل على مركز حضوري." }],
+  },
+  T_EN_SHERIF: {
+    availableModes: ["online"], confidence: "high", verified: true,
+    evidence: [{ title: "منصة شريف المصري — اللغة الإنجليزية للصف الثاني بكالوريا", url: "https://sherifelmassry.com/", source: "منصة شريف المصري", excerpt: "المنصة تعرض شرحًا وتطبيقات واختبارات للصف الثاني بكالوريا؛ عناوين المكتبات المعروضة تخص بيع الكتب وليست مراكز تدريس." }],
+  },
+  T_EN_AHMED_SOBHY: {
+    availableModes: ["online"], confidence: "medium", verified: true,
+    evidence: [{ title: "إنجليزي البكالوريا — دروس الصف الثاني بكالوريا", url: "https://zolotube.com/channel?id=UCP4vtEvANSvCszyJFBEiqOA", source: "قناة إنجليزي البكالوريا", excerpt: "محتوى دروس حديثة للصف الثاني بكالوريا متاح أونلاين؛ لم يظهر دليل على سنتر حضوري." }],
+  },
+  T_HIS_AHMED_GHONIEM: {
+    availableModes: ["online", "center"], confidence: "high", verified: true,
+    evidence: [{ title: "أحمد غنيم — المحاضرات الأونلاين والحضورية", url: "https://ahmedghoniem.com/", source: "موقع أحمد غنيم الرسمي", excerpt: "الموقع يعرض دروسًا أونلاين وقسم Offline Lectures ويذكر قاعة غنيم بالمعادي وعدة سناتر تعليمية." }],
+  },
+  T_HIS_MARWAN: {
+    availableModes: ["online"], confidence: "medium", verified: true,
+    evidence: [{ title: "المؤرخ مروان حسن — محتوى تاريخ الصف الثاني بكالوريا 2027", url: "https://youtube.com/channel/UCJqSCcNDCxe4b259TXPZbcw", source: "قناة المؤرخ مروان حسن", excerpt: "تظهر دروسًا حديثة لمنهج التاريخ للصف الثاني بكالوريا؛ لم يظهر دليل موثق على سنتر حضوري." }],
+  },
+  T_HIS_ABDELHADY: {
+    availableModes: ["online"], confidence: "medium", verified: true,
+    evidence: [{ title: "محمود عبدالهادي — محتوى تاريخ الصف الثاني بكالوريا", url: "https://zolotube.com/channel?id=UCThV5LrCMIWs9tyDvZ9IC2w", source: "قناة محمود عبدالهادي", excerpt: "تظهر دروس تاريخ للصف الثاني بكالوريا متاحة أونلاين؛ لم يظهر دليل على مركز حضوري." }],
+  },
+  T_PROG_IMAD_SHARAF: {
+    availableModes: ["online"], confidence: "high", verified: true,
+    evidence: [{ title: "WE4CODE — كورس البرمجة والذكاء الاصطناعي", url: "https://we4code.com/course/7", source: "منصة WE4CODE", excerpt: "المنصة تعرض كورس الصف الثاني بكالوريا بدروس وملفات وواجبات واختبارات واجتماعات أونلاين." }],
+  },
+  T_PROG_ANAS_AHMED: {
+    availableModes: [], confidence: "low", verified: false,
+    evidence: [{ title: "Code-UP — لم يتأكد ارتباط المدرس بالمقرر الظاهر", url: "https://www.code-up.tech/", source: "منصة Code-UP", excerpt: "المنصة تعرض مقرر البرمجة للصف الثاني بكالوريا، لكن صفحة المصدر لا تثبت أن د. أنس أحمد هو المدرس المسؤول عنه." }],
+  },
+  T_PROG_KHALED_ASHRAF: {
+    availableModes: ["online"], confidence: "high", verified: true,
+    evidence: [{ title: "برمجة بكالوريا — درس الصف الثاني بكالوريا 2027", url: "https://www.youtube.com/watch?v=oIYgUBLUJxU", source: "قناة برمجة بكالوريا", excerpt: "يوجد درس برمجة حديث للصف الثاني بكالوريا 2027 متاح عبر يوتيوب؛ لم يظهر دليل على سنتر حضوري." }],
+  },
+  T_HIS_AHMED_ADEL: {
+    availableModes: [], confidence: "low", verified: false,
+    evidence: [{ title: "أحمد عادل — مصدر غير مطابق للصف الثاني بكالوريا", url: "https://www.mr-ahmed-adel.com/course/90", source: "موقع أحمد عادل", excerpt: "الصفحة المعروضة مراجعة نهائية لطلاب الأزهر ولا تثبت تدريس تاريخ الصف الثاني بكالوريا الحالي أو تقديم سنتر." }],
+  },
+  T_HIS_GOMAA_EL_SAYED: {
+    availableModes: ["online"], confidence: "high", verified: true,
+    evidence: [{ title: "منصة القيصر — تاريخ الصف الثاني بكالوريا", url: "https://gomaa-elsayed.com/years/2", source: "منصة القيصر", excerpt: "الصفحة تعرض مقررات تاريخ للصف الثاني بكالوريا مع التسجيل والاشتراك عبر المنصة؛ لم يظهر دليل على مركز حضوري." }],
+  },
+  T_PROG_MAZEN_ALI_BARMAGTHALK: {
+    availableModes: ["online"], confidence: "high", verified: true,
+    evidence: [{ title: "برمجتهالك — البرمجة والذكاء الاصطناعي للصف الثاني بكالوريا", url: "https://barmagthalk.pyramitech.com/", source: "منصة برمجتهالك", excerpt: "المنصة تعرض كورس البرمجة والذكاء الاصطناعي للصف الثاني بكالوريا، وتذكر م. مازن علي كمدرب ومؤسس." }],
+  },
+};
+
+export function getCuratedTeacherDeliveryFacts(teacherId: string) {
+  return CURATED_DELIVERY_FACTS[teacherId] ?? null;
+}
+
 const inFlight = new Map<string, Promise<void>>();
 const CACHE_DAYS = 30;
 const FAILURE_RETRY_HOURS = 12;
@@ -131,6 +210,69 @@ async function collectYouTubeEvidence(teacherName: string, brandName: string, su
     }
   }
   return [...byUrl.values()].slice(0, 20);
+}
+
+type PublicEvidenceItem = { title: string; url: string; source: string; excerpt?: string; publishedAt?: string };
+
+export function normalizeSocialSearchItems(
+  teacherName: string,
+  brandName: string,
+  items: Array<Record<string, unknown>>,
+): PublicEvidenceItem[] {
+  const byUrl = new Map<string, PublicEvidenceItem>();
+  for (const item of items) {
+    const title = normalized(item.title ?? item.name ?? item.heading, 240);
+    const url = normalized(item.link ?? item.url ?? item.href, 1_000);
+    const excerpt = normalized(item.snippet ?? item.description ?? item.text ?? item.summary, 900);
+    if (!title || !/^https:\/\/(?:www\.|m\.|mbasic\.)?(?:facebook\.com|instagram\.com|tiktok\.com)\//i.test(url)) continue;
+    if (!teacherSourceMatches(teacherName, brandName, title, excerpt)) continue;
+    if (byUrl.has(url)) continue;
+    const platform = /facebook\.com/i.test(url) ? "Facebook" : /instagram\.com/i.test(url) ? "Instagram" : "TikTok";
+    byUrl.set(url, {
+      title, url, source: platform + " · " + title.slice(0, 120),
+      ...(excerpt ? { excerpt } : {}),
+      ...(typeof item.date === "string" ? { publishedAt: item.date.slice(0, 40) } : {}),
+    });
+  }
+  return [...byUrl.values()].slice(0, 12);
+}
+
+async function collectSocialEvidence(teacherName: string, brandName: string, subjectName: string): Promise<PublicEvidenceItem[]> {
+  const queries = [...new Set([
+    `site:facebook.com "${teacherName}" "${subjectName}" سنتر بكالوريا`,
+    `site:facebook.com "${teacherName}" "${subjectName}" أونلاين محاضرات`,
+    `site:facebook.com "${brandName}" دفعة 2027 سنتر`,
+    `site:instagram.com "${teacherName}" "${subjectName}"`,
+    `site:tiktok.com "${teacherName}" "${subjectName}"`,
+  ])];
+  const responses = await Promise.allSettled(queries.map(query =>
+    callDataApi("Google/search", { query: { gl: "EG", hl: "ar", q: query } }) as Promise<Record<string, unknown>>
+  ));
+  const items: Array<Record<string, unknown>> = [];
+  for (const response of responses) {
+    if (response.status !== "fulfilled") continue;
+    const payload = response.value;
+    const raw = Array.isArray(payload.items) ? payload.items
+      : Array.isArray(payload.organic) ? payload.organic
+      : Array.isArray(payload.organic_results) ? payload.organic_results
+      : Array.isArray(payload.results) ? payload.results
+      : [];
+    items.push(...raw as Array<Record<string, unknown>>);
+  }
+  return normalizeSocialSearchItems(teacherName, brandName, items);
+}
+
+async function collectPublicTeacherEvidence(teacherName: string, brandName: string, subjectName: string): Promise<PublicEvidenceItem[]> {
+  const [youtube, social] = await Promise.all([
+    collectYouTubeEvidence(teacherName, brandName, subjectName),
+    collectSocialEvidence(teacherName, brandName, subjectName).catch(error => {
+      console.warn("[Teacher directory] Social search unavailable:", error instanceof Error ? error.message.slice(0, 180) : "unknown error");
+      return [] as PublicEvidenceItem[];
+    }),
+  ]);
+  const byUrl = new Map<string, PublicEvidenceItem>();
+  for (const item of [...social, ...youtube]) if (!byUrl.has(item.url)) byUrl.set(item.url, item);
+  return [...byUrl.values()].slice(0, 30);
 }
 
 async function classifyEvidence(
@@ -236,7 +378,7 @@ async function refreshTeacherCourseFacts(scope: ResearchScope) {
     let evidence: TeacherCourseFactsInput["evidence"] = [];
     let classified: TeacherResearchClassification;
     try {
-      evidence = await collectYouTubeEvidence(teacher.nameAr, teacher.brandName, subject.nameAr);
+      evidence = await collectPublicTeacherEvidence(teacher.nameAr, teacher.brandName, subject.nameAr);
       classified = await classifyEvidence(teacher.nameAr, subject.nameAr, scope, evidence);
     } catch (error) {
       console.warn("[Teacher directory] Research pipeline failed:", error instanceof Error ? error.message.slice(0, 250) : "unknown error");
@@ -281,6 +423,27 @@ async function refreshTeacherCourseFacts(scope: ResearchScope) {
 
 export async function getTeacherCourseFactsWithRefresh(scope: ResearchScope): Promise<ResearchResult> {
   const current = await getTeacherCourseFacts(scope);
+  const curated = scope.educationSystem === "EG_BACCALAUREATE"
+    && scope.gradeYear === "الصف الثاني الثانوي – دفعة 2027"
+    ? getCuratedTeacherDeliveryFacts(scope.teacherId)
+    : null;
+  if (curated) {
+    const now = new Date();
+    return {
+      state: curated.verified ? "verified" : "insufficient_evidence",
+      facts: {
+        availableModes: curated.availableModes,
+        homeworkPolicy: current?.homeworkPolicy as TeacherCourseFactsInput["homeworkPolicy"] ?? "unknown",
+        homeworkRequiredBeforeNextLecture: current?.homeworkRequiredBeforeNextLecture as TeacherCourseFactsInput["homeworkRequiredBeforeNextLecture"] ?? "unknown",
+        preLectureExamRequired: current?.preLectureExamRequired as TeacherCourseFactsInput["preLectureExamRequired"] ?? "unknown",
+        confidence: curated.confidence,
+        evidence: curated.evidence,
+        checkedAt: now,
+        expiresAt: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1_000),
+        isStale: false,
+      },
+    };
+  }
   const stale = !current || current.isStale;
   if (stale) {
     void refreshTeacherCourseFacts(scope).catch(error => {
@@ -314,5 +477,60 @@ export async function getTeacherCourseFactsWithRefresh(scope: ResearchScope): Pr
       expiresAt: current.expiresAt,
       isStale: current.isStale,
     },
+  };
+}
+
+
+export type DiscoveredTeacher = {
+  found: boolean;
+  nameAr: string;
+  brandName: string;
+  sourceUrl: string;
+  availableModes: Array<"center" | "online">;
+  confidence: "low" | "medium" | "high";
+  evidence: Array<{ title: string; url: string; source: string }>;
+  notes: string;
+};
+
+/** Discover a teacher from strict public channel matches; delivery modes remain unknown without evidence. */
+export async function discoverTeacherForSubject(input: {
+  teacherName: string;
+  subjectId: string;
+  educationSystem: "EG_BACCALAUREATE" | "EG_GENERAL_SECONDARY";
+  gradeYear: string;
+}): Promise<DiscoveredTeacher> {
+  const teacherName = normalized(input.teacherName, 120);
+  const subject = getSIESubject(input.subjectId);
+  if (!subject) throw new Error("المادة المحددة غير موجودة في دليل الدراسة.");
+  const empty: DiscoveredTeacher = {
+    found: false, nameAr: teacherName, brandName: teacherName, sourceUrl: "",
+    availableModes: [], confidence: "low", evidence: [],
+    notes: "لم نعثر على قناة أو مصدر عام يطابق اسم المدرس بدرجة كافية.",
+  };
+  if (teacherName.length < 2) return empty;
+  const sources = await collectPublicTeacherEvidence(teacherName, teacherName, subject.nameAr);
+  if (!sources.length) return empty;
+  const channelCounts = new Map<string, number>();
+  for (const source of sources) {
+    const channel = source.source.replace(/^(?:YouTube|Facebook|Instagram|TikTok)\s*·\s*/i, "").trim();
+    if (channel) channelCounts.set(channel, (channelCounts.get(channel) ?? 0) + 1);
+  }
+  const brandName = [...channelCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? teacherName;
+  const classification = await classifyEvidence(
+    teacherName, subject.nameAr,
+    { teacherId: "CUSTOM_TEACHER_DISCOVERY", subjectId: input.subjectId, educationSystem: input.educationSystem, gradeYear: input.gradeYear },
+    sources,
+  );
+  return {
+    found: true,
+    nameAr: teacherName,
+    brandName,
+    sourceUrl: sources[0].url,
+    availableModes: classification.confidence === "low" ? [] : classification.availableModes,
+    confidence: classification.confidence,
+    evidence: sources.slice(0, 5).map(source => ({ title: source.title, url: source.url, source: source.source })),
+    notes: classification.notes || (classification.confidence === "low"
+      ? "عثرنا على محتوى متطابق مع الاسم، لكن لم يظهر دليل كافٍ لتأكيد طرق الدراسة."
+      : "تم فحص محتوى عام مرتبط بالمدرس. راجع المصدر للتأكد من تطابقه مع مدرسك."),
   };
 }

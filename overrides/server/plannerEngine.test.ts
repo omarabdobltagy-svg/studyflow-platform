@@ -4,10 +4,68 @@ import {
   combinePlannerEventImpacts,
   evaluatePlanQuality,
   getAvailableStudyDays,
+  getDailyPlanningCapacity,
+  getPlannerLearningStatePriority,
   schedulePlanSteps,
 } from "./plannerEngine";
 
 const settings = { dailyMinutes: 120, daysPerWeek: 5 as const, horizonDays: 7 as const };
+
+describe("AI curriculum learning priorities", () => {
+  it("puts unseen explanations before watched-only and review lessons", () => {
+    expect(getPlannerLearningStatePriority("not_watched")).toBeLessThan(getPlannerLearningStatePriority("watched_only"));
+    expect(getPlannerLearningStatePriority("not_watched")).toBeLessThan(getPlannerLearningStatePriority("needs_review"));
+    expect(getPlannerLearningStatePriority("not_recorded")).toBeLessThan(getPlannerLearningStatePriority("watched_only"));
+  });
+  it("keeps completed lessons outside active priority", () => {
+    expect(getPlannerLearningStatePriority("studied")).toBeGreaterThan(getPlannerLearningStatePriority("needs_review"));
+  });
+});
+
+describe("minute-aware daily allocation", () => {
+  it("reserves 15 percent of the student's declared daily time as recovery capacity", () => {
+    expect(getDailyPlanningCapacity(120)).toBe(102);
+    expect(getDailyPlanningCapacity(180)).toBe(153);
+    expect(getDailyPlanningCapacity(60)).toBe(51);
+  });
+
+  it("keeps a minimum actionable capacity and validates the buffer range", () => {
+    expect(getDailyPlanningCapacity(20)).toBe(20);
+    expect(() => getDailyPlanningCapacity(120, 45)).toThrow();
+    expect(() => getDailyPlanningCapacity(10)).toThrow();
+  });
+
+  it("isolates hard or large learning blocks from other work on the same day", () => {
+    const result = schedulePlanSteps([
+      { title: "تمهيد خفيف", detail: "قراءة", minutes: 30, category: "عربي", difficulty: "easy" },
+      { title: "درس ثقيل", detail: "فهم وتطبيق", minutes: 60, category: "عربي", difficulty: "hard" },
+      { title: "مراجعة قصيرة", detail: "استرجاع", minutes: 25, category: "تاريخ", difficulty: "easy" },
+    ], { dailyMinutes: 120, daysPerWeek: 6, horizonDays: 7, isolateHeavySteps: true });
+    expect(result.steps.find(step => step.sourceTitle === "تمهيد خفيف")?.dayIndex).toBe(1);
+    expect(result.steps.find(step => step.sourceTitle === "درس ثقيل")?.dayIndex).toBe(2);
+    expect(result.steps.find(step => step.sourceTitle === "مراجعة قصيرة")?.dayIndex).toBe(3);
+  });
+
+  it("splits long tasks into bounded sessions and keeps each day within the planned limit", () => {
+    const dailyCapacity = getDailyPlanningCapacity(120);
+    const result = schedulePlanSteps([
+      { title: "محاضرة طويلة", detail: "شرح", minutes: 240, category: "عربي" },
+      { title: "حل تدريبات", detail: "تطبيق", minutes: 120, category: "عربي" },
+    ], {
+      dailyMinutes: dailyCapacity,
+      daysPerWeek: 6,
+      horizonDays: 7,
+      maxSessionMinutes: 90,
+      isolateHeavySteps: true,
+    });
+    const loads = new Map<number, number>();
+    for (const item of result.steps.filter(step => step.scheduleState === "scheduled")) {
+      loads.set(item.dayIndex!, (loads.get(item.dayIndex!) ?? 0) + item.minutes);
+      expect(item.minutes).toBeLessThanOrEqual(90);
+    }
+    expect([...loads.values()].every(value => value <= dailyCapacity)).toBe(true);
+  });
+});
 
 describe("planner deterministic scheduler", () => {
   it("keeps each study day within capacity and respects weekly rest days", () => {

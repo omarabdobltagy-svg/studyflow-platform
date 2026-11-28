@@ -30,6 +30,7 @@ export type Message = {
   content: MessageContent | MessageContent[];
   name?: string;
   tool_call_id?: string;
+  tool_calls?: ToolCall[];
 };
 
 export type Tool = {
@@ -140,7 +141,7 @@ const normalizeContentPart = (
 };
 
 const normalizeMessage = (message: Message) => {
-  const { role, name, tool_call_id } = message;
+  const { role, name, tool_call_id, tool_calls } = message;
 
   if (role === "tool" || role === "function") {
     const content = ensureArray(message.content)
@@ -155,14 +156,16 @@ const normalizeMessage = (message: Message) => {
     };
   }
 
+  const normalizedToolCalls = tool_calls?.length ? { tool_calls } : {};
   const contentParts = ensureArray(message.content).map(normalizeContentPart);
 
-  // If there's only text content, collapse to a single string for compatibility
+  // Preserve assistant tool calls even when the model returns no visible text.
   if (contentParts.length === 1 && contentParts[0].type === "text") {
     return {
       role,
       name,
       content: contentParts[0].text,
+      ...normalizedToolCalls,
     };
   }
 
@@ -170,6 +173,7 @@ const normalizeMessage = (message: Message) => {
     role,
     name,
     content: contentParts,
+    ...normalizedToolCalls,
   };
 };
 

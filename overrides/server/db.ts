@@ -1,10 +1,13 @@
 import { formatStudyMethodNotes } from "./study-method";
+import { normalizeAssistantConversationDraft } from "./assistant-conversations";
 import { and, asc, desc, eq, inArray, isNull, like, lt, lte, or, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { storageDelete } from "./storage";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   aiPlans,
+  assistantConversations,
+  assistantMessages,
   bookChapters,
   books,
   calendarEvents,
@@ -20,6 +23,7 @@ import {
   studySessions,
   taskChangeLogs,
   teacherCourseFacts,
+  teacherDirectoryEntries,
   tasks,
   users,
 } from "../drizzle/schema";
@@ -230,7 +234,13 @@ export async function getUserByUsername(username: string) {
   return result[0];
 }
 
-export async function createLocalAuthUser(input: { username: string; name: string; passwordHash: string }) {
+export async function getUserByPhone(phone: string) {
+  const db = await requireDb();
+  const result = await db.select().from(users).where(eq(users.phone, phone.trim())).limit(1);
+  return result[0];
+}
+
+export async function createLocalAuthUser(input: { username: string; name: string; phone?: string; passwordHash: string }) {
   const db = await requireDb();
   const openId = "studyflow-user-" + randomUUID();
   await db.insert(users).values({
@@ -238,6 +248,7 @@ export async function createLocalAuthUser(input: { username: string; name: strin
     username: input.username.trim().toLowerCase(),
     passwordHash: input.passwordHash,
     name: input.name.trim(),
+    phone: input.phone?.trim() || null,
     loginMethod: "local",
     role: "user",
     lastSignedIn: new Date(),
@@ -504,6 +515,93 @@ export async function upsertTeacherCourseFacts(input: TeacherCourseFactsInput) {
   return getTeacherCourseFacts(input);
 }
 
+export type TeacherDirectoryRecordInput = {
+  teacherName: string;
+  brandName: string;
+  subjectId: string;
+  educationSystem: "EG_BACCALAUREATE" | "EG_GENERAL_SECONDARY";
+  gradeYear: string;
+  sourceUrl: string;
+  availableModes: Array<"center" | "online">;
+  confidence: "low" | "medium" | "high";
+  evidence: Array<{ title: string; url: string; source: string }>;
+  notes?: string;
+};
+
+export function normalizeTeacherDirectoryName(value: string) {
+  return value
+    .normalize("NFKC")
+    .toLocaleLowerCase("ar-EG")
+    .replace(/[أإآٱ]/g, "ا")
+    .replace(/ى/g, "ي")
+    .replace(/[ً-ٟـ]/g, "")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+export async function upsertTeacherDirectoryEntry(input: TeacherDirectoryRecordInput, submittedBy: number) {
+  const database = await requireDb();
+  const normalizedName = normalizeTeacherDirectoryName(input.teacherName);
+  if (!normalizedName) throw new Error("اسم المدرس غير صالح للدليل.");
+
+  const values = {
+    normalizedName,
+    teacherName: input.teacherName.trim().slice(0, 120),
+    brandName: input.brandName.trim().slice(0, 180) || input.teacherName.trim().slice(0, 180),
+    subjectId: input.subjectId,
+    educationSystem: input.educationSystem,
+    gradeYear: input.gradeYear,
+    sourceUrl: input.sourceUrl,
+    availableModesJson: JSON.stringify(input.availableModes),
+    confidence: input.confidence,
+    evidenceJson: JSON.stringify(input.evidence.slice(0, 5)),
+    notes: input.notes?.trim().slice(0, 700) || null,
+    submittedBy,
+  };
+
+  await database.insert(teacherDirectoryEntries).values(values).onDuplicateKeyUpdate({
+    set: {
+      teacherName: values.teacherName,
+      brandName: values.brandName,
+      sourceUrl: values.sourceUrl,
+      availableModesJson: values.availableModesJson,
+      confidence: values.confidence,
+      evidenceJson: values.evidenceJson,
+      notes: values.notes,
+      submittedBy,
+      confirmationCount: sql`${teacherDirectoryEntries.confirmationCount} + 1`,
+      updatedAt: new Date(),
+    },
+  });
+}
+
+export async function listTeacherDirectoryEntries(input: {
+  subjectId: string;
+  educationSystem: "EG_BACCALAUREATE" | "EG_GENERAL_SECONDARY";
+  gradeYear: string;
+}) {
+  const database = await requireDb();
+  const rows = await database.select().from(teacherDirectoryEntries).where(and(
+    eq(teacherDirectoryEntries.subjectId, input.subjectId),
+    eq(teacherDirectoryEntries.educationSystem, input.educationSystem),
+    eq(teacherDirectoryEntries.gradeYear, input.gradeYear),
+  )).orderBy(desc(teacherDirectoryEntries.confirmationCount), desc(teacherDirectoryEntries.updatedAt), asc(teacherDirectoryEntries.teacherName));
+
+  return rows.map(row => ({
+    id: row.id,
+    nameAr: row.teacherName,
+    brandName: row.brandName,
+    sourceUrl: row.sourceUrl,
+    availableModes: parseJson<Array<"center" | "online">>(row.availableModesJson, []),
+    confidence: row.confidence as "low" | "medium" | "high",
+    evidence: parseJson<Array<{ title: string; url: string; source: string }>>(row.evidenceJson, []),
+    notes: row.notes ?? "",
+    confirmationCount: row.confirmationCount,
+    updatedAt: row.updatedAt.toISOString(),
+  }));
+}
+
 export async function listTasks(userId: number) {
   const db = await requireDb();
   return db
@@ -670,8 +768,9 @@ export type ApprovedPlanStep = {
   minutes: number;
   category: string;
   priority?: "critical" | "high" | "medium" | "low";
-  existingTask?: { id: number; title: string; status: "todo" | "done"; confidence: "exact" | "strong" };
+  existingTask?: { id: number; title: string; status: "todo" | "done"; confidence: "exact" | "strong"; dueAt?: string | null };
   resourceRecommendation?: { title: string; url: string; teacherName?: string; reason: string };
+  subtasks?: Array<{ id: string; title: string; detail: string; curriculumNodeIds?: string[]; startSeconds?: number }>;
   scheduleState?: "scheduled" | "deferred";
   dayIndex?: number | null;
   dateOffsetDays?: number | null;
@@ -685,7 +784,7 @@ export function normalizeApprovedPlanSteps(steps: ApprovedPlanStep[]) {
       day: Number.isFinite(step.day) && step.day > 0 ? Math.floor(step.day) : index + 1,
       title: step.title.trim(),
       detail: step.detail.trim(),
-      minutes: Math.min(480, Math.max(5, Math.round(step.minutes || 25))),
+      minutes: Number.isFinite(step.minutes) ? Math.min(480, Math.max(0, Math.round(step.minutes))) : 25,
       category: step.category.trim() || "دراسة",
     }))
     .filter(step => step.title.length > 0);
@@ -821,8 +920,9 @@ export async function syncDailyPlanGoalTree(
       minutes: number;
       category: string;
       priority?: "critical" | "high" | "medium" | "low";
-      existingTask?: { id: number; title: string; status: "todo" | "done"; confidence: "exact" | "strong" };
+      existingTask?: { id: number; title: string; status: "todo" | "done"; confidence: "exact" | "strong"; dueAt?: string | null };
       resourceRecommendation?: { title: string; url: string; teacherName?: string; reason: string };
+      subtasks?: ApprovedPlanStep["subtasks"];
       scheduleState?: "scheduled" | "deferred";
       dayIndex?: number | null;
       dateOffsetDays?: number | null;
@@ -844,17 +944,74 @@ export async function syncDailyPlanGoalTree(
   if (!plan.title.trim() || steps.length === 0) {
     throw new Error("لا يمكن إنشاء مهام يومية من خطة بلا خطوات عملية.");
   }
-  const dueDates = steps.map(() => null);
-  const taskNotes = (step: typeof steps[number]) => [
-    step.detail,
-    ...(step.studyMethod ? [formatStudyMethodNotes(step.studyMethod)] : []),
-    ...(step.scheduleNote ? [step.scheduleNote] : []),
-    ...(step.resourceRecommendation ? [
-      "مشاهدة إضافية موصى بها من " + (step.resourceRecommendation.teacherName || "المدرس") + ": " + step.resourceRecommendation.title,
-      step.resourceRecommendation.url,
-      "سبب التوصية: " + step.resourceRecommendation.reason,
-    ] : []),
-  ].filter(Boolean).join("\n\n");
+  const startDate = new Date(schedule.startDate + "T12:00:00.000Z");
+  if (!Number.isFinite(startDate.getTime())) throw new Error("تاريخ بداية الخطة غير صالح.");
+  const dueDates = steps.map(step => {
+    if (step.scheduleState === "deferred") return null;
+    if (step.existingTask?.dueAt) {
+      const sourceDate = new Date(step.existingTask.dueAt);
+      if (Number.isFinite(sourceDate.getTime())) return sourceDate;
+    }
+    if (Number.isInteger(step.dateOffsetDays) && (step.dateOffsetDays ?? -1) >= 0) {
+      const date = new Date(startDate);
+      date.setUTCDate(date.getUTCDate() + (step.dateOffsetDays as number));
+      return date;
+    }
+    return null;
+  });
+  const compositeTaskMarker = "\n\n<!-- STUDYFLOW_COMPOSITE_TASK_V1 -->\n";
+  const readCompositeTask = (notes: string | null | undefined): any | null => {
+    const value = String(notes ?? "");
+    const markerIndex = value.lastIndexOf(compositeTaskMarker);
+    if (markerIndex < 0) return null;
+    try {
+      const parsed = JSON.parse(value.slice(markerIndex + compositeTaskMarker.length));
+      return parsed?.version === 1 && parsed?.kind === "youtube_review" && Array.isArray(parsed.subtasks)
+        ? parsed
+        : null;
+    } catch {
+      return null;
+    }
+  };
+  const taskNotes = (step: typeof steps[number], previousNotes?: string | null) => {
+    const baseNotes = [
+      String(step.detail || "").trim().slice(0, 420),
+      ...(step.scheduleNote ? [String(step.scheduleNote).trim().slice(0, 160)] : []),
+    ].filter(Boolean).join("\n");
+    if (!step.subtasks?.length || !step.resourceRecommendation) return [
+      baseNotes,
+      ...(step.resourceRecommendation ? [step.resourceRecommendation.url] : []),
+    ].filter(Boolean).join("\n");
+
+    const previous = readCompositeTask(previousNotes);
+    const previousCompletion = new Map<string, boolean>(
+      (previous?.subtasks ?? []).map((item: any) => [String(item.id), item.completed === true]),
+    );
+    const metadata = {
+      version: 1,
+      kind: "youtube_review",
+      videoTitle: String(step.resourceRecommendation.title || step.title).slice(0, 180),
+      videoUrl: String(step.resourceRecommendation.url || "").slice(0, 700),
+      teacherName: String(step.resourceRecommendation.teacherName || "").slice(0, 120),
+      subtasks: step.subtasks.slice(0, 12).map(item => ({
+        id: String(item.id).slice(0, 150),
+        title: String(item.title).slice(0, 140),
+        detail: String(item.detail).slice(0, 320),
+        completed: previousCompletion.get(String(item.id)) ?? false,
+        startSeconds: Number.isInteger(item.startSeconds) ? Math.max(0, Number(item.startSeconds)) : 0,
+        curriculumNodeIds: (item.curriculumNodeIds ?? []).slice(0, 8),
+      })),
+    };
+    let serialized = JSON.stringify(metadata);
+    while (baseNotes.length + compositeTaskMarker.length + serialized.length > 7_800 && metadata.subtasks.length > 1) {
+      metadata.subtasks.pop();
+      serialized = JSON.stringify(metadata);
+    }
+    if (baseNotes.length + compositeTaskMarker.length + serialized.length > 8_000) {
+      throw new Error("تعذّر حفظ خطوات المراجعة الفرعية بالحجم المسموح للمهمة.");
+    }
+    return baseNotes + compositeTaskMarker + serialized;
+  };
 
   return db.transaction(async tx => {
     // Retire open tasks from older AI-generated plans before writing the new one.
@@ -984,16 +1141,21 @@ export async function syncDailyPlanGoalTree(
         : step.priority === "low" ? "low" as const : "medium" as const;
       const stage = pendingStages[index];
       const linkedExistingTask = step.existingTask
-        ? (await tx.select({ id: tasks.id, status: tasks.status, notes: tasks.notes })
+        ? (await tx.select({ id: tasks.id, status: tasks.status, notes: tasks.notes, dueAt: tasks.dueAt })
             .from(tasks)
             .where(and(eq(tasks.id, step.existingTask.id), eq(tasks.userId, userId)))
             .limit(1))[0]
         : undefined;
-      if (linkedExistingTask && step.studyMethod && !linkedExistingTask.notes?.includes("طريقة المذاكرة:")) {
-        const methodNotes = formatStudyMethodNotes(step.studyMethod);
-        await tx.update(tasks).set({
-          notes: [linkedExistingTask.notes, methodNotes].filter(Boolean).join("\n\n"),
-        }).where(and(eq(tasks.id, linkedExistingTask.id), eq(tasks.userId, userId)));
+      // Existing teacher/source task details are authoritative and are never
+      // expanded with generated study-method text during plan synchronization.
+      // If an open task has no deadline, assign the planner's proposed day so
+      // it is visible in the student's calendar and task list.
+      if (linkedExistingTask && linkedExistingTask.status === "todo" && !linkedExistingTask.dueAt && dueAt) {
+        await tx.update(tasks).set({ dueAt }).where(and(
+          eq(tasks.id, linkedExistingTask.id),
+          eq(tasks.userId, userId),
+          eq(tasks.status, "todo"),
+        ));
       }
 
       if (stage) {
@@ -1013,7 +1175,7 @@ export async function syncDailyPlanGoalTree(
         if (task && !linkedExistingTask) {
           await tx.update(tasks).set({
             title: step.title,
-            notes: taskNotes(step),
+            notes: taskNotes(step, task?.notes ?? null),
             category: step.category || "دراسة",
             priority,
             estimatedMinutes: null,
@@ -1578,9 +1740,143 @@ export async function deleteCalendarEvent(userId: number, eventId: number) {
   if (result[0].affectedRows === 0) throw new Error("الموعد غير موجود أو لا تملك حذفه.");
 }
 
+function getAiPlanDatabaseErrorDetails(error: unknown) {
+  const outer = error && typeof error === "object" ? error as Record<string, unknown> : {};
+  const cause = outer.cause && typeof outer.cause === "object"
+    ? outer.cause as Record<string, unknown>
+    : {};
+  const pick = (...values: unknown[]) => values.find(value =>
+    typeof value === "string" || typeof value === "number"
+  );
+  return {
+    name: String(pick(cause.name, outer.name, "UnknownError")).slice(0, 80),
+    code: String(pick(cause.code, cause.errno, outer.code, outer.errno, "unknown")).slice(0, 80),
+    sqlState: String(pick(cause.sqlState, outer.sqlState, "unknown")).slice(0, 40),
+    message: String(pick(cause.message, outer.message, error) ?? "Unknown database error")
+      .replace(/\s+/g, " ")
+      .slice(0, 360),
+  };
+}
+
+function logAiPlanPersistenceFailure(
+  operation: "insert" | "update",
+  userId: number,
+  planJson: string,
+  error: unknown,
+  planId?: number,
+) {
+  const details = getAiPlanDatabaseErrorDetails(error);
+  console.error("[StudyFlow DB] AI plan persistence failed", {
+    operation,
+    userId,
+    planId: planId ?? null,
+    payloadBytes: new TextEncoder().encode(planJson).byteLength,
+    ...details,
+  });
+}
+
+export async function listAssistantConversations(userId: number) {
+  const db = await requireDb();
+  const conversations = await db.select()
+    .from(assistantConversations)
+    .where(eq(assistantConversations.userId, userId))
+    .orderBy(desc(assistantConversations.updatedAt))
+    .limit(30);
+  if (conversations.length === 0) return [];
+
+  const ids = conversations.map(conversation => conversation.id);
+  const messages = await db.select()
+    .from(assistantMessages)
+    .where(inArray(assistantMessages.conversationId, ids))
+    .orderBy(asc(assistantMessages.conversationId), asc(assistantMessages.sortOrder), asc(assistantMessages.id));
+  const grouped = new Map<number, typeof messages>();
+  for (const message of messages) {
+    const bucket = grouped.get(message.conversationId) ?? [];
+    bucket.push(message);
+    grouped.set(message.conversationId, bucket);
+  }
+
+  return conversations.map(conversation => ({
+    clientId: conversation.clientId,
+    title: conversation.title,
+    createdAt: conversation.createdAt,
+    updatedAt: conversation.updatedAt,
+    messages: (grouped.get(conversation.id) ?? []).map(message => ({
+      role: message.role,
+      content: message.content,
+    })),
+  }));
+}
+
+/**
+ * Saves a whole bounded conversation atomically. The client ID is scoped to the
+ * authenticated user, so a guessed ID can never overwrite another account's chat.
+ */
+export async function saveAssistantConversation(userId: number, input: unknown) {
+  const draft = normalizeAssistantConversationDraft(input);
+  if (!draft) throw new Error("بيانات المحادثة غير صالحة للحفظ.");
+  const db = await requireDb();
+  const updatedAt = new Date();
+
+  await db.transaction(async tx => {
+    const existing = await tx.select({ id: assistantConversations.id })
+      .from(assistantConversations)
+      .where(and(
+        eq(assistantConversations.userId, userId),
+        eq(assistantConversations.clientId, draft.clientId),
+      ))
+      .limit(1);
+    let conversationId = existing[0]?.id;
+
+    if (conversationId) {
+      await tx.update(assistantConversations)
+        .set({ title: draft.title, updatedAt })
+        .where(and(
+          eq(assistantConversations.id, conversationId),
+          eq(assistantConversations.userId, userId),
+        ));
+      await tx.delete(assistantMessages).where(eq(assistantMessages.conversationId, conversationId));
+    } else {
+      const inserted = await tx.insert(assistantConversations).values({
+        userId,
+        clientId: draft.clientId,
+        title: draft.title,
+        createdAt: updatedAt,
+        updatedAt,
+      });
+      conversationId = Number(inserted[0].insertId);
+    }
+
+    if (draft.messages.length > 0) {
+      await tx.insert(assistantMessages).values(draft.messages.map((message, index) => ({
+        conversationId: conversationId!,
+        role: message.role,
+        content: message.content,
+        sortOrder: index,
+      })));
+    }
+  });
+
+  return { ...draft, updatedAt };
+}
+
+export async function deleteAssistantConversation(userId: number, clientId: string) {
+  const db = await requireDb();
+  await db.delete(assistantConversations).where(and(
+    eq(assistantConversations.userId, userId),
+    eq(assistantConversations.clientId, clientId),
+  ));
+  return { success: true };
+}
+
 export async function saveAiPlan(userId: number, data: { prompt: string; title: string; planJson: string }) {
   const db = await requireDb();
-  await db.insert(aiPlans).values({ userId, prompt: data.prompt, title: data.title, planJson: data.planJson });
+  try {
+    await db.insert(aiPlans).values({ userId, prompt: data.prompt, title: data.title, planJson: data.planJson });
+  } catch (error) {
+    logAiPlanPersistenceFailure("insert", userId, data.planJson, error);
+    throw error;
+  }
 }
 
 export async function listAiPlans(userId: number) {
@@ -1672,10 +1968,15 @@ export async function getLatestAiPlanByPromptPrefix(userId: number, prefix: stri
 
 export async function updateAiPlanContent(userId: number, planId: number, planJson: string) {
   const db = await requireDb();
-  const result = await db.update(aiPlans)
-    .set({ planJson })
-    .where(and(eq(aiPlans.id, planId), eq(aiPlans.userId, userId)));
-  if (result[0].affectedRows === 0) throw new Error("خطة الدراسة المطلوب تحديثها غير موجودة.");
+  try {
+    const result = await db.update(aiPlans)
+      .set({ planJson })
+      .where(and(eq(aiPlans.id, planId), eq(aiPlans.userId, userId)));
+    if (result[0].affectedRows === 0) throw new Error("خطة الدراسة المطلوب تحديثها غير موجودة.");
+  } catch (error) {
+    logAiPlanPersistenceFailure("update", userId, planJson, error, planId);
+    throw error;
+  }
 }
 
 export async function updateAiPlanPrompt(userId: number, planId: number, prompt: string) {
@@ -1854,6 +2155,48 @@ export async function listRecentStudentActivityEvents(userId: number, limit = 30
     .orderBy(desc(studentActivityEvents.createdAt), desc(studentActivityEvents.id))
     .limit(Math.max(1, Math.min(100, Math.trunc(limit))));
   return rows.reverse().map(row => ({
+    id: row.id,
+    eventType: row.eventType,
+    entityType: row.entityType,
+    entityId: row.entityId,
+    summary: row.summary,
+    metadata: (() => {
+      try { return JSON.parse(row.metadataJson || "{}") as Record<string, unknown>; }
+      catch { return {}; }
+    })(),
+    createdAt: row.createdAt,
+  }));
+}
+
+const AI_BACKGROUND_EVENT_TYPES = [
+  "ai.background.started",
+  "ai.background.progress",
+  "ai.background.completed",
+  "ai.background.failed",
+  "ai.activity.started",
+  "ai.activity.progress",
+  "ai.activity.completed",
+  "ai.activity.failed",
+  "teacher.public_update_detected",
+  "teacher.video_analysis_completed",
+  "teacher.video_analysis_failed",
+  "teacher.alternative_review_accepted",
+] as const;
+
+/** Bounded per-student reader for background AI work; conversations are excluded. */
+export async function listRecentAIBackgroundActivityEvents(userId: number, limit = 60) {
+  const db = await requireDb();
+  const safeLimit = Math.max(1, Math.min(100, Math.trunc(Number.isFinite(limit) ? limit : 60)));
+  const rows = await db.select()
+    .from(studentActivityEvents)
+    .where(and(
+      eq(studentActivityEvents.userId, userId),
+      inArray(studentActivityEvents.eventType, [...AI_BACKGROUND_EVENT_TYPES]),
+    ))
+    .orderBy(desc(studentActivityEvents.createdAt), desc(studentActivityEvents.id))
+    .limit(safeLimit);
+
+  return rows.map(row => ({
     id: row.id,
     eventType: row.eventType,
     entityType: row.entityType,

@@ -52,17 +52,27 @@ describe("shared AI activity progress", () => {
 
   it("isolates each student's activity and exposes failures without leaking other users' state", () => {
     const id = startAIActivity(21, {
+      kind: "teacher_monitor",
+      title: "متابعة قنوات المدرسين",
+      stage: "فحص المصادر",
+      detail: "يتحقق من وجود تحديثات عامة.",
+    });
+    failAIActivity(21, id, "تعذّر إكمال الرصد.");
+
+    const assistantId = startAIActivity(21, {
       kind: "assistant",
       title: "المساعد الدراسي",
       stage: "استرجاع المنهج",
-      detail: "يبحث في الفهرس المتاح.",
+      detail: "محادثة عادية لا تدخل في سجل العمليات الخلفية.",
     });
-    failAIActivity(21, id, "تعذّر الاتصال بمزود الذكاء الاصطناعي.");
+    completeAIActivity(21, assistantId, "اكتمل الرد.");
 
+    expect(getAIActivitySnapshot(21).recent).toHaveLength(1);
     expect(getAIActivitySnapshot(21).recent[0]).toMatchObject({
       id,
+      kind: "teacher_monitor",
       status: "failed",
-      error: "تعذّر الاتصال بمزود الذكاء الاصطناعي.",
+      error: "تعذّر إكمال الرصد.",
     });
     expect(getAIActivitySnapshot(22)).toEqual({ active: [], recent: [] });
   });

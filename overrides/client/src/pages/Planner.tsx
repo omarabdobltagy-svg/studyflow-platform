@@ -1,15 +1,30 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import PlanExportActions from "@/components/PlanExportActions";
-import PlannerOperationsScene from "@/components/PlannerOperationsScene";
+import TaskReviewResourcePanel from "@/components/TaskReviewResourcePanel";
+import ExamMissionScene from "@/components/ExamMissionScene";
 import QueryErrorNotice from "@/components/QueryErrorNotice";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
+import { getNextOpenPlanStep } from "@/lib/plan-actions";
+import { getPlannerTeacherSessions, groupPlannerTeacherSessions, type PlannerTeacherSession } from "@/lib/teacher-sessions";
+import { formatTime12Hour, getDateKeyInTimeZone, getCalendarDaysBetween } from "@shared/date-time";
+import { getCairoSecondYearBaccalaureateExams } from "@shared/cairo-baccalaureate-exam-calendar";
+import { useServerClock } from "@/lib/server-clock";
+import { buildPlannerCurriculumLanes, getPlannerStepCurriculum as getPlanStepCurriculum, getTeacherSessionPreparationSteps } from "@/lib/planner-curriculum";
+import { ENGLISH_CURRICULUM_LABELS, displayCurriculumTitle } from "@/lib/curriculum-display";
 import {
+  SIE_CATALOG_META,
   getSIECheckpointProgressBranches,
   getSIEStudentVisibleBranches,
   getSIESubject,
+  getSIETeacher,
   matchSIECheckpointTask,
 } from "@shared/sie-catalog";
+import {
+  getEffectiveStudentLessonState,
+  isStudentLessonState,
+  type StudentLessonState,
+} from "@shared/sie-lesson-state";
 import {
   ArrowDown,
   ArrowUp,
@@ -26,10 +41,17 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import gsap from "gsap";
 
 type PlanningMode = "smart" | "backlog" | "teacher_sync";
+type StudyPace = "relaxed" | "balanced" | "intensive";
+const PACE_DAILY_CAPACITY: Record<StudyPace, number> = {
+  relaxed: 60,
+  balanced: 120,
+  intensive: 180,
+};
 type GenerationProgress = {
   status: "running" | "complete" | "failed";
   currentStage: "profile" | "curriculum" | "model" | "validation" | "saving" | "complete";
@@ -42,10 +64,12 @@ type PlanStep = {
   day: string;
   title: string;
   detail: string;
+  examFocus?: boolean;
+  examFocusDate?: string;
   studyMethod?: { stages: Array<{ title: string; instruction: string; reason: string; optional?: boolean }>; completionCriteria: string; teacherPolicyNote?: string };
   minutes: number;
   category: string;
-  phaseId?: "backlog" | "teacher_sync" | "steady";
+  phaseId?: "exam_focus" | "backlog" | "teacher_sync" | "steady" | "review_later";
   priority?: "critical" | "high" | "medium" | "low";
   priorityScore?: number;
   priorityReason?: string;
@@ -53,6 +77,8 @@ type PlanStep = {
   curriculumNodeIds?: string[];
   existingTask?: { id: number; title: string; status: "todo" | "done"; confidence: "exact" | "strong"; dueAt?: string | null };
   resourceRecommendation?: { title: string; url: string; teacherName?: string; reason: string };
+  aiReviewBrief?: { summaryAr: string; topicsNotCovered: string[] };
+  subtasks?: Array<{ id: string; title: string; detail: string; curriculumNodeIds?: string[]; startSeconds: number }>;
   difficulty?: "easy" | "medium" | "hard" | "unknown";
   lessonSize?: "small" | "medium" | "large" | "unknown";
   difficultyBasis?: "student_report" | "curriculum_profile" | "unknown";
@@ -85,7 +111,7 @@ type PlanQuality = {
     maxSessionMinutes: number;
   };
 };
-type ExecutionStrategyPhase = { id: "backlog" | "teacher_sync" | "steady"; title: string; purpose: string; actions: string[]; completionCriteria: string };
+type ExecutionStrategyPhase = { id: "exam_focus" | "backlog" | "teacher_sync" | "steady" | "review_later"; title: string; purpose: string; actions: string[]; completionCriteria: string };
 type PlanView = {
   title: string;
   summary: string;
@@ -95,31 +121,212 @@ type PlanView = {
   habits: { title: string; cue: string }[];
   quality?: PlanQuality;
   memorySnapshot?: Record<string, any>;
+  strategy?: {
+    baseline: { createdAt: string; title: string; summary: string; steps: Array<{ key: string; title: string; dayIndex: number | null; priority: string; phaseId: string; deferred: boolean }> };
+    revision: { number: number; createdAt: string; status: "baseline" | "adapted" | "stable"; headline: string; rationale: string; hasPreviousVersion: boolean; triggers: Array<{ code: string; label: string; detail: string }>;
+      diff: { added: Array<{ key: string; title: string }>; removed: Array<{ key: string; title: string }>; rescheduled: Array<{ key: string; title: string }>; reprioritized: Array<{ key: string; title: string }>; deferred: Array<{ key: string; title: string }>; preservedCount: number };
+    };
+    history: Array<{ number: number; createdAt: string; status: "baseline" | "adapted" | "stable"; headline: string; rationale: string; hasPreviousVersion: boolean; triggers: Array<{ code: string; label: string; detail: string }>; diff: any }>;
+  };
   // Export component compatibility only; deliberately blank so no AI self-test is created.
   reviewQuestion: string;
-  taskSync?: { parentGoalId: number; stageCount: number; taskCount: number; routineId?: number | null };
+  taskSync?: { parentGoalId?: number; stageCount: number; taskCount: number; routineId?: number | null };
 };
+
+type PlannerAssistantPatch = {
+  title?: string;
+  summary?: string;
+  updates: Array<{
+    index: number;
+    changes: Partial<Pick<PlanStep, "title" | "detail" | "category" | "priority" | "phaseId">>;
+  }>;
+  removeIndexes: number[];
+  order?: number[];
+};
+
+function applyPlannerAssistantPatch(plan: PlanView, patch: PlannerAssistantPatch): PlanView {
+  const removed = new Set(patch.removeIndexes);
+  const updatedSteps = plan.steps.map((step, index) => {
+    const update = patch.updates.find(item => item.index === index);
+    return update ? { ...step, ...update.changes } : step;
+  });
+  const remaining = plan.steps.map((_, index) => index).filter(index => !removed.has(index));
+  const order = patch.order ?? remaining;
+  return {
+    ...plan,
+    ...(patch.title ? { title: patch.title } : {}),
+    ...(patch.summary ? { summary: patch.summary } : {}),
+    steps: order.map(index => updatedSteps[index]).filter((step): step is PlanStep => Boolean(step)),
+    quality: undefined,
+  };
+}
 const DAILY_SNAPSHOT_PREFIX = "SIE_DAILY_PLAN_V4:";
+const DAILY_PLAN_PREFIX = "SIE_DAILY_PLAN_V5:";
 const DAILY_PLAN_DRAFT_PREFIX = "SIE_DAILY_PLAN_DRAFT_V1:";
 const ANNUAL_PLAN_PREFIX = "SIE_ANNUAL_PLAN_V1:";
 const STUDY_PLAN_PREFIX = "SIE_STUDY_PLAN_V2:";
-const todayCairo = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date());
-const initialPrompt = "كوّن لي خطة مذاكرة عملية للفترة القادمة. استخدم المهام الحالية وآخر موضع مكتمل وجدول حصص المدرسين، ووازن بين إنهاء المتراكم والاستعداد للمحاضرات الجديدة. لا تنشئ اختبارات أو أسئلة أو واجبات من عندك.";
+const todayCairo = getDateKeyInTimeZone(new Date(), "Africa/Cairo");
+const initialPrompt = "كوّن لي خطة مذاكرة عملية موزعة على جميع المواد المحددة في ملفي الدراسي، وليس مادة واحدة فقط. استخدم المهام الحالية وآخر موضع مكتمل وجدول حصص المدرسين، ووازن بين إنهاء المتراكم والاستعداد للمحاضرات الجديدة. اجعل عناوين المهام وشرحها بالعربية الواضحة. لا تنشئ اختبارات أو أسئلة أو واجبات من عندك.";
 const planningModeOptions: Array<{ value: PlanningMode; title: string; description: string; marker: string }> = [
   { value: "smart", title: "الخطة الذكية", description: "تخلّص المتراكم، وفي نفس الوقت تجهّزك لشرح المدرس القادم.", marker: "الموصى بها" },
   { value: "backlog", title: "المتراكم أولًا", description: "ركّز على المهام المفتوحة والفجوات المؤكدة قبل إضافة الجديد.", marker: "تركيز" },
   { value: "teacher_sync", title: "مواكبة المدرس", description: "حضّر للموضوع القادم قبل موعد الحصة وحافظ على متابعة الجديد.", marker: "استمرارية" },
 ];
-const PlannerFlowScene = lazy(() => import("@/components/PlannerFlowScene"));
 
-function DeferredPlannerFlowScene() {
-  const [ready, setReady] = useState(false);
-  useEffect(() => {
-    const timer = window.setTimeout(() => setReady(true), 450);
-    return () => window.clearTimeout(timer);
-  }, []);
-  const fallback = <div className="sf-planner-flow-placeholder" aria-hidden="true"><span /><span /><span /></div>;
-  return ready ? <Suspense fallback={fallback}><PlannerFlowScene /></Suspense> : fallback;
+function isEnglishOnlyText(value: string | null | undefined): boolean {
+  const text = String(value ?? "").trim();
+  return /[A-Za-z]{3,}/.test(text) && !/[\u0600-\u06FF]/.test(text);
+}
+
+function displayArabicText(value: string | null | undefined, fallback: string): string {
+  const text = String(value ?? "").trim();
+  if (!text) return fallback;
+  if (isEnglishOnlyText(text)) return fallback;
+  let localized = text;
+  for (const [english, arabic] of Object.entries(ENGLISH_CURRICULUM_LABELS)) {
+    localized = localized.replaceAll(english, arabic);
+  }
+  return localized
+    .replace(/\bUnit\s+(\d+)\s*:/gi, "الوحدة $1:")
+    .replace(/\bLesson\s+(\d+)\b/gi, "الدرس $1");
+}
+
+function displayTime12Hour(value: string): string {
+  return formatTime12Hour(value, "ar-EG", "UTC");
+}
+
+function displayPlanStepTitle(step: PlanStep, subjectIds: string[]): string {
+  const curriculum = getPlanStepCurriculum(step, subjectIds);
+  if (curriculum) {
+    const isEnglish = curriculum.subjectId === "ENG1_G2_BAC";
+    const unitTitle = isEnglish ? curriculum.unitTitle : displayCurriculumTitle(curriculum.unitTitle);
+    const unitLabel = curriculum.unitNumber
+      ? (isEnglish ? "Unit " : "الوحدة ") + curriculum.unitNumber.toLocaleString(isEnglish ? "en" : "ar-EG")
+        + (unitTitle ? " — " + unitTitle : "")
+      : unitTitle
+        ? (!isEnglish && curriculum.lessonType === "story" ? "القصة المقررة · " : "") + unitTitle
+        : "";
+    const lessonSequence = isEnglish
+      ? curriculum.branchId === "ENG_VOCABULARY" ? "Lesson 1 — Vocabulary"
+        : curriculum.branchId === "ENG_GRAMMAR" ? "Lesson " + (curriculum.lessonNumber || "2") + " — Grammar"
+          : curriculum.lessonNumber ? "Lesson " + curriculum.lessonNumber : ""
+      : curriculum.lessonNumber
+        ? (curriculum.lessonType === "story" ? "الفصل " : "الدرس ") + curriculum.lessonNumber
+        : curriculum.courseSequenceNumber
+          ? "الدرس " + curriculum.courseSequenceNumber.toLocaleString("ar-EG")
+          : "";
+    const segment = step.segmentIndex && step.segmentCount && step.segmentCount > 1
+      ? " — الجزء " + step.segmentIndex.toLocaleString("ar-EG") + " من " + step.segmentCount.toLocaleString("ar-EG")
+      : "";
+    return [unitLabel, lessonSequence, curriculum.lesson].filter(Boolean).join(" · ") + segment;
+  }
+  return displayArabicText(displayCurriculumTitle(step.title), "مهمة دراسية");
+}
+function displayPlanStepCategory(step: PlanStep, subjectIds: string[]): string {
+  const curriculum = getPlanStepCurriculum(step, subjectIds);
+  if (curriculum) return curriculum.subject;
+  return displayArabicText(step.category, step.existingTask ? "التزامات مسجلة" : "دراسة");
+}
+
+function displayPlanStepDetail(step: PlanStep, subjectIds: string[]): string {
+  const fallback = step.existingTask
+    ? "نفّذ التكليف المسجل كما هو، ثم حدّث حالة المهمة في قائمتك."
+    : getPlanStepCurriculum(step, subjectIds)
+      ? "ابدأ من مصدر المادة للدرس المحدد، وتابع شرح المدرس عند توفره، ثم سجّل تقدمك بعد المذاكرة."
+      : "راجع المطلوب في المهمة، ونفّذه من المصدر المسجل، ثم حدّث حالتها.";
+  return displayArabicText(step.detail, fallback);
+}
+
+function PlanDecisionPanel({plan}:{plan:PlanView}) {
+  const strategy=plan.strategy;
+  if(!strategy)return null;
+  const revision=strategy.revision, baseline=strategy.baseline, diff=revision.diff;
+  const changes=[
+    ...diff.added.slice(0,3).map(x=>({label:"أُضيفت",title:x.title,key:"a"+x.key})),
+    ...diff.removed.slice(0,3).map(x=>({label:"خرجت من التوزيع",title:x.title,key:"r"+x.key})),
+    ...diff.rescheduled.slice(0,3).map(x=>({label:"تغيّر موعدها",title:x.title,key:"s"+x.key})),
+    ...diff.reprioritized.slice(0,3).map(x=>({label:"تغيّرت أولويتها",title:x.title,key:"p"+x.key})),
+    ...diff.deferred.slice(0,3).map(x=>({label:"تأجلت",title:x.title,key:"d"+x.key})),
+  ];
+  return (
+    <section className="sf-plan-decision" data-testid="planner-decision-panel">
+      <header><div><span>قرار محرك التخطيط</span><strong>{revision.headline}</strong></div>
+        <span className={"sf-plan-decision-status "+(revision.status==="adapted"?"is-adapted":"")}>{revision.status==="baseline"?"النسخة الأساسية":revision.status==="adapted"?"خطة معدّلة":"لا تغيير جوهري"}</span>
+      </header>
+      <p className="sf-plan-decision-rationale">{revision.rationale}</p>
+      <div className="sf-plan-decision-compare">
+        <article><small>الخطة الأصلية</small><strong>{baseline.title}</strong><b>{baseline.steps.length.toLocaleString("ar-EG")} خطوة</b><p>{displayArabicText(baseline.summary,"النسخة الأولى المحفوظة من خطة المذاكرة.")}</p></article>
+        <article><small>التوزيع الحالي</small><strong>{displayArabicText(plan.title,"خطة المذاكرة")}</strong><b>{plan.steps.length.toLocaleString("ar-EG")} خطوة</b><p>{displayArabicText(plan.summary,"التوزيع الحالي وفق آخر بياناتك.")}</p></article>
+      </div>
+      {revision.triggers.length>0&&<div className="sf-plan-decision-triggers">{revision.triggers.map((x,i)=><article key={x.code+i}><b>{x.label}</b><p>{x.detail}</p></article>)}</div>}
+      {revision.hasPreviousVersion&&<div className="sf-plan-decision-changes">
+        <div><span>أُضيفت</span><b>{diff.added.length.toLocaleString("ar-EG")}</b></div>
+        <div><span>أُزيلت</span><b>{diff.removed.length.toLocaleString("ar-EG")}</b></div>
+        <div><span>تغيّر توقيتها</span><b>{diff.rescheduled.length.toLocaleString("ar-EG")}</b></div>
+        <div><span>تأجلت</span><b>{diff.deferred.length.toLocaleString("ar-EG")}</b></div>
+      </div>}
+      {changes.length>0&&<ul className="sf-plan-decision-change-list">{changes.map(x=><li key={x.key}><span>{x.label}</span><strong>{x.title}</strong></li>)}</ul>}
+      {!revision.hasPreviousVersion&&<small className="sf-plan-decision-baseline-note">دي نقطة القياس الأولى. هتظهر المقارنة التفصيلية عند أول تعديل لاحق.</small>}
+    </section>
+  );
+}
+
+function PlanReviewSubtasks({ step, subjectIds, teacherId }: { step: PlanStep; subjectIds: string[]; teacherId?: string }) {
+  if (!step.subtasks?.length && !step.aiReviewBrief && !step.resourceRecommendation && !step.examFocus) return null;
+  const curriculum = getPlanStepCurriculum(step, subjectIds);
+  const nodeId = step.curriculumNodeIds?.[0];
+  const branchId = curriculum && nodeId
+    ? getSIECheckpointProgressBranches(curriculum.subjectId).find(branch => branch.choices.some(choice => choice.nodeId === nodeId))?.branchId
+    : undefined;
+  return (
+    <section className="sf-sp-composite-subtasks">
+      {(step.resourceRecommendation || step.examFocus) && (
+        <TaskReviewResourcePanel
+          resource={step.resourceRecommendation}
+          subjectId={curriculum?.subjectId}
+          branchId={branchId}
+          nodeId={nodeId}
+          teacherId={teacherId}
+        />
+      )}
+      {step.aiReviewBrief && (
+        <div className="sf-sp-ai-review-brief" data-testid="ai-review-brief">
+          <header>
+            <strong>تحليل StudyFlow للمراجعة</strong>
+            {step.resourceRecommendation?.teacherName && <span>{step.resourceRecommendation.teacherName}</span>}
+          </header>
+          <p>{displayArabicText(step.aiReviewBrief.summaryAr, "حلّل المساعد محتوى هذا المصدر وربط الأجزاء المطابقة بالدروس التي تحتاج إلى مراجعة.")}</p>
+          {step.aiReviewBrief.topicsNotCovered.length > 0 && (
+            <div className="sf-sp-review-scope-note">
+              <strong>موضوعات تحتاج تغطية منفصلة</strong>
+              <ul>{step.aiReviewBrief.topicsNotCovered.map((topic, index) => <li key={index}>{displayArabicText(topic, "موضوع خارج نطاق المراجعة")}</li>)}</ul>
+            </div>
+          )}
+        </div>
+      )}
+      {step.subtasks?.length ? (
+        <>
+          <header>
+            <strong>الموضوعات المطابقة لمنهجك</strong>
+            <span>{step.subtasks.length.toLocaleString("ar-EG")} موضوعات</span>
+          </header>
+          <ol>
+            {step.subtasks.map((subtask, index) => {
+              return (
+                <li key={subtask.id}>
+                  <span className="sf-sp-composite-subtask-index">{(index + 1).toLocaleString("ar-EG")}</span>
+                  <div>
+                    <strong>{displayArabicText(subtask.title, "موضوع مراجعة")}</strong>
+                    <p>{displayArabicText(subtask.detail, "راجع الجزء المحدد من المراجعة.")}</p>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </>
+      ) : null}
+    </section>
+  );
 }
 
 function parseSavedPlan(record: { planJson: string }): PlanView | null {
@@ -142,6 +349,7 @@ function parseSavedPlan(record: { planJson: string }): PlanView | null {
       habits: Array.isArray(saved.habits) ? saved.habits : [],
       quality: saved.quality,
       memorySnapshot: saved.memorySnapshot,
+      strategy: saved.strategy && typeof saved.strategy === "object" ? saved.strategy as PlanView["strategy"] : undefined,
       reviewQuestion: "",
     };
   } catch {
@@ -150,50 +358,87 @@ function parseSavedPlan(record: { planJson: string }): PlanView | null {
 }
 
 export default function Planner() {
+  const { now: serverNow } = useServerClock();
   const utils = trpc.useUtils();
   const [plan, setPlan] = useState<PlanView | null>(null);
   const planningMode: PlanningMode = "smart";
-  const [dailyMinutes, setDailyMinutes] = useState(120);
+  const [selectedPace, setSelectedPace] = useState<StudyPace>("balanced");
+  const dailyMinutes = PACE_DAILY_CAPACITY[selectedPace];
   const [approved, setApproved] = useState(false);
   const [loadedSavedDraft, setLoadedSavedDraft] = useState(false);
+  const [showGenerationDetails, setShowGenerationDetails] = useState(false);
+  const [generationDetailsHiddenForRun, setGenerationDetailsHiddenForRun] = useState(false);
   const historyInitialized = useRef(false);
+  const initialDailyGenerationStarted = useRef(false);
   const plannerPreferencesInitialized = useRef(false);
+  // Start at the overview; the distribution map is opened only by an explicit tab choice.
+  const [plannerTab, setPlannerTab] = useState<"overview" | "schedule" | "curriculum" | "tasks" | "history">("overview");
 
   const history = trpc.plans.list.useQuery();
   const profile = trpc.studentProfile.get.useQuery(undefined, {
     retry: 1,
     refetchOnWindowFocus: true,
   });
+  const upcomingTeacherSessions = useMemo(
+    () => getPlannerTeacherSessions(profile.data),
+    [profile.data?.selection, profile.data?.subjectIds, profile.data?.teacherSelections, (profile.data?.selection as Record<string, any> | undefined)?.teacherSchedules],
+  );
+  const todayCairo = getDateKeyInTimeZone(serverNow ?? new Date(), "Africa/Cairo");
+  const upcomingCairoExams = useMemo(
+    () => getCairoSecondYearBaccalaureateExams(profile.data)
+      .filter(exam => exam.date >= todayCairo)
+      .sort((left, right) => left.date.localeCompare(right.date)),
+    [profile.data, todayCairo],
+  );
+  const nearestCairoExam = upcomingCairoExams[0] ?? null;
+  const nearestExamDays = nearestCairoExam
+    ? Math.max(0, getCalendarDaysBetween(todayCairo, nearestCairoExam.date))
+    : Number.POSITIVE_INFINITY;
   const learning = trpc.learning.get.useQuery(undefined, { staleTime: 15_000 });
   const tasksQuery = trpc.tasks.list.useQuery(undefined, { staleTime: 15_000 });
   const activeDailyPlan = trpc.plans.currentDaily.useQuery(undefined, {
     enabled: !profile.isLoading && !profile.isError && Boolean(profile.data?.subjectIds?.length),
     staleTime: 15_000,
     refetchOnWindowFocus: false,
-    refetchInterval: query => query.state.data?.plan ? 15_000 : query.state.data?.needsRefresh ? 30_000 : false,
+    // Poll quickly while the durable server-side reconciliation worker rebuilds a stale plan.
+    refetchInterval: query => query.state.data?.needsRefresh ? 900 : query.state.data?.plan ? 15_000 : false,
   });
 
   const progressPreview = useMemo(() => {
     const subjects = profile.data?.subjectIds ?? [];
     const gaps = (learning.data as any)?.gapByBranch ?? {};
-    return subjects.flatMap(subjectId =>
-      getSIEStudentVisibleBranches(subjectId).map(branch => {
+    return subjects.map(subjectId => {
+      const branches = getSIEStudentVisibleBranches(subjectId);
+      const snapshots = branches.map(branch => {
         const gap = gaps[subjectId]?.[branch.branchId];
-        const nextIndex = gap?.studentPosition;
-        const next = typeof nextIndex === "number" ? branch.choices[nextIndex] : null;
+        const position = typeof gap?.studentPosition === "number" ? gap.studentPosition : null;
+        const next = position !== null && position < branch.choices.length ? branch.choices[position] : null;
         return {
-          key: subjectId + "::" + branch.branchId,
-          subject: getSIESubject(subjectId)?.nameAr ?? subjectId,
-          branch: branch.branchTitle,
-          lastCompleted: gap?.studentFrontierTitle || (nextIndex === 0 ? "لم يبدأ بعد" : "غير محدد"),
-          next: next?.title ?? (gap?.studentPosition === branch.choices.length ? "اكتمل الفرع" : "غير محدد"),
-          gapCount: gap?.gapCount ?? null,
-          reference: gap?.referenceFrontierTitle ?? "غير مسجل",
+          next: next?.title ? displayCurriculumTitle(next.title) : null,
+          lastCompleted: gap?.studentFrontierTitle ? displayCurriculumTitle(gap.studentFrontierTitle) : null,
+          completed: position === null ? 0 : Math.max(0, Math.min(position, branch.choices.length)),
+          total: branch.choices.length,
+          gapCount: typeof gap?.gapCount === "number" ? gap.gapCount : null,
         };
-      })
-    );
+      });
+      const next = snapshots.find(item => item.next)?.next ?? null;
+      const lastCompleted = [...snapshots].reverse().find(item => item.lastCompleted)?.lastCompleted ?? "لم يبدأ بعد";
+      const completedCount = snapshots.reduce((sum, item) => sum + item.completed, 0);
+      const totalCount = snapshots.reduce((sum, item) => sum + item.total, 0);
+      const allGapsKnown = snapshots.length > 0 && snapshots.every(item => item.gapCount !== null);
+      const gapCount = allGapsKnown ? snapshots.reduce((sum, item) => sum + (item.gapCount ?? 0), 0) : null;
+      return {
+        key: subjectId,
+        subjectId,
+        subject: getSIESubject(subjectId)?.nameAr ?? subjectId,
+        lastCompleted,
+        next: next ?? (totalCount > 0 && completedCount >= totalCount ? "اكتمل المنهج المسجل" : "غير محدد"),
+        completedCount,
+        totalCount,
+        gapCount,
+      };
+    });
   }, [profile.data?.subjectIds, learning.data]);
-
   const mappedOpenTasks = useMemo(() => {
     const subjects = profile.data?.subjectIds ?? [];
     return (tasksQuery.data ?? [])
@@ -203,14 +448,96 @@ export default function Planner() {
         match: matchSIECheckpointTask(subjects, [task.title, task.notes || ""].join(" ")),
       }));
   }, [tasksQuery.data, profile.data?.subjectIds]);
-  const curriculumLinkedTasks = mappedOpenTasks.filter(item => item.match);
-  const taskProgressConflicts = curriculumLinkedTasks.filter(({ task, match }) => {
-    if (!match) return false;
-    const branch = getSIECheckpointProgressBranches(match.subjectId).find(item => item.branchId === match.branchId);
-    const gap = (learning.data as any)?.gapByBranch?.[match.subjectId]?.[match.branchId];
-    const index = branch?.choices.findIndex(choice => choice.nodeId === match.nodeId) ?? -1;
-    return index >= 0 && typeof gap?.studentPosition === "number" && index < gap.studentPosition;
-  });
+  const progressivePath = useMemo(() => {
+    type PathLesson = {
+      key: string;
+      subject: string;
+      lesson: string;
+      state: StudentLessonState;
+    };
+    const selection = (profile.data?.selection ?? {}) as Record<string, any>;
+    const courseProgress = (selection.learningCourseProgress ?? {}) as Record<string, any>;
+    const subjectLessonProgress = (selection.subjectLessonProgress ?? {}) as Record<string, any>;
+    const sq3rProgress = (selection.sq3rProgress ?? {}) as Record<string, any>;
+    const gaps = (learning.data as any)?.gapByBranch ?? {};
+    const unseen: PathLesson[] = [];
+    const deferred: PathLesson[] = [];
+    let unknownLessons = 0;
+
+    for (const subjectId of profile.data?.subjectIds ?? []) {
+      const subjectRecord = courseProgress[subjectId] ?? {};
+      const branchRecords = (subjectRecord.branches ?? {}) as Record<string, Record<string, any>>;
+      const lessonRecords = {
+        ...(subjectLessonProgress[subjectId] ?? {}),
+        ...(sq3rProgress[subjectId] ?? {}),
+      };
+      const subjectLabel = getSIESubject(subjectId)?.nameAr ?? subjectId;
+
+      for (const branch of getSIEStudentVisibleBranches(subjectId)) {
+        let savedBranch = branchRecords[branch.branchId] ?? {};
+        if (subjectId === "ARB_G2_BAC" && branch.branchId === "ARB_READING" && !Object.keys(savedBranch).length) {
+          savedBranch = Object.values(branchRecords).find(record =>
+            branch.choices.some(choice => [
+              record.lastCompletedLessonId,
+              record.teacherTeachingFrontierId,
+              record.schoolClassFrontierId,
+            ].includes(choice.nodeId))
+          ) ?? {};
+        }
+        const savedLessonStates = (savedBranch.lessonStates ?? {}) as Record<string, { state?: StudentLessonState }>;
+        const modelVersion = Number(savedBranch.lessonStateModelVersion ?? 0);
+        const gap = gaps[subjectId]?.[branch.branchId];
+        const studentPosition = typeof gap?.studentPosition === "number" ? gap.studentPosition : null;
+        const referencePosition = typeof gap?.referencePosition === "number" ? gap.referencePosition : null;
+        const studentFrontierId = gap?.studentFrontierId ?? "__UNKNOWN__";
+
+        for (const [index, choice] of branch.choices.entries()) {
+          const saved = savedLessonStates[choice.nodeId];
+          const hasExplicitState = isStudentLessonState(saved?.state);
+          let state: StudentLessonState = getEffectiveStudentLessonState({
+            choices: branch.choices,
+            nodeId: choice.nodeId,
+            studentFrontierId,
+            lessonStateModelVersion: modelVersion,
+            saved,
+          });
+          if (!hasExplicitState) {
+            // A lesson is accumulated only inside the instructor's covered range.
+            // Future syllabus checkpoints are not backlog just because the student
+            // frontier has not reached them yet.
+            if (referencePosition === null || index >= referencePosition || studentPosition === null) {
+              state = "not_recorded";
+            } else {
+              state = index < studentPosition ? "watched_only" : "not_watched";
+            }
+          }
+
+          const lessonRecord = lessonRecords[choice.nodeId];
+          const completedBySq3r = Array.isArray(lessonRecord?.completedSteps)
+            && new Set(lessonRecord.completedSteps).size === 5;
+          if (completedBySq3r) state = "studied";
+          if (state === "studied") continue;
+          if (state === "not_recorded") {
+            if (referencePosition !== null && index < referencePosition) {
+              unknownLessons += 1;
+            }
+            continue;
+          }
+          const item: PathLesson = {
+            key: subjectId + "::" + branch.branchId + "::" + choice.nodeId,
+            subject: subjectLabel,
+            lesson: displayCurriculumTitle(choice.title),
+            state,
+          };
+          if (state === "not_watched") unseen.push(item);
+          else if (state === "watched_only" || state === "needs_review") deferred.push(item);
+        }
+
+      }
+    }
+
+    return { unseen, deferred, unknownLessons };
+  }, [profile.data?.selection, profile.data?.subjectIds, learning.data]);
   const isPreflightReady = !profile.isLoading && !learning.isLoading && !tasksQuery.isLoading
     && !profile.isError && !learning.isError && !tasksQuery.isError;
 
@@ -221,11 +548,11 @@ export default function Planner() {
       const isLegacyAnnualPlan = prompt.startsWith(ANNUAL_PLAN_PREFIX)
         || saved?.title.includes("الخطة السنوية")
         || saved?.title.includes("الخطة القديمة");
-      const isDailyPlanRecord = prompt.startsWith(DAILY_SNAPSHOT_PREFIX);
+      const isDailyPlanRecord = prompt.startsWith(DAILY_SNAPSHOT_PREFIX)
+        || prompt.startsWith(DAILY_PLAN_PREFIX);
       const isUncommittedAutoDraft = prompt.startsWith(DAILY_PLAN_DRAFT_PREFIX);
-      const isLegacyApprovedRecord = prompt.startsWith(STUDY_PLAN_PREFIX)
-        && /^[a-f0-9]{32}:$/.test(prompt.slice(STUDY_PLAN_PREFIX.length));
-      if (!saved || isLegacyAnnualPlan || isDailyPlanRecord || isUncommittedAutoDraft || isLegacyApprovedRecord) return [];
+      const isLegacyManualPlan = prompt.startsWith(STUDY_PLAN_PREFIX);
+      if (!saved || isLegacyAnnualPlan || isDailyPlanRecord || isUncommittedAutoDraft || isLegacyManualPlan) return [];
       return [{ id: record.id, createdAt: record.createdAt, plan: saved }];
     })
     .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()), [history.data]);
@@ -235,31 +562,75 @@ export default function Planner() {
     const selection = (profile.data.selection ?? {}) as Record<string, any>;
     const conditions = (selection.studyConditions ?? {}) as Record<string, unknown>;
     const configuredMinutes = Number(conditions.dailyMinutes);
-    if (Number.isFinite(configuredMinutes) && configuredMinutes > 0) setDailyMinutes(configuredMinutes <= 60 ? 60 : configuredMinutes <= 150 ? 120 : 180);
+    if (Number.isFinite(configuredMinutes) && configuredMinutes > 0) {
+      setSelectedPace(configuredMinutes <= 60 ? "relaxed" : configuredMinutes <= 150 ? "balanced" : "intensive");
+    }
     plannerPreferencesInitialized.current = true;
   }, [profile.data, profile.isLoading, profile.isError]);
 
-  const generate = trpc.plans.generate.useMutation({
-    onSuccess: result => {
+  const ensureDaily = trpc.plans.ensureDaily.useMutation({
+    onSuccess: async result => {
       setPlan({
-        ...result,
-        habits: Array.isArray(result.habits) ? result.habits : [],
-        steps: Array.isArray(result.steps) ? result.steps : [],
+        ...result.plan,
+        habits: Array.isArray(result.plan.habits) ? result.plan.habits : [],
+        steps: Array.isArray(result.plan.steps) ? result.plan.steps : [],
         reviewQuestion: "",
+        taskSync: {
+          stageCount: result.taskCount,
+          taskCount: result.taskCount,
+        },
       });
-      setApproved(false);
+      setApproved(true);
       setLoadedSavedDraft(false);
-      void utils.plans.list.invalidate();
-      toast.success("قائمة المهام الذكية جاهزة. راجعها قبل إضافتها إلى مهامك.");
+      await Promise.all([
+        utils.plans.currentDaily.invalidate(),
+        utils.tasks.list.invalidate(),
+        utils.goals.list.invalidate(),
+        utils.dashboard.summary.invalidate(),
+        utils.plans.list.invalidate(),
+      ]);
+      toast.success(result.generated
+        ? "تم تحديث خطة واحدة ومزامنة المهام مع مواعيدها."
+        : "الخطة الحالية متوافقة مع بياناتك؛ لم يتم إنشاء نسخة جديدة.");
     },
-    onError: error => toast.error("تعذّر بناء الخطة: " + error.message),
+    onError: error => toast.error("تعذّر تحديث الخطة: " + error.message),
   });
 
-  const generationProgress = trpc.plans.generationProgress.useQuery(undefined, {
-    enabled: generate.isPending,
-    refetchInterval: generate.isPending ? 750 : false,
+  const aiActivity = trpc.ai.activity.useQuery(undefined, {
+    enabled: Boolean(profile.data?.subjectIds?.length),
+    refetchInterval: query => {
+      const active = query.state.data?.active ?? [];
+      const plannerIsRunning = active.some(item => item.kind === "daily_plan");
+      return activeDailyPlan.isLoading || ensureDaily.isPending || plannerIsRunning ? 1_000 : false;
+    },
     refetchOnWindowFocus: false,
   });
+  const backgroundPlanRunning = (aiActivity.data?.active ?? []).some(item => item.kind === "daily_plan");
+  const generationProgress = trpc.plans.generationProgress.useQuery(undefined, {
+    enabled: ensureDaily.isPending || backgroundPlanRunning || Boolean(activeDailyPlan.data?.needsRefresh),
+    refetchInterval: query => (
+      ensureDaily.isPending
+      || backgroundPlanRunning
+      || Boolean(activeDailyPlan.data?.needsRefresh)
+      || query.state.data?.status === "running"
+    ) ? 900 : false,
+    refetchOnWindowFocus: false,
+  });
+  const isPlanGenerationRunning = ensureDaily.isPending
+    || backgroundPlanRunning
+    || Boolean(activeDailyPlan.data?.needsRefresh)
+    || generationProgress.data?.status === "running";
+
+  useEffect(() => {
+    if (!isPlanGenerationRunning) {
+      setShowGenerationDetails(false);
+      setGenerationDetailsHiddenForRun(false);
+      return;
+    }
+    if (!generationDetailsHiddenForRun) setShowGenerationDetails(true);
+  }, [isPlanGenerationRunning, generationDetailsHiddenForRun]);
+  const visibleAIActivities = (aiActivity.data?.active ?? [])
+    .filter(item => item.kind === "daily_plan");
 
   const approvePlan = trpc.plans.approve.useMutation({
     onSuccess: async result => {
@@ -317,24 +688,15 @@ export default function Planner() {
     onError: error => toast.error("تعذّر مسح الخطط: " + error.message),
   });
 
-  const runGeneration = (minutes: number) => {
-    generate.mutate({
-      prompt: initialPrompt,
-      includeStudentProfile: true,
-      planningMode: "smart",
-      horizonDays: 7,
-      dailyMinutes: minutes,
-      daysPerWeek: 6,
-      startDate: todayCairo,
-      pace: "balanced",
-      paceLevel: 2,
-      deadline: null,
-    });
+  const runGeneration = () => {
+    setGenerationDetailsHiddenForRun(false);
+    setShowGenerationDetails(true);
+    ensureDaily.mutate({ dailyMinutes, forceRebuild: true });
   };
 
   useEffect(() => {
     const waitingForActivePlan = Boolean(profile.data?.subjectIds?.length) && activeDailyPlan.isLoading;
-    if (history.isLoading || history.isError || waitingForActivePlan || historyInitialized.current) return;
+    if (profile.isLoading || profile.isError || history.isLoading || history.isError || waitingForActivePlan || historyInitialized.current) return;
     historyInitialized.current = true;
 
     // The current active plan is not a deletable history draft. Load it from the
@@ -359,8 +721,38 @@ export default function Planner() {
     history.isError,
     savedPlans,
     profile.data?.subjectIds,
+    profile.isLoading,
+    profile.isError,
     activeDailyPlan.isLoading,
+    activeDailyPlan.isError,
     activeDailyPlan.data?.plan,
+  ]);
+
+  useEffect(() => {
+    // Preserve autonomous first-plan setup without making the currentDaily GET
+    // endpoint perform writes. Trigger one idempotent mutation after all read
+    // queries and saved-plan history have settled.
+    if (initialDailyGenerationStarted.current || ensureDaily.isPending || !historyInitialized.current) return;
+    if (profile.isLoading || profile.isError || !profile.data?.subjectIds?.length) return;
+    if (history.isLoading || history.isError) return;
+    if (activeDailyPlan.isLoading || activeDailyPlan.isError || !activeDailyPlan.data) return;
+    if (activeDailyPlan.data.plan || activeDailyPlan.data.generatedAt || savedPlans.length > 0 || plan) return;
+
+    initialDailyGenerationStarted.current = true;
+    ensureDaily.mutate({ dailyMinutes, forceRebuild: false });
+  }, [
+    profile.data?.subjectIds,
+    profile.isLoading,
+    profile.isError,
+    history.isLoading,
+    history.isError,
+    savedPlans.length,
+    activeDailyPlan.data,
+    activeDailyPlan.isLoading,
+    activeDailyPlan.isError,
+    plan,
+    dailyMinutes,
+    ensureDaily.isPending,
   ]);
 
   useEffect(() => {
@@ -402,10 +794,12 @@ export default function Planner() {
     updatePlan({
       ...plan,
       steps: [...plan.steps, {
-        day: `اليوم ${plan.steps.length + 1}`,
+        day: "موعد غير محدد",
         title: "مهمة جديدة",
-        detail: "اكتب ما الذي تريد إنجازه في هذه الجلسة.",
+        detail: "اكتب ما الذي تريد إنجازه في هذه المهمة.",
         minutes: 0,
+        dateOffsetDays: Math.max(0, ...plan.steps.map(step => step.dateOffsetDays ?? 0)) + 1,
+        dayIndex: plan.steps.length + 1,
         category: "دراسة",
         priority: "medium",
         difficulty: "unknown",
@@ -417,18 +811,19 @@ export default function Planner() {
     });
   };
 
-  const approveCurrentPlan = () => {
-    if (!plan) return;
+  const approveCurrentPlan = (nextPlan?: PlanView) => {
+    const planToApprove = nextPlan ?? plan;
+    if (!planToApprove || approvePlan.isPending) return;
     approvePlan.mutate({
       plan: {
-        title: plan.title,
-        summary: plan.summary,
-        steps: plan.steps.map((step, index) => ({
+        title: planToApprove.title,
+        summary: planToApprove.summary,
+        steps: planToApprove.steps.map((step, index) => ({
           ...step,
           day: step.day || `اليوم ${index + 1}`,
         })),
       },
-      schedule: { startDate: todayCairo, dailyMinutes, daysPerWeek: 6, horizonDays: 7, mode: "flexible" },
+      schedule: { startDate: todayCairo, dailyMinutes, daysPerWeek: 6, horizonDays: 7, mode: "topic" },
     });
   };
 
@@ -439,129 +834,409 @@ export default function Planner() {
     if (confirmed) deleteAllPlans.mutate();
   };
 
+
+
+  const planStepCount = plan?.steps.length ?? 0;
+  const completedPlanCount = plan?.steps.filter(step => step.plannerTaskStatus === "done" || step.existingTask?.status === "done").length ?? 0;
+  const planProgress = planStepCount ? Math.round((completedPlanCount / planStepCount) * 100) : 0;
+  const nextPlanStep = getNextOpenPlanStep(plan?.steps);
+  const taskRows = tasksQuery.data ?? [];
+  const openTaskRows = taskRows.filter(task => task.status !== "done");
+  const overdueTaskRows = openTaskRows.filter(task => task.dueAt && new Date(task.dueAt).getTime() < Date.now());
+  const todayTaskRows = openTaskRows.filter(task => task.dueAt && getDateKeyInTimeZone(task.dueAt instanceof Date ? task.dueAt : new Date(String(task.dueAt)), "Africa/Cairo") === todayCairo);
+  const planSubjectCount = plan
+    ? new Set(plan.steps.map(step => getPlanStepCurriculum(step, profile.data?.subjectIds ?? [])?.subjectId).filter(Boolean)).size
+    : 0;
+  const planNeedsRefresh = Boolean(activeDailyPlan.data?.needsRefresh);
+
   return (
-    <DashboardLayout
-      title="خطة المذاكرة"
-      description="خطة واقعية تتغير مع تقدمك والتزاماتك."
-    >
-      <div className="mx-auto w-full max-w-6xl space-y-5 pb-8">
+    <DashboardLayout title="خطة المذاكرة" description="قرار واضح، وتسلسل تنفيذ يربط المواد والالتزامات والمراجعات بتقدمك الفعلي.">
+      <div className="sf-study-plan-v2">
         {history.isError && <QueryErrorNotice onRetry={() => void history.refetch()} label="تعذّر تحميل خططك المحفوظة." />}
         {profile.isError && <QueryErrorNotice onRetry={() => void profile.refetch()} label="تعذّر تحميل ملفك الدراسي. أعد المحاولة قبل إنشاء الخطة." />}
 
-        <section className="sf-planner-intro relative overflow-hidden rounded-[1.75rem] border border-border bg-card p-5 shadow-sm sm:p-7">
-          <div className="pointer-events-none absolute -left-20 -top-24 size-72 rounded-full bg-primary/[0.08] blur-3xl" />
-          <div className="relative flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-            <div className="max-w-2xl">
-              <p className="text-[10px] font-semibold tracking-[.22em] text-primary">STUDYFLOW / PLANNER</p>
-              <h2 className="mt-3 text-2xl font-bold tracking-tight sm:text-3xl">مذاكرتك، بترتيب واقعي.</h2>
-              <p className="mt-2 max-w-xl text-sm leading-7 text-muted-foreground">
-                المحرك يوازن تلقائيًا بين المتراكم، والدرس القادم مع المدرس، والمهام المسجلة، والوقت المتاح. لا تحتاج إلى اختيار طريقة التخطيط أو كتابة طلب طويل.
-              </p>
+        <header className="sf-sp-hero" data-scroll-reveal>
+          <div className="sf-sp-hero-copy">
+            <div className="sf-sp-hero-meta">
+              <span className="sf-sp-kicker">مساحة التخطيط الدراسي</span>
+              <span className={"sf-sp-status " + (approved ? "is-active" : plan ? "is-draft" : "is-empty")}>
+                {approved ? "خطة معتمدة" : plan ? "مسودة للمراجعة" : "لم تُنشأ خطة بعد"}
+              </span>
             </div>
-            <div className="grid grid-cols-3 gap-2 sm:min-w-[320px]">
-              <div className="rounded-xl border border-border/70 bg-background/80 p-3">
-                <p className="text-[10px] text-muted-foreground">المواد</p>
-                <p className="mt-1 text-xl font-bold tabular-nums">{(profile.data?.subjectIds?.length ?? 0).toLocaleString("ar-EG")}</p>
-              </div>
-              <div className="rounded-xl border border-border/70 bg-background/80 p-3">
-                <p className="text-[10px] text-muted-foreground">مهام مفتوحة</p>
-                <p className="mt-1 text-xl font-bold tabular-nums">{(tasksQuery.data ?? []).filter((task: any) => task.status !== "done").length.toLocaleString("ar-EG")}</p>
-              </div>
-              <div className="rounded-xl border border-border/70 bg-background/80 p-3">
-                <p className="text-[10px] text-muted-foreground">فروع المنهج</p>
-                <p className="mt-1 text-xl font-bold tabular-nums">{progressPreview.length.toLocaleString("ar-EG")}</p>
-              </div>
+            <h1>أولوياتك مرتبة، وخطوتك التالية واضحة.</h1>
+            <p>الخطة تجمع المتراكم والدروس الجديدة والاختبارات ومواعيد المدرسين، ثم تعرض ترتيب التنفيذ وسبب أولوية كل خطوة.</p>
+            <a
+              href="/reviews"
+              data-testid="planner-youtube-reviews-link"
+              className="inline-flex min-h-10 w-fit items-center gap-2 rounded-xl border border-primary/30 bg-primary/10 px-3.5 py-2 text-xs font-bold text-primary transition-colors hover:border-primary/55 hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            >
+              اكتشف مراجعات مدرسك المطابقة للمنهج <ArrowUpRight className="size-3.5" />
+            </a>
+            <div className="sf-sp-context">
+              {profile.data?.track && <span>{profile.data.track}</span>}
+              <span>{(profile.data?.subjectIds?.length ?? 0).toLocaleString("ar-EG")} مواد دراسية</span>
+              <span>الذكاء الاصطناعي يرتّب الأولويات تلقائيًا</span>
             </div>
           </div>
-          {profile.data && (
-            <div className="relative mt-5 flex flex-wrap items-center gap-2 border-t border-border/70 pt-4 text-xs text-muted-foreground">
-              <span className="rounded-full border border-border bg-muted/25 px-3 py-1.5">{profile.data.track}</span>
-              <span className="rounded-full border border-border bg-muted/25 px-3 py-1.5">{profile.data.subjectIds.length} مواد مختارة</span>
-              <span className="rounded-full border border-border bg-muted/25 px-3 py-1.5">مستوى الانشغال: {dailyMinutes === 60 ? "مرتفع جدًا" : dailyMinutes === 120 ? "متوسط" : "أقل نسبيًا"}</span>
+          <div className="sf-sp-hero-progress">
+            <div className="sf-sp-ring" style={{ background: "conic-gradient(var(--primary) " + planProgress + "%, color-mix(in srgb, var(--border) 88%, transparent) 0)" }}>
+              <div className="sf-sp-ring-center">
+                <strong>{plan ? planProgress.toLocaleString("ar-EG") + "%" : "—"}</strong>
+                <span>إنجاز الخطة</span>
+              </div>
             </div>
-          )}
-        </section>
-
-        <PlannerOperationsScene />
-
-        {!profile.isLoading && profile.data && (!profile.data.subjectIds || profile.data.subjectIds.length === 0) && (
-          <section className="rounded-2xl border border-border bg-card p-5">
-            <h3 className="font-semibold">أكمل ملفك الدراسي أولًا</h3>
-            <p className="mt-1 text-sm leading-6 text-muted-foreground">حدد نظامك وصفك وموادك حتى يختار المحرك الدروس الصحيحة بدل إنشاء خطة عامة.</p>
-            <a href="/profile" className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-primary">فتح الملف الدراسي <ArrowUpRight className="size-4" /></a>
-          </section>
-        )}
-
-        <section className="sf-planner-capacity-card rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
-          <div>
-            <p className="text-[10px] font-semibold tracking-[.18em] text-primary">YOUR STUDY CAPACITY</p>
-            <h3 className="mt-1 text-lg font-bold">قد إيه وقتك متاح في حياتك غالبًا؟</h3>
-            <p className="mt-1 max-w-2xl text-xs leading-6 text-muted-foreground">ده مؤشر لانشغالك وحجم المهام المناسب ليك، مش مدة للمحاضرات أو جدول بمواعيد. تقدر تغيّره في أي وقت، ومش هنحدد وقتًا لأي مهمة إلا لو أنت اخترت ده بنفسك.</p>
+            <p>{plan ? completedPlanCount.toLocaleString("ar-EG") + " من " + planStepCount.toLocaleString("ar-EG") + " مهمة مكتملة" : "ستظهر نسبة التنفيذ بعد إنشاء الخطة واعتمادها."}</p>
           </div>
-          <div className="mt-4 grid gap-2 sm:grid-cols-3">
-            {([[60,"ساعة تقريبًا","مشغول جدًا — مهام أقل وبأولوية أعلى"],[120,"ساعتان تقريبًا","انشغال متوسط — حمل متوازن"],[180,"3 ساعات أو أكثر","مساحة أكبر — مهام أكثر عند الحاجة"]] as const).map(([value,label,description]) => (
-              <button key={value} type="button" aria-pressed={dailyMinutes===value} onClick={() => setDailyMinutes(value)}
-                className={"sf-capacity-choice rounded-xl border p-4 text-right transition " + (dailyMinutes===value ? "border-primary bg-primary/[.06] ring-1 ring-primary/25" : "border-border bg-background hover:border-primary/35")}>
-                <span className="block text-sm font-bold">{label}</span><span className="mt-1 block text-xs leading-5 text-muted-foreground">{description}</span>
-              </button>
-            ))}
-          </div>
-          <div className="mt-4 flex flex-col gap-3 border-t border-border/70 pt-4 sm:flex-row sm:items-center sm:justify-between">
-            <p className="max-w-xl text-xs leading-6 text-muted-foreground">المخطط هيقرأ موادك وتقدمك والمهام وشروط المدرسين، ثم يقترح قائمة مهام مرنة. لا يوجد يوم أو ساعة إلزامية لكل مهمة.</p>
-            <Button className="h-11 w-full rounded-xl px-6 sm:w-auto" onClick={() => runGeneration(dailyMinutes)} disabled={!isPreflightReady || generate.isPending || !profile.data?.subjectIds?.length}>
-              {generate.isPending ? <><Loader2 className="size-4 animate-spin" /> بنبني قائمتك…</> : <><Sparkles className="size-4" /> أنشئ قائمة مهامي</>}
-            </Button>
-          </div>
-        </section>
+        </header>
 
-        {plan && (
-          <PlanCard
-            plan={plan}
-            title={approved ? "الخطة المعتمدة" : loadedSavedDraft ? "مسودة محفوظة" : "مقترحك الدراسي"}
-            studentName={profile.data?.studentName}
-            editable={!approved}
-            onChange={updatePlan}
-            onApprove={approveCurrentPlan}
-            onAddStep={addStep}
-            onRemoveStep={removeStep}
-            onMoveStep={moveStep}
-            approving={approvePlan.isPending}
-            approved={approved}
+        {nearestCairoExam && (
+          <ExamMissionScene
+            exam={nearestCairoExam}
+            daysUntil={nearestExamDays}
+            upcomingExams={upcomingCairoExams}
+            selection={profile.data?.selection as Record<string, any> | undefined}
           />
         )}
 
-        {savedPlans.length > 0 && (
-          <details className="rounded-2xl border border-border bg-card p-4 sm:p-5">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
-              <div>
-                <p className="text-[10px] font-semibold tracking-[.16em] text-muted-foreground">SAVED HISTORY</p>
-                <h3 className="mt-1 font-semibold">خطط سابقة <span className="text-xs font-normal text-muted-foreground">({savedPlans.length})</span></h3>
-              </div>
-              <span className="text-xs text-primary">عرض السجل</span>
-            </summary>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              {savedPlans.map(item => (
-                <article key={item.id} className="rounded-xl border border-border/70 bg-muted/15 p-3">
-                  <button type="button" onClick={() => { setPlan(item.plan); setApproved(false); setLoadedSavedDraft(true); }} className="w-full text-right">
-                    <span className="block text-sm font-semibold">{item.plan.title}</span>
-                    <span className="mt-1 block line-clamp-2 text-xs leading-5 text-muted-foreground">{item.plan.summary}</span>
-                    <span className="mt-2 block text-[11px] text-muted-foreground">{new Intl.DateTimeFormat("ar-EG", { day: "numeric", month: "short", year: "numeric" }).format(new Date(item.createdAt))}</span>
-                  </button>
-                  <div className="mt-2 flex justify-end">
-                    <Button type="button" variant="ghost" size="sm" className="h-8 text-xs text-destructive" disabled={deleteSavedPlan.isPending} onClick={() => { if (window.confirm("حذف هذه المسودة من السجل؟")) deleteSavedPlan.mutate({ id: item.id }); }}>
-                      <Trash2 className="size-3.5" /> حذف
-                    </Button>
+        {nearestCairoExam && (
+          <ExamMissionScene
+            exam={nearestCairoExam}
+            daysUntil={nearestExamDays}
+            upcomingExams={upcomingCairoExams}
+            selection={profile.data?.selection as Record<string, any> | undefined}
+          />
+        )}
+
+        {plan&&<PlanDecisionPanel plan={plan}/>}
+        {plan&&<PlanAssistantChat plan={plan} subjectIds={profile.data?.subjectIds??[]} editable={true}
+          onChange={updatePlan} onProposalApplied={()=>setPlannerTab("schedule")}/>}
+
+        <section className="sf-sp-metrics" data-scroll-reveal aria-label="ملخص بيانات المذاكرة">
+          <article className="sf-sp-metric"><span>المهام المفتوحة</span><strong>{tasksQuery.isLoading ? "…" : openTaskRows.length.toLocaleString("ar-EG")}</strong><small>من قائمة مهامك الفعلية</small></article>
+          <article className="sf-sp-metric"><span>مهام مستحقة اليوم</span><strong>{tasksQuery.isLoading ? "…" : todayTaskRows.length.toLocaleString("ar-EG")}</strong><small>وفق المواعيد المسجلة</small></article>
+          <article className="sf-sp-metric"><span>مهام تجاوزت موعدها</span><strong>{tasksQuery.isLoading ? "…" : overdueTaskRows.length.toLocaleString("ar-EG")}</strong><small>تحتاج إلى إعادة ترتيب</small></article>
+          <article className="sf-sp-metric"><span>المواد الممثلة في الخطة</span><strong>{plan ? planSubjectCount.toLocaleString("ar-EG") : "—"}</strong><small>{plan ? "من المواد المحددة في ملفك" : "تظهر بعد بناء الخطة"}</small></article>
+        </section>
+
+        <nav className="sf-sp-tabs" role="tablist" aria-label="أقسام خطة المذاكرة">
+          {([
+            ["overview", "الملخص", Sparkles],
+            ["schedule", "التنفيذ", CalendarClock],
+            ["curriculum", "المواد", BrainCircuit],
+            ["tasks", "المهام", CheckCircle2],
+            ["history", "السجل", RefreshCw],
+          ] as const).map(([key, label, Icon]) => (
+            <button key={key} type="button" role="tab" aria-selected={plannerTab === key} className="sf-sp-tab" onClick={() => setPlannerTab(key)}>
+              <Icon className="size-4" /><span>{label}</span>
+            </button>
+          ))}
+        </nav>
+
+        {plannerTab === "overview" && (
+          <div className="sf-sp-panel sf-sp-overview-panel">
+            <section className="sf-sp-overview-grid" data-scroll-reveal>
+              <article className="sf-sp-focus-card">
+                <div className="sf-sp-section-heading">
+                  <div><span className="sf-sp-eyebrow">الخطوة التالية</span><h2>{nextPlanStep ? "ابدأ من هنا" : plan ? "أنهيت كل خطوات الخطة" : "ابدأ ببناء خطتك"}</h2></div>
+                  <span className="sf-sp-focus-mark">{plan ? (approved ? "خطة فعّالة" : "تحتاج مراجعتك") : "خطوة البداية"}</span>
+                </div>
+                {nextPlanStep ? (
+                  <>
+                    <div className="sf-sp-focus-title">{displayPlanStepTitle(nextPlanStep, profile.data?.subjectIds ?? [])}</div>
+                    <p className="sf-sp-focus-detail">{displayPlanStepDetail(nextPlanStep, profile.data?.subjectIds ?? [])}</p>
+                    <div className="sf-sp-step-meta">
+                      {nextPlanStep.category && <span>{displayPlanStepCategory(nextPlanStep, profile.data?.subjectIds ?? [])}</span>}
+                      {nextPlanStep.priority && <span>{({critical:"عاجلة",high:"أولوية عالية",medium:"متوسطة",low:"مرنة"} as Record<string,string>)[nextPlanStep.priority] || "أولوية عادية"}</span>}
+                    </div>
+                    <div className="sf-sp-focus-actions">
+                      <Button type="button" onClick={() => setPlannerTab("schedule")}><ArrowUpRight className="size-4" />افتح تفاصيل المهمة</Button>
+                    </div>
+                  </>
+                ) : plan ? (
+                  <p className="sf-sp-focus-detail">تم تسجيل اكتمال جميع مهام الخطة الحالية. راجع تقدمك في المنهج أو أنشئ خطة محدثة عند تغيّر بياناتك.</p>
+                ) : (
+                  <p className="sf-sp-focus-detail">سيبدأ المحرك من ملفك الدراسي والمواد المختارة وآخر موضع مؤكد في كل مادة، ثم يوازن بين المتراكم وشرح المدرس والمراجعة.</p>
+                )}
+              </article>
+
+              <aside className="sf-sp-builder-card">
+                <div className="sf-sp-section-heading">
+                  <div>
+                    <span className="sf-sp-eyebrow">المخطط الذكي</span>
+                    <h2>{plan ? "الذكاء الاصطناعي يدير أولوياتك" : "دع StudyFlow يرتّب أولوياتك"}</h2>
                   </div>
-                </article>
-              ))}
-            </div>
-            <div className="mt-4 flex justify-end border-t border-border pt-3">
-              <Button type="button" variant="ghost" size="sm" className="text-xs text-destructive" onClick={handleDeleteAll} disabled={deleteAllPlans.isPending}>
-                {deleteAllPlans.isPending ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-3.5" />}
-                مسح كل الخطط
-              </Button>
-            </div>
-          </details>
+                </div>
+                <p>يحلّل تقدمك في كل درس، ومواعيد المدرسين، والمهام المفتوحة، ثم يختار ما يجب أن تبدأ به وحجم الحمل المناسب تلقائيًا. لا تحتاج إلى اختيار خطة مرنة أو متوازنة أو مكثفة.</p>
+                <div className="sf-sp-pace-evidence">
+                  <strong>قاعدة ترتيب الأولويات</strong>
+                  <p>أولًا: الدروس التي لم تشاهد شرحها. بعد استكمال الدروس الجديدة: الدروس التي شاهدت شرحها ولم تذاكرها، ثم الدروس التي تحتاج مراجعة.</p>
+                </div>
+                {plan ? (
+                  <div className="sf-sp-auto-plan-status" role="status" aria-live="polite">
+                    {isPlanGenerationRunning ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
+                    <div>
+                      <strong>{isPlanGenerationRunning ? "يُحدّث StudyFlow الخطة الآن" : "خطتك تعمل تلقائيًا"}</strong>
+                      <span>{isPlanGenerationRunning
+                        ? "يجري ربط التغييرات بالمهام والتقدم المسجل."
+                        : "يراقب StudyFlow تغيّر تقدمك ومواعيدك ويعيد ترتيب الخطة عند الحاجة؛ لا يلزمك تشغيل التحليل يدويًا."}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <Button type="button" className="sf-sp-build-button" disabled={!isPreflightReady || isPlanGenerationRunning || !profile.data?.subjectIds?.length} onClick={runGeneration}>
+                    {isPlanGenerationRunning
+                      ? <><Loader2 className="size-4 animate-spin" /> جارٍ تجهيز الخطة</>
+                      : <><Sparkles className="size-4" /> إنشاء خطة المذاكرة</>}
+                  </Button>
+                )}
+                <small>عند تغيّر تقدمك أو مهامك، يعيد StudyFlow ترتيب الخطة ويحافظ على المهام المكتملة دون تكرار.</small>
+              </aside>
+            </section>
+
+            {isPlanGenerationRunning && (
+              <PlanGenerationInlineStatus progress={generationProgress.data ?? null} onShow={() => {
+                setGenerationDetailsHiddenForRun(false);
+                setShowGenerationDetails(true);
+              }} />
+            )}
+
+            {visibleAIActivities.length > 0 && (
+              <section className="app-card rounded-2xl p-4 sm:p-5" role="status" aria-live="polite">
+                <div className="mb-3 flex items-center gap-2">
+                  <Sparkles className="size-4 animate-pulse text-primary" />
+                  <strong className="text-sm">ماذا يفعل StudyFlow الآن؟</strong>
+                  <span className="mr-auto text-[10px] text-primary">يعمل تلقائيًا</span>
+                </div>
+                <div className="space-y-3">
+                  {visibleAIActivities.map(activity => (
+                    <article key={activity.id} className="rounded-xl border border-border/70 bg-muted/10 p-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <strong className="text-sm">{activity.title}</strong>
+                        <span className="rounded-full bg-primary/10 px-2 py-1 text-[10px] text-primary">{activity.stage}</span>
+                      </div>
+                      <p className="mt-1 text-xs leading-6 text-muted-foreground">{activity.detail}</p>
+                      {activity.events.length > 1 && (
+                        <ol className="mt-2 space-y-1 border-r border-border pr-3">
+                          {activity.events.slice(-3).map(event => (
+                            <li key={event.updatedAt} className="text-[11px] leading-5 text-muted-foreground">
+                              <span className="font-semibold text-foreground">{event.stage}:</span> {event.detail}
+                            </li>
+                          ))}
+                        </ol>
+                      )}
+                    </article>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {!profile.isLoading && profile.data && profile.data.subjectIds.length === 0 && (
+              <section className="sf-sp-empty" data-scroll-reveal>
+                <h2>ملفك الدراسي يحتاج إلى استكمال</h2>
+                <p>اختر الصف والمواد والمدرسين من ملفك الدراسي حتى نستطيع إنشاء خطة مرتبطة بمنهجك بدل اقتراح مهام عامة.</p>
+                <a href="/settings/academic"><ArrowUpRight className="size-4" />افتح الملف الدراسي</a>
+              </section>
+            )}
+
+            <section className="sf-sp-snapshot" data-scroll-reveal>
+              <div className="sf-sp-section-heading">
+                <div><span className="sf-sp-eyebrow">صورة المنهج</span><h2>أين وصلت في المواد؟</h2></div>
+                <button type="button" className="sf-sp-text-action" onClick={() => setPlannerTab("curriculum")}>عرض تفاصيل المواد <ArrowUpRight className="size-4" /></button>
+              </div>
+              {profile.isLoading || learning.isLoading ? (
+                <div className="sf-sp-skeletons"><span /><span /><span /></div>
+              ) : progressPreview.length ? (
+                <div className="sf-sp-snapshot-grid">
+                  {progressPreview.slice(0,4).map(item => (
+                    <article key={item.key} className="sf-sp-branch-card">
+                      <div className="sf-sp-branch-heading"><span>{item.subject}</span><small>{item.next === "غير محدد" ? "التقدم الدراسي" : "الدرس التالي"}</small></div>
+                      <strong>{item.next}</strong>
+                      <p>آخر موضع مكتمل: {item.lastCompleted}</p>
+                      <div className="sf-sp-branch-foot"><span>{item.gapCount === null ? "الفجوة غير محسوبة" : item.gapCount.toLocaleString("ar-EG") + " درس متأخر عن المرجع"}</span><span>{item.completedCount === null ? "التقدم غير محدد" : Math.round(item.completedCount / Math.max(1,item.totalCount) * 100).toLocaleString("ar-EG") + "%"}</span></div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="sf-sp-empty-inline">لا توجد بيانات منهج متاحة للمواد المحددة في ملفك بعد.</div>
+              )}
+            </section>
+
+          </div>
+        )}
+
+        {plannerTab === "schedule" && (
+          <div className="sf-sp-panel" data-scroll-reveal>
+            {isPlanGenerationRunning ? (
+              <section className="sf-sp-generation-in-distribution" aria-label="حالة بناء خريطة المذاكرة">
+                <div className="sf-sp-generation-context">
+                  <span className="sf-plan-generation-inline-mark"><Loader2 className="size-4 animate-spin" /></span>
+                  <div><strong>نعيد ترتيب خريطة مذاكرتك الآن</strong><p>الصف: {SIE_CATALOG_META.gradeYear} · يتم تحديث التوزيع في الخلفية.</p></div>
+                </div>
+                <PlanLoading
+                  progress={generationProgress.data ?? null}
+                  gradeLabel={SIE_CATALOG_META.gradeYear}
+                />
+              </section>
+            ) : planNeedsRefresh && approved ? (
+              <section className="sf-sp-generation-in-distribution" role="status" aria-live="polite">
+                <div className="sf-sp-generation-context">
+                  <span className="sf-plan-generation-inline-mark"><Loader2 className="size-4 animate-spin" /></span>
+                  <div>
+                    <strong>وصل تحديث يؤثر على أولويات مذاكرتك</strong>
+                    <p>نراجع موضع المدرس وتقدمك والاختبارات، ثم نعيد توزيع المهام قبل عرض الترتيب الجديد.</p>
+                  </div>
+                </div>
+                {generationProgress.data?.status === "running" ? (
+                  <PlanLoading progress={generationProgress.data} gradeLabel={SIE_CATALOG_META.gradeYear} />
+                ) : (
+                  <div className="sf-auto-replan-stages" aria-label="مراحل إعادة الترتيب">
+                    <span className="is-done"><CheckCircle2 className="size-4" />تأكيد مصدر التحديث</span>
+                    <span className="is-active"><Loader2 className="size-4 animate-spin" />مطابقة الدروس والمهام</span>
+                    <span>إعادة ترتيب الأولويات</span>
+                    <span>حفظ الخريطة الجديدة</span>
+                  </div>
+                )}
+              </section>
+            ) : activeDailyPlan.isLoading || history.isLoading ? (
+              <section className="sf-sp-empty" role="status" aria-live="polite">
+                <h2>بنحمّل خريطة خطتك</h2>
+                <p>نقرأ آخر نسخة محفوظة ونربط خطواتها بالمواد وحالة التنفيذ.</p>
+                <div className="sf-sp-skeletons"><span /><span /><span /></div>
+              </section>
+            ) : plan ? (
+              <PlanCard plan={plan} subjectIds={profile.data?.subjectIds ?? []} teacherSessions={upcomingTeacherSessions} teacherChoices={((profile.data?.selection as Record<string, any> | undefined)?.teacherChoices ?? profile.data?.teacherSelections ?? {}) as Record<string, string>} title={approved ? "الخطة المعتمدة" : loadedSavedDraft ? "مسودة محفوظة" : "مقترح للمراجعة"} studentName={profile.data?.studentName} editable={!approved} onChange={updatePlan} onApprove={approveCurrentPlan} onAddStep={addStep} onRemoveStep={removeStep} onMoveStep={moveStep} approving={approvePlan.isPending} approved={approved} />
+            ) : (
+              <section className="sf-sp-empty">
+                <h2>لم تُنشأ خريطة مذاكرة بعد</h2>
+                <p>افتح الملخص لإنشاء خطة من بيانات تقدمك الفعلية، ثم ستظهر الخريطة هنا مباشرة.</p>
+                <Button type="button" onClick={() => setPlannerTab("overview")}>إنشاء خطة المذاكرة</Button>
+              </section>
+            )}
+          </div>
+        )}
+
+        {plannerTab === "curriculum" && (
+          <div className="sf-sp-panel sf-sp-curriculum-panel">
+            <section className="sf-sp-section-card" data-scroll-reveal>
+              <div className="sf-sp-section-heading">
+                <div>
+                  <span className="sf-sp-eyebrow">المسار التدريجي</span>
+                  <h2>كل الدروس حسب أولويتها</h2>
+                </div>
+                <a href="/learning-map" className="sf-sp-text-action">تحديث موضعك <ArrowUpRight className="size-4" /></a>
+              </div>
+              <p className="sf-sp-muted-intro">القائمة تعرض كل درس حالته معروفة، لا عينة من أول الخطة فقط. الجدول اليومي يختار منها ما يناسب وقتك.</p>
+
+              <div className="sf-sp-board-metrics">
+                <article><span>شرح لم يُشاهد</span><strong>{progressivePath.unseen.length.toLocaleString("ar-EG")}</strong></article>
+                <article><span>مذاكرة أو مراجعة مؤجلة</span><strong>{progressivePath.deferred.length.toLocaleString("ar-EG")}</strong></article>
+                <article><span>دروس داخل النطاق حالتها غير مسجلة</span><strong>{progressivePath.unknownLessons.toLocaleString("ar-EG")}</strong></article>
+              </div>
+
+              {progressivePath.unknownLessons > 0 && (
+                <div className="sf-sp-empty-inline" role="status">
+                  هناك {progressivePath.unknownLessons.toLocaleString("ar-EG")} درس داخل نطاق شرح المدرس لم تُسجّل حالته. حدّد موضعك حتى نميّز الدروس المتراكمة من الدروس التي لم يشرحها المدرس بعد.
+                </div>
+              )}
+
+              {profile.isLoading || learning.isLoading ? (
+                <div className="sf-sp-skeletons"><span /><span /><span /></div>
+              ) : (
+                <>
+                  <section className="sf-sp-curriculum-group">
+                    <div className="sf-sp-section-heading">
+                      <div><span className="sf-sp-eyebrow">الأولوية الأولى</span><h3>دروس لم تشاهد شرحها</h3></div>
+                      <span className="sf-sp-count">{progressivePath.unseen.length.toLocaleString("ar-EG")}</span>
+                    </div>
+                    {progressivePath.unseen.length ? (
+                      <div className="sf-sp-task-list">
+                        {progressivePath.unseen.map(item => (
+                          <article key={item.key} className="sf-sp-task-row">
+                            <span className="sf-sp-task-check" aria-hidden="true" />
+                            <div className="min-w-0 flex-1">
+                              <strong>{item.subject} · {item.lesson}</strong>
+                              <small className="block mt-1">شرح غير مشاهد</small>
+                            </div>
+                            <span className="sf-sp-task-meta">ابدأ الآن</span>
+                          </article>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="sf-sp-empty-inline">لا توجد دروس مؤكدة ضمن هذه المرحلة.</div>
+                    )}
+                  </section>
+
+                  <section className="sf-sp-curriculum-group">
+                    <div className="sf-sp-section-heading">
+                      <div><span className="sf-sp-eyebrow">الأولوية التالية</span><h3>بعد إنهاء الدروس الجديدة</h3></div>
+                      <span className="sf-sp-count">{progressivePath.deferred.length.toLocaleString("ar-EG")}</span>
+                    </div>
+                    {progressivePath.deferred.length ? (
+                      <div className="sf-sp-task-list">
+                        {progressivePath.deferred.map(item => (
+                          <article key={item.key} className="sf-sp-task-row">
+                            <span className="sf-sp-task-check" aria-hidden="true" />
+                            <div className="min-w-0 flex-1">
+                              <strong>{item.subject} · {item.lesson}</strong>
+                              <small className="block mt-1">{item.state === "watched_only" ? "شاهدت الشرح ولم تسجل المذاكرة" : "درس يحتاج مراجعة"}</small>
+                            </div>
+                            <span className="sf-sp-task-meta">مؤجل</span>
+                          </article>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="sf-sp-empty-inline">لا توجد مذاكرة بعد الشرح أو مراجعة مؤجلة مسجلة.</div>
+                    )}
+                  </section>
+
+                  {progressivePath.unseen.length === 0
+                    && progressivePath.deferred.length === 0
+                    && progressivePath.unknownLessons === 0 && (
+                      <div className="sf-sp-empty-inline">لا يوجد تراكم مؤكد حاليًا. يتحدث المسار تلقائيًا عند تسجيل تقدمك في الدروس.</div>
+                    )}
+                </>
+              )}
+            </section>
+          </div>
+        )}
+
+        {plannerTab === "tasks" && (
+          <div className="sf-sp-panel">
+            <section className="sf-sp-section-card" data-scroll-reveal>
+              <div className="sf-sp-section-heading"><div><span className="sf-sp-eyebrow">قائمة العمل الفعلية</span><h2>مهام مفتوحة تؤثر على ترتيب المذاكرة</h2></div><a href="/tasks" className="sf-sp-text-action">إدارة كل المهام <ArrowUpRight className="size-4" /></a></div>
+              {tasksQuery.isLoading ? <div className="sf-sp-skeletons"><span /><span /><span /></div> : mappedOpenTasks.length ? (
+                <div className="sf-sp-task-list">
+                  {mappedOpenTasks.map(({task,match}) => (
+                    <article key={task.id} className="sf-sp-task-row">
+                      <span className="sf-sp-task-check" aria-hidden="true" />
+                      <div className="min-w-0 flex-1"><strong>{match ? (getSIESubject(match.subjectId)?.nameAr ?? "مادة دراسية") + " · " + displayCurriculumTitle(match.title) : displayArabicText(task.title, "مهمة مسجلة")}</strong><small className="block mt-1">{match ? (getSIESubject(match.subjectId)?.nameAr ?? "مادة دراسية") : displayArabicText(task.category, "مهمة عامة")}</small>{task.notes && <details className="mt-2"><summary className="cursor-pointer text-xs text-primary">عرض التفاصيل</summary><p className="mt-2 text-sm leading-6 text-muted-foreground">{displayArabicText(task.notes, "التفاصيل محفوظة في التكليف الأصلي.")}</p></details>}</div>
+                      <div className="sf-sp-task-meta"><span>{task.priority === "high" ? "أولوية عالية" : task.priority === "low" ? "مرنة" : "متوسطة"}</span><small>{task.dueAt ? new Intl.DateTimeFormat("ar-EG",{timeZone:"Africa/Cairo",day:"numeric",month:"short"}).format(new Date(task.dueAt)) : "بلا موعد"}</small></div>
+                    </article>
+                  ))}
+                </div>
+              ) : <div className="sf-sp-empty-inline">لا توجد مهام مفتوحة مرتبطة بموادك حاليًا.</div>}
+            </section>
+          </div>
+        )}
+
+        {plannerTab === "history" && (
+          <div className="sf-sp-panel">
+            <section className="sf-sp-section-card" data-scroll-reveal>
+              <div className="sf-sp-section-heading"><div><span className="sf-sp-eyebrow">النسخ المحفوظة</span><h2>سجل خططك السابقة</h2></div><span className="sf-sp-count">{savedPlans.length.toLocaleString("ar-EG")} خطة</span></div>
+              {savedPlans.length ? (
+                <div className="sf-sp-history-list">
+                  {savedPlans.map(item => (
+                    <article key={item.id} className="sf-sp-history-row">
+                      <button type="button" onClick={() => {setPlan(item.plan);setApproved(false);setLoadedSavedDraft(true);setPlannerTab("schedule");}}>
+                        <strong>{item.plan.title}</strong><span>{item.plan.summary}</span><small>{new Intl.DateTimeFormat("ar-EG",{day:"numeric",month:"long",year:"numeric"}).format(new Date(item.createdAt))}</small>
+                      </button>
+                      <Button type="button" variant="ghost" size="sm" disabled={deleteSavedPlan.isPending} onClick={() => {if(window.confirm("حذف هذه الخطة من السجل؟")) deleteSavedPlan.mutate({id:item.id});}}><Trash2 className="size-3.5" />حذف</Button>
+                    </article>
+                  ))}
+                </div>
+              ) : <div className="sf-sp-empty-inline">لا توجد مسودات محفوظة حتى الآن.</div>}
+              {savedPlans.length > 0 && <div className="sf-sp-history-footer"><Button type="button" variant="ghost" className="text-destructive" onClick={handleDeleteAll} disabled={deleteAllPlans.isPending}>{deleteAllPlans.isPending ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />} مسح كل الخطط المولّدة</Button></div>}
+            </section>
+          </div>
         )}
       </div>
     </DashboardLayout>
@@ -569,256 +1244,451 @@ export default function Planner() {
 }
 
 
-function PlanLoading({ progress }: { progress: GenerationProgress | null }) {
-  const stages: Array<{ id: GenerationProgress["currentStage"]; title: string }> = [
-    { id: "profile", title: "قراءة ملف الطالب والتقدم المسجل" },
-    { id: "curriculum", title: "تحميل خريطة الكتب والفروع والمتطلبات" },
-    { id: "model", title: "تحليل الأولويات وتكوين المسودة" },
-    { id: "validation", title: "مراجعة المسودة والقواعد المعتمدة" },
-    { id: "saving", title: "حفظ المسودة للمراجعة" },
-  ];
+function PlanGenerationInlineStatus({ progress, onShow }: { progress: GenerationProgress | null; onShow: () => void }) {
   return (
-    <section className="app-card rounded-2xl p-5 sm:p-6" role="status" aria-live="polite">
-      <div className="flex items-center gap-3">
-        <span className="flex size-11 items-center justify-center rounded-xl bg-secondary text-primary"><Sparkles className="size-5 animate-pulse" /></span>
-        <div>
-          <h3 className="font-bold">ببني مسودة خطتك</h3>
-          <p className="mt-1 text-sm text-muted-foreground">{progress?.detail || "جارٍ بدء المعالجة وقراءة بياناتك."}</p>
-        </div>
-        <Loader2 className="mr-auto size-5 animate-spin text-primary" />
+    <section className="sf-plan-generation-inline" role="status" aria-live="polite">
+      <span className="sf-plan-generation-inline-mark"><Loader2 className="size-4 animate-spin" /></span>
+      <div>
+        <strong>تحديث خطة المذاكرة جارٍ في الخلفية</strong>
+        <p>{progress?.detail || "نراجع الصف والمواد والمهام ومواعيد المدرسين قبل ترتيب التوزيع الجديد."}</p>
       </div>
-      <ol className="mt-5 space-y-2">
-        {stages.map((stage, index) => {
-          const done = progress?.completedStages.includes(stage.id) ?? false;
-          const current = progress?.status === "running" && progress.currentStage === stage.id;
-          return (
-            <li key={stage.id} className={"flex items-center gap-3 rounded-xl border px-3 py-3 " + (current
-              ? "border-primary/40 bg-primary/5"
-              : done ? "border-emerald-500/20 bg-emerald-500/5" : "border-border/60 bg-muted/10")}>
-              <span className="flex size-7 shrink-0 items-center justify-center rounded-full border border-border/70 text-xs">
-                {done ? <CheckCircle2 className="size-4 text-emerald-600" /> : current ? <Loader2 className="size-4 animate-spin text-primary" /> : index + 1}
-              </span>
-              <span className={"text-sm " + (current || done ? "font-semibold" : "text-muted-foreground")}>{stage.title}</span>
-              {current && <span className="mr-auto text-[11px] font-medium text-primary">جارٍ الآن</span>}
-              {done && <span className="mr-auto text-[11px] text-emerald-700">اكتملت</span>}
-            </li>
-          );
-        })}
-      </ol>
+      <Button type="button" size="sm" variant="outline" onClick={onShow}>عرض التقدم</Button>
     </section>
   );
 }
 
-function PlanCard({ plan, title, studentName, editable, onChange, onApprove, onAddStep, onRemoveStep, onMoveStep, approving, approved }: {
-  plan: PlanView; title: string; studentName?: string; editable: boolean;
-  onChange: (next: PlanView) => void; onApprove: () => void; onAddStep: () => void;
+function PlanLoading({ progress, gradeLabel, onHide }: { progress: GenerationProgress | null; gradeLabel?: string; onHide?: () => void }) {
+  const stages: Array<{ id: GenerationProgress["currentStage"]; title: string; detail: string }> = [
+    { id: "profile", title: "مراجعة ملفك وتقدمك", detail: "قراءة المواد المختارة وآخر موضع مؤكد لكل مادة وما أنجزته بالفعل." },
+    { id: "curriculum", title: "مطابقة خريطة المنهج", detail: "ربط المهام بالدروس والوحدات، واستبعاد الخطوات التي لم تعد مؤهلة." },
+    { id: "model", title: "اتخاذ قرارات التوزيع", detail: "موازنة المتراكم مع الدروس القادمة ومواعيد المدرسين وأولوياتك." },
+    { id: "validation", title: "فحص الخطة وقواعدها", detail: "مراجعة عدم تكرار المهام، وعدم إعادة درس مكتمل أو اختراع واجب ومحتوى." },
+    { id: "saving", title: "حفظ الخطة وربط المهام", detail: "تحديث شجرة المهام مع الحفاظ على العمل المنجز والالتزامات الحقيقية." },
+  ];
+  const completedCount = stages.filter(stage => progress?.completedStages.includes(stage.id)).length;
+  const currentIndex = stages.findIndex(stage => stage.id === progress?.currentStage);
+  const updatedLabel = progress?.updatedAt
+    ? new Intl.DateTimeFormat("ar-EG", { hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true, timeZone: "Africa/Cairo" }).format(new Date(progress.updatedAt))
+    : null;
+  return (
+    <section className="sf-plan-loading" role="status" aria-live="polite" aria-label="مراحل بناء خطة المذاكرة">
+      <header className="sf-plan-loading-heading">
+        <span className="sf-plan-loading-mark"><Sparkles className="size-5" /></span>
+        <div>
+          <p>محرك التخطيط الذكي</p>
+          <h3>بنكوّن خطة مبنية على بياناتك</h3>
+          {gradeLabel && <span className="sf-plan-loading-grade">أنت في: {gradeLabel}</span>}
+          <span>{progress?.detail || "نراجع ملفك الدراسي والمهام وتقدم المنهج قبل ترتيب الأولويات."}</span>
+        </div>
+        <div className="sf-plan-loading-heading-actions">
+          <Loader2 className="sf-plan-loading-spinner size-5" />
+          {onHide && <button type="button" className="sf-plan-loading-hide" onClick={onHide}>إخفاء هذه المرة <X className="size-3.5" /></button>}
+        </div>
+      </header>
+      <div className="sf-plan-loading-summary">
+        <strong>{completedCount.toLocaleString("ar-EG")} من {stages.length.toLocaleString("ar-EG")} مراحل مكتملة</strong>
+        {updatedLabel && <span>آخر تحديث {updatedLabel}</span>}
+      </div>
+      <ol className="sf-plan-loading-stages">
+        {stages.map((stage, index) => {
+          const done = progress?.completedStages.includes(stage.id) ?? false;
+          const current = progress?.status === "running" && progress.currentStage === stage.id;
+          return (
+            <li key={stage.id} className={current ? "is-current" : done ? "is-done" : "is-pending"}>
+              <span className="sf-plan-loading-index">
+                {done ? <CheckCircle2 className="size-4" /> : current ? <Loader2 className="size-4 animate-spin" /> : (index + 1).toLocaleString("ar-EG")}
+              </span>
+              <div className="sf-plan-loading-stage-copy">
+                <strong>{stage.title}</strong>
+                <p>{stage.detail}</p>
+              </div>
+              <span className="sf-plan-loading-state">{done ? "اكتملت" : current ? "جارٍ الآن" : "في الانتظار"}</span>
+            </li>
+          );
+        })}
+      </ol>
+      <footer className="sf-plan-loading-footer">
+        {currentIndex >= 0
+          ? "المرحلة الحالية: " + stages[currentIndex].title
+          : "يبدأ التنفيذ بعد اكتمال قراءة بيانات الخطة."}
+      </footer>
+    </section>
+  );
+}
+
+function PlanCard({ plan, subjectIds, teacherSessions, teacherChoices, title, studentName, editable, onChange, onApprove, onAddStep, onRemoveStep, onMoveStep, approving, approved }: {
+  plan: PlanView; subjectIds: string[]; teacherSessions: PlannerTeacherSession[]; teacherChoices?: Record<string, string>; title: string; studentName?: string; editable: boolean;
+  onChange: (next: PlanView) => void; onApprove: (nextPlan?: PlanView) => void; onAddStep: () => void;
   onRemoveStep: (index: number) => void; onMoveStep: (index: number, direction: -1 | 1) => void;
   approving: boolean; approved: boolean;
 }) {
   const [editing, setEditing] = useState<{ index: number; title: string; detail: string } | null>(null);
+  const [filter, setFilter] = useState<"all" | "open" | "done">("all");
+  const [selectedMapStepIndex, setSelectedMapStepIndex] = useState<number | null>(() => {
+    const firstOpen = plan.steps.findIndex(step =>
+      step.plannerTaskStatus !== "done" && step.existingTask?.status !== "done"
+    );
+    return firstOpen >= 0 ? firstOpen : plan.steps.length > 0 ? 0 : null;
+  });
+  const teacherSessionGroups = useMemo(() => groupPlannerTeacherSessions(teacherSessions), [teacherSessions]);
+  const [teacherScheduleExpanded, setTeacherScheduleExpanded] = useState(true);
+  const executionBoardRef = useRef<HTMLElement | null>(null);
   const completedCount = plan.steps.filter(step => step.plannerTaskStatus === "done" || step.existingTask?.status === "done").length;
-  const fallbackPhases: ExecutionStrategyPhase[] = [
-    { id: "backlog", title: "1. نقفل المتراكم المؤكد", purpose: "نبدأ بالالتزامات المفتوحة المسجلة فعلًا، ولا نعتبر وجود مهمة دليلًا على اكتمال درس.", actions: ["نرتب الالتزامات حسب الاستحقاق والأولوية", "نحافظ على تفاصيل التكليف الأصلي كما سجلها الطالب أو المدرس"], completionCriteria: "تحديث حالة الالتزام بعد تنفيذه، مع إبقاء تقدم المنهج مستقلًا." },
-    { id: "teacher_sync", title: "2. نواكب المدرس", purpose: "نربط الدروس القادمة بجدول الحصة المسجل، ونستعد للموضوع التالي من غير افتراض محتوى لم يذكره المدرس.", actions: ["نجهز للدرس التالي قبل الحصة إذا سمح الوقت", "بعد الحصة نسجل الفروع التي شرحها المدرس من تقرير الطالب"], completionCriteria: "تحديث موضع شرح المدرس فقط من تقرير واضح، من دون اعتبار الطالب متقنًا للدرس تلقائيًا." },
-    { id: "steady", title: "3. نثبت التقدم ونستكمل الفجوات", purpose: "نستكمل الخطوات المنهجية التالية بعد معالجة الأولويات الأقرب.", actions: ["نحافظ على ترتيب الدروس داخل كل فرع", "نعيد الحساب عند تسجيل تقدم أو التزام جديد"], completionCriteria: "تسجيل ما أنجزه الطالب فعلًا ثم إعادة ترتيب الخطوة التالية." },
-  ];
-  const phases = plan.executionStrategy?.phases?.length ? plan.executionStrategy.phases : fallbackPhases;
-  const stepPhaseId = (step: PlanStep, index: number) => step.phaseId ?? (step.existingTask ? "backlog" : index === 0 ? "teacher_sync" : "steady");
+    const subjectCount = new Set(plan.steps.map(step => getPlanStepCurriculum(step, subjectIds)?.subjectId).filter(Boolean)).size;
+  const confirmedTaskCount = plan.steps.filter(step => Boolean(step.existingTask)).length;
+  const coveredCurriculumCount = new Set(plan.steps.flatMap(step => step.curriculumNodeIds ?? [])).size;
+  const backlogCoverageMatch = /المتراكم الفعلي:\s*(\d+)\s*نقطة مؤكدة؛ أُدرج\s*(\d+)/.exec(plan.summary);
+  const backlogExpectedCount = backlogCoverageMatch ? Number(backlogCoverageMatch[1]) : null;
+  const backlogIncludedCount = backlogCoverageMatch ? Number(backlogCoverageMatch[2]) : null;
+  const backlogCoverageLabel = backlogExpectedCount === null || backlogIncludedCount === null
+    ? "غير متاح"
+    : backlogIncludedCount.toLocaleString("ar-EG") + " / " + backlogExpectedCount.toLocaleString("ar-EG");
+  const plannedReviewCount = new Set(plan.steps.filter(step=>step.aiReviewBrief||step.subtasks?.length).map(step=>step.existingTask?.id??step.curriculumNodeIds?.[0]??step.title)).size;
+  const phaseLabels: Record<string,string> = {
+    exam_focus: "استعداد الامتحان الأقرب",
+    backlog: "التزامات مفتوحة",
+    teacher_sync: "شرح قبل الحصة",
+    steady: "شرح غير مشاهد",
+    review_later: "بعد الدروس الجديدة",
+    deferred: "مؤجل",
+  };
+  const mapEntries = plan.steps
+    .map((step, index) => ({ step, index }))
+    .filter(({ step }) => {
+      const isDone = step.plannerTaskStatus === "done" || step.existingTask?.status === "done";
+      if (filter === "done") return isDone;
+      if (filter === "open") return !isDone;
+      return true;
+    });
+  // Group by actual syllabus unit first. Branch badges remain visible within a
+  // unit so Arabic multi-branch units and English Vocabulary/Grammar stay linked.
+  const mapLanes = buildPlannerCurriculumLanes(mapEntries, subjectIds);
+  const firstOpenMapStep = getNextOpenPlanStep(plan.steps);
+  const currentStepIndex = firstOpenMapStep ? plan.steps.indexOf(firstOpenMapStep) : -1;
+  const focusStepIndex = selectedMapStepIndex !== null && selectedMapStepIndex >= 0 && selectedMapStepIndex < plan.steps.length
+    ? selectedMapStepIndex : currentStepIndex >= 0 ? currentStepIndex : plan.steps.length ? 0 : -1;
+  const focusStep = focusStepIndex >= 0 ? plan.steps[focusStepIndex] : null;
+  const focusCurriculum = focusStep ? getPlanStepCurriculum(focusStep, subjectIds) : null;
+  const completionPercent = plan.steps.length ? Math.round(completedCount / plan.steps.length * 100) : 0;
+  const jumpToFocusStep = () => {
+    if (focusStepIndex < 0) return;
+    setSelectedMapStepIndex(focusStepIndex);
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+      executionBoardRef.current?.querySelector<HTMLElement>(`[data-step-index="${focusStepIndex}"]`)?.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+        block: "center",
+      });
+    }));
+  };
+  useEffect(() => {
+    const root = executionBoardRef.current;
+    if (!root || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const targets = Array.from(root.querySelectorAll<HTMLElement>("[data-motion-reveal]"));
+    if (!targets.length) return;
+    const observer = new IntersectionObserver(entries => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        const target = entry.target as HTMLElement;
+        observer.unobserve(target);
+        gsap.fromTo(target,
+          { autoAlpha: 0, y: 22, rotateX: 2, transformPerspective: 900 },
+          { autoAlpha: 1, y: 0, rotateX: 0, duration: .66, ease: "power3.out", clearProps: "transform,opacity,visibility" },
+        );
+      }
+    }, { threshold: .12, rootMargin: "0px 0px -5% 0px" });
+    targets.forEach(target => observer.observe(target));
+    return () => { observer.disconnect(); gsap.killTweensOf(targets); };
+  }, [mapLanes.length, mapEntries.length]);
   const saveEdit = () => {
     if (!editing) return;
     onChange({
       ...plan,
-      steps: plan.steps.map((step, index) => index === editing.index
+      steps: plan.steps.map((step,index) => index === editing.index
         ? { ...step, title: editing.title.trim() || step.title, detail: editing.detail.trim() || step.detail }
         : step),
     });
     setEditing(null);
   };
-  const formatTaskDueDate = (value?: string | null) => {
+  const formatDate = (value?: string | null) => {
     if (!value) return null;
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return null;
     return new Intl.DateTimeFormat("ar-EG", { timeZone: "Africa/Cairo", day: "numeric", month: "short" }).format(date);
   };
-
+  const priorityLabel: Record<string,string> = {critical:"عاجلة",high:"أولوية عالية",medium:"متوسطة",low:"مرنة"};
+  const summary = displayArabicText(plan.summary.split("\n\n")[0], "خطة مرتبة حسب التزاماتك والمواد المتاحة في ملفك الدراسي.");
   return (
-    <section className="sf-execution-plan overflow-hidden rounded-[1.65rem] border border-border bg-card shadow-sm">
-      <header className="border-b border-border/70 p-4 sm:p-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[10px] font-semibold tracking-[.16em] text-primary">STUDYFLOW / EXECUTION PLAN</span>
-              <span className="rounded-full border border-border px-2.5 py-1 text-[10px] text-muted-foreground">{title}</span>
-            </div>
-            <h2 className="mt-2 text-xl font-bold sm:text-2xl">خطة التنفيذ — هنعمل إيه وبأي ترتيب؟</h2>
-            <p className="mt-2 max-w-2xl whitespace-pre-line text-sm leading-7 text-muted-foreground">{plan.summary.split("\n\n")[0]}</p>
-            {studentName && <p className="mt-2 text-xs text-muted-foreground">مبنية على ملف {studentName}</p>}
+    <section className="sf-sp-plan-board">
+      <header className="sf-sp-board-header">
+        <div className="sf-sp-board-title">
+          <span className="sf-sp-eyebrow">خطة التنفيذ</span>
+          <div className="sf-sp-section-heading">
+            <div><h2>{displayArabicText(plan.title, "خطة المذاكرة")}</h2><p>{summary}</p></div>
+            <span className={"sf-sp-status " + (approved ? "is-active" : "is-draft")}>{approved ? "معتمدة" : "بانتظار الاعتماد"}</span>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className={"rounded-full border px-3 py-1.5 text-xs font-semibold " + (approved ? "border-primary/20 bg-primary/[0.05] text-primary" : "border-border bg-muted/30 text-muted-foreground")}>{approved ? "خطة معتمدة" : "مقترح للمراجعة"}</span>
-            <PlanExportActions plan={plan} studentName={studentName} />
-          </div>
+          {studentName && <small>مبنية على البيانات المسجلة في ملف {studentName}</small>}
         </div>
-        <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3">
-          <div className="rounded-xl border border-border/70 bg-muted/15 p-3"><p className="text-[10px] text-muted-foreground">المهام الفعلية في الخطة</p><p className="mt-1 text-base font-bold tabular-nums">{plan.steps.length.toLocaleString("ar-EG")}</p></div>
-          <div className="rounded-xl border border-border/70 bg-muted/15 p-3"><p className="text-[10px] text-muted-foreground">المهام المكتملة</p><p className="mt-1 text-base font-bold tabular-nums">{completedCount.toLocaleString("ar-EG")}</p></div>
-          <div className="col-span-2 rounded-xl border border-border/70 bg-muted/15 p-3 sm:col-span-1"><p className="text-[10px] text-muted-foreground">ترتيب العمل</p><p className="mt-1 text-sm font-bold">متراكم ← المدرس ← التثبيت</p></div>
-        </div>
+        <PlanExportActions plan={plan} studentName={studentName} />
       </header>
 
-      <div className="space-y-5 p-4 sm:p-6">
-        <section className="sf-execution-overview grid gap-4 overflow-hidden rounded-2xl border border-primary/15 bg-background/75 p-4 sm:p-5 lg:grid-cols-[minmax(0,1fr)_minmax(250px,.78fr)]">
-          <div className="relative z-10">
-            <p className="eyebrow">المنطق وراء الخطة</p>
-            <h3 className="mt-2 text-lg font-bold leading-8">{plan.executionStrategy?.objective ?? "نقفل الالتزامات المؤكدة أولًا، ثم نواكب شرح المدرس ونكمل الفجوات."}</h3>
-            <p className="mt-2 whitespace-pre-line text-xs leading-7 text-muted-foreground">{plan.executionStrategy?.rationale ?? "الترتيب يعتمد على المهام المفتوحة وموضع تقدمك في كل فرع وجدول الحصص المسجل. لن نخترع واجبًا أو نفترض موعدًا غير موجود."}</p>
-            <p className="mt-3 rounded-xl border border-border/70 bg-card/70 p-3 text-[11px] leading-6 text-muted-foreground">
-              مهم: واجب المدرس لا يظهر كتكليف جديد إلا إذا كان مسجلًا فعلًا في بياناتك أو أكدت أنت أنه مطلوب. متابعة شرح المدرس لا تعني أن الدرس اكتمل عندك.
-            </p>
-          </div>
-          <div className="sf-planner-flow-visual relative flex min-h-[190px] flex-col justify-end overflow-hidden rounded-xl border border-border/70 bg-card/65 p-3">
-            <DeferredPlannerFlowScene />
-            <div className="relative z-10 grid grid-cols-3 gap-1 text-center text-[10px] font-semibold">
-              <span className="rounded-lg border border-border/70 bg-background/85 px-2 py-2 text-foreground">المتراكم</span>
-              <span className="rounded-lg border border-border/70 bg-background/85 px-2 py-2 text-foreground">المدرس</span>
-              <span className="rounded-lg border border-border/70 bg-background/85 px-2 py-2 text-foreground">التثبيت</span>
-            </div>
-          </div>
-        </section>
-
-        <div className="space-y-4">
-          {phases.map((phase, phaseIndex) => {
-            const phaseSteps = plan.steps
-              .map((step, index) => ({ step, index }))
-              .filter(item => stepPhaseId(item.step, item.index) === phase.id);
-            return (
-              <section key={phase.id} className={"sf-execution-phase sf-execution-phase-" + phase.id + " overflow-hidden rounded-2xl border border-border/80 bg-background"}>
-                <header className="border-b border-border/70 bg-muted/15 p-4 sm:p-5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="flex size-7 items-center justify-center rounded-lg border border-primary/25 bg-primary/[.07] text-xs font-bold text-primary">{phaseIndex + 1}</span>
-                    <h3 className="text-sm font-bold">{phase.title}</h3>
-                    <span className="mr-auto rounded-full border border-border bg-card px-2.5 py-1 text-[10px] text-muted-foreground">{phaseSteps.length.toLocaleString("ar-EG")} مهمة</span>
-                  </div>
-                  <p className="mt-3 max-w-3xl text-xs leading-6 text-muted-foreground">{phase.purpose}</p>
-                  {phase.actions.length > 0 && (
-                    <ul className="mt-2 grid gap-1 sm:grid-cols-2">
-                      {phase.actions.slice(0, 4).map((action, index) => <li key={index} className="flex items-start gap-2 text-[11px] leading-5 text-foreground/80"><span className="mt-2 size-1 shrink-0 rounded-full bg-primary/70" />{action}</li>)}
-                    </ul>
-                  )}
-                </header>
-
-                <div className="divide-y divide-border/60">
-                  {phaseSteps.length ? phaseSteps.map(({ step, index }) => {
-                    const dueLabel = step.existingTask ? formatTaskDueDate(step.existingTask.dueAt) : null;
-                    const isDone = step.plannerTaskStatus === "done" || step.existingTask?.status === "done";
-                    return (
-                      <article key={step.plannerTaskId ?? step.existingTask?.id ?? step.sourceStepIndex ?? index} className="sf-execution-task p-4 sm:p-5">
-                        {editing?.index === index ? (
-                          <div className="space-y-3">
-                            <label className="block"><span className="mb-1 block text-[11px] font-semibold text-muted-foreground">عنوان المهمة</span><input value={editing.title} onChange={event => setEditing(current => current ? { ...current, title: event.target.value } : current)} className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm" /></label>
-                            <label className="block"><span className="mb-1 block text-[11px] font-semibold text-muted-foreground">تفاصيل المهمة</span><textarea rows={3} value={editing.detail} onChange={event => setEditing(current => current ? { ...current, detail: event.target.value } : current)} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm leading-6" /></label>
-                            <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="ghost" size="sm" onClick={() => setEditing(null)}>إلغاء</Button><Button type="button" size="sm" onClick={saveEdit}>حفظ التعديل</Button></div>
-                          </div>
-                        ) : (
-                          <div className="flex items-start gap-3">
-                            <span className={"mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl border text-[11px] font-semibold " + (isDone ? "border-primary/25 bg-primary/[.08] text-primary" : "border-border bg-muted/35 text-muted-foreground")}>{isDone ? <CheckCircle2 className="size-4" /> : (index + 1).toLocaleString("ar-EG")}</span>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="rounded-md bg-muted/60 px-2 py-1 text-[10px] font-semibold text-muted-foreground">{step.category}</span>
-                                {step.existingTask && <span className="text-[10px] text-muted-foreground">التزام مسجل مسبقًا</span>}
-                                {step.priority === "critical" && <span className="text-[10px] font-semibold text-destructive">عاجل</span>}
-                                {step.priority === "high" && <span className="text-[10px] font-semibold text-amber-600">أولوية عالية</span>}
-                                {isDone && <span className="text-[10px] font-semibold text-primary">مكتملة</span>}
-                                {dueLabel && <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground"><CalendarClock className="size-3" />{dueLabel}</span>}
-                              </div>
-                              <h4 className="mt-2 text-sm font-bold leading-6">{step.title}</h4>
-                              <p className="mt-1 whitespace-pre-line text-xs leading-6 text-muted-foreground">{step.detail}</p>
-                              {step.studyMethod && (
-                                <details className="mt-3 rounded-xl border border-border/70 bg-muted/15 p-3">
-                                  <summary className="cursor-pointer text-xs font-bold">طريقة المذاكرة والسبب وراء كل مرحلة</summary>
-                                  <ol className="mt-3 space-y-3">
-                                    {step.studyMethod.stages.map((stage, stageIndex) => (
-                                      <li key={stageIndex} className="border-r-2 border-primary/35 pr-3">
-                                        <p className="text-xs font-bold">{stageIndex + 1}. {stage.title}{stage.optional && <span className="mr-2 text-[10px] font-normal text-muted-foreground">(حسب المطلوب من المدرس)</span>}</p>
-                                        <p className="mt-1 text-xs leading-6 text-foreground/90">{stage.instruction}</p>
-                                        <p className="mt-1 text-[11px] leading-5 text-muted-foreground">ليه؟ {stage.reason}</p>
-                                      </li>
-                                    ))}
-                                  </ol>
-                                  {step.studyMethod.teacherPolicyNote && <p className="mt-3 rounded-lg bg-amber-500/5 p-2 text-[11px] leading-5 text-muted-foreground">{step.studyMethod.teacherPolicyNote}</p>}
-                                  <p className="mt-3 border-t border-border/60 pt-3 text-xs font-semibold leading-6">متى تعتبر المهمة مكتملة؟ {step.studyMethod.completionCriteria}</p>
-                                </details>
-                              )}
-                              {step.priorityReason && <details className="mt-2 text-[11px] text-muted-foreground"><summary className="cursor-pointer">ليه المهمة دي في المرحلة دي؟</summary><p className="mt-2 max-w-xl leading-6">{step.priorityReason}</p></details>}
-                              {step.resourceRecommendation && <a href={step.resourceRecommendation.url} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-[11px] font-semibold text-primary">افتح شرح المدرس المقترح</a>}
-                              {editable && (
-                                <div className="mt-3 flex flex-wrap items-center gap-1 border-t border-border/50 pt-2">
-                                  <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => setEditing({ index, title: step.title, detail: step.detail })}>تعديل</Button>
-                                  <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" disabled={index === 0} onClick={() => onMoveStep(index, -1)}><ArrowUp className="size-3.5" /> لأعلى</Button>
-                                  <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" disabled={index === plan.steps.length - 1} onClick={() => onMoveStep(index, 1)}><ArrowDown className="size-3.5" /> لأسفل</Button>
-                                  <Button type="button" variant="ghost" size="sm" className="mr-auto h-8 px-2 text-xs text-destructive" disabled={plan.steps.length <= 1} onClick={() => onRemoveStep(index)}><X className="size-3.5" /> حذف</Button>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </article>
-                    );
-                  }) : (
-                    <p className="p-4 text-xs leading-6 text-muted-foreground">لا توجد مهمة موثقة لهذه المرحلة في دورة التخطيط الحالية. لن نضيف عملًا افتراضيًا لمجرد ملء القائمة.</p>
-                  )}
-                </div>
-                <footer className="border-t border-border/60 bg-muted/10 px-4 py-3 text-[11px] leading-6 text-muted-foreground">
-                  متى نعتبر المرحلة تقدمت؟ {phase.completionCriteria}
-                </footer>
-              </section>
-            );
-          })}
-        </div>
-
-        {editable && (
-          <div className="flex flex-col gap-3 border-t border-border/70 pt-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" size="sm" className="h-9 rounded-lg" onClick={onAddStep}><Plus className="size-3.5" /> إضافة مهمة</Button>
-              <p className="self-center text-xs leading-5 text-muted-foreground">الاعتماد يضيف المهام إلى قائمتك. المواعيد لا تُنشأ إلا من موعد حقيقي أو من جدول المدرس.</p>
-            </div>
-            <Button type="button" className="h-11 rounded-xl px-6" onClick={onApprove} disabled={approving || plan.steps.length === 0 || !plan.title.trim()}>
-              {approving ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />} اعتماد المهام وإضافتها
-            </Button>
-          </div>
-        )}
-        <details className="rounded-xl border border-border/70 bg-muted/10 p-3">
-          <summary className="cursor-pointer text-xs font-semibold">تفاصيل إضافية</summary>
-          <div className="mt-3 whitespace-pre-line text-xs leading-6 text-muted-foreground">{plan.summary}</div>
-          {plan.habits.length > 0 && <div className="mt-3 grid gap-2 sm:grid-cols-2">{plan.habits.map((habit, index) => <div key={habit.title + ":" + index} className="rounded-lg bg-background p-3"><p className="text-xs font-semibold text-foreground">{habit.title}</p><p className="mt-1 text-xs leading-5">{habit.cue}</p></div>)}</div>}
-        </details>
-        <details className="rounded-xl border border-border/70">
-          <summary className="cursor-pointer px-4 py-3 text-xs font-semibold text-muted-foreground">اسأل مساعد الخطة</summary>
-          <div className="p-3"><PlanAssistantChat plan={plan} /></div>
-        </details>
+      <div className="sf-sp-board-metrics">
+        <article><span>إجمالي الخطوات</span><strong>{plan.steps.length.toLocaleString("ar-EG")}</strong></article>
+        <article><span>المهام المنفذة</span><strong>{completedCount.toLocaleString("ar-EG")}</strong></article>
+        <article><span>المتراكم المؤكد المدرج / الإجمالي</span><strong>{backlogCoverageLabel}</strong></article>
+        <article><span>نقاط المنهج المرتبطة</span><strong>{coveredCurriculumCount.toLocaleString("ar-EG")}</strong></article>
+        <article><span>مراجعات موجهة</span><strong>{plannedReviewCount.toLocaleString("ar-EG")}</strong></article>
+        <article><span>التزامات مسجلة</span><strong>{confirmedTaskCount.toLocaleString("ar-EG")}</strong></article>
       </div>
+
+      {teacherSessionGroups.length > 0 && (
+        <section className="sf-sp-teacher-schedule" aria-label="مواعيد المدرسين الأسبوعية">
+          <header>
+            <div><span>الجدول الأسبوعي</span><h3>كل مواعيد كل مدرس</h3></div>
+            <div className="sf-sp-schedule-header-actions">
+              <small>{teacherSessions.length.toLocaleString("ar-EG")} مواعيد · {teacherSessionGroups.length.toLocaleString("ar-EG")} مدرسين</small>
+              <button type="button" className="sf-sp-schedule-toggle" aria-expanded={teacherScheduleExpanded}
+                aria-controls="sf-sp-teacher-session-list" onClick={() => setTeacherScheduleExpanded(value => !value)}>
+                {teacherScheduleExpanded ? <ArrowUp className="size-3.5" /> : <ArrowDown className="size-3.5" />}
+                {teacherScheduleExpanded ? "طي الجدول" : "عرض المواعيد"}
+              </button>
+            </div>
+          </header>
+          {teacherScheduleExpanded && <div id="sf-sp-teacher-session-list" className="sf-sp-teacher-session-list">
+            {teacherSessionGroups.map(group => {
+              const nearestSession = group.sessions[0];
+              const preparationSteps = getTeacherSessionPreparationSteps(plan.steps, group.subjectId, subjectIds, 2, nearestSession?.dateOffsetDays ?? 0);
+              return (
+                <article key={group.key} data-testid={"planner-teacher-schedule-" + group.subjectId} className="sf-sp-teacher-session-card">
+                  <div className="sf-sp-teacher-session-main">
+                    <div className="sf-sp-teacher-session-copy">
+                      <strong>{group.teacherName}</strong>
+                      <span>{group.subjectName} · {group.sessions.length.toLocaleString("ar-EG")} مواعيد أسبوعية</span>
+                    </div>
+                  </div>
+                  <div className="sf-sp-teacher-session-slots" aria-label={"كل مواعيد " + group.teacherName}>
+                    {group.sessions.map(session => (
+                      <div key={session.key} className="sf-sp-teacher-session-slot" data-testid={"planner-teacher-slot-" + group.subjectId + "-" + session.dayOfWeek}>
+                        <span>{new Intl.DateTimeFormat("ar-EG", { timeZone: "Africa/Cairo", weekday: "long" }).format(new Date(session.sortDate + "T12:00:00.000Z"))}</span>
+                        <strong>{displayTime12Hour(session.time)}</strong>
+                        <small>وقت المحاضرة</small>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="sf-sp-session-preparation">
+                    <span className="sf-sp-session-preparation-label">التحضير قبل أقرب موعد</span>
+                    {preparationSteps.length > 0 ? (
+                      <div className="sf-sp-session-preparation-list">
+                        {preparationSteps.map(step => {
+                          const index = plan.steps.indexOf(step);
+                          return (
+                            <button
+                              key={step.existingTask?.id ?? step.plannerTaskId ?? step.title}
+                              type="button"
+                              data-testid={"planner-session-prep-" + (step.existingTask?.id ?? step.plannerTaskId ?? index)}
+                              onClick={() => setSelectedMapStepIndex(index)}
+                              aria-label={"عرض مهمة التحضير: " + displayPlanStepTitle(step, subjectIds)}
+                            >
+                              <span>{displayPlanStepTitle(step, subjectIds)}</span>
+                              <small>{step.day || "ضمن الخطة الحالية"}</small>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p>لا يوجد متراكم مؤكد مرتبط بهذه المادة في الخطة الحالية. سيحافظ المساعد على موعد الحصة، ولن يخترع عنوان المحاضرة أو واجبًا جديدًا قبل توفر معلومة موثوقة.</p>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
+          </div>}
+        </section>
+      )}
+
+      {plan.executionStrategy && (
+        <section className="sf-sp-plan-rationale">
+          <span className="sf-sp-eyebrow">ترتيب التنفيذ</span>
+          <h3>{displayArabicText(plan.executionStrategy.objective, "الشرح غير المشاهد أولًا، ثم الالتزامات، وبعدها المراجعة.")}</h3>
+          {plan.executionStrategy.phases?.length ? (
+            <div className="sf-sp-phase-summary">
+              {plan.executionStrategy.phases.map(phase => {
+                const count = plan.steps.filter(step => step.phaseId === phase.id).length;
+                return count > 0 ? (
+                  <article key={phase.id}>
+                    <span>{count.toLocaleString("ar-EG")}</span>
+                    <div><strong>{phaseLabels[phase.id] ?? phase.title}</strong></div>
+                  </article>
+                ) : null;
+              })}
+            </div>
+          ) : null}
+        </section>
+      )}
+
+      {plan.quality && (
+        <section className={"sf-sp-quality sf-sp-quality-" + plan.quality.status}>
+          <div><strong>{plan.quality.status === "ready" ? "الخطة جاهزة للاعتماد" : plan.quality.status === "partial" ? "الخطة تحتاج مراجعة" : "هناك عائق يمنع الاعتماد"}</strong><p>تقييم التوزيع: {plan.quality.score.toLocaleString("ar-EG")} من 100.</p></div>
+          <div>{plan.quality.blockers.map((item,index)=><small key={"b"+index}>{displayArabicText(item,"يوجد عائق يحتاج مراجعة.")}</small>)}{plan.quality.warnings.map((item,index)=><small key={"w"+index}>{displayArabicText(item,"هناك ملاحظة على توزيع الخطة.")}</small>)}</div>
+        </section>
+      )}
+
+      <section ref={executionBoardRef} className="sf-execution-board" data-testid="planner-execution-board">
+        <header className="sf-execution-board-header">
+          <div><span className="sf-sp-eyebrow">تنفيذ الخطة</span><h3>ابدأ بالخطوة التالية، والباقي مرتب حسب مادتك</h3><p>كل مادة لها مسار واضح. افتح الخطوة لمعرفة المطلوب وسبب ترتيبها، وسجّل تقدمك بعد التنفيذ.</p></div>
+          <div className="sf-execution-filters" role="group" aria-label="تصفية خطوات الخطة">
+            {([["all","كل الخطوات"],["open","المتبقي"],["done","المكتمل"]] as const).map(([key,label])=><button type="button" key={key} aria-pressed={filter===key} data-testid={"planner-filter-"+key} onClick={()=>{setFilter(key);setSelectedMapStepIndex(null);}}>{label}</button>)}
+          </div>
+        </header>
+        <div className="sf-execution-summary">
+          <div><small>الخطوة التالية</small><strong>{firstOpenMapStep?displayPlanStepTitle(firstOpenMapStep,subjectIds):"اكتملت خطوات الخطة"}</strong></div>
+          <div><small>المواد والمسارات</small><strong>{mapLanes.length.toLocaleString("ar-EG")}</strong></div>
+          <div><small>الخطوات المتبقية</small><strong>{(plan.steps.length-completedCount).toLocaleString("ar-EG")}</strong></div>
+        </div>
+        {focusStep && (
+          <section className={"sf-execution-focus-scene" + (focusStep.examFocus ? " is-exam-focus" : "")} data-testid="planner-focus-scene" data-motion-reveal>
+            <div className="sf-execution-focus-orbit" aria-hidden="true">
+              <span className="sf-execution-focus-orbit-ring" /><span className="sf-execution-focus-orbit-dot" />
+              <div className="sf-execution-focus-core"><small>PLAN PROGRESS</small><strong>{completionPercent.toLocaleString("en-US")}%</strong><span>من الخطة</span></div>
+            </div>
+            <div className="sf-execution-focus-copy">
+              <div className="sf-execution-focus-kicker"><span><Sparkles className="size-3.5" /> التركيز الحالي</span><small>{focusStep.examFocus ? "EXAM PRIORITY" : "NEXT ACTION"}</small></div>
+              <div className="sf-execution-focus-context">
+                <span>{focusCurriculum?.subject ?? displayPlanStepCategory(focusStep, subjectIds)}</span>
+                <span>{focusStep.phaseId ? (phaseLabels[focusStep.phaseId] ?? "ضمن الخطة") : "خطوة دراسية"}</span>
+                {focusStep.priority && <span>{priorityLabel[focusStep.priority] ?? "أولوية عادية"}</span>}
+              </div>
+              <h4>{displayPlanStepTitle(focusStep, subjectIds)}</h4>
+              <p>{displayPlanStepDetail(focusStep, subjectIds)}</p>
+              <div className="sf-execution-focus-meta">
+                {focusStep.day && <span><CalendarClock className="size-3.5" />{focusStep.day}</span>}
+                {focusStep.minutes > 0 && <span>{focusStep.minutes.toLocaleString("ar-EG")} دقيقة</span>}
+                {focusStep.examFocus && <span>مرتبطة بالامتحان الأقرب</span>}
+              </div>
+              <Button type="button" size="sm" onClick={jumpToFocusStep}>اعرض مكان الخطوة في المسار <ArrowUpRight className="size-3.5" /></Button>
+            </div>
+            <div className="sf-execution-focus-completion">
+              <span>معدل الإنجاز</span><strong>{completedCount.toLocaleString("ar-EG")}<small> / {plan.steps.length.toLocaleString("ar-EG")}</small></strong>
+              <i><b style={{ width: completionPercent + "%" }} /></i>
+              <small>{completionPercent === 100 ? "اكتملت كل خطوات الخطة" : "يتبقى " + (plan.steps.length - completedCount).toLocaleString("ar-EG") + " خطوة"}</small>
+            </div>
+          </section>
+        )}
+        {mapLanes.length?(
+          <div className="sf-execution-subjects" data-testid="planner-subject-lanes">
+            {mapLanes.map((lane,laneIndex)=>{
+              const laneDone=lane.items.filter(({step})=>step.plannerTaskStatus==="done"||step.existingTask?.status==="done").length;
+              const laneTotal=lane.items.length, lanePercent=laneTotal?Math.round(laneDone/laneTotal*100):0;
+              const laneHasSelection=lane.items.some(({index})=>index===selectedMapStepIndex);
+              return (
+                <details key={lane.key} className="sf-execution-subject" open={laneIndex===0||laneHasSelection}>
+                  <summary className="sf-execution-subject-summary">
+                    <span className="sf-execution-subject-icon"><BrainCircuit className="size-5"/></span>
+                    <span className="sf-execution-subject-copy"><small>{lane.isOfficialUnit?"وحدة دراسية":lane.subjectId?"المادة":"مهام عامة"}</small><strong>{lane.title}</strong><i><b style={{width:lanePercent+"%"}}/></i></span>
+                    <span className="sf-execution-subject-count">{laneDone.toLocaleString("ar-EG")} / {laneTotal.toLocaleString("ar-EG")}</span>
+                    <span className="sf-execution-subject-ring" style={{ background: "conic-gradient(var(--sf-lavender-bright, #C5B2DE) " + lanePercent + "%, rgba(255,255,255,.08) 0)" }} aria-label={"إنجاز " + lanePercent + " بالمئة"}><b>{lanePercent.toLocaleString("ar-EG")}%</b></span>
+                    <ArrowDown className="sf-execution-chevron size-4"/>
+                  </summary>
+                  <div className="sf-execution-steps">
+                    {lane.items.map(({step,index,curriculum},laneStepIndex)=>{
+                      const isDone=step.plannerTaskStatus==="done"||step.existingTask?.status==="done";
+                      const isNext=index===currentStepIndex&&!isDone;
+                      const isReview=Boolean(step.aiReviewBrief||step.subtasks?.length||(step.resourceRecommendation&&/مراجعة|review|revision/i.test(step.resourceRecommendation.reason||"")));
+                      const statusLabel=isDone?"مكتملة":isNext?"ابدأ من هنا":isReview?"مراجعة موجهة":step.existingTask?"التزام مسجل":"ضمن الخطة";
+                      const nodeId=step.curriculumNodeIds?.[0];
+                      const branchId=curriculum&&nodeId?getSIECheckpointProgressBranches(curriculum.subjectId).find(branch=>branch.choices.some(choice=>choice.nodeId===nodeId))?.branchId:undefined;
+                      return (
+                        <article key={step.plannerTaskId??step.existingTask?.id??step.sourceStepIndex??index} className={"sf-execution-step"+(step.examFocus?" is-exam-focus":"")+(isDone?" is-done":isNext?" is-next":isReview?" is-review":"")} data-step-index={index} data-motion-reveal data-testid={"planner-step-"+(nodeId??step.existingTask?.id??index)}>
+                          <span className="sf-execution-step-index">{isDone?<CheckCircle2 className="size-4"/>:(laneStepIndex+1).toLocaleString("ar-EG")}</span>
+                          <details className="sf-execution-step-details" open={selectedMapStepIndex===index} onToggle={event=>{if(event.currentTarget.open)setSelectedMapStepIndex(index);else if(selectedMapStepIndex===index)setSelectedMapStepIndex(null);}}>
+                            <summary>
+                              <span className="sf-execution-step-meta"><span>{statusLabel}</span>{step.day&&<span>{step.day}</span>}{step.priority&&<span>{priorityLabel[step.priority]??"أولوية عادية"}</span>}</span>
+                              <strong>{displayPlanStepTitle(step,subjectIds)}</strong>
+                              <p>{displayPlanStepDetail(step,subjectIds)}</p>
+                              <ArrowDown className="sf-execution-step-chevron size-4"/>
+                            </summary>
+                            <div className="sf-execution-step-body">
+                              {step.priorityReason&&<div className="sf-execution-reason"><small>لماذا اختيرت هذه الخطوة؟</small><p>{displayArabicText(step.priorityReason,"تم اختيارها حسب موضعك الدراسي والتزاماتك.")}</p></div>}
+                              {step.studyMethod&&<div className="sf-execution-method"><strong>طريقة التنفيذ</strong><ol>{step.studyMethod.stages.map((stage,stageIndex)=><li key={stageIndex}><b>{(stageIndex+1).toLocaleString("ar-EG")}. {displayArabicText(stage.title,"مرحلة المذاكرة")}</b><p>{displayArabicText(stage.instruction,"نفّذ هذه المرحلة من مصدر المادة ثم حدّث تقدمك.")}</p></li>)}</ol><small>تكتمل الخطوة عند: {displayArabicText(step.studyMethod.completionCriteria,"تنفيذ المراحل وتسجيل تقدمك الفعلي.")}</small></div>}
+                              {step.scheduleNote&&<p className="sf-execution-note">{displayArabicText(step.scheduleNote,"تم تعديل موعد هذه الخطوة مع الحفاظ عليها في الخطة.")}</p>}
+                              {step.existingTask&&<p className="sf-execution-note">هذه الخطوة مرتبطة بالتزام مسجل بالفعل؛ لن تُنشأ نسخة مكررة منها.</p>}
+                              <PlanReviewSubtasks
+                                step={step}
+                                subjectIds={subjectIds}
+                                teacherId={teacherChoices?.[curriculum?.subjectId ?? ""]}
+                              />
+                              <div className="sf-execution-step-actions">
+                                {curriculum&&branchId&&nodeId&&<a href={"/study?subject="+encodeURIComponent(curriculum.subjectId)+"&branch="+encodeURIComponent(branchId)+"&lesson="+encodeURIComponent(nodeId)}>افتح الدرس في مساحة المذاكرة <ArrowUpRight className="size-3.5"/></a>}
+                                {step.existingTask&&<a href="/tasks">افتح المهمة المسجلة <ArrowUpRight className="size-3.5"/></a>}
+                                {editable&&<div><Button type="button" size="sm" variant="ghost" onClick={()=>setEditing({index,title:step.title,detail:step.detail})}>تعديل</Button><Button type="button" size="sm" variant="ghost" disabled={index===0} onClick={()=>onMoveStep(index,-1)}><ArrowUp className="size-3.5"/>أعلى</Button><Button type="button" size="sm" variant="ghost" disabled={index===plan.steps.length-1} onClick={()=>onMoveStep(index,1)}><ArrowDown className="size-3.5"/>أسفل</Button><Button type="button" size="sm" variant="ghost" className="text-destructive" disabled={plan.steps.length<=1} onClick={()=>onRemoveStep(index)}><X className="size-3.5"/>حذف</Button></div>}
+                              </div>
+                              {editing?.index===index&&<div className="sf-sp-step-editor"><label><span>عنوان المهمة</span><input value={editing.title} onChange={event=>setEditing(current=>current?{...current,title:event.target.value}:current)}/></label><label><span>تفاصيل التنفيذ</span><textarea rows={3} value={editing.detail} onChange={event=>setEditing(current=>current?{...current,detail:event.target.value}:current)}/></label><div><Button type="button" variant="ghost" size="sm" onClick={()=>setEditing(null)}>إلغاء</Button><Button type="button" size="sm" onClick={saveEdit}>حفظ</Button></div></div>}
+                            </div>
+                          </details>
+                        </article>
+                      );
+                    })}
+                  </div>
+                </details>
+              );
+            })}
+          </div>
+        ):<div className="sf-sp-empty-inline">{filter==="done"?"لا توجد خطوات مكتملة.":filter==="open"?"لا توجد خطوات متبقية.":"لا توجد خطوات في الخطة بعد."}</div>}
+      </section>
+
+      {editable ? (
+        <footer className="sf-sp-board-footer">
+          <Button type="button" variant="outline" onClick={onAddStep}><Plus className="size-4" />أضف خطوة</Button>
+          <div><small>سيعاد فحص ترتيب الخطة عند اعتمادها. لن تُنشأ مواعيد أو واجبات غير مسجلة.</small><Button type="button" onClick={() => onApprove(plan)} disabled={approving || !plan.steps.length || !plan.title.trim()}>{approving ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}اعتماد التوزيع وإنشاء المهام</Button></div>
+        </footer>
+      ) : (
+        <footer className="sf-sp-approved-footer"><CheckCircle2 className="size-4" /><span>هذه الخطة معتمدة، والمهام مرتبطة بقائمة عملك. تعديل المصدر يتم من المهام أو من تقدم المنهج.</span>{plan.taskSync && <strong>{plan.taskSync.taskCount.toLocaleString("ar-EG")} مهمة مرتبطة</strong>}</footer>
+      )}
+
+      {plan.habits.length>0&&<details className="sf-sp-plan-extra"><summary>عادات داعمة للخطة</summary><div className="sf-sp-habits">{plan.habits.map((habit,index)=><article key={habit.title+index}><strong>{displayArabicText(habit.title,"عادة دراسية")}</strong><small>{displayArabicText(habit.cue,"استخدمها لدعم الاستمرارية في المذاكرة.")}</small></article>)}</div></details>}
     </section>
   );
 }
 
-function PlanAssistantChat({ plan }: { plan: PlanView }) {
+
+function PlanAssistantChat({ plan, subjectIds, editable, onChange, onProposalApplied }: {
+  plan: PlanView;
+  subjectIds: string[];
+  editable: boolean;
+  onChange: (next: PlanView) => void;
+  onProposalApplied?: () => void;
+}) {
   const [messages, setMessages] = useState<Array<{ role: "user" | "assistant"; content: string }>>([]);
   const [draft, setDraft] = useState("");
+  const [pendingPatch, setPendingPatch] = useState<PlannerAssistantPatch | null>(null);
   const context = useMemo(() => [
     "السياق: المستخدم يتحدث من صفحة خطة المذاكرة في StudyFlow.",
-    "اسم الخطة: " + plan.title,
-    "ملخص الخطة: " + plan.summary,
-    "مدة التنفيذ: " + plan.durationLabel,
+    "أجب دائمًا بالعربية المصرية الواضحة، ولا تستخدم عناوين إنجليزية في الشرح.",
+    "اسم الخطة: " + displayArabicText(plan.title, "خطة المذاكرة"),
+    "ملخص الخطة: " + displayArabicText(plan.summary, "خطة مرتبة حسب التزاماتك وتقدمك الفعلي."),
     "خطوات الخطة الحالية:",
     ...plan.steps.map((step, index) =>
-      `${index + 1}. ${step.day} | ${step.title} | ${step.minutes} دقيقة | ${step.category} | ${step.detail}${step.priorityReason ? " | سبب الأولوية: " + step.priorityReason : ""}`
+      `${index + 1}. ${displayPlanStepTitle(step, subjectIds)} | ${displayPlanStepCategory(step, subjectIds)} | ${displayPlanStepDetail(step, subjectIds)}${step.priorityReason ? " | سبب الأولوية: " + displayArabicText(step.priorityReason, "تم اختيارها حسب الأولوية المسجلة.") : ""}`
     ),
-  ].join("\n").slice(0, 7_500), [plan]);
+  ].join("\n").slice(0, 7_500), [plan, subjectIds]);
 
   const chat = trpc.ai.chat.useMutation({
-    onSuccess: result => setMessages(current => [...current, { role: "assistant" as const, content: result.content }].slice(-20)),
+    onSuccess: result => {
+      setMessages(current => [...current, { role: "assistant" as const, content: result.content }].slice(-20));
+      const planPatch = "planPatch" in result ? result.planPatch : undefined;
+      if (planPatch && editable) setPendingPatch(planPatch as PlannerAssistantPatch);
+    },
     onError: error => toast.error(error.message || "تعذّر الوصول إلى مساعد الخطة."),
   });
+
+  const acceptProposal = () => {
+    if(!pendingPatch||!editable)return;
+    const next=applyPlannerAssistantPatch(plan,pendingPatch);
+    setPendingPatch(null);
+    onChange(next);
+    toast.success("تم تطبيق الاقتراح على مسودة الخطة. راجع التوزيع ثم اعتمده لإنشاء المهام.");
+    onProposalApplied?.();
+  };
+  const rejectProposal = () => setPendingPatch(null);
 
   const sendMessage = () => {
     const content = draft.trim();
@@ -826,7 +1696,32 @@ function PlanAssistantChat({ plan }: { plan: PlanView }) {
     const nextMessages = [...messages, { role: "user" as const, content }].slice(-20);
     setMessages(nextMessages);
     setDraft("");
-    chat.mutate({ messages: nextMessages, memory: "", context });
+    chat.mutate({
+      messages: nextMessages,
+      memory: "",
+      context,
+      ...(editable ? {
+        planner: {
+          title: plan.title,
+          summary: plan.summary,
+          strategy: plan.strategy ? {
+            baselineTitle: plan.strategy.baseline.title,
+            baselineSummary: plan.strategy.baseline.summary,
+            revisionHeadline: plan.strategy.revision.headline,
+            revisionRationale: plan.strategy.revision.rationale,
+          } : undefined,
+          steps: plan.steps.map((step, index) => ({
+            title: displayPlanStepTitle(step, subjectIds),
+            detail: displayPlanStepDetail(step, subjectIds),
+            category: displayPlanStepCategory(step, subjectIds),
+            priority: step.priority,
+            phaseId: step.phaseId,
+            completed: step.plannerTaskStatus === "done" || step.existingTask?.status === "done",
+            linkedTask: Boolean(step.existingTask),
+          })),
+        },
+      } : {}),
+    });
   };
 
   return (
@@ -839,14 +1734,19 @@ function PlanAssistantChat({ plan }: { plan: PlanView }) {
             <p className="mt-1 text-xs leading-5 text-muted-foreground">اسأله عن ترتيب الأيام أو وقت أي خطوة أو اطلب اقتراحًا لتعديل الخطة.</p>
           </div>
         </div>
-        <span className="rounded-full border border-border bg-background px-3 py-1.5 text-[10px] text-muted-foreground">مرتبط بالخطة الحالية</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-full border border-border bg-background px-3 py-1.5 text-[10px] text-muted-foreground">{editable ? "تحرير المسودة متاح" : "الخطة المعتمدة — وضع القراءة"}</span>
+          <span className="rounded-full border border-border bg-background px-3 py-1.5 text-[10px] text-muted-foreground">سياق خطتك متصل</span>
+        </div>
       </header>
       <div className="grid gap-3 p-3 sm:p-4">
         <div className="max-h-[360px] min-h-24 space-y-3 overflow-y-auto rounded-xl bg-muted/15 p-3" aria-live="polite">
           {!messages.length && (
             <div className="flex min-h-20 items-center gap-3 text-sm text-muted-foreground">
               <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><BrainCircuit className="size-4" /></span>
-              <p>أنا شايف تفاصيل الخطة الحالية. اسألني مثلاً: ليه حطيت الدرس ده في اليوم ده؟ أو اقترح توزيعًا أخف.</p>
+              <p>{editable
+                ? "أنا شايف تفاصيل الخطة. اطلب تفسير الفرق بين خطة البداية والتوزيع الحالي أو تعديل ترتيب المهام وأولوياتها دون حذف التراكم."
+                : "أنا شايف تفاصيل الخطة المعتمدة. اسأل عن سبب الترتيب أو اطلب اقتراحًا؛ التعديل الفعلي يتطلب إنشاء مسودة جديدة."}</p>
             </div>
           )}
           {messages.map((message, index) => (
@@ -860,6 +1760,19 @@ function PlanAssistantChat({ plan }: { plan: PlanView }) {
           ))}
           {chat.isPending && <div className="flex justify-end"><span className="rounded-xl border border-border bg-card px-3 py-2 text-xs text-muted-foreground">المساعد بيحلل الخطة...</span></div>}
         </div>
+        {pendingPatch&&<section className="sf-plan-proposal" data-testid="planner-assistant-proposal">
+          <div className="sf-plan-proposal-copy">
+            <span>اقتراح جاهز للمراجعة</span>
+            <strong>{pendingPatch.updates.length.toLocaleString("ar-EG")} تعديل على الخطوات{pendingPatch.title?" وتحديث عنوان الخطة":""}{pendingPatch.summary?" وملخصها":""}{pendingPatch.order?" مع إعادة ترتيبها":""}</strong>
+            <p>لم تتغير خطة التنفيذ بعد. راجع الفرق ثم طبّق الاقتراح على المسودة.</p>
+            {pendingPatch.updates.slice(0,3).map((update,index)=>{
+              const before=plan.steps[update.index];
+              if(!before)return null;
+              return <article key={update.index}><small>الخطوة { (update.index+1).toLocaleString("ar-EG") }</small><div><span>قبل</span><b>{displayPlanStepTitle(before,subjectIds)}</b></div><div><span>بعد</span><b>{update.changes.title?displayArabicText(update.changes.title,displayPlanStepTitle(before,subjectIds)):displayPlanStepTitle(before,subjectIds)}</b></div>{update.changes.detail&&<p>{displayArabicText(update.changes.detail,"تفاصيل معدلة للخطوة.")}</p>}</article>;
+            })}
+          </div>
+          <div><Button type="button" variant="outline" onClick={rejectProposal}>رفض الاقتراح</Button><Button type="button" onClick={acceptProposal} disabled={!editable}>تطبيق الاقتراح</Button></div>
+        </section>}
         <div className="flex items-end gap-2">
           <textarea
             value={draft}
@@ -876,11 +1789,13 @@ function PlanAssistantChat({ plan }: { plan: PlanView }) {
             aria-label="اكتب رسالة لمساعد الخطة"
             className="min-h-12 max-h-32 min-w-0 flex-1 resize-y rounded-xl border border-border bg-background px-3 py-2.5 text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground focus:border-primary/60"
           />
-          <Button type="button" onClick={sendMessage} disabled={!draft.trim() || chat.isPending} className="h-12 shrink-0 rounded-xl px-4">
+          <Button type="button" onClick={sendMessage} disabled={!draft.trim() || chat.isPending || Boolean(pendingPatch)} className="h-12 shrink-0 rounded-xl px-4">
             <Send className="size-4" /><span className="hidden sm:inline">إرسال</span>
           </Button>
         </div>
-        <p className="px-1 text-[10px] text-muted-foreground">المساعد يقترح ويشرح؛ تعديل المهام أو ترتيبها يتم من أدوات الخطة نفسها قبل الاعتماد.</p>
+        <p className="px-1 text-[10px] text-muted-foreground">{editable
+          ? "المساعد يستخدم نفس قرارات محرك التخطيط، ويعدّل ترتيب المهام وأولوياتها دون حذف الخطة الأساسية أو الواجبات الأصلية."
+          : "المساعد يشرح الخطة ويقترح البدائل؛ لا يغيّر المهام الفعلية من وضع القراءة."}</p>
       </div>
     </section>
   );

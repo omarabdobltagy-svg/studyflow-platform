@@ -1,5 +1,6 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
+import { displayBranchTitle, displayCurriculumTitle } from "@/lib/curriculum-display";
 import { Input } from "@/components/ui/input";
 
 import { trpc } from "@/lib/trpc";
@@ -11,21 +12,59 @@ import {
   getSIESubject,
   normalizeSIECheckpointFrontier,
 } from "@shared/sie-catalog";
-import { calculateLearningGap, getNextLearningTarget } from "@shared/sie-learning-progress";
+import {
+  calculateLearningGap,
+  getNextLearningTarget,
+  mergeLegacyLinearBranchProgress,
+  selectLegacyLinearFrontier,
+} from "@shared/sie-learning-progress";
 import {
   getEffectiveStudentLessonState,
   getStudentLessonStateLabel,
+  isStudentLessonState,
   summarizeStudentLessonStates,
   type StudentLessonState,
 } from "@shared/sie-lesson-state";
-import { BookOpenText, Check, ChevronLeft, ChevronRight, Search, X } from "lucide-react";
+import { BookOpenText, Check, ChevronLeft, ChevronRight, Loader2, Search, Sparkles, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 
 export default function Study() {
+  const reduceMotion = useReducedMotion();
   const utils = trpc.useUtils();
-  const profile = trpc.studentProfile.get.useQuery();
+  const profile = trpc.studentProfile.get.useQuery(undefined, {
+    refetchInterval: query => {
+      const savedSelection = query.state.data?.selection as Record<string, any> | undefined;
+      const acceptedIds = new Set(Array.isArray(savedSelection?.acceptedAlternativeReviewVideoIds)
+        ? savedSelection?.acceptedAlternativeReviewVideoIds.filter((value: unknown): value is string => typeof value === "string")
+        : []);
+      const selectedTeacherIds = new Set(Object.values({
+        ...((query.state.data?.teacherSelections ?? {}) as Record<string, unknown>),
+        ...((savedSelection?.teacherChoices ?? {}) as Record<string, unknown>),
+      }).filter((value): value is string => typeof value === "string" && Boolean(value)));
+      const updates = Array.isArray(savedSelection?.teacherPublicUpdates) ? savedSelection.teacherPublicUpdates : [];
+      const analysisStillRunning = updates.some((update: any) => {
+        const videoId = typeof update.externalId === "string" ? update.externalId : "";
+        const status = String(update.contentAnalysis?.status ?? "processing");
+        const descriptionAlreadyVerified = Array.isArray(update.descriptionMatch?.topics)
+          && update.descriptionMatch.topics.length > 0;
+        if (descriptionAlreadyVerified) return false;
+        const selectedTeacherVideo = typeof update.teacherId === "string" && selectedTeacherIds.has(update.teacherId);
+        return (acceptedIds.has(videoId) || selectedTeacherVideo) && status !== "complete" && status !== "failed";
+      });
+      return analysisStillRunning ? 3_500 : false;
+    },
+  });
+  const learning = trpc.learning.get.useQuery();
+  const [progressGuideDismissed, setProgressGuideDismissed] = useState(false);
+  const completeProgressPickerGuide = trpc.studentProfile.completeProgressPickerGuide.useMutation({
+    onSuccess: async () => {
+      await utils.studentProfile.get.invalidate();
+      setProgressGuideDismissed(true);
+    },
+    onError: error => toast.error(error.message || "تعذّر حفظ إغلاق دليل مواضع التقدم."),
+  });
   const initialStudyParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
   const [subjectId, setSubjectId] = useState(initialStudyParams?.get("subject") || "");
   const [branchId, setBranchId] = useState(initialStudyParams?.get("branch") || "");
@@ -38,6 +77,8 @@ export default function Study() {
   const courseProgressMap = (selection.learningCourseProgress || {}) as Record<string, any>;
   const currentCourseProgress = courseProgressMap[subjectId] || {};
   const branchProgressMap = (currentCourseProgress.branches || {}) as Record<string, Record<string, any>>;
+  const lessonStateByBranch = ((learning.data as any)?.lessonStateByBranch?.[subjectId] ?? {}) as Record<string, { byNode?: Record<string, unknown> }>;
+  const learningGapByBranch = ((learning.data as any)?.gapByBranch?.[subjectId] ?? {}) as Record<string, { studentPosition?: number | null }>;
   const savedTeacherId = ((selection.teacherChoices || {}) as Record<string, string>)[subjectId]
     || (profile.data?.teacherSelections || {})[subjectId];
   const selectedTeacherId = savedTeacherId && savedTeacherId !== "__SKIP__" ? savedTeacherId : undefined;
@@ -50,6 +91,10 @@ export default function Study() {
   const allBranches = useMemo(() => getSIECheckpointProgressBranches(subjectId), [subjectId]);
   const branches = useMemo(() => getSIEStudentVisibleBranches(subjectId), [subjectId]);
   const units = useMemo(() => getSIECheckpointUnits(subjectId), [subjectId]);
+  const curriculumLessonCount = useMemo(
+    () => units.reduce((total, unit) => total + unit.lessonCount, 0),
+    [units],
+  );
   const [branchTransition, setBranchTransition] = useState<{ from: string; to: string } | null>(null);
   useEffect(() => {
     if (!branchTransition) return;
@@ -61,42 +106,44 @@ export default function Study() {
     ?? branches[0];
   const branchChoices = currentBranch?.choices ?? [];
   const currentBranchId = currentBranch?.branchId ?? "";
+  const setupCoachmarkVersion = Number(selection.setupCoachmarkVersion ?? 0);
+  const showProgressPickerGuide = setupCoachmarkVersion >= 1
+    && !selection.progressPickerGuideCompletedAt
+    && !progressGuideDismissed
+    && studyViewMode === "lessons"
+    && branchChoices.length > 0;
+  useEffect(() => {
+    if (setupCoachmarkVersion >= 1 && !selection.progressPickerGuideCompletedAt
+      && branches.length > 0 && studyViewMode === "units") {
+      setStudyViewMode("lessons");
+    }
+  }, [setupCoachmarkVersion, selection.progressPickerGuideCompletedAt, branches.length, studyViewMode]);
   const currentBranchPointLabel = currentBranch?.branchType === "official_section" ? "موضوع" : "درس";
   const isLinearSubject = subjectId === "HIS_G2_BAC" || subjectId === "PROG_AI_G2_BAC";
   const legacyLinearRecords = isLinearSubject ? Object.values(branchProgressMap) : [];
-  const legacyFrontierFromRecords = (field: string, teacherOnly = false) => {
-    const candidates = legacyLinearRecords
-      .filter(record => Object.prototype.hasOwnProperty.call(record, field))
-      .filter(record => !teacherOnly || (
-        selectedTeacherId
-          ? (!record.teacherId || record.teacherId === selectedTeacherId)
-          : teacherReferenceNameBase
-            ? (!record.teacherName || record.teacherName === teacherReferenceNameBase)
-            : true
-      ))
-      .map(record => {
-        const value = record[field] as string;
-        const rank = value === "__UNKNOWN__" ? -2
-          : value === "__NOT_STARTED__" ? -1
-            : branchChoices.findIndex(choice => choice.nodeId === value);
-        return { value, rank };
-      })
-      .filter(item => item.rank >= -2)
-      .sort((left, right) => left.rank - right.rank);
-    return candidates.length ? candidates[candidates.length - 1].value : undefined;
-  };
-  const legacyLinearProgress = {
-    ...(legacyFrontierFromRecords("lastCompletedLessonId") !== undefined
-      ? { lastCompletedLessonId: legacyFrontierFromRecords("lastCompletedLessonId") } : {}),
-    ...(legacyFrontierFromRecords("teacherTeachingFrontierId", true) !== undefined
-      ? { teacherTeachingFrontierId: legacyFrontierFromRecords("teacherTeachingFrontierId", true) } : {}),
-    ...(legacyFrontierFromRecords("schoolClassFrontierId") !== undefined
-      ? { schoolClassFrontierId: legacyFrontierFromRecords("schoolClassFrontierId") } : {}),
+  const legacyLinearProgress = isLinearSubject ? {
+    ...(selectLegacyLinearFrontier(branchChoices, legacyLinearRecords, "lastCompletedLessonId")
+      ? { lastCompletedLessonId: selectLegacyLinearFrontier(branchChoices, legacyLinearRecords, "lastCompletedLessonId") } : {}),
+    ...(selectLegacyLinearFrontier(branchChoices, legacyLinearRecords, "teacherTeachingFrontierId", {
+      teacherOnly: true,
+      teacherId: selectedTeacherId ?? null,
+      teacherName: teacherReferenceNameBase,
+    }) ? {
+      teacherTeachingFrontierId: selectLegacyLinearFrontier(branchChoices, legacyLinearRecords, "teacherTeachingFrontierId", {
+        teacherOnly: true,
+        teacherId: selectedTeacherId ?? null,
+        teacherName: teacherReferenceNameBase,
+      }),
+    } : {}),
+    ...(selectLegacyLinearFrontier(branchChoices, legacyLinearRecords, "schoolClassFrontierId")
+      ? { schoolClassFrontierId: selectLegacyLinearFrontier(branchChoices, legacyLinearRecords, "schoolClassFrontierId") } : {}),
     ...(selectedTeacherId ? { teacherId: selectedTeacherId } : {}),
     ...(teacherReferenceNameBase ? { teacherName: teacherReferenceNameBase } : {}),
-  };
+  } : {};
   const currentBranchProgress = currentBranchId
-    ? branchProgressMap[currentBranchId] || legacyLinearProgress
+    ? isLinearSubject
+      ? mergeLegacyLinearBranchProgress(branchChoices, branchProgressMap[currentBranchId] ?? {}, legacyLinearProgress)
+      : branchProgressMap[currentBranchId] || {}
     : {};
   const subjectIndex = Math.max(0, subjects.indexOf(subjectId));
   const isEnglishSkillBranch = subjectId === "ENG1_G2_BAC"
@@ -109,7 +156,9 @@ export default function Study() {
     : undefined;
   const branchDisplayTitle = subjectId === "ARB_G2_BAC" && currentBranchId === "ARB_READING"
     ? "نصوص الوحدة"
-    : currentBranch?.branchTitle || "الفرع الحالي";
+    : currentBranch?.branchTitle
+      ? displayBranchTitle(currentBranch.branchTitle)
+      : "الفرع الحالي";
   const [studentFrontierDrafts, setStudentFrontierDrafts] = useState<Record<string, string>>({});
   const [teacherFrontierDrafts, setTeacherFrontierDrafts] = useState<Record<string, string>>({});
   const [schoolFrontierDrafts, setSchoolFrontierDrafts] = useState<Record<string, string>>({});
@@ -160,9 +209,12 @@ export default function Study() {
   const hasSchoolFrontierSelection = schoolClassFrontierId !== "__UNKNOWN__"
     || Boolean(currentBranchProgress.schoolFrontierConfirmedAt)
     || Object.prototype.hasOwnProperty.call(schoolFrontierDrafts, studentFrontierDraftKey);
+  const wasFrontierPairConfirmed = Boolean(
+    currentBranchProgress.studentFrontierConfirmedAt && currentBranchProgress.teacherFrontierConfirmedAt
+  );
   const branchChoiceOptions = getSIECheckpointProgressOptions(subjectId, currentBranchId);
   const currentBranchLastLessonId = branchChoices[branchChoices.length - 1]?.nodeId;
-  const isCurrentBranchComplete = Boolean(currentBranchLastLessonId && lastCompletedLessonId === currentBranchLastLessonId);
+  const hasReachedEndOfCurrentBranch = Boolean(currentBranchLastLessonId && lastCompletedLessonId === currentBranchLastLessonId);
   const autoSaveFingerprintRef = useRef("");
   const setLastCompletedLessonId = (value: string) => {
     autoSaveFingerprintRef.current = "";
@@ -201,7 +253,7 @@ export default function Study() {
     ?? currentGap.studentFrontierTitle;
   const teacherFrontierDisplayLabel = branchChoiceOptions.find(option => option.value === teacherTeachingFrontierId)?.label
     ?? currentGap.referenceFrontierTitle;
-  const isStudentDoneWithBranch = currentGap.studentPosition === branchChoices.length && branchChoices.length > 0;
+  const hasReachedEndOfBranch = currentGap.studentPosition === branchChoices.length && branchChoices.length > 0;
 
 
   useEffect(() => {
@@ -247,8 +299,12 @@ export default function Study() {
       setStudentFrontierDrafts(clearSavedDraft);
       setTeacherFrontierDrafts(clearTeacherDraft);
       setSchoolFrontierDrafts(clearSchoolDraft);
-      if (result.savedStudent && variables.subjectId === "ARB_G2_BAC"
-        && Object.prototype.hasOwnProperty.call(variables, "studentFrontierId")) {
+      const pairConfirmedNow = Boolean(
+        result.record?.studentFrontierConfirmedAt && result.record?.teacherFrontierConfirmedAt
+      );
+      const pairJustCompleted = pairConfirmedNow && !wasFrontierPairConfirmed
+        && (result.savedStudent || result.savedTeacher);
+      if (pairJustCompleted && variables.subjectId === "ARB_G2_BAC") {
         const savedBranchIndex = allBranches.findIndex(item => item.branchId === variables.branchId);
         const nextBranch = savedBranchIndex >= 0
           ? allBranches.slice(savedBranchIndex + 1).find(candidate =>
@@ -258,8 +314,8 @@ export default function Study() {
         if (nextBranch) {
           const fromLabel = variables.branchId === "ARB_READING"
             ? "نصوص الوحدة"
-            : allBranches[savedBranchIndex]?.branchTitle ?? "الفرع الحالي";
-          const toLabel = nextBranch.branchTitle;
+            : displayBranchTitle(allBranches[savedBranchIndex]?.branchTitle ?? "الفرع الحالي");
+          const toLabel = displayBranchTitle(nextBranch.branchTitle);
           setBranchTransition({ from: fromLabel, to: toLabel });
           setBranchId(nextBranch.branchId);
           toast.success("تم حفظ موضعك — ننتقل الآن إلى " + toLabel + ".");
@@ -267,13 +323,17 @@ export default function Study() {
         }
         const nextTarget = getNextLearningTarget(subjects, subjectId, branches, currentBranchId);
         if (nextTarget) {
+          const nextLabel = nextTarget.branchId
+            ? displayBranchTitle(allBranches.find(item => item.branchId === nextTarget.branchId)?.branchTitle ?? "الفرع التالي")
+            : getSIESubject(nextTarget.subjectId)?.nameAr;
+          setBranchTransition({ from: branchDisplayTitle, to: nextLabel || "المادة التالية" });
           setSubjectId(nextTarget.subjectId);
           setBranchId(nextTarget.branchId || "");
           toast.success("اكتملت فروع العربي؛ انتقلنا إلى المادة التالية.");
           return;
         }
         toast.success("تم حفظ آخر موضع في جميع فروع العربي.");
-      } else if (result.savedStudent && result.learningGap?.studentPosition === branchChoices.length && branchChoices.length > 0) {
+      } else if (pairJustCompleted && branchChoices.length > 0) {
         if (isEnglishSkillBranch) {
           toast.success(currentBranchId === "ENG_VOCABULARY"
             ? "أنهيت دروس Vocabulary المفهرسة داخل الوحدات."
@@ -285,8 +345,9 @@ export default function Study() {
           setSubjectId(nextTarget.subjectId);
           setBranchId(nextTarget.branchId || "");
           const nextLabel = nextTarget.branchId
-            ? branches.find(item => item.branchId === nextTarget.branchId)?.branchTitle
+            ? displayBranchTitle(branches.find(item => item.branchId === nextTarget.branchId)?.branchTitle ?? "الفرع التالي")
             : getSIESubject(nextTarget.subjectId)?.nameAr;
+          setBranchTransition({ from: branchDisplayTitle, to: nextLabel || "المادة التالية" });
           toast.success("أنهيت موضوعات هذا الفرع؛ انتقلنا إلى " + (nextLabel || "الموضع التالي") + ".");
           return;
         }
@@ -304,14 +365,22 @@ export default function Study() {
     onError: error => toast.error(error.message || "تعذّر حفظ موضع المنهج."),
   });
   const updateLessonLearningState = trpc.learning.updateLessonLearningState.useMutation({
-    onSuccess: async (_result, variables) => {
+    onSuccess: async (result, variables) => {
       await Promise.all([
         utils.studentProfile.get.invalidate(),
         utils.learning.get.invalidate(),
         utils.plans.currentDaily.invalidate(),
         utils.dashboard.summary.invalidate(),
+        utils.ai.inbox.invalidate(),
       ]);
-      toast.success("تم تحديث حالة الدرس؛ الخطة هتراعي إنك شاهدته أو ذاكرته فعلًا.");
+      const reconciliation = result.taskReconciliation;
+      if (reconciliation?.questionsCreated > 0) {
+        toast.info("المساعد عنده سؤال بخصوص مهمة مرتبطة بالدرس. افتح جرس الرسائل أعلى المنصة.");
+      } else if (reconciliation?.resolvedCount > 0) {
+        toast.success("تم تحديث حالة الدرس، والمساعد أغلق " + reconciliation.resolvedCount + " مهمة مذاكرة قديمة مرتبطة به.");
+      } else {
+        toast.success("تم تحديث حالة الدرس؛ الخطة هتراعي إنك شاهدته أو ذاكرته فعلًا.");
+      }
     },
     onError: error => toast.error(error.message || "تعذّر تحديث حالة الدرس."),
   });
@@ -350,10 +419,10 @@ export default function Study() {
       const nextUnit = currentUnitIndex >= 0 ? units[currentUnitIndex + 1] : undefined;
       if (nextUnit) {
         openUnitLessons(nextUnit);
-        toast.success("تم إكمال " + unit.title + " — انتقلنا إلى " + nextUnit.title + " مباشرةً.");
+        toast.success("تم تسجيل وصول الشرح إلى نهاية " + unit.title + " — انتقلنا إلى " + nextUnit.title + ".");
       } else {
         setStudyViewMode("units");
-        toast.success("تم تسجيل إكمال " + unit.title + ". انتهيت من الوحدات المفهرسة لهذه المادة.");
+        toast.success("تم تسجيل وصولك لنهاية شرح " + unit.title + ". راجع حالة المذاكرة لكل درس على حدة.");
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "تعذّر تسجيل إكمال الوحدة.");
@@ -370,14 +439,23 @@ export default function Study() {
       const targetIndex = branch.choices.findIndex(item => item.nodeId === last.nodeId);
       return savedIndex < targetIndex;
     }) ?? unit.branches[0];
-    if (nextBranch) setBranchId(nextBranch.branchId);
+    if (nextBranch) {
+      const fromLabel = currentBranch?.branchTitle ? displayBranchTitle(currentBranch.branchTitle) : "الوحدة الحالية";
+      setBranchTransition({ from: fromLabel, to: displayBranchTitle(nextBranch.branchTitle) });
+      setBranchId(nextBranch.branchId);
+    }
     setStudyViewMode("lessons");
   };
 
   const updateTeacherSelection = trpc.studentProfile.updateTeacherSelection.useMutation({
     onSuccess: async () => {
-      await Promise.all([utils.studentProfile.get.invalidate(), utils.learning.get.invalidate()]);
-      toast.success("تم حفظ طريقة الدراسة.");
+      await Promise.all([
+        utils.studentProfile.get.invalidate(),
+        utils.learning.get.invalidate(),
+        utils.plans.currentDaily.invalidate(),
+        utils.ai.inbox.invalidate(),
+      ]);
+      toast.success("تم حفظ اختيار المدرس وطريقة المتابعة.");
     },
     onError: error => {
       setCourseModeOverrides(current => { const next = { ...current }; delete next[subjectId]; return next; });
@@ -449,7 +527,7 @@ export default function Study() {
   const visibleSubjects = subjects.filter(id => normalizeFrontierSearch(getSIESubject(id)?.nameAr || id).includes(normalizeFrontierSearch(subjectSearch)));
 
   return (
-    <DashboardLayout title="المذاكرة والتقدم" description="اختر المادة وحدّد موضعك وموضع شرح المدرس في المنهج.">
+    <DashboardLayout title="المذاكرة والتقدم" description="اختر المادة والوحدة، وسجّل حالة الشرح والمذاكرة لكل درس.">
       {profile.isError && <div className="rounded-2xl border border-destructive/20 bg-destructive/5 p-4 text-sm">تعذّر تحميل ملفك الدراسي. <button className="font-bold underline" onClick={() => void profile.refetch()}>إعادة المحاولة</button></div>}
       <section className="grid gap-6">
         <article className="sf-study-subject-selector app-card min-w-0 overflow-hidden rounded-2xl">
@@ -459,11 +537,11 @@ export default function Study() {
           </header>
           <div className="space-y-3 p-4 sm:p-5">
             <div className="relative"><Search className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input value={subjectSearch} onChange={event => setSubjectSearch(event.target.value)} placeholder="ابحث عن مادة..." aria-label="البحث عن مادة" className="h-11 rounded-xl pr-9 text-sm" />
+              <Input value={subjectSearch} onChange={event => setSubjectSearch(event.target.value)} placeholder="ابحث عن مادة..." aria-label="البحث عن مادة" data-testid="study-subject-search" className="h-11 rounded-xl pr-9 text-sm" />
               {subjectSearch && <button type="button" aria-label="مسح البحث" onClick={() => setSubjectSearch("")} className="absolute left-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground hover:bg-muted"><X className="size-3.5" /></button>}
             </div>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {visibleSubjects.map(id => { const active = id === subjectId; return <motion.button key={id} type="button" aria-pressed={active} onClick={() => { setSubjectId(id); setBranchId(""); }} whileTap={{ scale: 0.98 }}
+              {visibleSubjects.map(id => { const active = id === subjectId; return <motion.button key={id} type="button" data-testid={"study-subject-" + id} aria-pressed={active} onClick={() => { setSubjectId(id); setBranchId(""); setStudyViewMode("units"); setBranchTransition(null); }} whileTap={reduceMotion ? undefined : { scale: 0.98 }}
                 className={"min-h-12 rounded-xl border px-3 py-3 text-sm font-semibold transition " + (active ? "border-primary bg-primary/10 text-foreground ring-2 ring-primary/15" : "border-border bg-background text-muted-foreground hover:border-primary/35")}>{getSIESubject(id)?.nameAr || id}</motion.button>; })}
             </div>
             {!visibleSubjects.length && <p className="rounded-xl bg-muted/30 p-4 text-center text-sm text-muted-foreground">لا توجد مادة مطابقة لبحثك.</p>}
@@ -472,17 +550,17 @@ export default function Study() {
       </section>
 
       <AnimatePresence>
-        {branchTransition && subjectId === "ARB_G2_BAC" && (
+        {branchTransition && (
           <motion.div
             key={branchTransition.to}
-            initial={{ opacity: 0, y: -12, scale: .97, filter: "blur(5px)" }}
+            initial={reduceMotion ? false : { opacity: 0, y: -12, scale: .97, filter: "blur(5px)" }}
             animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
-            exit={{ opacity: 0, y: -8, scale: .985, filter: "blur(4px)" }}
-            transition={{ duration: .42, ease: [.22, 1, .36, 1] }}
+            exit={reduceMotion ? undefined : { opacity: 0, y: -8, scale: .985, filter: "blur(4px)" }}
+            transition={reduceMotion ? { duration: 0 } : { duration: .42, ease: [.22, 1, .36, 1] }}
             className="relative mb-4 overflow-hidden rounded-2xl border border-primary/25 bg-primary/[0.045] p-4 text-foreground shadow-sm"
           >
             <div className="relative flex items-center gap-3">
-              <motion.span initial={{ rotate: -30, scale: .65 }} animate={{ rotate: 0, scale: 1 }} transition={{ type: "spring", stiffness: 240, damping: 16 }}
+              <motion.span initial={reduceMotion ? false : { rotate: -30, scale: .65 }} animate={{ rotate: 0, scale: 1 }} transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 240, damping: 16 }}
                 className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Check className="size-5" /></motion.span>
               <div className="min-w-0 flex-1">
                 <p className="text-[10px] font-bold tracking-[.12em] text-primary">تم حفظ موضعك بنجاح</p>
@@ -500,19 +578,59 @@ export default function Study() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-[10px] font-bold tracking-[0.14em] text-primary">اختيار التقدم</p>
-              <h2 className="mt-1 text-xl font-bold">ابدأ من الوحدة، أو افتح الدروس</h2>
-              <p className="mt-1 text-sm leading-6 text-muted-foreground">{subjectId === "ENG1_G2_BAC" ? "كل الوحدات العشر داخل فرع Units، وداخل كل وحدة دروس Vocabulary وGrammar بأرقامها، ثم موضوعات الكتاب." : "ابدأ بالوحدات الرسمية من الكتاب. فروع التعبير والإملاء والأدب والقصة تظهر كمسارات كورس المدرس بشكل مستقل. تقدر تسجل اكتمال وحدة أو تضغط «إظهار باقي الدروس» للتفصيل."}</p>
+              <h2 className="mt-1 text-xl font-bold">تصفّح المنهج حسب الوحدة أو الدرس</h2>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">{subjectId === "ENG1_G2_BAC" ? "الوحدات الرسمية العشر، وداخل كل وحدة دروس المفردات (Vocabulary) والقواعد (Grammar) بأرقامها، ثم موضوعات الكتاب." : "الوحدات الرسمية مرتبة حسب الكتاب، والفروع الإضافية تظهر كمسارات مستقلة. افتح تبويب الدروس للوصول إلى تفاصيل كل درس وتحديث حالته."}</p>
             </div>
-            <div className="inline-flex rounded-xl border border-border bg-muted/40 p-1">
-              <button type="button" onClick={() => setStudyViewMode("units")} aria-pressed={studyViewMode === "units"}
-                className={"rounded-lg px-4 py-2 text-xs font-bold transition " + (studyViewMode === "units" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>الوحدات</button>
-              <button type="button" onClick={() => setStudyViewMode("lessons")} aria-pressed={studyViewMode === "lessons"}
-                className={"rounded-lg px-4 py-2 text-xs font-bold transition " + (studyViewMode === "lessons" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>إظهار باقي الدروس</button>
+            <div
+              className="sf-study-view-tabs"
+              role="tablist"
+              aria-label="عرض المنهج"
+              onKeyDown={event => {
+                if (event.key !== "ArrowLeft" && event.key !== "ArrowRight" && event.key !== "Home" && event.key !== "End") return;
+                event.preventDefault();
+                const next = event.key === "Home" ? "units"
+                  : event.key === "End" ? "lessons"
+                    : event.key === "ArrowLeft"
+                      ? (studyViewMode === "units" ? "lessons" : "units")
+                      : (studyViewMode === "units" ? "lessons" : "units");
+                setBranchTransition(null);
+                setStudyViewMode(next);
+                window.requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[data-testid="study-view-${next}"]`)?.focus());
+              }}
+            >
+              <button
+                type="button"
+                role="tab"
+                data-testid="study-view-units"
+                id="sf-study-units-tab"
+                tabIndex={studyViewMode === "units" ? 0 : -1}
+                aria-selected={studyViewMode === "units"}
+                aria-controls="sf-study-units-panel" aria-label={"الوحدات، " + units.length.toLocaleString("ar-EG") + " وحدة"}
+                onClick={() => { setBranchTransition(null); setStudyViewMode("units"); }}
+                className={"sf-study-view-tab " + (studyViewMode === "units" ? "is-active" : "")}
+              >
+                <span>الوحدات</span>
+                <span className="sf-study-view-count">{units.length.toLocaleString("ar-EG")}</span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                data-testid="study-view-lessons"
+                id="sf-study-lessons-tab"
+                tabIndex={studyViewMode === "lessons" ? 0 : -1}
+                aria-selected={studyViewMode === "lessons"}
+                aria-controls="sf-study-lessons-panel" aria-label={"الدروس، " + curriculumLessonCount.toLocaleString("ar-EG") + " درس"}
+                onClick={() => { setBranchTransition(null); setStudyViewMode("lessons"); }}
+                className={"sf-study-view-tab " + (studyViewMode === "lessons" ? "is-active" : "")}
+              >
+                <span>الدروس</span>
+                <span className="sf-study-view-count">{curriculumLessonCount.toLocaleString("ar-EG")}</span>
+              </button>
             </div>
           </div>
         </header>
         {studyViewMode === "units" ? (
-          <div className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5 xl:grid-cols-3">
+          <div id="sf-study-units-panel" role="tabpanel" aria-labelledby="sf-study-units-tab" aria-label="وحدات المنهج" className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5 xl:grid-cols-3">
             {units.map((unit, unitIndex) => {
               const unitChoices = unit.branches.flatMap(unitBranch => unitBranch.choices.map(choice => ({
                 ...choice,
@@ -529,29 +647,40 @@ export default function Study() {
                 .filter(choice => choice.lessonType === "topic")
                 .sort((left, right) => String(left.lessonNumber || "").localeCompare(String(right.lessonNumber || ""), "en", { numeric: true }));
               const unitBranchState = unit.branches.map(unitBranch => {
+                const states = lessonStateByBranch[unitBranch.branchId]?.byNode ?? {};
                 const branch = allBranches.find(item => item.branchId === unitBranch.branchId);
-                const saved = branchProgressMap[unitBranch.branchId]?.lastCompletedLessonId;
-                const normalized = typeof saved === "string" && branch
-                  ? normalizeSIECheckpointFrontier(subjectId, unitBranch.branchId, saved)
-                  : "__UNKNOWN__";
-                const savedIndex = normalized === "__NOT_STARTED__" ? -1 : branch?.choices.findIndex(item => item.nodeId === normalized) ?? -1;
-                const completed = unitBranch.choices.filter(choice => {
+                const studentPosition = learningGapByBranch[unitBranch.branchId]?.studentPosition;
+                const studied = unitBranch.choices.filter(choice => states[choice.nodeId] === "studied").length;
+                const watchedOnly = unitBranch.choices.filter(choice => states[choice.nodeId] === "watched_only").length;
+                const needsReview = unitBranch.choices.filter(choice => states[choice.nodeId] === "needs_review").length;
+                const notWatched = unitBranch.choices.filter(choice => states[choice.nodeId] === "not_watched").length;
+                const notRecorded = unitBranch.choices.filter(choice => !isStudentLessonState(states[choice.nodeId]) || states[choice.nodeId] === "not_recorded").length;
+                const reached = unitBranch.choices.filter(choice => {
                   const index = branch?.choices.findIndex(item => item.nodeId === choice.nodeId) ?? -1;
-                  return index >= 0 && savedIndex >= index;
+                  return index >= 0 && typeof studentPosition === "number" && index < studentPosition;
                 }).length;
-                return { branchId: unitBranch.branchId, branchTitle: unitBranch.branchTitle, completed, total: unitBranch.choices.length };
+                return { branchId: unitBranch.branchId, branchTitle: unitBranch.branchTitle, studied, watchedOnly, needsReview, notWatched, notRecorded, reached, total: unitBranch.choices.length };
               });
               const totalTopics = unitBranchState.reduce((sum, item) => sum + item.total, 0);
-              const completedTopics = unitBranchState.reduce((sum, item) => sum + item.completed, 0);
+              const completedTopics = unitBranchState.reduce((sum, item) => sum + item.studied, 0);
+              const reachedTopics = unitBranchState.reduce((sum, item) => sum + item.reached, 0);
+              const needsReviewTopics = unitBranchState.reduce((sum, item) => sum + item.needsReview, 0);
+              const watchedOnlyTopics = unitBranchState.reduce((sum, item) => sum + item.watchedOnly, 0);
+              const notWatchedTopics = unitBranchState.reduce((sum, item) => sum + item.notWatched, 0);
+              const notRecordedTopics = unitBranchState.reduce((sum, item) => sum + item.notRecorded, 0);
               const complete = totalTopics > 0 && completedTopics === totalTopics;
+              const frontierComplete = totalTopics > 0 && reachedTopics === totalTopics;
               const percent = totalTopics ? Math.round(completedTopics / totalTopics * 100) : 0;
               return (
-                <article key={unit.unitId} className={"sf-study-unit-card group relative overflow-hidden rounded-2xl border p-4 transition-all duration-300 " + (complete ? "border-primary/30 bg-primary/[0.045]" : "border-border/75 bg-card hover:-translate-y-1 hover:border-primary/35 hover:shadow-xl")}>
+                <article key={unit.unitId} data-testid={"study-unit-" + unit.unitId} className={"sf-study-unit-card group relative overflow-hidden rounded-2xl border p-4 transition-all duration-300 " + (complete ? "border-primary/30 bg-primary/[0.045]" : "border-border/75 bg-card hover:-translate-y-1 hover:border-primary/35 hover:shadow-xl")}>
                   <div className="pointer-events-none absolute -left-14 -top-14 size-36 rounded-full bg-primary/10 blur-3xl transition-opacity group-hover:opacity-100" />
                   <div className="relative">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="text-[10px] font-bold tracking-[.12em] text-primary">{unit.isOfficialUnit ? "وحدة الكتاب الرسمي" : unit.unitId.startsWith("TOPICS_ARB_") ? "كورس المدرس" : "مسار إضافي"}</p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-[10px] font-bold tracking-[.12em] text-primary">{unit.isOfficialUnit ? "وحدة الكتاب الرسمي" : unit.unitId.startsWith("TOPICS_ARB_") ? "مسار إضافي" : "مسار مهاري"}</p>
+                          <span className="sf-study-unit-count">{unit.lessonCount.toLocaleString("ar-EG")} درس</span>
+                        </div>
                         <h3 className="mt-1 font-bold leading-7">{unit.title}</h3>
                       </div>
                       <span className={"flex size-9 shrink-0 items-center justify-center rounded-xl " + (complete ? "bg-primary text-primary-foreground" : "bg-secondary text-primary")}>
@@ -559,11 +688,16 @@ export default function Study() {
                       </span>
                     </div>
                     <div className="mt-4 flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">{completedTopics} من {totalTopics} {subjectId === "ENG1_G2_BAC" ? "درس / موضوع" : "موضوع"}</span>
+                      <span className="text-muted-foreground">{completedTopics} من {totalTopics} ذاكرته وفهمته</span>
                       <span className="font-bold text-primary">{percent}٪</span>
                     </div>
                     <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
                       <motion.div className="h-full rounded-full bg-primary" initial={false} animate={{ width: percent + "%" }} transition={{ duration: .55, ease: "easeOut" }} />
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-muted-foreground">
+                      <span>وصل الشرح إلى {reachedTopics} / {totalTopics}</span>
+                      {watchedOnlyTopics > 0 && <span>شاهدها دون مذاكرة: {watchedOnlyTopics}</span>}
+                      {needsReviewTopics > 0 && <span className="text-amber-700 dark:text-amber-300">تحتاج مراجعة: {needsReviewTopics}</span>}
                     </div>
                     {subjectId === "ENG1_G2_BAC" && unit.isOfficialUnit ? (
                       <div className="sf-english-unit-map mt-4 rounded-2xl border border-border/70 bg-background/70 p-3.5" data-english-unit={unit.unitNumber}>
@@ -578,18 +712,20 @@ export default function Study() {
                         <div className="sf-english-unit-lessons grid gap-2">
                           {unitSkillLessons.map(choice => {
                             const lessonKind = choice.lessonType === "vocabulary" ? "Vocabulary" : "Grammar";
-                            const lessonLabel = `Lesson ${choice.lessonNumber} · ${lessonKind}`;
                             const helperText = choice.lessonType === "vocabulary"
                               ? "مفردات وتعبيرات الوحدة"
-                              : choice.title;
+                              : displayCurriculumTitle(choice.title);
                             return (
                               <button key={choice.nodeId} type="button" onClick={() => {
                                 setBranchTransition(null);
                                 setBranchId(choice.displayBranchId);
                                 setStudyViewMode("lessons");
-                              }} className="sf-english-lesson-row flex w-full min-w-0 items-center gap-2 rounded-xl border border-border/60 bg-card px-3 py-2.5 text-right transition-colors hover:border-primary/40 hover:bg-accent/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
-                                <span className="sf-english-lesson-type shrink-0 rounded-lg bg-secondary px-2.5 py-1 text-[10px] font-extrabold text-secondary-foreground">{lessonLabel}</span>
-                                <span className="min-w-0 flex-1 text-xs font-semibold leading-6 text-foreground">{helperText}</span>
+                              }} className="sf-english-lesson-row sf-english-lesson-row-stacked flex w-full min-w-0 items-center gap-3 rounded-xl border border-border/60 bg-card px-3 py-3 text-right transition-colors hover:border-primary/40 hover:bg-accent/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+                                <span className="sf-english-lesson-copy min-w-0 flex-1">
+                                  <strong className="sf-english-lesson-sequence">Lesson {choice.lessonNumber}</strong>
+                                  <span className="sf-english-lesson-name">{helperText}</span>
+                                </span>
+                                <span className="sf-english-lesson-type shrink-0 rounded-lg bg-secondary px-2.5 py-1 text-[10px] font-extrabold text-secondary-foreground">{lessonKind}</span>
                                 <span className="shrink-0 text-[10px] font-semibold text-primary">متابعة</span>
                               </button>
                             );
@@ -610,9 +746,11 @@ export default function Study() {
                                   setBranchTransition(null);
                                   setBranchId(choice.displayBranchId);
                                   setStudyViewMode("lessons");
-                                }} className="sf-english-lesson-row flex w-full min-w-0 items-start gap-2 rounded-xl border border-border/60 bg-card px-3 py-2 text-right transition-colors hover:border-primary/40 hover:bg-accent/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
-                                  <span className="sf-english-section-tag shrink-0 rounded-md border border-border bg-muted px-2 py-1 text-[9px] font-semibold text-muted-foreground">{"Topic " + choice.lessonNumber}</span>
-                                  <span className="min-w-0 flex-1 text-xs leading-6 text-foreground">{choice.title}</span>
+                                }} className="sf-english-lesson-row sf-english-lesson-row-stacked flex w-full min-w-0 items-center gap-3 rounded-xl border border-border/60 bg-card px-3 py-3 text-right transition-colors hover:border-primary/40 hover:bg-accent/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+                                  <span className="sf-english-lesson-copy min-w-0 flex-1">
+                                    <strong className="sf-english-lesson-sequence">Lesson {choice.lessonNumber}</strong>
+                                    <span className="sf-english-lesson-name">{displayCurriculumTitle(choice.title)}</span>
+                                  </span>
                                   {sectionLabel && <span className="sf-english-section-tag shrink-0 rounded-md border border-border bg-muted px-2 py-1 text-[9px] font-semibold text-muted-foreground">{sectionLabel}</span>}
                                 </button>
                               );
@@ -625,11 +763,19 @@ export default function Study() {
                         {unitBranchState.map(item => <span key={item.branchId} className="rounded-lg border border-border/70 bg-background/70 px-2 py-1 text-[10px] text-muted-foreground">{item.branchTitle}</span>)}
                       </div>
                     )}
+                    {needsReviewTopics > 0 && (
+                      <div className="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-3 py-2 text-[11px] leading-5 text-amber-800 dark:text-amber-200">
+                        {needsReviewTopics} درس ذاكرته من قبل لكنه يحتاج مراجعة؛ لا يُحتسب مكتملًا نهائيًا.
+                      </div>
+                    )}
+                    {notRecordedTopics > 0 && (
+                      <p className="mt-2 text-[10px] text-muted-foreground">{notRecordedTopics} درس لم تحدد حالة مذاكرته بعد.</p>
+                    )}
                     <div className="mt-4 grid grid-cols-2 gap-2">
-                      <Button type="button" variant="outline" className="rounded-xl text-xs" onClick={() => openUnitLessons(unit)}>فتح الدروس</Button>
-                      <Button type="button" className="rounded-xl text-xs" disabled={complete || saveUnitFrontier.isPending}
-                        onClick={() => void completeUnit(unit)}>
-                        {complete ? "مكتملة" : saveUnitFrontier.isPending ? "جارٍ الحفظ…" : "أنهيت الوحدة"}
+                      <Button type="button" data-testid={"study-open-unit-" + unit.unitId} variant="outline" className="rounded-xl text-xs" onClick={() => openUnitLessons(unit)}>عرض الدروس</Button>
+                      <Button type="button" className="rounded-xl text-xs" disabled={frontierComplete || saveUnitFrontier.isPending}
+                        data-testid={"study-complete-unit-" + unit.unitId} onClick={() => void completeUnit(unit)}>
+                        {frontierComplete ? "وصلت لنهاية الشرح" : saveUnitFrontier.isPending ? "جارٍ الحفظ…" : "سجّل وصولك لنهاية الشرح"}
                       </Button>
                     </div>
                   </div>
@@ -639,9 +785,9 @@ export default function Study() {
             {!units.length && <p className="col-span-full rounded-xl bg-muted/30 p-4 text-center text-sm text-muted-foreground">لم يتم ربط وحدات معتمدة لهذه المادة حتى الآن.</p>}
           </div>
         ) : (
-          <div className="flex flex-wrap items-center justify-between gap-3 p-4 sm:p-5">
+          <div id="sf-study-lessons-panel" role="tabpanel" aria-labelledby="sf-study-lessons-tab" aria-label="دروس المنهج" className="flex flex-wrap items-center justify-between gap-3 p-4 sm:p-5">
             <p className="text-xs leading-6 text-muted-foreground">عرض الدروس التفصيلية. اختيار آخر درس مكتمل يحدّث الموضوع التالي عليك مباشرةً.</p>
-            <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => setStudyViewMode("units")}>العودة إلى الوحدات</Button>
+            <Button type="button" data-testid="study-back-to-units" variant="outline" size="sm" className="rounded-xl" onClick={() => { setBranchTransition(null); setStudyViewMode("units"); }}>العودة إلى الوحدات</Button>
           </div>
         )}
       </section>
@@ -709,21 +855,28 @@ export default function Study() {
                         && savedPosition !== "__UNKNOWN__"
                         && savedPosition !== "__NOT_STARTED__"
                         && branch.choices.some(choice => choice.nodeId === savedPosition);
-                      const isComplete = branch.choices.length > 0
+                      const isAtEnd = branch.choices.length > 0
                         && savedPosition === branch.choices[branch.choices.length - 1]?.nodeId;
                       const active = branch.branchId === currentBranchId;
                       return (
-                        <button key={branch.branchId} type="button" aria-pressed={active} aria-current={active ? "step" : undefined}
+                        <button key={branch.branchId} type="button" data-testid={"study-branch-" + branch.branchId} aria-pressed={active} aria-current={active ? "step" : undefined}
                           onClick={() => {
-                            setBranchTransition(null);
-                            setBranchId(branch.branchId);
+                            if (branch.branchId !== currentBranchId) {
+                              setBranchTransition({
+                                from: branchDisplayTitle,
+                                to: displayBranchTitle(branch.branchTitle),
+                              });
+                              setBranchId(branch.branchId);
+                            }
                           }}
                           className={"flex min-h-14 min-w-0 items-center gap-2 rounded-xl border px-3 py-2.5 text-right text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 " +
-                            (active ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary/20" : isComplete ? "border-emerald-500/25 bg-emerald-500/[0.05] text-foreground" : hasProgress ? "border-primary/25 bg-primary/[0.035] text-foreground" : "border-border bg-background text-muted-foreground hover:border-primary/35 hover:text-foreground")}>
-                          <span className={"flex size-6 shrink-0 items-center justify-center rounded-full text-[10px] " + (isComplete ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>
-                            {isComplete ? <Check className="size-3.5" /> : index + 1}
+                            (active ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary/20" : isAtEnd ? "border-primary/25 bg-primary/[0.035] text-foreground" : hasProgress ? "border-primary/25 bg-primary/[0.035] text-foreground" : "border-border bg-background text-muted-foreground hover:border-primary/35 hover:text-foreground")}>
+                          <span className={"flex size-6 shrink-0 items-center justify-center rounded-full text-[10px] " + (isAtEnd ? "bg-primary/10 text-primary" : active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>
+                            {index + 1}
                           </span>
-                          <span className="min-w-0 break-words leading-5">{branch.branchTitle}</span>
+                          <span className="min-w-0 break-words leading-5">{displayBranchTitle(branch.branchTitle)}
+                            {isAtEnd && <small className="mt-0.5 block text-[9px] font-medium text-primary">آخر نقطة في الشرح</small>}
+                          </span>
                         </button>
                       );
                     })}
@@ -781,9 +934,39 @@ export default function Study() {
                         <h4 className="mt-1 break-words text-sm font-bold sm:text-base">آخر درس وصلت له في شرح المدرس</h4>
                         <p className="mt-1 text-xs leading-5 text-muted-foreground">النقطة المختارة تحدد آخر درس شاهدت شرحه أو حضرت حصته. ده لا يعني إنك ذاكرت الدرس أو فهمته؛ حالة المذاكرة والفهم هتتسجل لكل درس بشكل مستقل تحت.</p>
                       </div>
-                      <div className="mt-4 grid gap-6 md:grid-cols-2">
+                      <AnimatePresence initial={false}>
+                      {showProgressPickerGuide && (
+                        <motion.aside
+                          key={subjectId + "::" + currentBranchId}
+                          className="sf-progress-coach-float"
+                          role="status"
+                          aria-live="polite"
+                          aria-atomic="true"
+                          initial={reduceMotion ? false : { opacity: 0, y: 12, scale: .985 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={reduceMotion ? undefined : { opacity: 0, y: -8, scale: .985 }}
+                          transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 260, damping: 24 }}
+                        >
+                          <span className="sf-progress-coach-kicker"><Sparkles className="size-3.5" /> أول إعداد لتقدمك</span>
+                          <strong>عندك موضعان منفصلان — اختار كل واحد بدقة</strong>
+                          <p>
+                            «آخر درس وصلت له في الشرح» هو آخر درس حضرت شرحه أو شاهدته أنت.
+                            «موضع المدرس» هو آخر نقطة وصل إليها هو في تدريسه. اختيار أحدهما لا يغيّر الآخر،
+                            ومشاهدة المحاضرة لا تعني أنك ذاكرت الدرس أو فهمته.
+                          </p>
+                          <div className="sf-progress-coach-actions">
+                            <button type="button" onClick={() => setProgressGuideDismissed(true)}>ذكّرني لاحقًا</button>
+                            <button type="button" disabled={completeProgressPickerGuide.isPending}
+                              onClick={() => completeProgressPickerGuide.mutate(undefined)}>
+                              {completeProgressPickerGuide.isPending ? "جارٍ الحفظ..." : "فهمت، ابدأ الاختيار"}
+                            </button>
+                          </div>
+                        </motion.aside>
+                      )}
+                    </AnimatePresence>
+                    <div className="mt-4 grid gap-6 md:grid-cols-2 sf-progress-position-pickers">
                         <div className="min-w-0 rounded-xl border border-border/70 bg-background/70 p-3">
-                          <SearchableFrontierPicker label="آخر درس وصلت له في الشرح" hint="اختَر آخر محاضرة حضرتها أو درس وصل له شرح المدرس. هنعرض الدروس السابقة بعلامة مشاهدة، لكن المذاكرة والفهم حالة منفصلة."
+                          <SearchableFrontierPicker testId="student-frontier" label="آخر درس وصلت له في الشرح" hint="اختَر آخر محاضرة حضرتها أو درس وصل له شرح المدرس. هنعرض الدروس السابقة بعلامة مشاهدة، لكن المذاكرة والفهم حالة منفصلة."
                             value={hasStudentFrontierSelection ? lastCompletedLessonId : ""} onChange={setLastCompletedLessonId} disabled={saveBranchFrontier.isPending}
                             onPrevious={() => setLastCompletedLessonId(stepFrontier(lastCompletedLessonId, "previous"))}
                             onNext={() => setLastCompletedLessonId(stepFrontier(lastCompletedLessonId || "__UNKNOWN__", "next"))}
@@ -791,11 +974,11 @@ export default function Study() {
                             options={[{ value: "__NOT_STARTED__", label: "لم أبدأ هذا الفرع" },{ value: "__UNKNOWN__", label: "موضعي غير معروف" },...branchChoiceOptions]} visibleOptionLimit={subjectId === "ARB_G2_BAC" && currentBranchId === "ARB_SPELLING" ? 8 : 6} />
                           {hasStudentFrontierSelection && currentGap.studentPosition !== null && <div className="mt-3 rounded-xl border border-primary/15 bg-primary/[0.045] px-3 py-2.5">
                             <p className="text-[10px] font-semibold text-muted-foreground">الخطوة التالية عليك</p>
-                            <p className="mt-1 text-sm font-bold text-foreground">{nextStudentLesson?.title || (isStudentDoneWithBranch ? "أنهيت كل الموضوعات المفهرسة في هذا الفرع" : "لم يتم تحديد الموضوع التالي")}</p>
+                            <p className="mt-1 text-sm font-bold text-foreground">{nextStudentLesson?.title || (hasReachedEndOfBranch ? "وصلت إلى آخر نقطة في شرح هذا الفرع" : "لم يتم تحديد الموضوع التالي")}</p>
                           </div>}
                         </div>
                         <div className="min-w-0 rounded-xl border border-border/70 bg-background/70 p-3">
-                          <SearchableFrontierPicker label="موضع المدرس في هذا الفرع"
+                          <SearchableFrontierPicker testId="teacher-frontier" label="موضع المدرس في هذا الفرع"
                             hint="آخر نقطة وصل إليها المدرس في شرحه لهذا الفرع."
                             value={teacherTeachingFrontierId} onChange={setTeacherFrontier}
                             disabled={saveBranchFrontier.isPending}
@@ -807,7 +990,7 @@ export default function Study() {
                         </div>
                         {courseMode === "center" ? (
                           <div className="min-w-0 rounded-xl border border-border/70 bg-background/70 p-3 md:col-span-2">
-                            <SearchableFrontierPicker label="موضع السنتر / المجموعة (اختياري)" hint="يمكنك تسجيل موضع المجموعة عند الحاجة."
+                            <SearchableFrontierPicker testId="school-frontier" label="موضع السنتر / المجموعة (اختياري)" hint="يمكنك تسجيل موضع المجموعة عند الحاجة."
                               value={schoolClassFrontierId} onChange={setSchoolFrontier} disabled={saveBranchFrontier.isPending}
                               onPrevious={() => setSchoolFrontier(stepFrontier(schoolClassFrontierId, "previous"))}
                               onNext={() => setSchoolFrontier(stepFrontier(schoolClassFrontierId, "next"))}
@@ -854,21 +1037,35 @@ export default function Study() {
                           </div>
                         )}
                       </header>
-                      <div className="max-h-[640px] divide-y divide-border/60 overflow-y-auto">
+                      <div className="divide-y divide-border/60">
                         {branchChoices.map((choice, index) => {
                           const state = getLessonState(choice.nodeId);
                           const isFrontier = choice.nodeId === lastCompletedLessonId;
-                          const reachedInLecture = index <= studentFrontierIndex && studentFrontierIndex >= 0 && state !== "not_watched" && state !== "not_recorded";
+                          const isAtOrBeforeFrontier = index <= studentFrontierIndex && studentFrontierIndex >= 0;
+                          const reachedInLecture = isAtOrBeforeFrontier && state !== "not_watched" && state !== "not_recorded";
+                          const canToggleReachMarker = isAtOrBeforeFrontier
+                            && (state === "watched_only" || state === "not_watched" || state === "not_recorded");
                           const pending = updateLessonLearningState.isPending
                             && updateLessonLearningState.variables?.nodeId === choice.nodeId;
                           return (
-                            <article key={choice.nodeId} className={"sf-lesson-state-row flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:gap-4 sm:px-4 " + (isFrontier ? "is-frontier" : "") + (state === "not_watched" ? " is-missed" : "")}>
+                            <article key={choice.nodeId} data-testid={"study-lesson-" + choice.nodeId} className={"sf-lesson-state-row flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:gap-4 sm:px-4 " + (isFrontier ? "is-frontier" : "") + (state === "not_watched" ? " is-missed" : "")}>
                               <div className="flex min-w-0 items-center gap-3 sm:flex-1">
-                                <span className={"sf-lesson-state-marker flex size-8 shrink-0 items-center justify-center rounded-xl border text-xs font-bold " + (state === "not_recorded" || state === "not_watched" ? "border-border bg-muted text-muted-foreground" : isFrontier ? "border-primary/40 bg-primary/15 text-primary" : "border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300")}>
+                                <button type="button"
+                                  className={"sf-lesson-state-marker flex size-8 shrink-0 items-center justify-center rounded-xl border text-xs font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-default " + (state === "not_recorded" || state === "not_watched" ? "border-border bg-muted text-muted-foreground" : isFrontier ? "border-primary/40 bg-primary/15 text-primary" : "border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300")}
+                                  aria-label={state === "watched_only" ? "إزالة علامة مشاهدة " + choice.title : "تسجيل مشاهدة " + choice.title}
+                                  aria-pressed={state === "watched_only" || state === "studied" || state === "needs_review"}
+                                  disabled={pending || !canToggleReachMarker}
+                                  onClick={() => updateLessonLearningState.mutate({
+                                    subjectId,
+                                    branchId: currentBranchId,
+                                    nodeId: choice.nodeId,
+                                    state: state === "watched_only" ? "not_watched" : "watched_only",
+                                  })}>
                                   {state === "not_recorded" ? "؟" : state === "not_watched" ? <X className="size-3.5" /> : <Check className="size-4" />}
-                                </span>
+                                </button>
                                 <div className="min-w-0 flex-1">
-                                  <p className="break-words text-xs font-bold leading-6">{choice.title}</p>
+                                  <p className="break-words text-xs font-bold leading-6">{subjectId === "ENG1_G2_BAC" && choice.lessonNumber ? "Lesson " + choice.lessonNumber : displayCurriculumTitle(choice.title)}</p>
+                                  {subjectId === "ENG1_G2_BAC" && choice.lessonNumber && <p className="mt-0.5 break-words text-[11px] leading-5 text-muted-foreground">{displayCurriculumTitle(choice.title)}</p>}
                                   <div className="mt-1 flex flex-wrap items-center gap-1.5">
                                     <span className={"rounded-md px-2 py-1 text-[10px] font-semibold " + (state === "studied" ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-300" : state === "watched_only" ? "bg-primary/10 text-primary" : state === "needs_review" ? "bg-amber-500/10 text-amber-700 dark:text-amber-300" : "bg-muted text-muted-foreground")}>{getStudentLessonStateLabel(state)}</span>
                                     {isFrontier && <span className="sf-lesson-frontier-badge rounded-md border border-primary/25 bg-primary/10 px-2 py-1 text-[10px] font-bold text-primary">آخر نقطة وصلت لها</span>}
@@ -879,6 +1076,7 @@ export default function Study() {
                               <label className="block w-full sm:w-[230px]">
                                 <span className="sr-only">حالة مذاكرتك: {choice.title}</span>
                                 <select
+                                  data-testid={"study-lesson-state-" + choice.nodeId}
                                   value={state}
                                   disabled={pending}
                                   onChange={event => updateLessonLearningState.mutate({
@@ -924,9 +1122,10 @@ export default function Study() {
                             تم حفظ موضعك وموضع المدرس تلقائيًا.
                           </div>
                           <p className="mt-1 pr-8 text-xs leading-5 text-muted-foreground">
-                            {isCurrentBranchComplete
-                              ? isEnglishSkillBranch ? "اكتمل هذا المسار داخل الوحدات. يمكنك متابعة نوع الدرس الآخر أو العودة إلى الوحدات."
-                                : nextVisibleBranch ? "اكتمل الفرع؛ يتم الانتقال تلقائيًا إلى الفرع التالي." : "اكتملت الفروع الظاهرة في هذه المادة."
+                            {hasReachedEndOfCurrentBranch
+                              ? isEnglishSkillBranch ? "وصلت إلى آخر نقطة في هذا المسار. يمكنك متابعة نوع الدرس الآخر أو العودة إلى الوحدات."
+                                : nextVisibleBranch ? "وصلت إلى آخر نقطة في هذا الفرع؛ انتقلنا للفرع التالي. هذا لا يؤكد مذاكرة دروسه."
+                                  : "وصلت إلى آخر نقطة في هذا الفرع. راجع حالة مذاكرة كل درس بشكل مستقل."
                               : "يمكنك تعديل أي موضع في أي وقت، وسيُحفظ التحديث تلقائيًا."}
                           </p>
                         </motion.div>
@@ -966,9 +1165,9 @@ export default function Study() {
             </p>
           </div>
           <div className="rounded-xl border border-primary/20 bg-primary/[0.045] p-4">
-            <p className="text-xs text-muted-foreground">التالي بعد آخر موضوع مكتمل</p>
-            <p className="mt-2 font-bold text-foreground">{nextStudentLesson?.title || (isStudentDoneWithBranch ? "اكتملت موضوعات هذا الفرع" : "حدد آخر موضوع أنهيته")}</p>
-            <p className="mt-1 text-[11px] leading-5 text-muted-foreground">ده موضع وصولك في شرح المدرس فقط. حالة المذاكرة والفهم لكل درس محسوبة منفصلة في قائمة الدروس.</p>
+            <p className="text-xs text-muted-foreground">التالي بعد آخر نقطة وصلت لها في الشرح</p>
+            <p className="mt-2 font-bold text-foreground">{nextStudentLesson?.title || (hasReachedEndOfBranch ? "وصلت إلى نهاية نقاط الشرح المسجلة" : "حدد آخر موضع وصلت إليه في الشرح")}</p>
+            <p className="mt-1 text-[11px] leading-5 text-muted-foreground">تسجيل آخر نقطة في الشرح لا يعني أنك ذاكرت كل الدروس أو فهمتها. حالة المذاكرة والفهم لكل درس محفوظة بشكل مستقل.</p>
           </div>
           <p className="text-xs leading-6 text-muted-foreground sm:col-span-2 lg:col-span-4">
             {currentGap.status === "student_position_missing" ? "حدد موضعك أنت أولًا." : currentGap.status === "reference_missing" ? "لا يوجد مرجع محفوظ للمقارنة حتى الآن؛ يمكنك متابعة تقدمك دون إعداد إضافي هنا." : "الحساب يستخدم عدد نقاط الفهرس داخل هذا الفرع فقط؛ لا يعمم الرقم على بقية فروع المادة."}
@@ -997,14 +1196,15 @@ function normalizeFrontierSearch(value: string) {
 }
 
 function SearchableFrontierPicker({
-  label, hint, value, onChange, options, disabled = false, visibleOptionLimit = 6,
+  testId, label, hint, value, onChange, options, disabled = false, visibleOptionLimit = 6,
   onPrevious, onNext, previousDisabled = false, nextDisabled = false,
 }: {
-  label: string; hint?: string; value: string; onChange: (value: string) => void;
+  testId?: string; label: string; hint?: string; value: string; onChange: (value: string) => void;
   options: ChoiceButtonOption[]; disabled?: boolean; visibleOptionLimit?: number;
   onPrevious?: () => void; onNext?: () => void;
   previousDisabled?: boolean; nextDisabled?: boolean;
 }) {
+  const reduceMotion = useReducedMotion();
   const [query, setQuery] = useState("");
   const [showAllOptions, setShowAllOptions] = useState(false);
   const optionsIdentity = options.length + "::" + (options[0]?.value ?? "") + "::" + (options[options.length - 1]?.value ?? "");
@@ -1029,13 +1229,13 @@ function SearchableFrontierPicker({
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div><p className="text-sm font-bold">{label}</p>{hint && <p className="mt-1 text-xs leading-5 text-muted-foreground">{hint}</p>}</div>
         {(onPrevious || onNext) && <div className="flex shrink-0 gap-1">
-          {onPrevious && <Button type="button" size="sm" variant="outline" disabled={disabled || previousDisabled} onClick={onPrevious} className="h-8 rounded-lg px-2 text-[11px]"><ChevronRight className="ml-1 size-3.5" />السابق</Button>}
-          {onNext && <Button type="button" size="sm" variant="outline" disabled={disabled || nextDisabled} onClick={onNext} className="h-8 rounded-lg px-2 text-[11px]">التالي<ChevronLeft className="mr-1 size-3.5" /></Button>}
+          {onPrevious && <Button type="button" data-testid={testId ? testId + "-previous" : undefined} size="sm" variant="outline" disabled={disabled || previousDisabled} onClick={onPrevious} className="h-8 rounded-lg px-2 text-[11px]"><ChevronRight className="ml-1 size-3.5" />السابق</Button>}
+          {onNext && <Button type="button" data-testid={testId ? testId + "-next" : undefined} size="sm" variant="outline" disabled={disabled || nextDisabled} onClick={onNext} className="h-8 rounded-lg px-2 text-[11px]">التالي<ChevronLeft className="mr-1 size-3.5" /></Button>}
         </div>}
       </div>
       <div className="relative">
         <Search className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input value={query} onChange={event => setQuery(event.target.value)} disabled={disabled}
+        <Input data-testid={testId ? testId + "-search" : undefined} value={query} onChange={event => setQuery(event.target.value)} disabled={disabled}
           placeholder="ابحث باسم الدرس أو رقمه..." aria-label={"البحث في " + label} className="h-11 rounded-xl pr-9 pl-9 text-xs" />
         {query && <button type="button" aria-label="مسح البحث" onClick={() => setQuery("")}
           className="absolute left-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground hover:bg-muted"><X className="size-3.5" /></button>}
@@ -1043,19 +1243,23 @@ function SearchableFrontierPicker({
       <div className="grid max-h-[430px] gap-2 overflow-y-auto overscroll-contain pr-1 sm:grid-cols-2">
         {visibleOptions.map(option => {
           const selected = value === option.value;
-          return <button key={option.value} type="button" aria-pressed={selected} disabled={disabled}
+          return <motion.button key={option.value} type="button" data-testid={testId ? testId + "-option-" + option.value : undefined} data-selected={selected ? "true" : "false"} aria-pressed={selected} disabled={disabled}
+            layout={!reduceMotion}
+            whileTap={reduceMotion ? undefined : { scale: 0.975 }}
+            animate={reduceMotion ? undefined : { scale: selected ? 1.012 : 1 }}
+            transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 380, damping: 25 }}
             onClick={() => onChange(option.value)}
-            className={"flex min-h-14 min-w-0 items-center justify-between gap-2 rounded-xl border px-3 py-3 text-right transition disabled:cursor-not-allowed disabled:opacity-50 " + (selected ? "border-primary bg-primary/10 text-foreground ring-2 ring-primary/10" : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground")}>
+            className={"flex min-h-14 min-w-0 items-center justify-between gap-2 rounded-xl border px-3 py-3 text-right transition disabled:cursor-not-allowed disabled:opacity-50 " + (selected ? "is-selected border-primary bg-primary/10 text-foreground ring-2 ring-primary/10" : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground")}>
             <span className="min-w-0"><span className="block break-words text-sm font-semibold leading-5">{option.label}</span>
               {option.description && <span className="mt-1 block text-[10px] leading-4 text-muted-foreground">{option.description}</span>}</span>
             <span className={"flex size-6 shrink-0 items-center justify-center rounded-full border " + (selected ? "border-primary bg-primary text-primary-foreground" : "border-border text-transparent")}>{selected && <Check className="size-3.5" />}</span>
-          </button>;
+          </motion.button>;
         })}
       </div>
-      {!normalizedQuery && hiddenOptionCount > 0 && !showAllOptions && <Button type="button" variant="outline" size="sm" className="w-full rounded-xl text-xs" onClick={() => setShowAllOptions(true)}>إظهار باقي الدروس ({hiddenOptionCount})</Button>}
-      {!normalizedQuery && showAllOptions && hiddenOptionCount > 0 && <Button type="button" variant="ghost" size="sm" className="w-full rounded-xl text-xs" onClick={() => setShowAllOptions(false)}>عرض خيارات أقل</Button>}
+      {!normalizedQuery && hiddenOptionCount > 0 && !showAllOptions && <Button type="button" data-testid={testId ? testId + "-show-all" : undefined} variant="outline" size="sm" className="w-full rounded-xl text-xs" onClick={() => setShowAllOptions(true)}>إظهار باقي الدروس ({hiddenOptionCount})</Button>}
+      {!normalizedQuery && showAllOptions && hiddenOptionCount > 0 && <Button type="button" data-testid={testId ? testId + "-show-less" : undefined} variant="ghost" size="sm" className="w-full rounded-xl text-xs" onClick={() => setShowAllOptions(false)}>عرض خيارات أقل</Button>}
       {!visibleOptions.length && <p className="rounded-xl bg-muted/30 p-3 text-center text-xs text-muted-foreground">لا توجد نتيجة مطابقة في فهرس هذا الفرع.</p>}
-      {value && <button type="button" disabled={disabled} onClick={() => onChange(options.some(option => option.value === "__UNKNOWN__") ? "__UNKNOWN__" : "")}
+      {value && <button type="button" data-testid={testId ? testId + "-clear" : undefined} disabled={disabled} onClick={() => onChange(options.some(option => option.value === "__UNKNOWN__") ? "__UNKNOWN__" : "")}
         className="text-xs font-semibold text-muted-foreground underline underline-offset-4 disabled:opacity-50">إلغاء الاختيار</button>}
     </div>
   );

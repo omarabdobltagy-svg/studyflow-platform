@@ -13,12 +13,12 @@ type LayerId = "overview" | "tasks" | "goals" | "schedule" | "learning" | "insig
 type SceneNode = { id: LayerId; label: string; value: string; color: number };
 
 const layerMeta: Record<LayerId, { title: string; eyebrow: string; description: string; path?: string }> = {
-  overview: { title: "مركز القيادة", eyebrow: "COMMAND CENTER", description: "صورة واحدة لما يحتاج انتباهك الآن." },
-  tasks: { title: "إدارة المهام", eyebrow: "TASK DATABASE", description: "التقط المهمة، صنّفها، حدّد أولويتها، وأنهِها من نفس المساحة.", path: "/tasks" },
-  goals: { title: "الأهداف والمراحل", eyebrow: "GOAL SYSTEM", description: "تابع العلاقة بين الهدف ومراحله والمهام التي تحرّكه.", path: "/goals" },
-  schedule: { title: "الجدول الزمني", eyebrow: "TIME LAYER", description: "المواعيد القادمة والمهام ذات التاريخ في خط زمني واحد.", path: "/calendar" },
-  learning: { title: "خريطة التعلّم", eyebrow: "LEARNING GRAPH", description: "المواد والمدرسون ونقطة التقدم والتراكم المسجل.", path: "/study" },
-  insights: { title: "مؤشرات الأداء", eyebrow: "PROGRESS INTELLIGENCE", description: "قراءة تشغيلية من سجلاتك الفعلية، وليست حكمًا على مستوى إتقانك.", path: "/analytics" },
+  overview: { title: "مركز القيادة", eyebrow: "نظرة اليوم", description: "صورة واحدة لما يحتاج انتباهك الآن." },
+  tasks: { title: "إدارة المهام", eyebrow: "إدارة المهام", description: "التقط المهمة، صنّفها، حدّد أولويتها، وأنهِها من نفس المساحة.", path: "/tasks" },
+  goals: { title: "الأهداف والمراحل", eyebrow: "منظومة الأهداف", description: "تابع العلاقة بين الهدف ومراحله والمهام التي تحرّكه.", path: "/goals" },
+  schedule: { title: "الجدول الزمني", eyebrow: "المواعيد والجدول", description: "المواعيد القادمة والمهام ذات التاريخ في خط زمني واحد.", path: "/calendar" },
+  learning: { title: "خريطة التعلّم", eyebrow: "مسار التعلّم", description: "المواد والمدرسون ونقطة التقدم والتراكم المسجل.", path: "/study" },
+  insights: { title: "مؤشرات الأداء", eyebrow: "مؤشرات التقدم", description: "قراءة تشغيلية من سجلاتك الفعلية، وليست حكمًا على مستوى إتقانك.", path: "/analytics" },
 };
 
 const cairoDateKey = (value: Date | string) =>
@@ -114,9 +114,9 @@ export default function PlannerOperationsScene() {
 
   const nodes = useMemo<SceneNode[]>(() => [
     { id: "overview", label: "اليوم", value: String(openTasks.length), color: 0xc0a06a },
-    { id: "tasks", label: "المهام", value: String(openTasks.length), color: 0x8b9b91 },
+    { id: "tasks", label: "المهام", value: String(openTasks.length), color: 0x9c7469 },
     { id: "goals", label: "الأهداف", value: String(activeGoals.length), color: 0xb98653 },
-    { id: "schedule", label: "الجدول", value: String(upcomingEvents.length), color: 0x8292a3 },
+    { id: "schedule", label: "الجدول", value: String(upcomingEvents.length), color: 0xb99b70 },
     { id: "learning", label: "التعلّم", value: String(profileSubjectIds.length ?? 0), color: 0x9b7772 },
     { id: "insights", label: "الأداء", value: completionRate + "%", color: 0xa19a8b },
   ], [openTasks.length, activeGoals.length, upcomingEvents.length, profileSubjectIds.length, completionRate]);
@@ -197,10 +197,10 @@ export default function PlannerOperationsScene() {
   const activeMeta = layerMeta[layer];
 
   return (
-    <section className="sf-ops-workspace mb-7" aria-label="مساحة التشغيل التفاعلية">
+    <section className="sf-ops-workspace mb-7" aria-label="مساحة التشغيل التفاعلية" data-testid="studyflow-live-workspace" data-workspace-mode="interactive">
       <div className="sf-ops-heading">
         <div>
-          <p className="eyebrow">STUDYFLOW / INTERACTIVE WORKSPACE</p>
+          <p className="eyebrow">مساحة العمل التفاعلية</p>
           <h2>مساحة تشغيل خطتك</h2>
           <p>كل طبقة متصلة ببياناتها وإجراءاتها. اختر عقدة من المشهد أو افتح القسم مباشرة.</p>
         </div>
@@ -217,7 +217,7 @@ export default function PlannerOperationsScene() {
       <div className="sf-ops-grid">
         <section className="sf-ops-scene-card">
           <div className="sf-ops-card-heading">
-            <div><p>FUNCTION MAP</p><h3>خريطة الوظائف</h3></div>
+            <div><p>خريطة الوظائف</p><h3>خريطة الوظائف</h3></div>
             <span><Layers3 className="size-4" /> 6 طبقات مترابطة</span>
           </div>
           <FunctionScene nodes={nodes} selectedId={layer} onSelect={onSceneSelect} />
@@ -261,7 +261,7 @@ export default function PlannerOperationsScene() {
           {layer === "tasks" && (
             <div className="sf-ops-layer-body">
               <form className="sf-ops-capture" onSubmit={submitTask}>
-                <div className="sf-ops-capture-title"><Plus className="size-4" /><b>التقاط سريع لمهمة</b><span>Quick capture</span></div>
+                <div className="sf-ops-capture-title"><Plus className="size-4" /><b>التقاط سريع لمهمة</b><span>إضافة سريعة</span></div>
                 <input value={draftTitle} onChange={event => setDraftTitle(event.target.value)} maxLength={220} placeholder="اكتب المهمة… مثل: حل 20 سؤالًا على الدرس" aria-label="عنوان المهمة الجديدة" />
                 <div className="sf-ops-capture-fields">
                   <select value={draftCategory} onChange={event => setDraftCategory(event.target.value)} aria-label="تصنيف المهمة">
@@ -295,7 +295,7 @@ export default function PlannerOperationsScene() {
           {layer === "goals" && (
             <div className="sf-ops-layer-body">
               <form className="sf-ops-capture" onSubmit={submitGoal}>
-                <div className="sf-ops-capture-title"><Target className="size-4" /><b>إنشاء هدف سريع</b><span>Goal capture</span></div>
+                <div className="sf-ops-capture-title"><Target className="size-4" /><b>إنشاء هدف سريع</b><span>إنشاء هدف</span></div>
                 <div className="sf-ops-capture-fields sf-ops-create-single">
                   <input value={draftGoalTitle} onChange={event => setDraftGoalTitle(event.target.value)} maxLength={180} placeholder="ما النتيجة التي تريد الوصول إليها؟" aria-label="عنوان الهدف الجديد" />
                   <Button type="submit" disabled={!draftGoalTitle.trim() || createGoal.isPending} size="sm"><Plus className="size-4" />إنشاء هدف</Button>
@@ -314,7 +314,7 @@ export default function PlannerOperationsScene() {
           {layer === "schedule" && (
             <div className="sf-ops-layer-body">
               <form className="sf-ops-capture" onSubmit={submitEvent}>
-                <div className="sf-ops-capture-title"><CalendarDays className="size-4" /><b>إضافة موعد</b><span>Schedule capture</span></div>
+                <div className="sf-ops-capture-title"><CalendarDays className="size-4" /><b>إضافة موعد</b><span>تفاصيل الموعد</span></div>
                 <div className="sf-ops-capture-fields sf-ops-create-single">
                   <input value={draftEventTitle} onChange={event => setDraftEventTitle(event.target.value)} maxLength={180} placeholder="عنوان الموعد أو جلسة المذاكرة" aria-label="عنوان الموعد الجديد" />
                   <input type="datetime-local" value={draftEventAt} onChange={event => setDraftEventAt(event.target.value)} aria-label="تاريخ ووقت الموعد" />
@@ -344,7 +344,7 @@ export default function PlannerOperationsScene() {
                   })}</div>
                   {learningChoices.length > 0 && (
                     <section className="sf-ops-learning-editor">
-                      <div className="sf-ops-capture-title"><GraduationCap className="size-4" /><b>تحديث تقدم درس</b><span>LESSON TRACKER</span></div>
+                      <div className="sf-ops-capture-title"><GraduationCap className="size-4" /><b>تحديث تقدم درس</b><span>متابعة الدرس</span></div>
                       <div className="sf-ops-learning-selects">
                         <select value={learningSubjectId} onChange={event => { setLearningSubject(event.target.value); setLearningLesson(""); setLearningDraft({ key: "", steps: [] }); }} aria-label="اختيار المادة">
                           {profileSubjectIds.map((subjectId: string) => <option key={subjectId} value={subjectId}>{getSIESubject(subjectId)?.nameAr || subjectId}</option>)}
@@ -452,7 +452,7 @@ function FunctionScene({ nodes, selectedId, onSelect }: { nodes: SceneNode[]; se
       const keyLight = new THREE.PointLight(0xc9a56a, 22, 12);
       keyLight.position.set(-2.5, 2.2, 3);
       scene.add(keyLight);
-      const cyanLight = new THREE.PointLight(0x8999a7, 14, 12);
+      const cyanLight = new THREE.PointLight(0xb99272, 14, 12);
       cyanLight.position.set(2.5, -1.6, 2);
       scene.add(cyanLight);
 

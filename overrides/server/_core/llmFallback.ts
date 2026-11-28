@@ -31,6 +31,9 @@ export async function invokeLLMWithNvidiaFallback(params: InvokeParams): Promise
   }
 
   const choice = primary.choices?.[0];
+  // A tool-call-only assistant message is a valid intermediate agent step,
+  // not an empty completion that should be replaced by the fallback model.
+  if (choice?.message?.tool_calls?.length) return primary;
   const content = contentAsText(choice?.message?.content ?? "");
   if (!content.trim() || choice?.finish_reason === "length") {
     console.warn("[StudyFlow AI] Primary provider returned an empty or truncated response; invoking NVIDIA fallback.", {
