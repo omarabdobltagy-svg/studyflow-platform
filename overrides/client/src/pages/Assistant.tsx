@@ -84,12 +84,12 @@ export default function Assistant() {
   const [streamingThreadId, setStreamingThreadId] = useState<string | null>(null);
   const [pendingAttachments, setPendingAttachments] = useState<AssistantTextAttachment[]>([]);
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
-  const assistantThreadsQuery = trpc.assistant.threads.list.useQuery(undefined, {
+  const assistantThreadsQuery = trpc.ai.threads.list.useQuery(undefined, {
     staleTime: 30_000,
     refetchOnWindowFocus: false,
   });
-  const saveAssistantThread = trpc.assistant.threads.save.useMutation();
-  const deleteAssistantThread = trpc.assistant.threads.delete.useMutation();
+  const saveAssistantThread = trpc.ai.threads.save.useMutation();
+  const deleteAssistantThread = trpc.ai.threads.delete.useMutation();
   const activeThread = useMemo(
     () => threads.find(thread => thread.id === selectedId) || threads[0],
     [threads, selectedId],
@@ -353,7 +353,7 @@ export default function Assistant() {
       const completedMessages: ChatMessage[] = [
         ...activeThread.messages,
         userMessage,
-        { role: "assistant", content: streamedText },
+        { role: "assistant" as const, content: streamedText },
       ].slice(-40);
       const completedThread = {
         ...activeThread,
