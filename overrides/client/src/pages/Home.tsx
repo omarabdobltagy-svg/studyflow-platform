@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
+import ExamMissionScene from "@/components/ExamMissionScene";
 import QueryErrorNotice from "@/components/QueryErrorNotice";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -789,6 +790,13 @@ export default function Home() {
               </Button>
             )}
           </section>
+        )}
+        {upcomingExams.length > 0 && (
+          <ExamMissionScene
+            exam={upcomingExams[0]}
+            daysUntil={daysUntilExam(upcomingExams[0].date)}
+            upcomingExams={upcomingExams}
+          />
         )}
         {upcomingExams.length > 0 && (
           <section className="sf-home-exam-calendar" aria-labelledby="sf-home-exam-calendar-title">
