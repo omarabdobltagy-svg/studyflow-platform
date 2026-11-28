@@ -1411,3 +1411,22 @@ html body .sf-login-screen.sf-shell-v3 .sf-security-mark span {
   border-color: color-mix(in srgb,var(--sf-wine) 40%,var(--border)) !important;
   background: color-mix(in srgb,var(--sf-wine) 7%,var(--card)) !important;
 }
+
+
+/* Beat the legacy feature-experience.css !important background on the home AI card. */
+html body .sf-shell-v3 .sf-main .sf-home-ai-decision {
+  border: 1px solid rgba(209,183,123,.24) !important;
+  border-radius: 25px !important;
+  color: #F4EDE7 !important;
+  background:
+    radial-gradient(ellipse at 92% 0%,rgba(209,183,123,.14),transparent 32%),
+    radial-gradient(ellipse at 5% 100%,rgba(140,66,76,.28),transparent 44%),
+    linear-gradient(125deg,#211A19 0%,#352326 58%,#211A19 100%) !important;
+  background-image:
+    radial-gradient(ellipse at 92% 0%,rgba(209,183,123,.14),transparent 32%),
+    radial-gradient(ellipse at 5% 100%,rgba(140,66,76,.28),transparent 44%),
+    linear-gradient(125deg,#211A19 0%,#352326 58%,#211A19 100%) !important;
+  box-shadow: 0 26px 62px -44px rgba(0,0,0,.68), inset 0 1px rgba(255,255,255,.06) !important;
+}
+html body .sf-shell-v3 .sf-main .sf-home-ai-decision .sf-home-ai-decision-copy h3 { color: #FFF8F2 !important; }
+html body .sf-shell-v3 .sf-main .sf-home-ai-decision .sf-home-ai-decision-copy > p { color: #C8BBAF !important; }
