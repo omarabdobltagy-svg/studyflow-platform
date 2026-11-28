@@ -45,6 +45,24 @@ async function readPageState(page) {
         const style = getComputedStyle(card);
         return { color: style.backgroundColor, image: style.backgroundImage };
       })(),
+      loginSubmitSurface: (() => {
+        const button = document.querySelector(".sf-login-screen .sf-auth-submit");
+        if (!button) return null;
+        const style = getComputedStyle(button);
+        return { color: style.color, background: style.backgroundColor, image: style.backgroundImage };
+      })(),
+      loginActiveTabSurface: (() => {
+        const button = document.querySelector(".sf-login-screen .sf-auth-mode-tabs button[aria-selected='true']");
+        if (!button) return null;
+        const style = getComputedStyle(button);
+        return { color: style.color, background: style.backgroundColor, image: style.backgroundImage };
+      })(),
+      loginBrandSurface: (() => {
+        const mark = document.querySelector(".sf-login-screen .sf-login-brand-mark-v4");
+        if (!mark) return null;
+        const style = getComputedStyle(mark);
+        return { color: style.color, background: style.backgroundColor, image: style.backgroundImage };
+      })(),
       screenWidth: window.innerWidth,
       documentWidth: document.documentElement.scrollWidth,
       bodyWidth: document.body.scrollWidth,
@@ -134,6 +152,25 @@ async function run() {
         initialState.loginCardSurface
           && (initialState.loginCardSurface.image !== "none" || initialState.loginCardSurface.color !== "rgba(0, 0, 0, 0)"),
         viewport.name + ": login card surface is not rendered",
+      );
+      assert(
+        initialState.loginCardSurface.image.includes("41, 34, 32")
+          && !initialState.loginCardSurface.image.includes("27, 35, 23"),
+        viewport.name + ": legacy green login card palette is still active: " + JSON.stringify(initialState.loginCardSurface),
+      );
+      assert(
+        initialState.loginSubmitSurface?.image.includes("140, 66, 76")
+          && !initialState.loginSubmitSurface.image.includes("86, 111, 230")
+          && !initialState.loginSubmitSurface.image.includes("216, 241, 124"),
+        viewport.name + ": login button is not using the wine brand palette: " + JSON.stringify(initialState.loginSubmitSurface),
+      );
+      assert(
+        initialState.loginActiveTabSurface?.background.includes("140, 66, 76"),
+        viewport.name + ": active auth tab is not using the wine brand palette: " + JSON.stringify(initialState.loginActiveTabSurface),
+      );
+      assert(
+        initialState.loginBrandSurface?.image.includes("228, 212, 184"),
+        viewport.name + ": login brand mark is not using the muted gold palette: " + JSON.stringify(initialState.loginBrandSurface),
       );
       assert(initialState.inputCount >= 2, viewport.name + ": login fields are missing");
       assert(
