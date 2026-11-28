@@ -59,10 +59,12 @@ type PlanStep = {
   day: string;
   title: string;
   detail: string;
+  examFocus?: boolean;
+  examFocusDate?: string;
   studyMethod?: { stages: Array<{ title: string; instruction: string; reason: string; optional?: boolean }>; completionCriteria: string; teacherPolicyNote?: string };
   minutes: number;
   category: string;
-  phaseId?: "backlog" | "teacher_sync" | "steady" | "review_later";
+  phaseId?: "exam_focus" | "backlog" | "teacher_sync" | "steady" | "review_later";
   priority?: "critical" | "high" | "medium" | "low";
   priorityScore?: number;
   priorityReason?: string;
@@ -192,11 +194,12 @@ function displayPlanStepTitle(step: PlanStep, subjectIds: string[]): string {
   const curriculum = getPlanStepCurriculum(step, subjectIds);
   if (curriculum) {
     const isEnglish = curriculum.subjectId === "ENG1_G2_BAC";
+    const unitTitle = isEnglish ? curriculum.unitTitle : displayCurriculumTitle(curriculum.unitTitle);
     const unitLabel = curriculum.unitNumber
       ? (isEnglish ? "Unit " : "الوحدة ") + curriculum.unitNumber.toLocaleString(isEnglish ? "en" : "ar-EG")
-        + (curriculum.unitTitle ? " — " + displayCurriculumTitle(curriculum.unitTitle) : "")
-      : curriculum.unitTitle
-        ? (curriculum.lessonType === "story" ? "القصة المقررة · " : "") + displayCurriculumTitle(curriculum.unitTitle)
+        + (unitTitle ? " — " + unitTitle : "")
+      : unitTitle
+        ? (!isEnglish && curriculum.lessonType === "story" ? "القصة المقررة · " : "") + unitTitle
         : "";
     const lessonSequence = isEnglish
       ? curriculum.branchId === "ENG_VOCABULARY" ? "Lesson 1 — Vocabulary"

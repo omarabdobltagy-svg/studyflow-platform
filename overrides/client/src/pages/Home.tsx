@@ -675,11 +675,13 @@ export default function Home() {
                     const branch = curriculum && nodeId
                       ? getSIECheckpointProgressBranches(curriculum.subjectId).find(item => item.choices.some(choice => choice.nodeId === nodeId))
                       : null;
-                    const unitLabel = curriculum?.subjectId === "ENG1_G2_BAC" && curriculum.unitNumber
-                      ? "Unit " + curriculum.unitNumber + " — " + displayCurriculumTitle(curriculum.unitTitle)
+                    const isEnglishCurriculum = curriculum?.subjectId === "ENG1_G2_BAC";
+                    const unitTitle = isEnglishCurriculum ? curriculum?.unitTitle : displayCurriculumTitle(curriculum?.unitTitle);
+                    const unitLabel = isEnglishCurriculum && curriculum?.unitNumber
+                      ? "Unit " + curriculum.unitNumber + (unitTitle ? " — " + unitTitle : "")
                       : curriculum?.unitNumber
                         ? "الوحدة " + curriculum.unitNumber.toLocaleString("ar-EG")
-                        : curriculum?.unitTitle || "";
+                        : unitTitle || "";
                     const lessonLabel = curriculum?.subjectId === "ENG1_G2_BAC"
                       ? curriculum.branchId === "ENG_VOCABULARY" ? "Lesson 1 — Vocabulary"
                         : curriculum.branchId === "ENG_GRAMMAR" ? "Lesson " + (curriculum.lessonNumber || "2") + " — Grammar"
@@ -688,7 +690,7 @@ export default function Home() {
                     const displayStepTitle = curriculum?.subjectId === "ENG1_G2_BAC" ? curriculum.lesson : step.title;
                     return (
                       <article key={step.plannerTaskId ?? step.existingTask?.id ?? step.sourceStepIndex ?? index}
-                        className={"sf-home-study-step " + (isDone ? "is-done" : isNext ? "is-next" : "is-upcoming")}
+                        className={"sf-home-study-step " + (step.examFocus ? "is-exam-focus " : "") + (isDone ? "is-done" : isNext ? "is-next" : "is-upcoming")}
                         data-testid={"home-study-step-" + index}>
                         <div className="sf-home-study-step-marker" aria-hidden="true">
                           {isDone ? <CheckCircle2 className="size-4" /> : <span>{(index + 1).toLocaleString("ar-EG")}</span>}

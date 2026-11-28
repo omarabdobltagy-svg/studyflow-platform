@@ -1612,6 +1612,13 @@ export function applyDailyPlanDepth(
       }
     }
   }
+  if (urgentExam && !urgentExam.scope) {
+    for (const item of dailyBacklogItems.filter(candidate => candidate.subjectId === urgentExam.exam.subjectId)) {
+      if (snapshot.completedNodeIds.has(item.choice.nodeId)) continue;
+      urgentExamNodeIds.add(item.choice.nodeId);
+      urgentExamLearningStateByNode.set(item.choice.nodeId, item.choice.learningState ?? "not_recorded");
+    }
+  }
   const representedNodeIds = new Set([
     ...steps.flatMap(step => step.curriculumNodeIds ?? []),
     ...urgentExamNodeIds,
@@ -1939,7 +1946,9 @@ export function applyDailyPlanDepth(
         examFocusDate: urgentExam.exam.date,
         priority: "critical",
         priorityScore: 100,
-        priorityReason: (urgentExam.daysUntil === 0 ? "امتحان اليوم" : "امتحان غدًا") + "؛ هذا الدرس ضمن النطاق المستقل المحفوظ لمادة " + urgentExam.exam.subjectName + ".",
+        priorityReason: (urgentExam.daysUntil === 0 ? "امتحان اليوم" : "امتحان غدًا") + " في مادة " + urgentExam.exam.subjectName + (urgentExam.scope
+          ? "؛ هذا الدرس ضمن النطاق الذي حفظته لهذا الامتحان."
+          : "؛ هذه خطوة من المتراكم المعروف للمادة فقط، وليست تأكيدًا بأنها ضمن محتوى الامتحان."),
       };
     }
     if (!lesson) return step;
@@ -2051,28 +2060,28 @@ function buildStudentExecutionStrategy(
     },
     {
       id: "teacher_sync" as const,
-      title: "1. ابدأ بالدروس غير المشاهدة المرتبطة بحصة قريبة",
+      title: "2. جهّز الدروس المرتبطة بحصة قريبة",
       defaultPurpose: "نبدأ بالدروس التي لم تشاهد شرحها بعد، ونراعي موعد الحصة المسجل عندما يكون مرتبطًا بهذا الدرس.",
       completionCriteria: "مشاهدة شرح المدرس للدرس، ثم مذاكرته من المصدر وتحديث حالة التقدم.",
       empty: "لا توجد دروس غير مشاهدة مرتبطة بحصة قريبة.",
     },
     {
       id: "steady" as const,
-      title: "2. استكمل بقية الدروس الجديدة غير المشاهدة",
+      title: "3. استكمل بقية الدروس الجديدة غير المشاهدة",
       defaultPurpose: "نستكمل الدروس التي لم تشاهد شرحها في بقية الفروع والمواد، مع الحفاظ على ترتيب المنهج.",
       completionCriteria: "مشاهدة شرح الدرس ومذاكرته من المصدر ثم تحديث حالته.",
       empty: "لا توجد دروس جديدة أخرى غير مشاهدة ضمن سعة الخطة الحالية.",
     },
     {
       id: "backlog" as const,
-      title: "3. الالتزامات المفتوحة الأخرى",
+      title: "4. الالتزامات المفتوحة الأخرى",
       defaultPurpose: "بعد ترتيب الدروس الجديدة غير المشاهدة، ننفذ الالتزامات المفتوحة المؤكدة التي لا ترتبط بدرس جديد غير مشاهد.",
       completionCriteria: "تحديث حالة كل التزام بعد تنفيذه، وعدم اعتبار المهمة وحدها دليلًا على اكتمال درس.",
       empty: "لا توجد التزامات مفتوحة أخرى تحتاج إلى إدراجها.",
     },
     {
       id: "review_later" as const,
-      title: "4. المذاكرة والمراجعة بعد استكمال المنهج الجديد",
+      title: "5. المذاكرة والمراجعة بعد استكمال المنهج الجديد",
       defaultPurpose: "هذه الدروس شوهد شرحها بالفعل أو سبق مذاكرتها؛ نؤجلها حتى ننتهي من الدروس التي لم نشاهد شرحها، ثم نعود إليها للمذاكرة أو المراجعة.",
       completionCriteria: "بعد استكمال الدروس الجديدة، ارجع إلى المصدر وذاكر الدروس التي شاهدت شرحها أو راجع الدروس التي تحتاج تثبيتًا.",
       empty: "لا توجد مراجعات مؤجلة؛ الأولوية الحالية للدروس التي لم يُشاهد شرحها.",
