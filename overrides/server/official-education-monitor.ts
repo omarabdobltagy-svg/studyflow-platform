@@ -291,8 +291,13 @@ export async function scanOfficialEducationSources(
   };
 }
 
+export type HighConfidenceOfficialPlanningSignal = Omit<OfficialEducationUpdate, "confidence" | "impactType"> & {
+  confidence: "high";
+  impactType: Exclude<OfficialEducationImpact, "general">;
+};
+
 /** Only these source-backed, explicit and recent signals may invalidate a stored plan. */
-export function isHighConfidenceOfficialPlanningSignal(value: unknown): value is OfficialEducationUpdate {
+export function isHighConfidenceOfficialPlanningSignal(value: unknown): value is HighConfidenceOfficialPlanningSignal {
   if (!value || typeof value !== "object") return false;
   const update = value as Partial<OfficialEducationUpdate>;
   return update.confidence === "high"
