@@ -36,7 +36,13 @@ async function readPageState(page) {
       bodyText: (document.body?.innerText ?? "").trim().slice(0, 1600),
       themeClass: document.documentElement.className,
       primary: getComputedStyle(document.documentElement).getPropertyValue("--primary").trim(),
+      wine: getComputedStyle(document.documentElement).getPropertyValue("--sf-wine").trim(),
+      gold: getComputedStyle(document.documentElement).getPropertyValue("--sf-gold-bright").trim(),
       bodyBackground: getComputedStyle(document.body).backgroundColor,
+      loginCardBackground: (() => {
+        const card = document.querySelector(".sf-login-form-card");
+        return card ? getComputedStyle(card).backgroundColor : null;
+      })(),
       screenWidth: window.innerWidth,
       documentWidth: document.documentElement.scrollWidth,
       bodyWidth: document.body.scrollWidth,
@@ -118,11 +124,11 @@ async function run() {
         throw new Error(viewport.name + ": login UI did not render. " + JSON.stringify(diagnostic));
       }
 
-      const allowedPrimaryTokens = ["#8C424C", "#D1B77B"];
-      assert(
-        allowedPrimaryTokens.includes(initialState.primary.toUpperCase()),
-        viewport.name + ": unexpected primary theme token " + initialState.primary,
-      );
+      assert(initialState.themeClass.split(/\\s+/).includes("dark"), viewport.name + ": expected dark premium theme");
+      assert(initialState.primary.toUpperCase() === "#D1B77B", viewport.name + ": gold primary token is missing");
+      assert(initialState.wine.toUpperCase() === "#A95861", viewport.name + ": wine brand token is missing");
+      assert(initialState.gold.toUpperCase() === "#D1B77B", viewport.name + ": gold brand token is missing");
+      assert(initialState.loginCardBackground && initialState.loginCardBackground !== "rgba(0, 0, 0, 0)", viewport.name + ": login card surface is not rendered");
       assert(initialState.inputCount >= 2, viewport.name + ": login fields are missing");
       assert(
         initialState.documentWidth <= viewport.width + 2,
