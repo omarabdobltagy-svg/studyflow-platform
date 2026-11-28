@@ -12,14 +12,14 @@ The StudyFlow application is built from `Dockerfile`, which extracts the source 
 
 ## Database migrations
 
-The Preview service pre-deploy command runs `node scripts/migrate-local-auth.mjs`.
+Both the Preview and Production app services run `node scripts/migrate-local-auth.mjs` as their Railway pre-deploy command, each against its own separate `DATABASE_URL`.
 
 That additive, idempotent script:
 - Adds the local account columns and unique username index if missing.
 - Creates or validates `studentActivityEvents`, including its columns, indexes and user foreign key. This table is used by the activity feed and event logging.
 - Stores migration markers in `studyflow_migrations` and refuses to guess account ownership when legacy account data is ambiguous.
 
-The event table existed in the Drizzle journal, but the Preview pre-deploy command did not run the Drizzle migration runner. The additive check closes that gap without running every historical migration or using `db:push`. Future schema migrations still require review.
+The event table existed in the Drizzle journal, but the app services do not run the full Drizzle migration runner during deployment. This hook applies only the reviewed additive schema checks needed by this application, without replaying historical migrations or using `db:push`. Future schema migrations still require review against the live production schema.
 
 ## Local StudyFlow accounts
 
