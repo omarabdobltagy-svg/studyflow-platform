@@ -2,6 +2,8 @@ import { z } from "zod";
 import { getSIECheckpointProgressBranches, getSIESubject, getSIETeacher, matchSIECheckpointTask, normalizeSIECheckpointFrontier, type SIECheckpointTaskMatch } from "@shared/sie-catalog";
 import { calculateLearningGap } from "@shared/sie-learning-progress";
 import { getDateKeyInTimeZone } from "@shared/date-time";
+import { getCairoSecondYearBaccalaureateExams } from "@shared/cairo-baccalaureate-exam-calendar";
+import { getMonthlyExamScopeRecord } from "@shared/monthly-exam-scope";
 import { invokeLLM, invokeNvidiaLLM } from "./_core/llm";
 import { isPrimaryProviderFallbackEligible } from "./_core/llmFallback";
 import { updateAIActivity } from "./aiActivity";
@@ -159,19 +161,21 @@ const planSchema = z.object({
     objective: z.string().trim().min(10).max(900),
     rationale: z.string().trim().min(10).max(900),
     phases: z.array(z.object({
-      id: z.enum(["backlog", "teacher_sync", "steady", "review_later"]),
+      id: z.enum(["exam_focus", "backlog", "teacher_sync", "steady", "review_later"]),
       title: z.string().trim().min(3).max(140),
       purpose: z.string().trim().min(8).max(500),
       actions: z.array(z.string().trim().min(3).max(300)).max(8).default([]),
       completionCriteria: z.string().trim().min(5).max(400),
-    })).max(4).optional(),
+    })).max(5).optional(),
   }).optional(),
   durationLabel: z.string().trim().min(2).max(100),
   steps: z.array(z.object({
     day: z.string().trim().max(60).default(""),
     title: z.string().trim().min(2).max(180),
     detail: z.string().trim().min(5).max(1_200),
-    phaseId: z.enum(["backlog", "teacher_sync", "steady", "review_later"]).optional(),
+    phaseId: z.enum(["exam_focus", "backlog", "teacher_sync", "steady", "review_later"]).optional(),
+    examFocus: z.boolean().default(false),
+    examFocusDate: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/).optional(),
     studyMethod: z.object({
       stages: z.array(z.object({
         title: z.string().trim().min(2).max(120),
@@ -1465,6 +1469,24 @@ export function applyDailyPlanDepth(
   // never whether an eligible curriculum point is silently removed from the plan.
   const snapshot = buildPlannerProgressSnapshot(profile);
   const selection = (profile.selection ?? {}) as Record<string, any>;
+  const todayCairo = getDateKeyInTimeZone(new Date(), "Africa/Cairo");
+  const nearestExam = getCairoSecondYearBaccalaureateExams(profile)
+    .filter(exam => exam.date >= todayCairo)
+    .sort((left, right) => left.date.localeCompare(right.date))[0] ?? null;
+  const nearestExamDays = nearestExam
+    ? Math.max(0, getCalendarDaysBetween(todayCairo, nearestExam.date))
+    : Number.POSITIVE_INFINITY;
+  const urgentExam = nearestExam && nearestExamDays <= 1
+    ? {
+        exam: nearestExam,
+        daysUntil: nearestExamDays,
+        scope: getMonthlyExamScopeRecord(
+          (selection.monthlyExamScopes ?? {}) as Record<string, unknown>,
+          nearestExam.subjectId,
+          nearestExam.date,
+        ),
+      }
+    : null;
   const teacherChoices = (selection.teacherChoices ?? profile.teacherSelections ?? {}) as Record<string, string>;
   const teacherSchedules = (selection.teacherSchedules ?? {}) as Record<string, Array<{ dayOfWeek: number; startTime: string }>>;
   const subjectForStep = (step: GeneratedPlan["steps"][number]) => {
@@ -1547,7 +1569,53 @@ export function applyDailyPlanDepth(
   });
 
   const usedTaskIds = new Set(steps.map(step => step.existingTask?.id).filter((id): id is number => typeof id === "number"));
-  const representedNodeIds = new Set(steps.flatMap(step => step.curriculumNodeIds ?? []));
+  const urgentExamNodeIds = new Set<string>();
+  const urgentExamLearningStateByNode = new Map<string, StudentLessonState>();
+  const urgentExamScopeSteps: GeneratedPlan["steps"] = [];
+  if (urgentExam?.scope) {
+    const includedNodeIds = new Set(urgentExam.scope.includedNodeIds);
+    for (const branch of getPlanningBranches(urgentExam.exam.subjectId)) {
+      const progress = snapshot.branches.get(plannerBranchKey(urgentExam.exam.subjectId, branch.branchId));
+      const eligibleById = new Map((progress?.eligibleChoices ?? []).map(choice => [choice.nodeId, choice]));
+      for (const [index, choice] of branch.choices.entries()) {
+        if (!includedNodeIds.has(choice.nodeId) || snapshot.completedNodeIds.has(choice.nodeId)) continue;
+        const learningState = eligibleById.get(choice.nodeId)?.learningState ?? "not_recorded";
+        urgentExamNodeIds.add(choice.nodeId);
+        urgentExamLearningStateByNode.set(choice.nodeId, learningState);
+        const sourceLabel = urgentExam.scope.source === "school_confirmed" ? "نطاق مؤكد من المدرسة" : "نطاق حدده الطالب بنفسه";
+        const detail = learningState === "not_watched"
+          ? "هذا الدرس ضمن " + sourceLabel + " لامتحان " + urgentExam.exam.subjectName + " بتاريخ " + urgentExam.exam.date + ". ابدأ من مصدر الشرح المعتمد، ثم ذاكر الدرس وسجّل تقدمك."
+          : learningState === "not_recorded"
+            ? "هذا الدرس ضمن " + sourceLabel + " لامتحان " + urgentExam.exam.subjectName + ". حالة مذاكرتك غير مسجلة؛ راجع المصدر وحدّث الحالة بعد الاستعداد."
+            : "هذا الدرس ضمن " + sourceLabel + " لامتحان " + urgentExam.exam.subjectName + " بتاريخ " + urgentExam.exam.date + ". قدّم مراجعته الآن بسبب قرب الامتحان، حتى لو كانت حالته watched_only أو needs_review.";
+        urgentExamScopeSteps.push(planSchema.shape.steps.element.parse({
+          day: "",
+          title: (getSIESubject(urgentExam.exam.subjectId)?.nameAr ?? urgentExam.exam.subjectName) + " — " + branch.branchTitle + " — " + choice.title,
+          detail,
+          minutes: 0,
+          category: urgentExam.exam.subjectName + " · استعداد الامتحان",
+          curriculumNodeIds: [choice.nodeId],
+          phaseId: "exam_focus",
+          examFocus: true,
+          examFocusDate: urgentExam.exam.date,
+          priority: "critical",
+          priorityScore: 100 - index,
+          priorityReason: (urgentExam.daysUntil === 0 ? "امتحان اليوم" : "امتحان غدًا") + " في " + urgentExam.exam.subjectName
+            + "؛ هذه الخطوة ضمن " + sourceLabel
+            + (urgentExam.exam.schoolConfirmed ? "." : "، وجدول مديرية القاهرة ما زال مقترحًا وغير مؤكد من المدرسة."),
+          difficulty: "unknown",
+          lessonSize: "unknown",
+          difficultyBasis: "unknown",
+          difficultyConfidence: "low",
+          sourcePages: [],
+        }));
+      }
+    }
+  }
+  const representedNodeIds = new Set([
+    ...steps.flatMap(step => step.curriculumNodeIds ?? []),
+    ...urgentExamNodeIds,
+  ]);
   const usedTitles = new Set(steps.map(step => normalizePlannerLessonText(step.title)));
 
   // Group verified review segments from one teacher video into one parent task.
@@ -1561,11 +1629,14 @@ export function applyDailyPlanDepth(
 
   // A review video may help either a lesson the student marked for review
   // or a lesson whose explanation was watched but not yet studied.
-  const reviewEligibleNodeIds = new Set(
-    dailyBacklogItems
+  const reviewEligibleNodeIds = new Set([
+    ...dailyBacklogItems
       .filter(item => item.choice.learningState === "needs_review" || item.choice.learningState === "watched_only")
       .map(item => item.choice.nodeId),
-  );
+    ...[...urgentExamLearningStateByNode.entries()]
+      .filter(([, state]) => state === "needs_review" || state === "watched_only")
+      .map(([nodeId]) => nodeId),
+  ]);
   const analyzedVideos = getSelectedTeacherRevisionUpdates(profile, rawTeacherVideos as any[]);
   for (const video of analyzedVideos) {
     const teacher = getSIETeacher(String(video.teacherId));
@@ -1820,7 +1891,7 @@ export function applyDailyPlanDepth(
     });
   });
 
-  const candidates: GeneratedPlan["steps"] = [...openTaskSteps, ...videoTopicSteps, ...steps, ...nextChoiceSteps];
+  const candidates: GeneratedPlan["steps"] = [...openTaskSteps, ...videoTopicSteps, ...urgentExamScopeSteps, ...steps, ...nextChoiceSteps];
   const seenTaskIds = new Set<number>();
   const seenNodes = new Set<string>();
   const deduplicated = candidates.filter(step => {
@@ -1857,7 +1928,20 @@ export function applyDailyPlanDepth(
     return lesson ? getPlannerLearningStatePriority(lesson.learningState) : 1;
   };
   const normalizeStateAndPhase = (step: GeneratedPlan["steps"][number]): GeneratedPlan["steps"][number] => {
-    const lesson = (step.curriculumNodeIds ?? []).map(nodeId => curriculumLearningByNode.get(nodeId)).find(Boolean);
+    const nodeIds = step.curriculumNodeIds ?? [];
+    const urgentNodeId = nodeIds.find(nodeId => urgentExamNodeIds.has(nodeId));
+    const lesson = nodeIds.map(nodeId => curriculumLearningByNode.get(nodeId)).find(Boolean);
+    if (urgentNodeId && urgentExam) {
+      return {
+        ...step,
+        phaseId: "exam_focus",
+        examFocus: true,
+        examFocusDate: urgentExam.exam.date,
+        priority: "critical",
+        priorityScore: 100,
+        priorityReason: (urgentExam.daysUntil === 0 ? "امتحان اليوم" : "امتحان غدًا") + "؛ هذا الدرس ضمن النطاق المستقل المحفوظ لمادة " + urgentExam.exam.subjectName + ".",
+      };
+    }
     if (!lesson) return step;
     if (lesson.learningState === "not_watched") {
       const hasSchedule = Array.isArray(teacherSchedules[lesson.subjectId]) && teacherSchedules[lesson.subjectId].length > 0;
@@ -1900,6 +1984,10 @@ export function applyDailyPlanDepth(
     const bucket = normalizedCandidates.filter(step => stateBand(step) === band).map(normalizeStateAndPhase);
     orderedSteps.push(...interleavePlannerItemsBySubject(bucket, profile.subjectIds ?? [], subjectForStep));
   }
+  const urgentNodeSet = urgentExamNodeIds;
+  const urgentSteps = orderedSteps.filter(step => (step.curriculumNodeIds ?? []).some(nodeId => urgentNodeSet.has(nodeId)));
+  const nonUrgentSteps = orderedSteps.filter(step => !(step.curriculumNodeIds ?? []).some(nodeId => urgentNodeSet.has(nodeId)));
+  orderedSteps.splice(0, orderedSteps.length, ...urgentSteps, ...nonUrgentSteps);
 
   const expectedBacklogCount = dailyBacklogNodeIds.size;
   const scheduledBacklogNodeIds = new Set(orderedSteps.flatMap(step => step.curriculumNodeIds ?? [])
@@ -1919,9 +2007,16 @@ export function applyDailyPlanDepth(
   const missingSummary = missingBacklogCount > 0
     ? "تعذّر إسناد " + missingBacklogCount + " نقطة متراكمة إلى مهمة؛ لم نعتبر التغطية كاملة."
     : "كل نقاط المتراكم المؤكد أُدرجت في الخطة.";
+  const examFocusSummary = urgentExam
+    ? "أولوية الامتحان الأقرب: " + urgentExam.exam.subjectName + " بتاريخ " + urgentExam.exam.date
+      + (urgentExam.scope
+        ? "؛ قُدّمت " + urgentExamNodeIds.size + " درسًا حدده الطالب صراحةً ضمن النطاق."
+        : "؛ لم يُحفظ نطاق مستقل، لذلك لا نخترع محتوى الامتحان.")
+    : "";
   const coverageNote = "المتراكم الفعلي: " + expectedBacklogCount + " نقطة مؤكدة؛ أُدرج " + coveredNodeCount
     + " منها في الخطة. " + missingSummary
     + (unresolvedSummary ? " " + unresolvedSummary : "")
+    + (examFocusSummary ? " " + examFocusSummary : "")
     + " فيديوهات المراجعة المطابقة للمحتوى: " + reviewVideoCount
     + ". لا تستبدل المراجعة العادية إلا مراجعة فيديو عالية الثقة تطابق درسًا مسجلًا بأنه يحتاج مراجعة.";
   return {
@@ -1940,12 +2035,20 @@ function buildStudentExecutionStrategy(
   const supplied = plan.executionStrategy;
   const suppliedPhases = new Map((supplied?.phases ?? []).map(phase => [phase.id, phase]));
   const stepsByPhase = {
+    exam_focus: plan.steps.filter(step => step.phaseId === "exam_focus"),
     backlog: plan.steps.filter(step => step.phaseId === "backlog"),
     teacher_sync: plan.steps.filter(step => step.phaseId === "teacher_sync"),
     steady: plan.steps.filter(step => step.phaseId === "steady" || !step.phaseId),
     review_later: plan.steps.filter(step => step.phaseId === "review_later"),
   };
   const phaseMeta = [
+    {
+      id: "exam_focus" as const,
+      title: "1. استعداد الامتحان الأقرب",
+      defaultPurpose: "نبدأ بالموضوعات المحددة لهذا الامتحان، ثم نعود إلى مسار التعلم العام.",
+      completionCriteria: "راجع موضوعات النطاق المستقل وحدّث حالة كل درس من المصدر.",
+      empty: "لا يوجد امتحان قريب يحتاج إلى مسار عاجل.",
+    },
     {
       id: "teacher_sync" as const,
       title: "1. ابدأ بالدروس غير المشاهدة المرتبطة بحصة قريبة",
@@ -1978,6 +2081,7 @@ function buildStudentExecutionStrategy(
   const phases = phaseMeta.map(meta => {
     const generated = suppliedPhases.get(meta.id);
     const defaultActions: Record<typeof meta.id, string[]> = {
+      exam_focus: ["راجع فقط الدروس التي حُفظت ضمن نطاق الامتحان", "حدّث حالة كل درس بعد الاستعداد"],
       backlog: ["نراجع الالتزامات المفتوحة المسجلة", "نبدأ بالأقرب استحقاقًا والأعلى أولوية"],
       teacher_sync: ["نستخدم جدول الحصة المسجل للتحضير قبل الموعد", "بعد الحصة نحدّث موضع شرح المدرس من ردك"],
       steady: ["نستكمل الدروس التي لم يُشاهد شرحها بعد", "نحدّث ترتيب الأولويات مع كل تقدم جديد"],
@@ -2014,8 +2118,12 @@ function buildStudentExecutionStrategy(
     };
   });
   return {
-    objective: "نبدأ بالدروس التي لم تشاهد شرحها، ونؤجل المذاكرة بعد الشرح والمراجعة إلى ما بعد استكمال المنهج الجديد.",
-    rationale: "يفصل StudyFlow بين مشاهدة شرح المدرس ومذاكرة الدرس. الحالة المسجلة لكل درس هي التي تحدد ترتيبه؛ لا تتقدم المراجعة على درس لم تشاهد شرحه، ولا نفترض حالة غير مسجلة.",
+    objective: stepsByPhase.exam_focus.length
+      ? "الاستعداد أولًا للامتحان الأقرب، ثم استكمال مسار التعلم العام بعده."
+      : "نبدأ بالدروس التي لم تشاهد شرحها، ونؤجل المذاكرة بعد الشرح والمراجعة إلى ما بعد استكمال المنهج الجديد.",
+    rationale: stepsByPhase.exam_focus.length
+      ? "هذا استثناء محدود بمادة وموعد ونطاق منفصل محفوظ؛ تقرير الطالب لا يُعرض كتأكيد رسمي، وموضع المدرس لا يُستخدم لاشتقاق محتوى الامتحان."
+      : "يفصل StudyFlow بين مشاهدة شرح المدرس ومذاكرة الدرس. الحالة المسجلة لكل درس هي التي تحدد ترتيبه؛ لا تتقدم المراجعة على درس لم تشاهد شرحه، ولا نفترض حالة غير مسجلة.",
     phases,
   };
 }
@@ -2108,14 +2216,14 @@ export async function generatePersonalPlan(
     : "لم يطلب المستخدم تخصيص الخطة بالملف الدراسي.").slice(0, 18_000);
   const system = [
     "أنت محرك التخطيط الدراسي داخل StudyFlow، ولست مساعد دردشة عام.",
-    "اللغة المعروضة للطالب إلزامية: اكتب العنوان والملخص وكل تفاصيل المهام والتصنيفات وأسباب الأولوية والمراحل والإرشادات والعادات بالعربية المصرية الواضحة. لا تكتب عناوين أو جملًا إنجليزية. اترك اسم لغة برمجة أو مصطلح علمي أصليًا بالإنجليزية فقط عندما يكون جزءًا ضروريًا من المادة، واشرحه بالعربية.",
+    "لغة العرض تتبع لغة المادة: العربي والتاريخ والبرمجة بالعربية الواضحة، أما الإنجليزي فيحتفظ بأسماء Unit وLesson وVocabulary وGrammar وعنوان الدرس الإنجليزي الرسمي كما في الكتالوج. لا تترجم أسماء دروس الإنجليزي ولا تستبدلها بعنوان عربي عام، واعرض Unit ثم Lesson ثم اسم الدرس.",
     "تغطية المواد إلزامية: اقرأ كل المواد المختارة في ملف الطالب. إذا كان لكل مادة درس مؤهل غير مكتمل أو التزام مفتوح، أدرج خطوة واحدة على الأقل من كل مادة قبل إضافة خطوات ثانية من مادة أخرى. وزّع الخطوات بالتناوب بين المواد ولا تجعل كثرة فروع مادة واحدة تستحوذ على الخطة. إذا لم توجد خطوة مؤهلة لمادة بعينها، لا تخترع درسًا واذكر نقص البيانات بوضوح.",
-    "اجعل أسماء الدروس مطابقة لعناوين المنهج الرسمية، لكن اعرضها بالعربية. لا تنقل أسماء الوحدات أو الدروس الإنجليزية كما هي في واجهة الطالب؛ استخدم معرفات curriculumNodeIds الصحيحة لربط الخطوة بعنوانها العربي الرسمي.",
+    "اربط كل خطوة بمعرف curriculumNodeId صحيح. استخدم الاسم الرسمي العربي للمواد العربية والتاريخ والبرمجة، والاسم الرسمي الإنجليزي كما هو للإنجليزي. لا تترجم Vocabulary أو Grammar أو عناوين Unit/Lesson.",
     "جودة الخطة لا تعتمد على قوة صياغة الطالب أو طول طلبه. استخرج النية حتى لو كان الطلب قصيرًا أو عاميًا أو غير مرتب، ثم استعن تلقائيًا ببيانات الملف والمنهج والتراكم والتقدم وسجل تنفيذ المهام والصعوبة التي صرّح بها الطالب والسياق المتاح.",
     "لا تطلب من الطالب إعادة كتابة بيانات موجودة في ملفه، ولا تنتظر منه هندسة برومبت احترافي. افترض أقل قدر ممكن، واذكر الافتراضات المؤثرة فقط داخل الملخص، ولا تخترع بيانات ناقصة.",
     "حلّل فجوة المنهج لكل فرع مستقل، وموضع الطالب مقابل موضع المدرس في الفرع نفسه، وما أكمله الطالب وما أجّله فعليًا، والصعوبة المسجلة من الطالب. لا تجمع فجوات الفروع المستقلة ولا تستنتج سلوكًا من غياب البيانات.",
     "افصل بين مشاهدة المحاضرة وبين مذاكرة الدرس وفهمه. آخر نقطة وصل إليها الطالب في الشرح تعني أنه حضر/شاهد حتى هذه النقطة فقط إذا كان سجل الفرع على lessonStateModelVersion=1. الحالة watched_only ليست إتمامًا للمذاكرة؛ أنشئ لها مهمة مراجعة المصدر وشرح الفكرة للنفس، ولا تطلب مشاهدة المحاضرة مرة أخرى. الحالة needs_review تعني أن الطالب ذاكر سابقًا لكنه يحتاج مراجعة، والحالة studied وحدها تعني أن أول دورة مذاكرة اكتملت بحسب تقريره الذاتي.",
-    "قاعدة أولوية إلزامية في الخطة اليومية: كل درس حالته not_watched (شرح المدرس لم يُشاهد) يسبق أي درس حالته watched_only أو needs_review. لا تضع watched_only أو needs_review في الجدول الحالي قبل تغطية كل الدروس غير المشاهدة في جميع المواد والفروع المختارة؛ ضعها في مرحلة review_later بعد استكمال المنهج الجديد. لا تخلط مشاهدة الشرح بمذاكرته، ولا تعِد تشغيل فيديو تمت مشاهدته. حالة not_recorded ليست دليلًا على عدم المشاهدة ولا على الإنجاز؛ لا تخمّنها، واجعلها بعد الدروس غير المشاهدة المعروفة. الحالة studied مكتملة ومستبعدة.",
+    "قاعدة الأولوية العامة: الدروس not_watched تسبق watched_only وneeds_review في الخطة اليومية المعتادة. الاستثناء الوحيد: إذا كان للطالب امتحان مسجل اليوم أو غدًا، وله نطاق مستقل محفوظ لذلك التاريخ، قدّم الدروس غير المكتملة التي حددها الطالب صراحةً داخل هذا النطاق في مرحلة exam_focus قبل القاعدة العامة. هذا النطاق تقرير ذاتي ما لم يكن مصدره school_confirmed؛ لا تصفه بأنه تأكيد رسمي. لا تستخدم موضع المدرس أو السنتر لاشتقاق نطاق الامتحان. إذا لم يوجد نطاق محفوظ، لا تخترع محتوى الامتحان؛ قدّم المتراكم المعروف في مادة الامتحان فقط مع وصفه بأنه استعداد عام للمادة لا قائمة دروس داخلة. بعد هذا الاستثناء الضيق، تبقى قاعدة not_watched ثم watched_only/needs_review سارية على بقية المواد والفروع. لا تخلط مشاهدة الشرح بمذاكرته ولا تعِد تشغيل فيديو تمت مشاهدته. حالة not_recorded ليست دليلًا على الإنجاز؛ والحالة studied مكتملة ومستبعدة.",
     "رتّب الدروس غير المشاهدة داخل كل فرع حسب تسلسل المنهج، ووازن بين المواد دون أن تقفز إلى مراجعة درس شوهد شرحه بينما توجد دروس أخرى لم يُشاهد شرحها. يملك المحرك قرار عدد الخطوات وترتيبها؛ لا تطلب من الطالب اختيار خطة مرنة أو متوازنة أو مكثفة.",
     "احترم الاستثناءات لكل درس على حدة: إذا كان lesson state=not_watched فلا تعتبره مكتملًا حتى لو كان بعده دروس أخرى في موضع الطالب. لا تعِد فتح الدروس التي حالتها studied، ولا تحوّل مجرد مشاهدة المحاضرة إلى إنجاز مذاكرة. الدروس القديمة التي لم تدخل نموذج الحالة الجديد قد تظل متوافقة مع سجلها السابق.",
     "حدود مسؤولية أساسية: StudyFlow مخطط ومتابع للتقدم، وليس مدرسًا أو منصة امتحانات. المهارات والأهداف التعليمية الواردة في الكتب تُستخدم لفهم طبيعة الدرس وترابطه فقط؛ المدرس هو من يشرح هذه المهارات ويدرّب الطالب عليها ويقيّمها.",
@@ -2151,7 +2259,7 @@ export async function generatePersonalPlan(
     "الهدف الامتحاني الافتراضي لكل المواد هو امتحان نهاية السنة في الصف الثاني بكالوريا. لا يوجد امتحان ترم أول في هذا المسار؛ لذلك لا تنشئ خطة أو أولوية على أساس امتحان ترم أول، ولا تستخدم توزيع درجات منشورًا لفترة أخرى. لا تضف وزنًا امتحانيًا رقميًا لأي فرع إلا إذا وُجدت مواصفة رسمية تخص الامتحان السنوي نفسه.",
     "استخدم توجيهات أنماط السؤال في بيانات الكتب كإشارات نوعية لمعرفة المهارات التي تحظى باهتمام، وليس لنسخ شكل امتحان: لا تنقل عدد الأسئلة أو نوعها أو توزيع الدرجات أو نسب الاختياري والمقالي أو أوزان الصف الثالث إلى البكالوريا، ولا تستنتج درجة غير موثقة للفقرة أو القصة. لا تنشئ أسئلة من أي نمط مهما كانت أهميته؛ دور هذه البيانات هو ترتيب متابعة المحتوى فقط.",
     "في العربي، احترم إشارة الأولوية التأسيسية لفرع النحو كما هي معرفة في بيانات المنتج، مع بقاء البلاغة والقراءة والنصوص والتعبير والإملاء والأدب فروعًا مستقلة كما في الكتالوج. في الإنجليزي، امنح القواعد والمفردات إشارة أولوية تأسيسية مستندة إلى توجيه المنتج وأنماط السؤال المهاري العامة في الثانوية العامة، دون نقل عدد الأسئلة أو توزيع درجات الصف الثالث إلى البكالوريا.",
-    "في التاريخ والبرمجة والذكاء الاصطناعي لا تتجاهل الدروس غير المكتملة، لكن اختر قائمة محدودة من المهام ذات الأولوية الحالية، مع إبقاء بقية المنهج لعمليات التجديد اللاحقة. لا تصنع تغطية سنوية في قائمة المهام الحالية.",
+    "في التاريخ والبرمجة والذكاء الاصطناعي استخدم فقط دروس الكتالوج ذات curriculumNodeIds المطابقة. لا تنشئ مهام عامة أو عناوين مختلقة أو استنتاجات عن موضع المنهج من اسم المادة. إذا لم توجد مطابقة مؤكدة، استبعد الخطوة بدل اختراع درس.",
     "رتّب الأولويات لكل درس أيضًا وفق موعد الاختبار الموثق، والفجوة داخل الفرع نفسه بين آخر درس أنجزه الطالب وموضع المدرس، والمتطلبات السابقة، وحجم المحتوى، وصعوبة المفاهيم ونتائج الطالب. لا تخلط بين وحدات وفروع متوازية.",
     "حدّد difficulty: easy/medium/hard/unknown، وlessonSize: small/medium/large/unknown، وpriority: critical/high/medium/low لكل خطوة. أضف difficultyBasis وdifficultyConfidence. لا تجعل كل درس طويل صعبًا تلقائيًا؛ الحجم شيء والصعوبة شيء آخر.",
     "أدرج printedPageRange فقط عندما يكون نطاق الصفحة المطبوعة موثقًا في ملف المنهج؛ هذه أرقام الصفحات المطبوعة في الكتاب وليست أرقام صفحات PDF. لا تخترع نطاقات صفحات للإنجليزي أو الإيطالي إذا كانت متاحة على مستوى الوحدة فقط.",
@@ -2167,8 +2275,8 @@ export async function generatePersonalPlan(
     "كيّف قائمة المهام مع ظروف الطالب المعلنة: الطاقة المنخفضة أو الانشغال الشديد يعني عدد مهام أقل وبداية أسهل، والحالة المعنوية المنخفضة تعني اختيار مهمة أولى سهلة، وقيود الموارد تعني عدم تكليف الطالب بأداة أو كتاب أو اتصال غير متاح. لا تقدم تشخيصًا طبيًا أو نفسيًا.",
     "لا تعتبر غياب السجل دليلًا على الإنجاز، ولا توبّخ الطالب.",
     "لا تحوّل منظومة الأداءات الأسبوعية والشهرية إلى دروس منهجية؛ تعامل معها كالتزامات منفصلة يجب تتبع إنجازها لأن لها شرط أهلية مستقلًا، ولا تخلط نسبها مع توزيع درجات ورقة الامتحان.",
-    "أخرج JSON صحيحًا فقط بالعربية: title, summary, durationLabel, steps (1-240 عنصرًا، وكل عنصر فيه title,detail,category,curriculumNodeIds,phaseId: backlog|teacher_sync|steady,priority,difficulty,lessonSize,difficultyBasis,difficultyConfidence,resourceRecommendation?,printedPageRange,sourcePages,day,dayIndex,dateOffsetDays,scheduleState)، executionStrategy ({objective,rationale,phases:[{id,title,purpose,actions,completionCriteria}]}), habits (0-5 فيها title,cue). resourceRecommendation اختياري ولا يُضاف إلا لمصدر مدرس موثق ومطابق حرفيًا لأحد تحديثات الصف الثاني بكالوريا ومفيد لدرس غير مكتمل؛ شكله {title,url,teacherName,reason}. يجب أن يحتوي curriculumNodeIds على معرف واحد أو أكثر من الدروس المتاحة التي ترتبط بها الخطوة. printedPageRange نطاق صفحات الكتاب المطبوع [البداية، النهاية] عند توافره فقط؛ sourcePages مراجع PDF المسترجعة فعليًا فقط وتكون [] في غير ذلك. اجعل الملخص واضحًا والتفاصيل مركزة.",
-    "كل خطوة يجب أن تحدد المادة والوحدة/الفرع والدرس وطريقة مذاكرته، لا عنوانًا عامًا.",
+    "أخرج JSON صحيحًا فقط بالعربية: title, summary, durationLabel, steps (1-240 عنصرًا، وكل عنصر فيه title,detail,category,curriculumNodeIds,phaseId: exam_focus|backlog|teacher_sync|steady,priority,difficulty,lessonSize,difficultyBasis,difficultyConfidence,resourceRecommendation?,printedPageRange,sourcePages,day,dayIndex,dateOffsetDays,scheduleState)، executionStrategy ({objective,rationale,phases:[{id,title,purpose,actions,completionCriteria}]}), habits (0-5 فيها title,cue). resourceRecommendation اختياري ولا يُضاف إلا لمصدر مدرس موثق ومطابق حرفيًا لأحد تحديثات الصف الثاني بكالوريا ومفيد لدرس غير مكتمل؛ شكله {title,url,teacherName,reason}. يجب أن يحتوي curriculumNodeIds على معرف واحد أو أكثر من الدروس المتاحة التي ترتبط بها الخطوة. printedPageRange نطاق صفحات الكتاب المطبوع [البداية، النهاية] عند توافره فقط؛ sourcePages مراجع PDF المسترجعة فعليًا فقط وتكون [] في غير ذلك. اجعل الملخص واضحًا والتفاصيل مركزة.",
+    "كل خطوة يجب أن تحدد المادة والوحدة/الفرع والدرس وطريقة مذاكرته، لا عنوانًا عامًا. اترك عناوين الإنجليزي باللغة الإنجليزية واذكر Unit وLesson واسم الدرس المحدد.",
     planScope === "daily"
       ? "هذه قائمة مهام تشغيلية حالية. نمط الأولوية المختار: " + (planningMode === "backlog" ? "المتراكم أولًا فقط" : planningMode === "teacher_sync" ? "مواكبة متطلبات المدرس" : "ذكي متوازن: إنهاء الالتزامات الحالية والاستعداد للموضوع التالي") + ". أخرج مهامًا قليلة أو أكثر حسب مستوى الانشغال، دون أي أيام أو مواعيد أو مدد."
       : "نطاق هذه الخطة سنوي قديم للتوافق مع المسودات السابقة فقط.",
