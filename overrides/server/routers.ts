@@ -112,6 +112,7 @@ import type { InvokeParams } from "./_core/llm";
 import { formatTextbookEvidence, retrieveTextbookEvidence } from "./textbook-retrieval";
 import { buildStandaloneAssistantContext } from "./assistant-context";
 import { scanOfficialEducationSources, isHighConfidenceOfficialPlanningSignal, type OfficialEducationUpdate } from "./official-education-monitor";
+import { summarizeDatabaseError } from "./official-education-error";
 import { createReminderCron, getReminderPreferences, listReminderNotifications, markReminderRead, saveReminderPreferences, saveReminderSchedule } from "./reminders";
 import { discoverTeacherForSubject, getTeacherCourseFactsWithRefresh } from "./teacher-course-research";
 import { getEffectiveStudentLessonState, summarizeStudentLessonStates, STUDENT_LESSON_STATES, isStudentLessonState, type StudentLessonState } from "@shared/sie-lesson-state";
@@ -678,7 +679,7 @@ async function scanOfficialEducationForStudent(userId: number, activityId?: stri
       }
       return highConfidenceUpdates.length > 0;
     } catch (error) {
-      console.warn("[StudyFlow official education monitor] Scan failed:", error instanceof Error ? error.message : String(error));
+      console.warn("[StudyFlow official education monitor] Scan failed:", summarizeDatabaseError(error));
       if (activityId) {
         updateAIActivity(userId, activityId, "تعذّر فحص المصادر الرسمية", "لم نغيّر الخطة بسبب مصدر لم يتم التحقق منه. سيُعاد الفحص لاحقًا.");
       }
