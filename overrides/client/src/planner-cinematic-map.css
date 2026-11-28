@@ -453,3 +453,38 @@ html body .sf-login-screen.sf-shell-v3 .sf-auth-mode-tabs button[aria-pressed="t
  background-image:linear-gradient(135deg,rgba(226,196,125,.18),rgba(255,255,255,.045))!important;
  box-shadow:0 8px 24px rgba(0,0,0,.22),inset 0 1px rgba(255,255,255,.1)!important;
 }
+
+
+/* Remaining home hero and task surfaces must not inherit the former lavender palette. */
+html body .sf-shell-v3 .sf-main .sf-map-hero{
+ position:relative;overflow:hidden;border:1px solid rgba(226,196,125,.22)!important;border-radius:26px!important;color:#F4F0E6!important;
+ background:radial-gradient(ellipse at 12% 5%,rgba(226,196,125,.14),transparent 46%),
+ radial-gradient(ellipse at 95% 100%,rgba(110,115,117,.14),transparent 40%),
+ linear-gradient(125deg,#090B0D 0%,#18191A 58%,#0B0D10 100%)!important;
+ box-shadow:inset 0 1px rgba(255,255,255,.10),0 27px 72px rgba(0,0,0,.40)!important;
+}
+html body .sf-shell-v3 .sf-main .sf-map-hero::after{
+ border-color:rgba(226,196,125,.19)!important;
+ box-shadow:0 0 0 22px rgba(226,196,125,.028),0 0 0 48px rgba(226,196,125,.02)!important;
+}
+html body .sf-shell-v3 .sf-main .sf-map-hero :is(h1,h2,h3,h4,strong){color:#F4E8CA!important}
+html body .sf-shell-v3 .sf-main .sf-map-hero :is(p,small,.text-muted-foreground){color:#C3BBAA!important}
+html body .sf-shell-v3 .sf-main .sf-map-hero .sf-map-eyebrow{color:#E2C47D!important}
+html body .sf-shell-v3 .sf-main .sf-map-hero-meta>*{
+ border-color:rgba(226,196,125,.18)!important;background:rgba(255,255,255,.045)!important;color:#E5D5B0!important;
+}
+html body .sf-shell-v3 .sf-main .sf-task-overview{
+ border:1px solid rgba(226,196,125,.22)!important;border-radius:25px!important;color:#F4F0E6!important;
+ background:radial-gradient(ellipse at 94% 0%,rgba(226,196,125,.13),transparent 32rem),
+ radial-gradient(ellipse at 4% 100%,rgba(110,115,117,.10),transparent 42%),
+ linear-gradient(125deg,#0A0C0E 0%,#1B1A18 58%,#101214 100%)!important;
+ box-shadow:inset 0 1px rgba(255,255,255,.10),0 24px 62px rgba(0,0,0,.38)!important;
+}
+html body .sf-shell-v3 .sf-main .sf-task-overview-heading>p{color:#E2C47D!important}
+html body .sf-shell-v3 .sf-main .sf-task-overview :is(h2,strong,b){color:#F5EBD5!important}
+html body .sf-shell-v3 .sf-main .sf-task-overview :is(.sf-task-overview-heading>span,.sf-task-progress-copy>span,.sf-task-progress-copy small,.sf-task-overview-stats article span){color:#C1B9AA!important}
+html body .sf-shell-v3 .sf-main .sf-task-progress-rail{background:rgba(255,255,255,.11)!important}
+html body .sf-shell-v3 .sf-main .sf-task-progress-rail i{background:linear-gradient(90deg,#98713B,#E2C47D)!important;box-shadow:0 0 14px rgba(226,196,125,.28)!important}
+html body .sf-shell-v3 .sf-main .sf-task-overview-stats article{
+ border-color:rgba(226,196,125,.16)!important;border-radius:15px!important;background:rgba(255,255,255,.035)!important;
+}
