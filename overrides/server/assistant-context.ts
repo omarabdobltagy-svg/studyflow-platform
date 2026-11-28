@@ -5,7 +5,11 @@ export type StandaloneAssistantContextInput = {
   attachmentContext?: string;
 };
 
-/** Curriculum-only context: no planner decisions, tasks, teacher schedules or progress fields. */
+/**
+ * Builds context for the curriculum-only assistant.
+ * Planner decisions, tasks, calendars, teacher schedules and progress are
+ * intentionally not accepted as inputs to this function.
+ */
 export function buildStandaloneAssistantContext(input: StandaloneAssistantContextInput): string {
   return [
     "نطاق المحادثة: مساعد معرفي مستقل لفهم محتوى المنهج، وليس محرك تخطيط.",

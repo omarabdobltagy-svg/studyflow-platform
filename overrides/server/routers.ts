@@ -108,6 +108,7 @@ import { searchYoutubeVideos } from "./youtube-search";
 import { invokeLLMWithNvidiaFallback, invokeLLMWithNvidiaFallbackStream } from "./_core/llmFallback";
 import type { InvokeParams } from "./_core/llm";
 import { formatTextbookEvidence, retrieveTextbookEvidence } from "./textbook-retrieval";
+import { buildStandaloneAssistantContext } from "./assistant-context";
 import { createReminderCron, getReminderPreferences, listReminderNotifications, markReminderRead, saveReminderPreferences, saveReminderSchedule } from "./reminders";
 import { discoverTeacherForSubject, getTeacherCourseFactsWithRefresh } from "./teacher-course-research";
 import { getEffectiveStudentLessonState, summarizeStudentLessonStates, STUDENT_LESSON_STATES, isStudentLessonState, type StudentLessonState } from "@shared/sie-lesson-state";
