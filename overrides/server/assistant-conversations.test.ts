@@ -42,7 +42,7 @@ describe("assistant conversation persistence boundaries", () => {
     });
 
     expect(result?.messages).toHaveLength(40);
-    expect(result?.messages[0].content).toBe("رسالة 6");
+    expect(result?.messages[0].content).toBe("رسالة 5");
     expect(result?.messages.at(-1)?.content).toBe("رسالة 44");
     expect(result?.title).toBe("عنوان طويل");
   });
