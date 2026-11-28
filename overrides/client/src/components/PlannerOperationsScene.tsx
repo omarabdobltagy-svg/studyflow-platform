@@ -452,7 +452,7 @@ function FunctionScene({ nodes, selectedId, onSelect }: { nodes: SceneNode[]; se
       const keyLight = new THREE.PointLight(0xc9a56a, 22, 12);
       keyLight.position.set(-2.5, 2.2, 3);
       scene.add(keyLight);
-      const cyanLight = new THREE.PointLight(0x8999a7, 14, 12);
+      const cyanLight = new THREE.PointLight(0xb99272, 14, 12);
       cyanLight.position.set(2.5, -1.6, 2);
       scene.add(cyanLight);
 
