@@ -864,7 +864,7 @@ async function buildDailyPlanOperationalContext(userId: number) {
     "نطاق هذا الامتحان غير متاح من مصدر موثوق في السياق الحالي. تجاهل أي نطاق يدوي قديم أدخله الطالب، ولا تستنتج الموضوعات الداخلة من آخر درس شرحه المدرس. لا تذكر نطاقًا إلا عند وجود تصريح امتحاني واضح مع مصدر قابل للتحقق.",
     exam.schoolConfirmed ? "حالة الجدول: مؤكد من المدرسة" : "حالة الجدول: مقترح مديرية القاهرة، غير مؤكد من المدرسة",
   ].join(" — "));
-  const horizon = now.getTime() + 14 * 24 * 60 * 60 * 1_000;  const horizon = now.getTime() + 14 * 24 * 60 * 60 * 1_000;
+  const horizon = now.getTime() + 14 * 24 * 60 * 60 * 1_000;
   const formatDate = (value: unknown) => {
     if (!value) return "";
     const date = value instanceof Date ? value : new Date(String(value));
