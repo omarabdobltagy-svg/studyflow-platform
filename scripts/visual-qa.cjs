@@ -280,6 +280,15 @@ async function run() {
       mapEmpty: read(".sf-map-empty-state"),
         };
       });
+      const overflowDiagnostics = await page.evaluate(() => {
+        const nodes = Array.from(document.querySelectorAll("#studyflow-design-qa-specimen *"))
+          .map(el => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el); return {tag:el.tagName,id:el.id,classes:typeof el.className==="string"?el.className:"",left:Math.round(r.left),right:Math.round(r.right),width:Math.round(r.width),scrollWidth:el.scrollWidth,clientWidth:el.clientWidth,overflowX:s.overflowX,position:s.position}; })
+          .filter(el => el.right > window.innerWidth + 2 || el.left < -2 || el.scrollWidth > el.clientWidth + 2)
+          .sort((a,b) => (b.right-window.innerWidth)-(a.right-window.innerWidth)).slice(0,30);
+        const shell=document.querySelector("#studyflow-design-qa-specimen");
+        const frame=shell?.querySelector(".sf-app-frame");
+        return {viewportWidth:window.innerWidth,documentWidth:document.documentElement.scrollWidth,bodyWidth:document.body.scrollWidth,shell:shell?{width:shell.getBoundingClientRect().width,scrollWidth:shell.scrollWidth,overflow:getComputedStyle(shell).overflow}:null,frame:frame?{width:frame.getBoundingClientRect().width,scrollWidth:frame.scrollWidth,overflow:getComputedStyle(frame).overflow}:null,overflowNodes:nodes};
+      });
       for (const [name, component] of Object.entries(designSpecimen)) {
         if (name === "viewportWidth" || name === "documentWidth") continue;
         assert(component?.visible, viewport.name + ": current design component is missing or hidden: " + name);
@@ -335,15 +344,6 @@ async function run() {
         designSpecimen.mapEmpty.backgroundImage !== "none",
         viewport.name + ": planner empty-map state has no designed surface: " + JSON.stringify(designSpecimen.mapEmpty),
       );
-      const overflowDiagnostics = await page.evaluate(() => {
-        const nodes = Array.from(document.querySelectorAll("#studyflow-design-qa-specimen *"))
-          .map(el => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el); return {tag:el.tagName,id:el.id,classes:typeof el.className==="string"?el.className:"",left:Math.round(r.left),right:Math.round(r.right),width:Math.round(r.width),scrollWidth:el.scrollWidth,clientWidth:el.clientWidth,overflowX:s.overflowX,position:s.position}; })
-          .filter(el => el.right > window.innerWidth + 2 || el.left < -2 || el.scrollWidth > el.clientWidth + 2)
-          .sort((a,b) => (b.right-window.innerWidth)-(a.right-window.innerWidth)).slice(0,30);
-        const shell=document.querySelector("#studyflow-design-qa-specimen");
-        const frame=shell?.querySelector(".sf-app-frame");
-        return {viewportWidth:window.innerWidth,documentWidth:document.documentElement.scrollWidth,bodyWidth:document.body.scrollWidth,shell:shell?{width:shell.getBoundingClientRect().width,scrollWidth:shell.scrollWidth,overflow:getComputedStyle(shell).overflow}:null,frame:frame?{width:frame.getBoundingClientRect().width,scrollWidth:frame.scrollWidth,overflow:getComputedStyle(frame).overflow}:null,overflowNodes:nodes};
-      });
       await page.screenshot({ path: path.join(outDir, viewport.name + "-design-system.png"), fullPage: true });
       await page.evaluate(() => {
         document.getElementById("studyflow-design-qa-specimen")?.remove();
