@@ -298,9 +298,21 @@ export default function CurriculumMap() {
                         && typeof gap?.studentPosition === "number" && index === gap.studentPosition;
                       const state = isCompleted ? "completed" : isNeedsReview ? "review" : isWatchedOnly ? "watched"
                         : isBehindTeacher ? "gap" : isUnmapped ? "unmapped" : isNext ? "next" : "future";
+                      const isEnglish = subjectId === "ENG1_G2_BAC";
                       const stepLabel = branch.pointLabel === "موضوع" ? "الموضوع" : "الدرس";
                       const localizedTitle = displayCurriculumTitle(choice.title);
                       const localizedUnit = displayCurriculumTitle(choice.unitTitle);
+                      const cleanUnitTitle = localizedUnit.replace(/^الوحدة\s+\d+\s*[:：-]?\s*/u, "");
+                      const unitLabel = choice.unitTitle
+                        ? (isEnglish && choice.unitNumber
+                          ? "Unit " + choice.unitNumber + " — " + cleanUnitTitle
+                          : choice.unitNumber ? "الوحدة " + choice.unitNumber.toLocaleString("ar-EG") + " · " + cleanUnitTitle : localizedUnit)
+                        : "";
+                      const lessonLabel = isEnglish
+                        ? choice.branchId === "ENG_VOCABULARY" ? "Lesson 1 — Vocabulary"
+                          : choice.branchId === "ENG_GRAMMAR" ? "Lesson " + (choice.lessonNumber || "2") + " — Grammar"
+                          : choice.lessonNumber ? "Lesson " + choice.lessonNumber : "Lesson " + (index + 1)
+                        : stepLabel + " " + (choice.lessonNumber ?? index + 1);
                       return (
                         <button
                           key={choice.nodeId}
@@ -308,12 +320,12 @@ export default function CurriculumMap() {
                           role="listitem"
                           onClick={() => goToStudy(branch.branchId, choice.nodeId)}
                           className={"sf-map-step sf-map-step-" + state}
-                          aria-label={stepLabel + " " + (choice.lessonNumber ?? index + 1) + ": " + localizedTitle}
+                          aria-label={[unitLabel, lessonLabel, localizedTitle].filter(Boolean).join(" — ")}
                         >
-                          <span className="sf-map-step-number">{stepLabel} {choice.lessonNumber ?? index + 1}</span>
+                          {unitLabel && <small className="sf-map-step-unit">{unitLabel}</small>}
+                          <span className="sf-map-step-number">{lessonLabel}</span>
                           <b>{localizedTitle}</b>
                           {localizedTitle !== choice.title && <small className="sf-map-step-original" dir="ltr">{choice.title}</small>}
-                          {choice.unitTitle && <small className="sf-map-step-unit">{choice.unitNumber ? "الوحدة " + choice.unitNumber + " · " : ""}{localizedUnit}</small>}
                           <em>{isCompleted ? "ذاكرته وفهمته" : isNeedsReview ? "يحتاج مراجعة" : isWatchedOnly ? "شاهد الشرح فقط" : isBehindTeacher ? "فاتك داخل شرح المدرس" : isUnmapped ? "حالة المذاكرة غير مسجلة" : isNext ? "التالي" : "لاحقًا"}</em>
                         </button>
                       );

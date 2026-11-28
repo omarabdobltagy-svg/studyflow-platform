@@ -96,9 +96,9 @@ export function displayBranchTitle(value: string): string {
     "الوحدات (Units)": "وحدات الكتاب",
     "القصة - The Lost World": "القصة: العالم المفقود",
     "GRE — مسار تكميلي": "مسار إثرائي لاختبار اللغة",
-    "دروس المفردات داخل الوحدات": "Vocabulary",
-    "دروس القواعد داخل الوحدات": "Grammar",
-    "المقرر بالكامل": "منهج المادة",
+    "دروس المفردات داخل الوحدات": "Lesson 1 — Vocabulary",
+    "دروس القواعد داخل الوحدات": "Lesson 2+ — Grammar",
+    "المقرر بالكامل": "دروس المادة",
   };
   return labels[value] ?? displayCurriculumTitle(value);
 }
