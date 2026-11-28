@@ -7,137 +7,137 @@
 :root {
   color-scheme: light;
   --radius: 1rem;
-  --background: #F4F1EA;
-  --foreground: #292824;
-  --card: #FFFEFC;
-  --card-foreground: #292824;
-  --popover: #FFFEFC;
-  --popover-foreground: #292824;
-  --primary: #D75C35;
+  --background: #F1EEE7;
+  --foreground: #262329;
+  --card: #FAF8F3;
+  --card-foreground: #262329;
+  --popover: #FCFAF6;
+  --popover-foreground: #262329;
+  --primary: #8E7348;
   --primary-foreground: #FFFFFF;
-  --secondary: #EAE5DB;
-  --secondary-foreground: #3C352D;
-  --muted: #F0EDE6;
-  --muted-foreground: #706C63;
-  --accent: #F5E4D8;
-  --accent-foreground: #83452F;
-  --destructive: #B94F43;
+  --secondary: #E8E1D6;
+  --secondary-foreground: #39333C;
+  --muted: #EDE9E1;
+  --muted-foreground: #6F6872;
+  --accent: #E9E1EB;
+  --accent-foreground: #49394D;
+  --destructive: #A9444D;
   --destructive-foreground: #FFFFFF;
-  --border: #DED8CC;
-  --input: #D3C9BB;
-  --ring: #D96840;
-  --sidebar: #1B1C18;
+  --border: #D8D0C5;
+  --input: #CBC1B4;
+  --ring: #9A7C50;
+  --sidebar: #151419;
   --sidebar-foreground: #F1EEE7;
-  --sidebar-primary: #E77A56;
-  --sidebar-primary-foreground: #211813;
-  --sidebar-accent: #2A2D26;
+  --sidebar-primary: #D6BC83;
+  --sidebar-primary-foreground: #211C17;
+  --sidebar-accent: #29252E;
   --sidebar-accent-foreground: #F1EEE7;
-  --sidebar-border: rgba(224,216,202,.12);
-  --sidebar-ring: #D9825F;
-  --chart-1: #D75C35;
-  --chart-2: #D5AC73;
-  --chart-3: #7C937D;
-  --chart-4: #A1836A;
-  --chart-5: #9EAA9E;
-  --sf-ember: #D75C35;
-  --sf-ember-deep: #8E432C;
-  --sf-brass: #B7824E;
-  --sf-brass-bright: #D5AC73;
-  --sf-brass-soft: #F0E3CF;
+  --sidebar-border: rgba(214,188,131,.14);
+  --sidebar-ring: #D6BC83;
+  --chart-1: #8E7348;
+  --chart-2: #B8945E;
+  --chart-3: #76677D;
+  --chart-4: #9A8799;
+  --chart-5: #B7AD9F;
+  --sf-ember: #4C3A4F;
+  --sf-ember-deep: #302432;
+  --sf-brass: #A88954;
+  --sf-brass-bright: #D6BC83;
+  --sf-brass-soft: #F2E9D6;
   --sf-wine: var(--sf-ember);
   --sf-wine-deep: var(--sf-ember-deep);
   --sf-gold: var(--sf-brass);
   --sf-gold-bright: var(--sf-brass-bright);
   --sf-gold-soft: var(--sf-brass-soft);
-  --sf-canvas: #F4F1EA;
-  --sf-surface: #FFFEFC;
+  --sf-canvas: #F1EEE7;
+  --sf-surface: #FAF8F3;
   --sf-surface-raised: #FFFFFF;
-  --sf-surface-soft: #EAE5DB;
-  --sf-text: #292824;
-  --sf-text-muted: #706C63;
-  --sf-line: #DED8CC;
-  --sf-success: #66866D;
-  --sf-warning: #B7824E;
-  --sf-danger: #B94F43;
+  --sf-surface-soft: #E8E1D6;
+  --sf-text: #262329;
+  --sf-text-muted: #6F6872;
+  --sf-line: #D8D0C5;
+  --sf-success: #69856F;
+  --sf-warning: #A88954;
+  --sf-danger: #A9444D;
   --sf-shadow: 0 18px 48px -38px rgba(36,32,26,.24);
   --sf-shadow-raised: 0 24px 58px -42px rgba(36,32,26,.32);
   --sf-panel-radius: 22px;
   --sf-content-width: 1480px;
-  --sf-ink: #292824;
-  --sf-plum: #1B1C18;
-  --sf-purple: var(--sf-ember);
-  --sf-violet: #B98268;
-  --sf-lilac: var(--sf-brass-soft);
-  --sf-paper: var(--sf-canvas);
-  --sf-mint: var(--sf-surface-soft);
-  --sf-yellow: var(--sf-brass-soft);
-  --sf-blue: var(--sf-ember);
-  --sf-rose: #F5E4D8;
-  --sf-cyan: var(--sf-brass-soft);
-  --sf-coral: #D36F4E;
-  --sf-page-accent: var(--sf-ember);
-  --sf-navigation-accent: var(--sf-brass-bright);
-  --sf-navigation-active: rgba(215,92,53,.17);
+  --sf-ink: #262329;
+  --sf-plum: #151419;
+  --sf-purple: #4C3A4F;
+  --sf-violet: #8E7E94;
+  --sf-lilac: #F2E9D6;
+  --sf-paper: #F1EEE7;
+  --sf-mint: #E2DED6;
+  --sf-yellow: #F2E9D6;
+  --sf-blue: #A88954;
+  --sf-rose: #E9E1EB;
+  --sf-cyan: #F2E9D6;
+  --sf-coral: #8C6C82;
+  --sf-page-accent: #8E7348;
+  --sf-navigation-accent: #D6BC83;
+  --sf-navigation-active: rgba(76,58,79,.12);
   --sf-navigation-hover: rgba(255,255,255,.07);
 }
 
 html.dark {
   color-scheme: dark;
-  --background: #151715;
-  --foreground: #F1EEE7;
-  --card: #20231F;
-  --card-foreground: #F1EEE7;
-  --popover: #292D27;
-  --popover-foreground: #F1EEE7;
-  --primary: #F0784B;
-  --primary-foreground: #211813;
-  --secondary: #2B3029;
-  --secondary-foreground: #F1EEE7;
-  --muted: #262B25;
-  --muted-foreground: #B5B5B8;
-  --accent: #3D302B;
-  --accent-foreground: #FFE7D9;
-  --destructive: #D67564;
-  --destructive-foreground: #1D1714;
-  --border: #41473D;
-  --input: #4F554B;
-  --ring: #F0784B;
-  --sidebar: #10130F;
-  --sidebar-foreground: #F1EEE7;
-  --sidebar-primary: #F0784B;
-  --sidebar-primary-foreground: #211813;
-  --sidebar-accent: #272D26;
-  --sidebar-accent-foreground: #F1EEE7;
-  --sidebar-border: rgba(224,216,202,.13);
-  --sidebar-ring: #F0784B;
-  --chart-1: #F0784B;
-  --chart-2: #E3B982;
-  --chart-3: #90A88F;
-  --chart-4: #C18B70;
-  --chart-5: #B7B2A4;
-  --sf-ember: #F0784B;
-  --sf-ember-deep: #8D432D;
-  --sf-brass: #D0A66E;
-  --sf-brass-bright: #E3B982;
-  --sf-brass-soft: #46382F;
+  --background: #101114;
+  --foreground: #F3EFE6;
+  --card: #191A1F;
+  --card-foreground: #F3EFE6;
+  --popover: #212228;
+  --popover-foreground: #F3EFE6;
+  --primary: #D6BC83;
+  --primary-foreground: #171612;
+  --secondary: #29262D;
+  --secondary-foreground: #EEE9DF;
+  --muted: #24232A;
+  --muted-foreground: #B6AEB6;
+  --accent: #382E3B;
+  --accent-foreground: #E9DCEB;
+  --destructive: #C7656B;
+  --destructive-foreground: #FDF6F1;
+  --border: #39353F;
+  --input: #4A444E;
+  --ring: #D6BC83;
+  --sidebar: #0C0D10;
+  --sidebar-foreground: #F3EFE6;
+  --sidebar-primary: #D6BC83;
+  --sidebar-primary-foreground: #171612;
+  --sidebar-accent: #201E24;
+  --sidebar-accent-foreground: #F3EFE6;
+  --sidebar-border: rgba(214,188,131,.14);
+  --sidebar-ring: #D6BC83;
+  --chart-1: #D6BC83;
+  --chart-2: #B99A64;
+  --chart-3: #86758B;
+  --chart-4: #9C8B9E;
+  --chart-5: #C0B7A9;
+  --sf-ember: #4C3A4F;
+  --sf-ember-deep: #302432;
+  --sf-brass: #B99A64;
+  --sf-brass-bright: #D6BC83;
+  --sf-brass-soft: #453B2F;
   --sf-wine: var(--sf-ember);
   --sf-wine-deep: var(--sf-ember-deep);
   --sf-gold: var(--sf-brass);
   --sf-gold-bright: var(--sf-brass-bright);
   --sf-gold-soft: var(--sf-brass-soft);
-  --sf-canvas: #151715;
-  --sf-surface: #20231F;
-  --sf-surface-raised: #282E2A;
-  --sf-surface-soft: #262B25;
-  --sf-text: #F1EEE7;
-  --sf-text-muted: #B5B5B8;
-  --sf-line: #41473D;
-  --sf-success: #90A88F;
-  --sf-warning: #E3B982;
-  --sf-danger: #E18473;
+  --sf-canvas: #101114;
+  --sf-surface: #191A1F;
+  --sf-surface-raised: #232329;
+  --sf-surface-soft: #24232A;
+  --sf-text: #F3EFE6;
+  --sf-text-muted: #B6AEB6;
+  --sf-line: #39353F;
+  --sf-success: #91A18E;
+  --sf-warning: #D6BC83;
+  --sf-danger: #C7656B;
   --sf-shadow: 0 18px 48px -34px rgba(0,0,0,.62);
   --sf-shadow-raised: 0 28px 72px -42px rgba(0,0,0,.72);
-  --sf-navigation-active: rgba(240,120,75,.17);
+  --sf-navigation-active: rgba(214,188,131,.16);
 }
 
 html, body, #root {
@@ -178,14 +178,14 @@ body {
 .sf-shell-v3 .sf-sidebar {
   border-inline-start: 1px solid rgba(220, 222, 230, .10) !important;
   background:
-    radial-gradient(ellipse at 100% 0%, rgba(215, 92, 53, .19), transparent 25rem),
+    radial-gradient(ellipse at 100% 0%, rgba(76, 58, 79, .19), transparent 25rem),
     linear-gradient(180deg, #20231F 0%, #151715 100%) !important;
   color: #F1EEE7 !important;
 }
 .sf-shell-v3 .sf-brand-mark,
 .sf-shell-v3 .sf-login-brand-mark-v4 {
   border: 1px solid rgba(227, 185, 130, .30) !important;
-  background: linear-gradient(145deg, #F0D8B1 0%, #E0B982 56%, #D75C35 130%) !important;
+  background: linear-gradient(145deg, #F0D8B1 0%, #E0B982 56%, #4C3A4F 130%) !important;
   color: #2D211F !important;
   box-shadow: 0 12px 26px -17px rgba(227, 185, 130, .50) !important;
 }
@@ -206,7 +206,7 @@ body {
 }
 .sf-shell-v3 .sf-nav-item.is-active {
   border-color: rgba(227, 185, 130, .22) !important;
-  background: linear-gradient(105deg, rgba(215, 92, 53, .34), rgba(215, 92, 53, .12)) !important;
+  background: linear-gradient(105deg, rgba(76, 58, 79, .34), rgba(76, 58, 79, .12)) !important;
   color: #FFF9F4 !important;
   box-shadow: inset -2px 0 0 var(--sf-gold-bright), 0 10px 24px -20px rgba(0,0,0,.6) !important;
 }
@@ -223,7 +223,7 @@ body {
 .sf-shell-v3 .sf-account-avatar,
 .sf-shell-v3 .sf-topbar-avatar {
   border: 1px solid rgba(227, 185, 130, .28) !important;
-  background: linear-gradient(145deg, #D75C35, #4D2C31) !important;
+  background: linear-gradient(145deg, #4C3A4F, #4D2C31) !important;
   color: #FFF8F2 !important;
 }
 
@@ -233,7 +233,7 @@ body {
   border: 1px solid rgba(226, 210, 194, .12) !important;
   border-radius: 21px !important;
   background:
-    radial-gradient(ellipse at 5% 0%, rgba(215,92,53,.28), transparent 38%),
+    radial-gradient(ellipse at 5% 0%, rgba(76,58,79,.28), transparent 38%),
     linear-gradient(112deg, #20231F 0%, #252B35 56%, #211B19 100%) !important;
   box-shadow: 0 17px 38px -30px rgba(0,0,0,.68), inset 0 1px rgba(255,255,255,.055) !important;
 }
@@ -256,7 +256,7 @@ body {
 }
 .sf-shell-v3 .sf-dock-item { border-radius: 12px !important; color: rgba(244,237,231,.72) !important; }
 .sf-shell-v3 .sf-dock-item.is-active {
-  background: rgba(215, 92, 53, .22) !important;
+  background: rgba(76, 58, 79, .22) !important;
   color: #FFF8F2 !important;
 }
 .sf-shell-v3 .sf-dock-tooltip {
@@ -642,7 +642,7 @@ body [data-slot="sheet-overlay"] { background: rgba(14, 11, 10, .66) !important;
 .sf-login-screen.sf-shell-v3,
 .sf-auth-screen.sf-shell-v3 {
   background:
-    radial-gradient(ellipse at 12% 8%, rgba(215,92,53,.22), transparent 36rem),
+    radial-gradient(ellipse at 12% 8%, rgba(76,58,79,.22), transparent 36rem),
     radial-gradient(ellipse at 88% 92%, rgba(227,185,130,.11), transparent 34rem),
     linear-gradient(145deg,#151715,#1B1C18 55%,#151715) !important;
 }
@@ -668,7 +668,7 @@ body [data-slot="sheet-overlay"] { background: rgba(14, 11, 10, .66) !important;
 .sf-login-screen.sf-shell-v3 .sf-auth-mode-tabs button { color: #C8BBAF !important; }
 .sf-login-screen.sf-shell-v3 .sf-auth-mode-tabs button[aria-selected="true"] {
   border-color: rgba(227,185,130,.28) !important;
-  background: rgba(215,92,53,.28) !important;
+  background: rgba(76,58,79,.28) !important;
   color: #FFF8F2 !important;
 }
 .sf-login-screen.sf-shell-v3 .sf-auth-input {
@@ -701,7 +701,7 @@ body [data-slot="sheet-overlay"] { background: rgba(14, 11, 10, .66) !important;
   }
   .sf-shell-v3 .sf-mobile-dock-item { color: rgba(244,237,231,.72) !important; }
   .sf-shell-v3 .sf-mobile-dock-item.is-active {
-    background: rgba(215,92,53,.28) !important;
+    background: rgba(76,58,79,.28) !important;
     color: #FFF8F2 !important;
   }
   .sf-shell-v3 .sf-mobile-dock-item.is-active svg { color: var(--sf-gold-bright) !important; }
@@ -730,7 +730,7 @@ body [data-slot="sheet-overlay"] { background: rgba(14, 11, 10, .66) !important;
    resurfacing above the central design system. */
 html body .sf-login-screen.sf-shell-v3 {
   background:
-    radial-gradient(ellipse at 12% 8%, rgba(215,92,53,.22), transparent 36rem),
+    radial-gradient(ellipse at 12% 8%, rgba(76,58,79,.22), transparent 36rem),
     radial-gradient(ellipse at 88% 92%, rgba(227,185,130,.11), transparent 34rem),
     linear-gradient(145deg,#151715 0%,#1B1C18 55%,#151715 100%) !important;
   color: #F1EEE7 !important;
@@ -754,13 +754,13 @@ html body .sf-login-screen.sf-shell-v3 .sf-login-frame-v4 .sf-login-form-card {
   backdrop-filter: none !important;
 }
 html body .sf-login-screen.sf-shell-v3 .sf-login-form-card::before {
-  background: linear-gradient(90deg,transparent,#E3B982 45%,#F0784B 68%,transparent) !important;
+  background: linear-gradient(90deg,transparent,#D6BC83 45%,#D6BC83 68%,transparent) !important;
   opacity: .9 !important;
 }
 html body .sf-login-screen.sf-shell-v3 .sf-login-brand-mark-v4 {
   border: 1px solid rgba(227,185,130,.38) !important;
   color: #2D211F !important;
-  background: linear-gradient(145deg,#F0D8B1 0%,#E5C18B 56%,#D75C35 130%) !important;
+  background: linear-gradient(145deg,#F0D8B1 0%,#E5C18B 56%,#4C3A4F 130%) !important;
   box-shadow: 0 12px 26px -17px rgba(227,185,130,.50) !important;
 }
 html body .sf-login-screen.sf-shell-v3 .sf-login-brand-v4 b,
@@ -774,7 +774,7 @@ html body .sf-login-screen.sf-shell-v3 .sf-login-security p {
 }
 html body .sf-login-screen.sf-shell-v3 .sf-auth-eyebrow,
 html body .sf-login-screen.sf-shell-v3 .sf-login-eyebrow {
-  color: #E3B982 !important;
+  color: #D6BC83 !important;
 }
 html body .sf-login-screen.sf-shell-v3 .sf-login-form label {
   color: #E9DED3 !important;
@@ -793,9 +793,9 @@ html body .sf-login-screen.sf-shell-v3 .sf-auth-mode-tabs button[aria-pressed="t
   border: 1px solid rgba(227,185,130,.30) !important;
   border-radius: 11px !important;
   color: #FFF8F2 !important;
-  background: rgba(215,92,53,.38) !important;
+  background: rgba(76,58,79,.38) !important;
   background-image: none !important;
-  box-shadow: 0 8px 22px -17px rgba(215,92,53,.54) !important;
+  box-shadow: 0 8px 22px -17px rgba(76,58,79,.54) !important;
 }
 html body .sf-login-screen.sf-shell-v3 input.sf-auth-input,
 html body .sf-login-screen.sf-shell-v3 .sf-auth-input {
@@ -810,7 +810,7 @@ html body .sf-login-screen.sf-shell-v3 .sf-auth-input::placeholder {
   color: #9E9187 !important;
 }
 html body .sf-login-screen.sf-shell-v3 .sf-auth-input:focus-visible {
-  border-color: #E3B982 !important;
+  border-color: #D6BC83 !important;
   box-shadow: 0 0 0 3px rgba(227,185,130,.16) !important;
 }
 html body .sf-login-screen.sf-shell-v3 .sf-login-form-card button.sf-auth-submit,
@@ -820,9 +820,9 @@ html body .sf-login-screen.sf-shell-v3 .sf-login-form-card button.bg-primary {
   border: 1px solid rgba(227,185,130,.34) !important;
   border-radius: 13px !important;
   color: #FFF8F2 !important;
-  background: linear-gradient(135deg,#F0784B 0%,#D56A47 56%,#8B432D 100%) !important;
-  background-image: linear-gradient(135deg,#F0784B 0%,#D56A47 56%,#8B432D 100%) !important;
-  box-shadow: 0 13px 28px -19px rgba(215,92,53,.54), inset 0 1px rgba(255,255,255,.10) !important;
+  background: linear-gradient(135deg,#D6BC83 0%,#D56A47 56%,#8B432D 100%) !important;
+  background-image: linear-gradient(135deg,#D6BC83 0%,#D56A47 56%,#8B432D 100%) !important;
+  box-shadow: 0 13px 28px -19px rgba(76,58,79,.54), inset 0 1px rgba(255,255,255,.10) !important;
 }
 html body .sf-login-screen.sf-shell-v3 .sf-login-form-card button.sf-auth-submit:hover,
 html body .sf-login-screen.sf-shell-v3 button.sf-auth-submit:hover {
@@ -831,7 +831,7 @@ html body .sf-login-screen.sf-shell-v3 button.sf-auth-submit:hover {
   background-image: linear-gradient(135deg,#F58B61 0%,#B74D2C 56%,#783C29 100%) !important;
 }
 html body .sf-login-screen.sf-shell-v3 .sf-auth-mode-switch {
-  color: #E3B982 !important;
+  color: #D6BC83 !important;
   background: transparent !important;
 }
 html body .sf-login-screen.sf-shell-v3 .sf-login-security {
@@ -842,7 +842,7 @@ html body .sf-login-screen.sf-shell-v3 .sf-security-mark {
   background: rgba(227,185,130,.12) !important;
 }
 html body .sf-login-screen.sf-shell-v3 .sf-security-mark span {
-  background: #E3B982 !important;
+  background: #D6BC83 !important;
   box-shadow: 0 0 0 4px rgba(227,185,130,.11) !important;
 }
 
@@ -868,7 +868,7 @@ html body .sf-login-screen.sf-shell-v3 .sf-security-mark span {
   color: #F1EEE7;
   background:
     radial-gradient(ellipse at 92% 0%,rgba(227,185,130,.14),transparent 32%),
-    radial-gradient(ellipse at 5% 100%,rgba(215,92,53,.28),transparent 44%),
+    radial-gradient(ellipse at 5% 100%,rgba(76,58,79,.28),transparent 44%),
     linear-gradient(125deg,#20231F 0%,#292F3A 58%,#191F1C 100%);
   box-shadow: 0 26px 62px -44px rgba(0,0,0,.68), inset 0 1px rgba(255,255,255,.06);
 }
@@ -878,7 +878,7 @@ html body .sf-login-screen.sf-shell-v3 .sf-security-mark span {
   flex-wrap: wrap;
   align-items: center;
   gap: 9px;
-  color: #E3B982;
+  color: #D6BC83;
   font-size: 10px;
   font-weight: 850;
   letter-spacing: .04em;
@@ -894,7 +894,7 @@ html body .sf-login-screen.sf-shell-v3 .sf-security-mark span {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #E3B982;
+  background: #D6BC83;
   box-shadow: 0 0 0 5px rgba(227,185,130,.12),0 0 18px rgba(227,185,130,.28);
 }
 .sf-home-ai-decision-copy h3 {
@@ -942,7 +942,7 @@ html body .sf-login-screen.sf-shell-v3 .sf-security-mark span {
 .sf-home-ai-decision-compare > div { display: grid; min-width: 0; gap: 3px; text-align: center; }
 .sf-home-ai-decision-compare > div small { color: #BDB0A5; font-size: 9px; }
 .sf-home-ai-decision-compare > div strong { color: #F7EEE5; font-size: clamp(25px,3vw,34px); font-weight: 900; line-height: 1.15; font-variant-numeric: tabular-nums; }
-.sf-home-ai-decision-compare > div span { color: #E3B982; font-size: 9px; }
+.sf-home-ai-decision-compare > div span { color: #D6BC83; font-size: 9px; }
 .sf-home-ai-decision-compare > i { width: 1px; height: 58px; background: rgba(227,185,130,.28); }
 .sf-home-ai-decision-compare > button {
   grid-column: 1 / -1;
@@ -971,7 +971,7 @@ html body .sf-login-screen.sf-shell-v3 .sf-security-mark span {
 }
 .sf-home-ai-decision-orbit span { inset: 0 18px; transform: rotate(-24deg); }
 .sf-home-ai-decision-orbit i { inset: 24px 0; transform: rotate(25deg); }
-.sf-home-ai-decision-orbit b { inset: 48px 54px; border-color: rgba(215,92,53,.55); }
+.sf-home-ai-decision-orbit b { inset: 48px 54px; border-color: rgba(76,58,79,.55); }
 
 /* The active session finish flow is a real modal with a clear decision hierarchy. */
 .sf-session-finish-overlay {
@@ -1122,7 +1122,7 @@ html body .sf-login-screen.sf-shell-v3 .sf-security-mark span {
   border-radius: 25px !important;
   color: #F1EEE7 !important;
   background:
-    radial-gradient(ellipse at 12% 5%,rgba(215,92,53,.28),transparent 43%),
+    radial-gradient(ellipse at 12% 5%,rgba(76,58,79,.28),transparent 43%),
     radial-gradient(ellipse at 95% 100%,rgba(227,185,130,.12),transparent 36%),
     linear-gradient(125deg,#20231F 0%,#332124 60%,#20231F 100%) !important;
   box-shadow: 0 24px 58px -42px rgba(0,0,0,.68) !important;
@@ -1139,7 +1139,7 @@ html body .sf-login-screen.sf-shell-v3 .sf-security-mark span {
 }
 .sf-shell-v3 .sf-main .sf-map-hero :is(h1,h2,h3,h4,strong) { color: #F5EEE8 !important; }
 .sf-shell-v3 .sf-main .sf-map-hero :is(p,small,.text-muted-foreground) { color: #C8BBAF !important; }
-.sf-shell-v3 .sf-main .sf-map-hero .sf-map-eyebrow { color: #E3B982 !important; }
+.sf-shell-v3 .sf-main .sf-map-hero .sf-map-eyebrow { color: #D6BC83 !important; }
 .sf-shell-v3 .sf-main .sf-map-hero-meta > * {
   border-color: rgba(227,185,130,.18) !important;
   background: rgba(255,255,255,.055) !important;
@@ -1169,11 +1169,11 @@ html body .sf-login-screen.sf-shell-v3 .sf-security-mark span {
   color: #F1EEE7 !important;
   background:
     radial-gradient(ellipse at 94% 0%,rgba(227,185,130,.15),transparent 28rem),
-    radial-gradient(ellipse at 4% 100%,rgba(215,92,53,.27),transparent 40%),
+    radial-gradient(ellipse at 4% 100%,rgba(76,58,79,.27),transparent 40%),
     linear-gradient(120deg,#20231F 0%,#292F3A 58%,#241B1A 100%) !important;
   box-shadow: 0 22px 54px -40px rgba(0,0,0,.66) !important;
 }
-.sf-shell-v3 .sf-main .sf-task-overview-heading > p { color: #E3B982 !important; }
+.sf-shell-v3 .sf-main .sf-task-overview-heading > p { color: #D6BC83 !important; }
 .sf-shell-v3 .sf-main .sf-task-overview-heading h2,
 .sf-shell-v3 .sf-main .sf-task-overview-progress strong,
 .sf-shell-v3 .sf-main .sf-task-overview-stats article b { color: #FFF8F2 !important; }
@@ -1182,7 +1182,7 @@ html body .sf-login-screen.sf-shell-v3 .sf-security-mark span {
 .sf-shell-v3 .sf-main .sf-task-progress-copy small,
 .sf-shell-v3 .sf-main .sf-task-overview-stats article span { color: rgba(244,237,231,.68) !important; }
 .sf-shell-v3 .sf-main .sf-task-progress-rail { background: rgba(255,255,255,.13) !important; }
-.sf-shell-v3 .sf-main .sf-task-progress-rail i { background: linear-gradient(90deg,#D75C35,#E3B982) !important; }
+.sf-shell-v3 .sf-main .sf-task-progress-rail i { background: linear-gradient(90deg,#4C3A4F,#D6BC83) !important; }
 .sf-shell-v3 .sf-main .sf-task-overview-stats article {
   border-color: rgba(224,216,202,.13) !important;
   border-radius: 14px !important;
@@ -1274,7 +1274,7 @@ html body .sf-login-screen.sf-shell-v3 .sf-security-mark span {
   border-color: color-mix(in srgb,var(--sf-gold) 24%,var(--border)) !important;
   border-radius: 19px !important;
   background:
-    radial-gradient(ellipse at 50% 48%,rgba(215,92,53,.28),transparent 48%),
+    radial-gradient(ellipse at 50% 48%,rgba(76,58,79,.28),transparent 48%),
     radial-gradient(ellipse at 50% 100%,rgba(227,185,130,.10),transparent 52%),
     linear-gradient(145deg,#181413,#2B1E1E 56%,#181413) !important;
 }
@@ -1429,11 +1429,11 @@ html body .sf-shell-v3 .sf-main .sf-home-ai-decision {
   color: #F1EEE7 !important;
   background:
     radial-gradient(ellipse at 92% 0%,rgba(227,185,130,.14),transparent 32%),
-    radial-gradient(ellipse at 5% 100%,rgba(215,92,53,.28),transparent 44%),
+    radial-gradient(ellipse at 5% 100%,rgba(76,58,79,.28),transparent 44%),
     linear-gradient(125deg,#20231F 0%,#292F3A 58%,#191F1C 100%) !important;
   background-image:
     radial-gradient(ellipse at 92% 0%,rgba(227,185,130,.14),transparent 32%),
-    radial-gradient(ellipse at 5% 100%,rgba(215,92,53,.28),transparent 44%),
+    radial-gradient(ellipse at 5% 100%,rgba(76,58,79,.28),transparent 44%),
     linear-gradient(125deg,#20231F 0%,#292F3A 58%,#191F1C 100%) !important;
   box-shadow: 0 26px 62px -44px rgba(0,0,0,.68), inset 0 1px rgba(255,255,255,.06) !important;
 }
