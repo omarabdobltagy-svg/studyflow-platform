@@ -435,10 +435,10 @@ function getTeacherProfileChannelId(profileUrl: string): string | null {
   try {
     const parsed = new URL(profileUrl);
     const idFromQuery = parsed.searchParams.get("id");
-    const idFromPath = parsed.pathname.match(/(?:^|\\/)channel\\/(UC[\\w-]{20,})(?:\\/|$)/i)?.[1]
-      ?? parsed.pathname.match(/(?:^|\\/)(UC[\\w-]{20,})(?:\\/|$)/i)?.[1];
+    const idFromPath = parsed.pathname.match(/(?:^|\/)channel\/(UC[\w-]{20,})(?:\/|$)/i)?.[1]
+      ?? parsed.pathname.match(/(?:^|\/)(UC[\w-]{20,})(?:\/|$)/i)?.[1];
     const candidate = idFromQuery ?? idFromPath;
-    return candidate && /^UC[\\w-]{20,}$/i.test(candidate) ? candidate : null;
+    return candidate && /^UC[\w-]{20,}$/i.test(candidate) ? candidate : null;
   } catch {
     return null;
   }
@@ -450,8 +450,8 @@ function getTeacherProfileVideoId(profileUrl: string): string | null {
     const host = parsed.hostname.toLowerCase();
     if (!["youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be", "www.youtu.be", "www.zolotube.com", "zolotube.com"].includes(host)) return null;
     const candidate = host.endsWith("youtu.be")
-      ? parsed.pathname.replace(/^\\/+/, "").split("/")[0]
-      : parsed.searchParams.get("v") ?? parsed.pathname.match(/^\\/(?:shorts|embed)\\/([A-Za-z0-9_-]{6,20})/)?.[1] ?? null;
+      ? parsed.pathname.replace(/^\/+/, "").split("/")[0]
+      : parsed.searchParams.get("v") ?? parsed.pathname.match(/^\/(?:shorts|embed)\/([A-Za-z0-9_-]{6,20})/)?.[1] ?? null;
     return candidate && /^[A-Za-z0-9_-]{6,20}$/.test(candidate) ? candidate : null;
   } catch {
     return null;
@@ -461,7 +461,7 @@ function getTeacherProfileVideoId(profileUrl: string): string | null {
 export async function resolveTeacherYoutubeChannelId(teacherId: string, savedChannelId?: string): Promise<string | null> {
   const known = YOUTUBE_CHANNEL_IDS[teacherId];
   if (known) return known;
-  if (savedChannelId && /^UC[\\w-]{20,}$/.test(savedChannelId)) return savedChannelId;
+  if (savedChannelId && /^UC[\w-]{20,}$/.test(savedChannelId)) return savedChannelId;
   const teacher = getSIETeacher(teacherId);
   if (!teacher) return null;
   const profileUrl = teacher.profileUrl ?? "";
@@ -470,7 +470,7 @@ export async function resolveTeacherYoutubeChannelId(teacherId: string, savedCha
   const apiKey = process.env.YOUTUBE_API_KEY?.trim();
   if (!apiKey) return null;
 
-  const handle = profileUrl.match(/youtube\\.com\\/@([^/?]+)/i)?.[1];
+  const handle = profileUrl.match(/youtube\.com\/@([^/?]+)/i)?.[1];
   if (handle) {
     const result = await fetchJson(
       "https://www.googleapis.com/youtube/v3/channels?part=id,snippet&forHandle="
@@ -478,7 +478,7 @@ export async function resolveTeacherYoutubeChannelId(teacherId: string, savedCha
     );
     const items = Array.isArray(result.items) ? result.items as Array<Record<string, any>> : [];
     const match = items.find(item => typeof item.id === "string"
-      && /^UC[\\w-]{20,}$/.test(item.id)
+      && /^UC[\w-]{20,}$/.test(item.id)
       && youtubeChannelMatchesTeacher(String(item.snippet?.title ?? ""), teacher.nameAr, teacher.brandName));
     if (match?.id) return match.id as string;
   }
@@ -495,7 +495,7 @@ export async function resolveTeacherYoutubeChannelId(teacherId: string, savedCha
     const item = items[0];
     const channelId = typeof item?.snippet?.channelId === "string" ? item.snippet.channelId : "";
     const channelTitle = typeof item?.snippet?.channelTitle === "string" ? item.snippet.channelTitle : "";
-    if (/^UC[\\w-]{20,}$/.test(channelId)
+    if (/^UC[\w-]{20,}$/.test(channelId)
       && youtubeChannelMatchesTeacher(channelTitle, teacher.nameAr, teacher.brandName)) return channelId;
   }
 
