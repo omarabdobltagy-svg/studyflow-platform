@@ -99,7 +99,7 @@ export const SIE_SYSTEMS: Array<{
 
 export const SIE_SUBJECTS: SIESubject[] = [
   { subjectId: "ARB_G2_BAC", nameAr: "اللغة العربية", curriculumAvailable: true, core: true, note: "فهرس الجزء الأول موثق: 3 وحدات و9 دروس." },
-  { subjectId: "ENG1_G2_BAC", nameAr: "اللغة الإنجليزية الأولى", curriculumAvailable: true, core: true, note: "فهرس الجزء الأول موثق: 5 وحدات و20 موضوعًا." },
+  { subjectId: "ENG1_G2_BAC", nameAr: "الإنجليزية", curriculumAvailable: true, core: true, note: "فهرس الجزء الأول موثق: 5 وحدات و20 موضوعًا." },
   { subjectId: "HIS_G2_BAC", nameAr: "التاريخ", curriculumAvailable: true, core: true, note: "فهرس الجزء الأول موثق: 3 وحدات و12 درسًا." },
   { subjectId: "PROG_AI_G2_BAC", nameAr: "البرمجة والذكاء الاصطناعي", curriculumAvailable: true, note: "فهرسا الجزأين موثقان: 7 فصول و23 درسًا." },
   { subjectId: "PHY_G2_BAC_PENDING", nameAr: "الفيزياء", curriculumAvailable: false, note: "المادة ضمن اختيار المسار، لكن فهرسها غير محمّل في الحزمة." },

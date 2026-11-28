@@ -9,7 +9,6 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 // analytics, books) are requested only when the student opens those screens.
 const WorkspaceInteractionHub = lazy(() => import("@/components/WorkspaceInteractionHub"));
 const TeacherClassFollowup = lazy(() => import("@/components/TeacherClassFollowup"));
-const AIActivityCenter = lazy(() => import("@/components/AIActivityCenter"));
 const AIActivityHistory = lazy(() => import("@/pages/AIActivityHistory"));
 const Books = lazy(() => import("@/pages/Books"));
 const Calendar = lazy(() => import("@/pages/Calendar"));
@@ -113,7 +112,6 @@ function App() {
             {/* Keep global tools lazy so they do not block the first page paint. */}
             <Suspense fallback={null}>
               <WorkspaceInteractionHub />
-              <AIActivityCenter />
               <TeacherClassFollowup />
             </Suspense>
           </WouterRouter>

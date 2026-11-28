@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
-import PlannerOperationsScene from "@/components/PlannerOperationsScene";
 import QueryErrorNotice from "@/components/QueryErrorNotice";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,6 +9,7 @@ import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
 import { getNextOpenPlanStep } from "@/lib/plan-actions";
 import { getPlannerStepCurriculum } from "@/lib/planner-curriculum";
+import { displayCurriculumTitle } from "@/lib/curriculum-display";
 import { CAIRO_BAC_EXAM_CALENDAR_NOTICE, getCairoSecondYearBaccalaureateExams } from "@shared/cairo-baccalaureate-exam-calendar";
 import { getSIEStudentVisibleBranches, getSIECheckpointProgressBranches, getSIESubject, matchSIECheckpointTask, normalizeSIECheckpointFrontier } from "@shared/sie-catalog";
 import { formatTime12Hour, getCalendarDaysBetween, getDateKeyInTimeZone } from "@shared/date-time";
@@ -88,7 +88,7 @@ export default function Home() {
       await utils.studentProfile.get.invalidate();
       setShowWelcomeGuide(false);
     },
-    onError: error => toast.error(error.message || "تعذّر حفظ إكمال دليل البداية."),
+    onError: error => toast.error(error.message || "تعذّر حفظ إكمال إزاي تبدأ؟."),
   });
   const dailyPlan = trpc.plans.currentDaily.useQuery(undefined, {
     enabled: Boolean(user) && !authLoading,
@@ -666,8 +666,7 @@ export default function Home() {
             <div className="sf-home-study-map-title">
               <span>مساحة اليوم · مسار التنفيذ</span>
               <h3>خريطة مذاكرة اليوم</h3>
-              <p>اقرأ الدرس وافهمه أولًا، ثم استرجع أفكاره وحلّ عليه. كل خطوة هنا توصلك للخطوة اللي بعدها.</p>
-            </div>
+              </div>
             <Button variant="outline" size="sm" className="sf-home-study-map-open" onClick={() => setLocation("/planner")}>
               الخريطة الكاملة <ArrowLeft className="size-4" />
             </Button>
@@ -679,7 +678,6 @@ export default function Home() {
           ) : plan ? (
             <div className="sf-home-study-map-body">
               <div className="sf-home-study-map-summary">
-                <p>{plan.summary}</p>
                 <div className="sf-home-study-map-progress">
                   <div className="sf-home-study-map-progress-copy">
                     <span>تقدم تنفيذ الخطة</span>
@@ -694,6 +692,22 @@ export default function Home() {
                   {homeStudySteps.slice(0, 6).map((step: any, index: number) => {
                     const isDone = step.plannerTaskStatus === "done" || step.existingTask?.status === "done";
                     const isNext = index === homeNextStepIndex;
+                    const curriculum = getPlannerStepCurriculum(step, profile.data?.subjectIds ?? []);
+                    const nodeId = step.curriculumNodeIds?.[0];
+                    const branch = curriculum && nodeId
+                      ? getSIECheckpointProgressBranches(curriculum.subjectId).find(item => item.choices.some(choice => choice.nodeId === nodeId))
+                      : null;
+                    const unitLabel = curriculum?.subjectId === "ENG1_G2_BAC" && curriculum.unitNumber
+                      ? "Unit " + curriculum.unitNumber + " — " + displayCurriculumTitle(curriculum.unitTitle)
+                      : curriculum?.unitNumber
+                        ? "الوحدة " + curriculum.unitNumber.toLocaleString("ar-EG")
+                        : curriculum?.unitTitle || "";
+                    const lessonLabel = curriculum?.subjectId === "ENG1_G2_BAC"
+                      ? curriculum.branchId === "ENG_VOCABULARY" ? "Lesson 1 — Vocabulary"
+                        : curriculum.branchId === "ENG_GRAMMAR" ? "Lesson " + (curriculum.lessonNumber || "2") + " — Grammar"
+                          : curriculum.lessonNumber ? "Lesson " + curriculum.lessonNumber : ""
+                      : curriculum?.lessonNumber ? "الدرس " + curriculum.lessonNumber : "";
+                    const displayStepTitle = curriculum?.subjectId === "ENG1_G2_BAC" ? curriculum.lesson : step.title;
                     return (
                       <article key={step.plannerTaskId ?? step.existingTask?.id ?? step.sourceStepIndex ?? index}
                         className={"sf-home-study-step " + (isDone ? "is-done" : isNext ? "is-next" : "is-upcoming")}
@@ -708,8 +722,14 @@ export default function Home() {
                             {step.day && <span>{step.day}</span>}
                             {isDone ? <strong>مكتملة</strong> : isNext ? <strong>ابدأ من هنا</strong> : <span>قادمة</span>}
                           </div>
-                          <h4>{step.title}</h4>
-                          <p>{step.detail || "ابدأ بقراءة الجزء المطلوب بهدوء، واربط الأفكار ببعضها قبل الانتقال للحل."}</p>
+                          {(unitLabel || lessonLabel) && (
+                            <div className="sf-home-study-step-curriculum" aria-label="موضع الدرس في المنهج">
+                              {unitLabel && <span>{unitLabel}</span>}
+                              {lessonLabel && <span>{lessonLabel}</span>}
+                            </div>
+                          )}
+                          <h4>{displayStepTitle}</h4>
+                          {step.detail && <p>{step.detail}</p>}
                           {Array.isArray(step.studyMethod?.stages) && step.studyMethod.stages.length > 0 && (
                             <ol className="sf-home-study-step-stages" aria-label="مراحل تنفيذ المهمة">
                               {step.studyMethod.stages.slice(0, 3).map((stage: any, stageIndex: number) => (
@@ -720,21 +740,14 @@ export default function Home() {
                               ))}
                             </ol>
                           )}
-                          {(() => {
-                            const curriculum = getPlannerStepCurriculum(step, profile.data?.subjectIds ?? []);
-                            const nodeId = step.curriculumNodeIds?.[0];
-                            const branch = curriculum && nodeId
-                              ? getSIECheckpointProgressBranches(curriculum.subjectId).find(item => item.choices.some(choice => choice.nodeId === nodeId))
-                              : null;
-                            return curriculum && branch && nodeId ? (
-                              <a className="sf-home-study-step-action"
-                                href={"/study?subject=" + encodeURIComponent(curriculum.subjectId)
-                                  + "&branch=" + encodeURIComponent(branch.branchId)
-                                  + "&lesson=" + encodeURIComponent(nodeId)}>
-                                افتح الدرس وابدأ القراءة <ArrowLeft className="size-3.5" />
-                              </a>
-                            ) : null;
-                          })()}
+                          {curriculum && branch && nodeId && (
+                            <a className="sf-home-study-step-action"
+                              href={"/study?subject=" + encodeURIComponent(curriculum.subjectId)
+                                + "&branch=" + encodeURIComponent(branch.branchId)
+                                + "&lesson=" + encodeURIComponent(nodeId)}>
+                              افتح الدرس <ArrowLeft className="size-3.5" />
+                            </a>
+                          )}
                         </div>
                       </article>
                     );
@@ -760,8 +773,8 @@ export default function Home() {
                 <div className="sf-home-study-map-sync" role="status" aria-live="polite">
                   <Loader2 className="size-4 animate-spin" />
                   <div>
-                    <strong>StudyFlow بيحدّث ترتيب خطواتك تلقائيًا</strong>
-                    <span>نطابق آخر تقدمك والمهام الجديدة قبل اعتماد المسار المحدّث.</span>
+                    <strong>الخريطة بتُعاد مواءمتها</strong>
+                    <span>وصل تحديث في تقدمك أو مواعيدك؛ لن نعرض الترتيب القديم كأنه نهائي.</span>
                   </div>
                 </div>
               )}
@@ -771,14 +784,14 @@ export default function Home() {
               {profile.data?.subjectIds?.length ? (
                 <>
                   <Loader2 className="size-8 animate-spin" />
-                  <strong>{ensurePlan.isPending ? "محرك التخطيط بيبني خريطة يومك" : "بنجهّز مسار مذاكرتك تلقائيًا"}</strong>
-                  <p>بنراجع موادك وآخر تقدمك والمهام المسجلة، وبعدها هتظهر لك أول خطوة ومكان القراءة والمراجعة بوضوح.</p>
+                  <strong>{ensurePlan.isPending ? "بنرتّب أولويات اليوم" : "خريطة اليوم قيد التجهيز"}</strong>
+                  <p>هنعرض لك أول مهمة واضحة، ثم باقي الخطوات المرتبطة بموضعك في المنهج.</p>
                 </>
               ) : (
                 <>
                   <Sparkles className="size-8" />
-                  <strong>كمّل ملفك الدراسي عشان نفتح لك المسار</strong>
-                  <p>أكمل المواد ومواعيد المحاضرات مرة واحدة، وبعدها StudyFlow هيبني خريطة مذاكرتك تلقائيًا.</p>
+                  <strong>ابدأ بإعداد ملفك الدراسي</strong>
+                  <p>اختَر موادك ومدرسيك ومواعيد الحصص؛ بعدها نقدر نحدد أولوياتك بدقة.</p>
                   <Button onClick={() => setLocation("/settings/academic")} variant="outline" className="rounded-xl">إكمال الملف الدراسي <ArrowLeft className="size-4" /></Button>
                 </>
               )}
@@ -805,13 +818,13 @@ export default function Home() {
             <header className="sf-home-exam-calendar-header">
               <div>
                 <span className="sf-sp-eyebrow">المتابعة الامتحانية · القاهرة</span>
-                <h3 id="sf-home-exam-calendar-title">امتحانات المواد المضافة للمجموع</h3>
-                <p>توزيع نوفمبر المقترح للصف الثاني بكالوريا حسب المواد الموجودة في ملفك.</p>
+                <h3 id="sf-home-exam-calendar-title">الامتحانات القادمة</h3>
+                <p>مواعيد مقترحة على مستوى مديرية القاهرة، وليست جدول مدرستك المؤكد.</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <span className="sf-home-exam-calendar-status">جدول مديرية مقترح</span>
+                <span className="sf-home-exam-calendar-status">مواعيد مقترحة</span>
                 <Button type="button" variant="outline" size="sm" className="rounded-full"
-                  onClick={() => setLocation("/planner")}>جهّز خطة مراجعة الشهر</Button>
+                  onClick={() => setLocation("/planner")}>افتح خطة المذاكرة</Button>
               </div>
             </header>
             <div className="sf-home-exam-calendar-track">
@@ -836,31 +849,25 @@ export default function Home() {
                     <span className="sf-home-exam-countdown">
                       {days === 0 ? "اليوم" : days === 1 ? "غدًا" : "بعد " + days.toLocaleString("ar-EG") + " يوم"}
                     </span>
-                    <details className="sf-home-exam-scope" data-testid={"home-exam-scope-" + exam.subjectId}>
-                      <summary>
-                        دروس المراجعة المسجلة
-                        <span>{coveredLessonCount.toLocaleString("ar-EG")} درس</span>
-                      </summary>
+                    <div className="sf-home-exam-scope" data-testid={"home-exam-scope-" + exam.subjectId}>
+                      <div className="sf-home-exam-scope-heading">
+                        <span>نطاق المراجعة المسجل</span>
+                        <b>{coveredLessonCount.toLocaleString("ar-EG")} درس</b>
+                      </div>
                       {examScope.length ? (
-                        <div className="sf-home-exam-scope-content">
-                          <section>
-                            <ul>{examScope.flatMap(branch => branch.lessonTitles.map((title, lessonIndex) => ({
-                              id: branch.lessonIds[lessonIndex] || branch.branchId + "-" + lessonIndex,
-                              title,
-                            }))).map(lesson => (
-                              <li key={lesson.id}>{lesson.title}</li>
-                            ))}</ul>
-                          </section>
-                        </div>
+                        <ul className="sf-home-exam-scope-preview">
+                          {examScope.flatMap(branch => branch.lessonTitles.map((title, lessonIndex) => ({
+                            id: branch.lessonIds[lessonIndex] || branch.branchId + "-" + lessonIndex,
+                            title,
+                          }))).slice(0, 3).map(lesson => (
+                            <li key={lesson.id}>{lesson.title}</li>
+                          ))}
+                        </ul>
                       ) : (
-                        <p className="sf-home-exam-scope-empty">
-                          لا يوجد موضع مدرس أو سنتر مؤكد لهذه المادة بعد. حدّث الموضع في صفحة المذاكرة حتى نعرض الدروس دون تخمين.
-                        </p>
+                        <p className="sf-home-exam-scope-empty">سجّل آخر موضع شرح للمدرس حتى نحدد الدروس الداخلة في نطاق المراجعة.</p>
                       )}
-                      <p className="sf-home-exam-scope-note">
-                        النطاق مبني على آخر موضع شرح مسجل، وهو إطار مراجعة مقترح وليس إعلانًا رسميًا بمحتوى الامتحان.
-                      </p>
-                    </details>
+                      <p className="sf-home-exam-scope-note">النطاق تقدير مبني على موضع الشرح المسجل، وليس إعلانًا رسميًا بمحتوى الامتحان.</p>
+                    </div>
                   </article>
                 );
               })}
@@ -871,9 +878,7 @@ export default function Home() {
             </footer>
           </section>
         )}
-
-        <PlannerOperationsScene />
-      </div>
+</div>
         <AnimatePresence>
           {showWelcomeGuide && (
             <motion.div

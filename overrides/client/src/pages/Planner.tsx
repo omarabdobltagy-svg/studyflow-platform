@@ -191,16 +191,22 @@ function displayTime12Hour(value: string): string {
 function displayPlanStepTitle(step: PlanStep, subjectIds: string[]): string {
   const curriculum = getPlanStepCurriculum(step, subjectIds);
   if (curriculum) {
+    const isEnglish = curriculum.subjectId === "ENG1_G2_BAC";
     const unitLabel = curriculum.unitNumber
-      ? "الوحدة " + curriculum.unitNumber.toLocaleString("ar-EG") + (curriculum.unitTitle ? " — " + displayCurriculumTitle(curriculum.unitTitle) : "")
+      ? (isEnglish ? "Unit " : "الوحدة ") + curriculum.unitNumber.toLocaleString(isEnglish ? "en" : "ar-EG")
+        + (curriculum.unitTitle ? " — " + displayCurriculumTitle(curriculum.unitTitle) : "")
       : curriculum.unitTitle
         ? (curriculum.lessonType === "story" ? "القصة المقررة · " : "") + displayCurriculumTitle(curriculum.unitTitle)
         : "";
-    const lessonSequence = curriculum.lessonNumber
-      ? (curriculum.lessonType === "story" ? "الفصل " : "الدرس ") + curriculum.lessonNumber
-      : curriculum.courseSequenceNumber
-        ? "الدرس " + curriculum.courseSequenceNumber.toLocaleString("ar-EG")
-        : "";
+    const lessonSequence = isEnglish
+      ? curriculum.branchId === "ENG_VOCABULARY" ? "Lesson 1 — Vocabulary"
+        : curriculum.branchId === "ENG_GRAMMAR" ? "Lesson " + (curriculum.lessonNumber || "2") + " — Grammar"
+          : curriculum.lessonNumber ? "Lesson " + curriculum.lessonNumber : ""
+      : curriculum.lessonNumber
+        ? (curriculum.lessonType === "story" ? "الفصل " : "الدرس ") + curriculum.lessonNumber
+        : curriculum.courseSequenceNumber
+          ? "الدرس " + curriculum.courseSequenceNumber.toLocaleString("ar-EG")
+          : "";
     const segment = step.segmentIndex && step.segmentCount && step.segmentCount > 1
       ? " — الجزء " + step.segmentIndex.toLocaleString("ar-EG") + " من " + step.segmentCount.toLocaleString("ar-EG")
       : "";
@@ -1470,7 +1476,7 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
                           <span className="sf-execution-step-index">{isDone?<CheckCircle2 className="size-4"/>:(laneStepIndex+1).toLocaleString("ar-EG")}</span>
                           <details className="sf-execution-step-details" open={selectedMapStepIndex===index} onToggle={event=>{if(event.currentTarget.open)setSelectedMapStepIndex(index);else if(selectedMapStepIndex===index)setSelectedMapStepIndex(null);}}>
                             <summary>
-                              <span className="sf-execution-step-meta"><span>{statusLabel}</span>{step.day&&<span>{step.day}</span>}{curriculum?.unitNumber&&<span>الوحدة {curriculum.unitNumber.toLocaleString("ar-EG")}</span>}{curriculum?.lessonNumber&&<span>الدرس {curriculum.lessonNumber}</span>}{step.priority&&<span>{priorityLabel[step.priority]??"أولوية عادية"}</span>}</span>
+                              <span className="sf-execution-step-meta"><span>{statusLabel}</span>{step.day&&<span>{step.day}</span>}{step.priority&&<span>{priorityLabel[step.priority]??"أولوية عادية"}</span>}</span>
                               <strong>{displayPlanStepTitle(step,subjectIds)}</strong>
                               <p>{displayPlanStepDetail(step,subjectIds)}</p>
                               <ArrowDown className="sf-execution-step-chevron size-4"/>

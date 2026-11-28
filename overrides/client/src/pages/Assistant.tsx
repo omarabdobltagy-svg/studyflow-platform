@@ -2,7 +2,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { AIChatBox } from "@/components/AIChatBox";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
-import { BookOpen, CalendarClock, CheckCircle2, ClipboardList, FileText, MessageSquare, Paperclip, Plus, RefreshCw, ShieldCheck, Sparkles, Trash2, X } from "lucide-react";
+import { BookOpen, FileText, MessageSquare, Paperclip, Plus, ShieldCheck, Sparkles, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -95,17 +95,7 @@ export default function Assistant() {
     [threads, selectedId],
   );
   const profile = trpc.studentProfile.get.useQuery();
-  const dailyPlan = trpc.plans.currentDaily.useQuery(undefined, {
-    enabled: !profile.isLoading && !profile.isError && Boolean(profile.data?.subjectIds?.length),
-    staleTime: 15_000,
-    refetchOnWindowFocus: false,
-    refetchInterval: query => query.state.data?.needsRefresh ? 900 : query.state.data?.plan ? 15_000 : false,
-  });
-  const dashboardSummary = trpc.dashboard.summary.useQuery({ timeZone: "Africa/Cairo" }, {
-    enabled: Boolean(profile.data),
-    staleTime: 20_000,
-  });
-  const assistantContextReady = Boolean(profile.data && !profile.isError && !dailyPlan.isLoading && !dailyPlan.isError && !dashboardSummary.isLoading && !dashboardSummary.isError);
+  const assistantContextReady = Boolean(profile.data && !profile.isLoading && !profile.isError);
   const abortControllerRef = useRef<AbortController | null>(null);
   const streamingThreadRef = useRef<string | null>(null);
 
@@ -396,14 +386,14 @@ export default function Assistant() {
   const activeIsStreaming = Boolean(activeThread && streamingThreadId === activeThread.id);
 
   return (
-    <DashboardLayout title="المساعد الدراسي الذكي" description="ذكاء دراسي متصل بسياق مساحتك، وأنشطتك، والمهام والروتين والتقويم والتقدم المنهجي.">
+    <DashboardLayout title="المساعد المعرفي للمنهج" description="مساحة مستقلة لشرح المفاهيم وفهم الدروس والرجوع إلى مصادر المنهج. لا تدير خطة مذاكرتك ولا تغيّر مهامك.">
       <section className="sf-assistant-shell mb-5 overflow-hidden rounded-[1.5rem] border border-border/70 bg-card">
         <div className="flex flex-col gap-4 border-b border-border/70 bg-gradient-to-l from-secondary/75 via-card to-card p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
           <div className="flex items-start gap-3">
             <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg"><Sparkles className="size-5" /></span>
             <div>
-              <div className="flex flex-wrap items-center gap-2"><h2 className="text-lg font-bold">مساعد StudyFlow</h2><span className="sf-assistant-live-state"><i/>{assistantContextReady?"السياق الدراسي جاهز":profile.isError?"تعذّر تحميل الملف الدراسي":"يربط بيانات مساحتك"}</span></div>
-              <p className="mt-1 text-sm leading-6 text-muted-foreground">المساعد يقرأ سياقك الحالي قبل الرد: المنهج، الخطة، المهام، التقدم، المواعيد والنشاط المسجل.</p>
+              <div className="flex flex-wrap items-center gap-2"><h2 className="text-lg font-bold">مساعد StudyFlow</h2><span className="sf-assistant-live-state"><i/>{assistantContextReady?"فهرس موادك جاهز":profile.isError?"تعذّر تحميل المواد":"جارٍ تحميل موادك"}</span></div>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">اسأل عن درس أو مصطلح أو فكرة في الكتاب. هذه المحادثة مستقلة عن محرك التخطيط ولوحة اليوم.</p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -411,24 +401,6 @@ export default function Assistant() {
             <span className="inline-flex items-center gap-1.5 rounded-xl bg-muted px-3 py-2"><ShieldCheck className="size-3.5"/>تفضيلاتك الدراسية محفوظة</span>
           </div>
         </div>
-        <section className="sf-assistant-context-strip" data-testid="assistant-live-context">
-          <header>
-            <div><span>سياق المساعد</span><strong>البيانات التي يعتمد عليها في هذه الجلسة</strong></div>
-            <div className="sf-assistant-context-actions">
-              <span>{assistantContextReady?"آخر مزامنة مكتملة":dailyPlan.isError||dashboardSummary.isError?"بعض البيانات غير متاحة":"جارٍ ربط البيانات"}</span>
-              <Button type="button" variant="outline" size="sm" onClick={()=>void Promise.all([profile.refetch(),dailyPlan.refetch(),dashboardSummary.refetch()])} disabled={profile.isFetching||dailyPlan.isFetching||dashboardSummary.isFetching}>
-                <RefreshCw className={"size-3.5"+(profile.isFetching||dailyPlan.isFetching||dashboardSummary.isFetching?" animate-spin":"")}/> تحديث السياق
-              </Button>
-            </div>
-          </header>
-          <div className="sf-assistant-context-grid">
-            <article><span><BookOpen className="size-4"/>ملف المنهج</span><strong>{profile.isLoading?"…":profile.data?.subjectIds?.length??0}</strong><small>مواد محددة</small></article>
-            <article><span><CalendarClock className="size-4"/>الخطة اليومية</span><strong>{dailyPlan.isLoading?"…":dailyPlan.data?.needsRefresh?"تحديث":dailyPlan.data?.plan?"مرتبطة":"غير منشأة"}</strong><small>{dailyPlan.data?.plan?.steps?.length??0} خطوة حالية</small></article>
-            <article><span><ClipboardList className="size-4"/>المهام</span><strong>{dashboardSummary.isLoading?"…":dashboardSummary.data?.taskStats?.remaining??"—"}</strong><small>مهمة مفتوحة</small></article>
-            <article><span><CheckCircle2 className="size-4"/>الإنجاز المسجل</span><strong>{dashboardSummary.isLoading?"…":dashboardSummary.data?.taskStats?.completed??"—"}</strong><small>مهمة مكتملة</small></article>
-          </div>
-          <p>هذه ليست بيانات تخمينية: إذا فشل تحميل مصدر ما، يظهر ذلك هنا ولا يتعامل المساعد معه على أنه صفر أو إنجاز مكتمل.</p>
-        </section>
         <div className="grid gap-4 p-3 sm:p-4 lg:grid-cols-[250px_minmax(0,1fr)]">
           <aside className="sf-assistant-sidebar flex min-w-0 flex-col rounded-2xl border border-border/70 bg-muted/20 p-3">
             <Button type="button" onClick={createConversation} className="mb-3 h-11 w-full justify-center gap-2 rounded-xl bg-primary">

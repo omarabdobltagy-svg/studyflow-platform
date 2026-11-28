@@ -10,6 +10,7 @@ export type PlannerCurriculumReference = {
   subjectId: string;
   subject: string;
   branch: string;
+  branchId: string;
   lesson: string;
   unitId?: string;
   unitNumber?: number;
@@ -56,6 +57,7 @@ function locateNode(subjectId: string, nodeId: string): PlannerCurriculumReferen
       subjectId,
       subject: getSIESubject(subjectId)?.nameAr ?? "مادة دراسية",
       branch: displayBranchTitle(branch.branchTitle),
+      branchId: branch.branchId,
       lesson: displayCurriculumTitle(choice.title),
       ...(unit ? { unitId: unit.unitId } : {}),
       ...(unit?.unitNumber ?? choice.unitNumber
