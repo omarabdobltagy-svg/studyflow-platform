@@ -2538,6 +2538,46 @@ export const appRouter = router({
         }
         return { success: true };
       }),
+    saveMonthlyExamScope: protectedProcedure
+      .input(z.object({
+        subjectId: z.string().trim().min(1).max(80),
+        date: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/),
+        includedNodeIds: z.array(z.string().trim().min(1).max(120)).max(100),
+        excludedNodeIds: z.array(z.string().trim().min(1).max(120)).max(100).default([]),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const profile = await getStudentProfile(ctx.user.id);
+        if (!profile || profile.educationSystem !== "baccalaureate" || !profile.subjectIds.includes(input.subjectId)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "هذه المادة غير موجودة في ملف البكالوريا." });
+        }
+        const exam = getCairoSecondYearBaccalaureateExams(profile)
+          .find(item => item.subjectId === input.subjectId && item.date === input.date);
+        if (!exam) throw new TRPCError({ code: "BAD_REQUEST", message: "تاريخ الامتحان غير موجود في جدول المواد المسجلة." });
+        const allowed = new Set(getSIECheckpointProgressBranches(input.subjectId).flatMap(branch => branch.choices.map(choice => choice.nodeId)));
+        const includedNodeIds = [...new Set(input.includedNodeIds)];
+        const excludedNodeIds = [...new Set(input.excludedNodeIds)];
+        if (!includedNodeIds.length
+          || includedNodeIds.some(id => !allowed.has(id))
+          || excludedNodeIds.some(id => !allowed.has(id))
+          || excludedNodeIds.some(id => includedNodeIds.includes(id))) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "راجع الدروس المحددة داخل النطاق وخارجه." });
+        }
+        const selection = (profile.selection ?? {}) as Record<string, any>;
+        const monthlyExamScopes = { ...((selection.monthlyExamScopes ?? {}) as Record<string, unknown>) };
+        const key = input.subjectId + "::" + input.date;
+        const record = {
+          subjectId: input.subjectId,
+          examDate: input.date,
+          includedNodeIds,
+          excludedNodeIds,
+          source: "student_reported" as const,
+          savedAt: new Date().toISOString(),
+        };
+        monthlyExamScopes[key] = record;
+        await updateStudentProfileSelection(ctx.user.id, { ...selection, monthlyExamScopes });
+        queueDailyPlanReconciliation(ctx.user.id, "student.monthly_exam_scope_changed", "student");
+        return { success: true, scope: record };
+      }),
     markMonthlyExamCompleted: protectedProcedure
       .input(z.object({
         subjectId: z.string().trim().min(1).max(80),

@@ -14,6 +14,7 @@ import { CAIRO_BAC_EXAM_CALENDAR_NOTICE, getUpcomingCairoSecondYearBaccalaureate
 import { getSIEStudentVisibleBranches, getSIECheckpointProgressBranches, getSIESubject, matchSIECheckpointTask, normalizeSIECheckpointFrontier } from "@shared/sie-catalog";
 import { formatTime12Hour, getCalendarDaysBetween, getDateKeyInTimeZone } from "@shared/date-time";
 import { buildMonthlyExamCoveredScope } from "@shared/monthly-exam-scope";
+import MonthlyExamScopeManager from "@/components/MonthlyExamScopeManager";
 import {
   ArrowLeft, BarChart3, BookOpenText, CalendarDays, Check, CheckCircle2, Clock3,
   Compass, GraduationCap, ListChecks, Loader2, MessageCircle,
@@ -372,14 +373,7 @@ export default function Home() {
     () => serverNow ? getUpcomingCairoSecondYearBaccalaureateExams(profile.data, serverNow, completedMonthlyExamKeys) : [],
     [profile.data?.educationSystem, profile.data?.gradeYear, profile.data?.subjectIds, cairoExamDate, serverNow, completedMonthlyExamKeys],
   );
-  const monthlyExamCoveredScope = useMemo(() => {
-    const selection = (profile.data?.selection ?? {}) as Record<string, any>;
-    return buildMonthlyExamCoveredScope(
-      profile.data?.subjectIds ?? [],
-      (selection.learningCourseProgress ?? {}) as Record<string, any>,
-      (selection.courseModes ?? {}) as Record<string, string>,
-    );
-  }, [profile.data?.subjectIds, profile.data?.selection]);
+  const monthlyExamScopeRecords = ((profile.data?.selection as Record<string, any> | undefined)?.monthlyExamScopes ?? {}) as Record<string, unknown>;
   const daysUntilExam = (date: string) => cairoExamDate ? Math.max(0, getCalendarDaysBetween(cairoExamDate, date)) : 0;
   const homeNextStepIndex = homeNextStep ? homeStudySteps.indexOf(homeNextStep) : -1;
   const taskCount = summary.data?.taskStats.total ?? 0;
@@ -817,10 +811,11 @@ export default function Home() {
                 const dateLabel = new Intl.DateTimeFormat("ar-EG", {
                   day: "numeric", month: "long", timeZone: "Africa/Cairo",
                 }).format(new Date(exam.date + "T12:00:00Z"));
-                const examScope = monthlyExamCoveredScope.filter(item => item.subjectId === exam.subjectId);
+                const examScope = buildMonthlyExamCoveredScope([exam.subjectId], monthlyExamScopeRecords, exam.date);
                 const coveredLessonCount = examScope.reduce((total, branch) => total + branch.lessonTitles.length, 0);
+                const excludedLessonCount = examScope.reduce((total, branch) => total + branch.excludedLessonTitles.length, 0);
                 return (
-                  <article key={exam.subjectId} className="sf-home-exam-item">
+                  <article key={exam.subjectId} className={"sf-home-exam-item" + (days === 0 ? " is-exam-today" : days === 1 ? " is-exam-tomorrow" : "")} data-exam-date={exam.date}>
                     <div className="sf-home-exam-item-date">
                       <span>{exam.dayName}</span>
                       <strong>{dateLabel}</strong>
@@ -848,29 +843,31 @@ export default function Home() {
                     )}
                     <div className="sf-home-exam-scope" data-testid={"home-exam-scope-" + exam.subjectId}>
                       <div className="sf-home-exam-scope-heading">
-                        <span>نطاق المراجعة المسجل</span>
-                        <b>{coveredLessonCount.toLocaleString("ar-EG")} درس</b>
+                        <span>محتوى الامتحان</span>
+                        <b>{coveredLessonCount.toLocaleString("ar-EG")} داخل · {excludedLessonCount.toLocaleString("ar-EG")} خارج</b>
                       </div>
                       {examScope.length ? (
-                        <ul className="sf-home-exam-scope-preview">
+                        <div className="sf-home-exam-scope-preview">
                           {examScope.flatMap(branch => branch.lessonTitles.map((title, lessonIndex) => ({
                             id: branch.lessonIds[lessonIndex] || branch.branchId + "-" + lessonIndex,
                             title,
-                          }))).slice(0, 3).map(lesson => (
-                            <li key={lesson.id}>{lesson.title}</li>
-                          ))}
-                        </ul>
+                          }))).slice(0, 5).map(lesson => <span key={lesson.id} className="is-included">{lesson.title}</span>)}
+                          {examScope.flatMap(branch => branch.excludedLessonTitles.map((title, lessonIndex) => ({
+                            id: branch.excludedLessonIds[lessonIndex] || branch.branchId + "-excluded-" + lessonIndex,
+                            title,
+                          }))).slice(0, 4).map(lesson => <span key={lesson.id} className="is-excluded">{lesson.title}</span>)}
+                        </div>
                       ) : (
-                        <p className="sf-home-exam-scope-empty">سجّل آخر موضع شرح للمدرس حتى نحدد الدروس الداخلة في نطاق المراجعة.</p>
+                        <p className="sf-home-exam-scope-empty">لم تحدد نطاق هذا الامتحان بعد. آخر موضع للمدرس دليل على ما شرحه فقط، وليس دليلًا على ما سيدخل الاختبار.</p>
                       )}
-                      <p className="sf-home-exam-scope-note">النطاق تقدير مبني على موضع الشرح المسجل، وليس إعلانًا رسميًا بمحتوى الامتحان.</p>
+                      <MonthlyExamScopeManager subjectId={exam.subjectId} examDate={exam.date} selection={profile.data?.selection as Record<string, any> | undefined}/>
                     </div>
                   </article>
                 );
               })}
             </div>
             <footer className="sf-home-exam-calendar-footer">
-              <p>جدول مديرية القاهرة المقترح، وليس تأكيدًا من مدرستك. نطاق المراجعة المعروض تقديري ويعتمد على موضع الشرح المسجل.</p>
+              <p>جدول مديرية القاهرة المقترح وليس تأكيدًا من مدرستك. نطاق كل امتحان يُحفظ على حدة من الدروس التي تحددها أنت؛ لا نستنتجه من موضع المدرس.</p>
             </footer>
           </section>
         )}
