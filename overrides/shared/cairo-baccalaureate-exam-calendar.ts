@@ -49,17 +49,12 @@ export function getCairoExamUnitTwoFocus(subjectId: string): CairoExamUnitFocus 
         ...(choice.sourceLabel ? { sourceLabel: choice.sourceLabel } : {}),
       }))
   );
-  const unitTitle = lessons.find(lesson =>
-    lesson.sourceLabel?.includes("الوحدة الثانية")
-  )?.sourceLabel
-    ? lessons.find(lesson => lesson.sourceLabel?.includes("الوحدة الثانية"))?.sourceLabel
-    : getSIECheckpointProgressBranches(subjectId)
-        .flatMap(branch => branch.choices)
-        .find(choice => choice.unitNumber === 2)?.unitTitle;
+  const unitTitle = getSIECheckpointProgressBranches(subjectId)
+    .flatMap(branch => branch.choices)
+    .find(choice => choice.unitNumber === 2 && choice.unitTitle?.trim())?.unitTitle?.trim();
   return {
     unitNumber: 2,
-    unitTitle: unitTitle?.replace(/^.*الوحدة الثانية[،: -]*/,"").trim()
-      || (subjectId === "ENG1_G2_BAC" ? "Leisure Time" : "الوحدة الثانية"),
+    unitTitle: unitTitle || (subjectId === "ENG1_G2_BAC" ? "Leisure Time" : "فهرس الوحدة الثانية غير متاح"),
     lessons,
     source: "student_guidance",
   };
