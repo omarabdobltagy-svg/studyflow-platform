@@ -926,10 +926,10 @@ async function buildDailyPlanOperationalContext(userId: number) {
     typeof decisionSignals.dailyMinutes === "number" && decisionSignals.dailyMinutes <= 60
       ? "القدرة اليومية محدودة إلى " + decisionSignals.dailyMinutes + " دقيقة تقريبًا. لا تتجاوز السعة الواقعية ولا تخفِ المهام الزائدة؛ اذكر ما تم تأجيله وسبب التأجيل."
       : "",
-    decisionSignals.openTasksCount >= 10
+    (decisionSignals.openTasksCount ?? 0) >= 10
       ? "التراكم مرتفع (" + decisionSignals.openTasksCount + " مهمة مفتوحة): لا تحاول إنهاء كل شيء في يوم واحد. حافظ على المهام، أزل التكرار، ووزّعها حسب الأولوية والأهلية."
       : "",
-    decisionSignals.recentSetbacks >= 2
+    (decisionSignals.recentSetbacks ?? 0) >= 2
       ? "هناك تعثرات حديثة متكررة: أعد ضبط حجم الخطوات وواقعيتها بدل إضافة مهام تعويضية فوق القدرة."
       : "",
     decisionSignals.obstacle ? "العائق المسجل لدى الطالب: " + decisionSignals.obstacle + ". لا تتجاهله؛ عدّل التوزيع بما يمكن تنفيذه." : "",
