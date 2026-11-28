@@ -21,6 +21,7 @@ import "./design-quality.css";
 import "./identity-system.css";
 import "./exam-first-planner.css";
 import "./liquid-glass.css";
+import "./planner-cinematic-map.css";
 
 // Analytics is optional. Do not emit a broken /umami request when no endpoint is configured.
 const analyticsEndpoint = import.meta.env.VITE_ANALYTICS_ENDPOINT?.trim();

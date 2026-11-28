@@ -80,9 +80,10 @@ describe("Arabic course taxonomy", () => {
       || option.label.includes("تابع الممنوع")
     );
     expect(mamnooOptions).toHaveLength(1);
+    expect(mamnooOptions.map(option => option.label)).not.toContain("تابع الممنوع من الصرف");
     expect(mamnooOptions[0]).toMatchObject({
       value: "ARB_U2_N3",
-      label: "الممنوع من الصرف وعلل منعه",
+      label: "الممنوع من الصرف",
     });
     expect(options.find(option => option.value === "ARB_U3_N1_NAAT")).toMatchObject({
       value: "ARB_U3_N1_NAAT",
@@ -125,6 +126,15 @@ describe("Arabic course taxonomy", () => {
     )).toHaveLength(2);
     expect(unitThreeNahw?.choices.map(choice => choice.title)).not.toContain("التمييز");
     expect(getSIECheckpointChoices("ARB_G2_BAC").some(choice => choice.nodeId === "ARB_U3_N1")).toBe(false);
+  });
+
+
+  it("keeps official Unit 2 available for every core subject", () => {
+    for (const subjectId of ["ARB_G2_BAC", "ENG1_G2_BAC", "HIS_G2_BAC", "PROG_AI_G2_BAC"]) {
+      const unitTwo = getSIECheckpointUnits(subjectId).find(unit => unit.isOfficialUnit && unit.unitNumber === 2);
+      expect(unitTwo, subjectId + " must expose official Unit 2").toBeDefined();
+      expect(unitTwo?.lessonCount ?? 0).toBeGreaterThan(0);
+    }
   });
 
   it("keeps Arabic teacher-course branches separate from official textbook units", () => {

@@ -353,7 +353,7 @@ export default function Home() {
   const plan = dailyPlan.data?.plan;
   const upcomingTeacherSessions = useMemo(
     () => serverNow && profile.data
-      ? getPlannerTeacherSessions(profile.data, serverNow).slice(0, 6)
+      ? getPlannerTeacherSessions(profile.data, serverNow)
       : [],
     [profile.data, serverNow],
   );

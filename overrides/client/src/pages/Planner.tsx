@@ -371,7 +371,7 @@ export default function Planner() {
   const initialDailyGenerationStarted = useRef(false);
   const plannerPreferencesInitialized = useRef(false);
   // Start at the overview; the distribution map is opened only by an explicit tab choice.
-  const [plannerTab, setPlannerTab] = useState<"overview" | "schedule" | "curriculum" | "tasks" | "history">("overview");
+  const [plannerTab, setPlannerTab] = useState<"overview" | "schedule" | "curriculum" | "tasks" | "history">("schedule");
 
   const history = trpc.plans.list.useQuery();
   const profile = trpc.studentProfile.get.useQuery(undefined, {
@@ -955,7 +955,7 @@ export default function Planner() {
         <nav className="sf-sp-tabs" role="tablist" aria-label="أقسام خطة المذاكرة">
           {([
             ["overview", "الملخص", Sparkles],
-            ["schedule", "التنفيذ", CalendarClock],
+            ["schedule", "الخريطة", CalendarClock],
             ["curriculum", "المواد", BrainCircuit],
             ["tasks", "المهام", CheckCircle2],
             ["history", "السجل", RefreshCw],
@@ -968,7 +968,7 @@ export default function Planner() {
 
         {plannerTab === "overview" && (
           <div className="sf-sp-panel sf-sp-overview-panel">
-            {plan && <PlanDecisionPanel plan={plan} />}
+            {/* Removed the confusing urgent exam-adjustment card. */}
             {plan && <PlanAssistantChat
               plan={plan}
               subjectIds={profile.data?.subjectIds ?? []}
@@ -1162,10 +1162,25 @@ export default function Planner() {
             ) : plan ? (
               <PlanCard plan={plan} subjectIds={profile.data?.subjectIds ?? []} teacherSessions={upcomingTeacherSessions} teacherChoices={((profile.data?.selection as Record<string, any> | undefined)?.teacherChoices ?? profile.data?.teacherSelections ?? {}) as Record<string, string>} title={approved ? "الخطة المعتمدة" : loadedSavedDraft ? "مسودة محفوظة" : "مقترح للمراجعة"} studentName={profile.data?.studentName} editable={!approved} onChange={updatePlan} onApprove={approveCurrentPlan} onAddStep={addStep} onRemoveStep={removeStep} onMoveStep={moveStep} approving={approvePlan.isPending} approved={approved} />
             ) : (
-              <section className="sf-sp-empty">
-                <h2>لم تُنشأ خريطة مذاكرة بعد</h2>
-                <p>افتح الملخص لإنشاء خطة من بيانات تقدمك الفعلية، ثم ستظهر الخريطة هنا مباشرة.</p>
-                <Button type="button" onClick={() => setPlannerTab("overview")}>إنشاء خطة المذاكرة</Button>
+              <section className="sf-sp-empty sf-map-empty-state" data-testid="planner-map-empty">
+                <span className="sf-map-empty-orbit" aria-hidden="true"><Sparkles className="size-7" /></span>
+                <span className="sf-sp-eyebrow">خريطة المذاكرة</span>
+                <h2>{profile.data?.subjectIds?.length ? "خريطتك الدراسية جاهزة للإنشاء" : "أكمل ملفك الدراسي أولًا"}</h2>
+                <p>{profile.data?.subjectIds?.length
+                  ? "سيبني StudyFlow المسارات من موادك ومواضع تقدمك الفعلية ومواعيد المدرسين، ثم يعرض كل خطوة داخل خريطة واحدة."
+                  : "حدّد موادك ومدرسيك ومواضعك الدراسية من الملخص، وبعدها ستظهر خريطة المنهج هنا."}</p>
+                {generationError && <p className="sf-map-empty-error" role="alert">{generationError}</p>}
+                {profile.data?.subjectIds?.length ? (
+                  <Button type="button" className="sf-map-empty-action" onClick={runGeneration}
+                    disabled={!isPreflightReady || isPlanGenerationRunning || ensureDaily.isPending}>
+                    {ensureDaily.isPending ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+                    إنشاء خريطة المذاكرة
+                  </Button>
+                ) : (
+                  <Button type="button" className="sf-map-empty-action" onClick={() => setPlannerTab("overview")}>
+                    إعداد الملف الدراسي
+                  </Button>
+                )}
               </section>
             )}
           </div>
@@ -1486,7 +1501,7 @@ function PlanCard({ plan, subjectIds, teacherSessions, teacherChoices, title, st
     <section className="sf-sp-plan-board">
       <header className="sf-sp-board-header">
         <div className="sf-sp-board-title">
-          <span className="sf-sp-eyebrow">خطة التنفيذ</span>
+          <span className="sf-sp-eyebrow">خريطة المذاكرة</span>
           <div className="sf-sp-section-heading">
             <div><h2>{displayArabicText(plan.title, "خطة المذاكرة")}</h2><p>{summary}</p></div>
             <span className={"sf-sp-status " + (approved ? "is-active" : "is-draft")}>{approved ? "معتمدة" : "بانتظار الاعتماد"}</span>
@@ -1630,7 +1645,7 @@ function PlanCard({ plan, subjectIds, teacherSessions, teacherChoices, title, st
 
       <section ref={executionBoardRef} className="sf-execution-board" data-testid="planner-execution-board">
         <header className="sf-execution-board-header">
-          <div><span className="sf-sp-eyebrow">تنفيذ الخطة</span><h3>ابدأ بالخطوة التالية، والباقي مرتب حسب مادتك</h3><p>كل مادة لها مسار واضح. افتح الخطوة لمعرفة المطلوب وسبب ترتيبها، وسجّل تقدمك بعد التنفيذ.</p></div>
+          <div><span className="sf-sp-eyebrow">المسار التفاعلي للمنهج</span><h3>خريطة المواد والوحدات والدروس</h3><p>كل مادة تظهر في مسار مستقل؛ افتح الوحدة ثم الدرس لمعرفة الخطوة التالية وسبب ترتيبها، وسجّل تقدمك بعد التنفيذ.</p></div>
           <div className="sf-execution-filters" role="group" aria-label="تصفية خطوات الخطة">
             {([["all","كل الخطوات"],["open","المتبقي"],["done","المكتمل"]] as const).map(([key,label])=><button type="button" key={key} aria-pressed={filter===key} data-testid={"planner-filter-"+key} onClick={()=>{setFilter(key);setSelectedMapStepIndex(null);}}>{label}</button>)}
           </div>

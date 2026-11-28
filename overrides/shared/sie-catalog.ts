@@ -1263,8 +1263,8 @@ const ARABIC_NAHW_TOPIC_GROUPS = [
     groupId: "ARABIC_NAHW_AL_MAMNOO_MIN_AL_SARF",
     nodeIds: ["ARB_U2_N1", "ARB_U2_N2", "ARB_U2_N3"],
     value: "ARB_U2_N3",
-    label: "الممنوع من الصرف وعلل منعه",
-    description: "الموضوع كاملًا: الدرس والتكملة والتطبيق",
+    label: "الممنوع من الصرف",
+    description: "درس واحد يشمل شرح القاعدة وتكملتها وتطبيقها الوارد في المنهج",
   },
 ] as const;
 

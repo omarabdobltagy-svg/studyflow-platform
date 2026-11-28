@@ -1,4 +1,5 @@
-import { CalendarDays, ShieldCheck, AlertCircle } from "lucide-react";
+import { CalendarDays, ShieldCheck, AlertCircle, ArrowLeft } from "lucide-react";
+import { useLocation } from "wouter";
 
 export type PlannerExam = {
   subjectId: string;
@@ -18,6 +19,7 @@ export default function ExamMissionScene({
   daysUntil: number;
   upcomingExams: PlannerExam[];
 }) {
+  const [, setLocation] = useLocation();
   const dateLabel = new Intl.DateTimeFormat("ar-EG", {
     weekday: "long",
     day: "numeric",
@@ -65,6 +67,9 @@ export default function ExamMissionScene({
               ? "راجع إعلان المدرسة لمعرفة نطاق الدروس، ثم اربط المراجعة بالموضوعات المحددة."
               : "تأكد من الموعد مع المدرسة أولاً. هذا التاريخ من جدول مديرية القاهرة المقترح وليس تأكيداً مدرسياً."}
           </p>
+          <button type="button" className="sf-exam-mission-action" onClick={() => setLocation("/planner")}>
+            افتح خريطة المذاكرة <ArrowLeft className="size-4" />
+          </button>
         </div>
       </div>
 
