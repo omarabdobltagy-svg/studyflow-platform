@@ -286,6 +286,70 @@ export default function DashboardLayout({ title, description, children, action }
   }, [location, reduceMotion]);
 
   useEffect(() => {
+    const scope = pageContentRef.current;
+    if (!scope) return;
+
+    const formatter = new Intl.NumberFormat("ar-EG", { maximumFractionDigits: 0 });
+    const tweens = new Map<HTMLElement, gsap.core.Tween>();
+    const animateCounter = (element: HTMLElement) => {
+      const rawTarget = element.dataset.countUp;
+      const target = rawTarget === undefined ? NaN : Number(rawTarget);
+      if (!Number.isFinite(target)) return;
+      if (element.dataset.countUpCompleted === String(target)) return;
+      if (reduceMotion) {
+        element.dataset.countUpCompleted = String(target);
+        element.dataset.countUpValue = String(target);
+        element.textContent = formatter.format(target);
+        return;
+      }
+
+      tweens.get(element)?.kill();
+      const start = element.dataset.countUpCompleted === undefined
+        ? 0
+        : Number(element.dataset.countUpValue ?? element.dataset.countUpCompleted);
+      const state = { value: Number.isFinite(start) ? start : 0 };
+      element.dataset.countUpCompleted = String(target);
+      if (start === 0 && element.dataset.countUpValue === undefined) element.textContent = formatter.format(0);
+      tweens.set(element, gsap.to(state, {
+        value: target,
+        duration: .92,
+        ease: "power3.out",
+        onUpdate: () => {
+          element.dataset.countUpValue = String(state.value);
+          element.textContent = formatter.format(Math.round(state.value));
+        },
+        onComplete: () => {
+          element.dataset.countUpValue = String(target);
+          element.textContent = formatter.format(target);
+          tweens.delete(element);
+        },
+      }));
+    };
+
+    const scan = (node: Node) => {
+      if (node instanceof HTMLElement && node.matches("[data-count-up]")) animateCounter(node);
+      if (node instanceof ParentNode) node.querySelectorAll<HTMLElement>("[data-count-up]").forEach(animateCounter);
+    };
+
+    scan(scope);
+    const observer = new MutationObserver(records => {
+      for (const record of records) {
+        if (record.type === "attributes" && record.target instanceof HTMLElement) {
+          animateCounter(record.target);
+        }
+        record.addedNodes.forEach(scan);
+      }
+    });
+    observer.observe(scope, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-count-up"] });
+
+    return () => {
+      observer.disconnect();
+      tweens.forEach(tween => tween.kill());
+      tweens.clear();
+    };
+  }, [location, reduceMotion]);
+
+  useEffect(() => {
     if (user && studentProfile.isSuccess && studentProfile.data == null && location !== "/onboarding") {
       setLocation("/onboarding");
     }
