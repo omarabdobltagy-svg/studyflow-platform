@@ -845,21 +845,22 @@ async function buildDailyPlanOperationalContext(userId: number) {
   const todayCairo = getDateKeyInTimeZone(now, "Africa/Cairo");
   const cairoExams = getCairoSecondYearBaccalaureateExams(profile)
     .filter(exam => exam.date >= todayCairo);
-  const monthlyExamCoveredScope = buildMonthlyExamCoveredScope(
-    subjectIds,
-    (selection.learningCourseProgress ?? {}) as Record<string, any>,
-    (selection.courseModes ?? {}) as Record<string, string>,
-  );
+  const monthlyExamScopeRecords = (selection.monthlyExamScopes ?? {}) as Record<string, unknown>;
   const cairoExamContext = cairoExams.map(exam => {
-    const scope = monthlyExamCoveredScope.filter(branch => branch.subjectId === exam.subjectId);
-    const coveredTopics = scope.flatMap(branch => branch.lessonTitles.map(title => branch.branchTitle + ": " + title));
+    const scope = buildMonthlyExamCoveredScope([exam.subjectId], monthlyExamScopeRecords, exam.date);
+    const includedTopics = scope.flatMap(branch => branch.lessonTitles.map(title => branch.branchTitle + ": " + title));
+    const excludedTopics = scope.flatMap(branch => branch.excludedLessonTitles.map(title => branch.branchTitle + ": " + title));
+    const scopeDescription = includedTopics.length
+      ? "نطاق الامتحان الذي حدده الطالب بنفسه (تقرير ذاتي غير مؤكد من المدرسة): " + includedTopics.slice(0, 60).join("، ")
+        + (excludedTopics.length ? "؛ موضوعات قال الطالب إنها خارج النطاق: " + excludedTopics.slice(0, 30).join("، ") : "")
+      : "لم يحدد الطالب نطاق هذا الامتحان بعد. موضع المدرس يوضح آخر ما شرحه، ولا يثبت ما سيدخل الاختبار. لا تستنتج نطاق الامتحان من موضع الشرح.";
     return [
       exam.date,
       exam.dayName,
       exam.subjectName,
       exam.category === "specialization" ? "مادة تخصصية حسب المسار" : "مادة أساسية مضافة للمجموع",
-      "نطاق الشرح المسجل حتى الآن (تقدير للمراجعة وليس قائمة امتحان رسمية): "
-        + (coveredTopics.length ? coveredTopics.slice(0, 60).join("، ") : "لا يوجد موضع مدرس/سنتر مؤكد؛ لا تخمّن محتوى الامتحان."),
+      scopeDescription,
+      exam.schoolConfirmed ? "حالة الجدول: مؤكد من المدرسة" : "حالة الجدول: مقترح مديرية القاهرة، غير مؤكد من المدرسة",
     ].join(" — ");
   });
   const horizon = now.getTime() + 14 * 24 * 60 * 60 * 1_000;
@@ -2541,7 +2542,7 @@ export const appRouter = router({
     saveMonthlyExamScope: protectedProcedure
       .input(z.object({
         subjectId: z.string().trim().min(1).max(80),
-        date: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/),
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
         includedNodeIds: z.array(z.string().trim().min(1).max(120)).max(100),
         excludedNodeIds: z.array(z.string().trim().min(1).max(120)).max(100).default([]),
       }))
@@ -2581,7 +2582,7 @@ export const appRouter = router({
     markMonthlyExamCompleted: protectedProcedure
       .input(z.object({
         subjectId: z.string().trim().min(1).max(80),
-        date: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/),
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       }))
       .mutation(async ({ ctx, input }) => {
         const profile = await getStudentProfile(ctx.user.id);
