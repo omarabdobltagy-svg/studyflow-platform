@@ -713,3 +713,126 @@ body [data-slot="sheet-overlay"] { background: rgba(14, 11, 10, .66) !important;
     transition-duration: .01ms !important;
   }
 }
+
+
+/* Final high-specificity auth overrides.
+   index.css still contains legacy html body .sf-login-* selectors with !important
+   declarations; these explicit rules prevent the old green/blue palette from
+   resurfacing above the central design system. */
+html body .sf-login-screen.sf-shell-v3 {
+  background:
+    radial-gradient(ellipse at 12% 8%, rgba(140,66,76,.22), transparent 36rem),
+    radial-gradient(ellipse at 88% 92%, rgba(209,183,123,.11), transparent 34rem),
+    linear-gradient(145deg,#171312 0%,#241A19 55%,#171312 100%) !important;
+  color: #F4EDE7 !important;
+}
+html body .sf-login-screen.sf-shell-v3 .sf-login-frame-v4 {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+html body .sf-login-screen.sf-shell-v3 .sf-login-form-side {
+  background: transparent !important;
+}
+html body .sf-login-screen.sf-shell-v3 .sf-login-frame-v4 .sf-login-form-card {
+  border: 1px solid rgba(230,210,190,.18) !important;
+  border-radius: 25px !important;
+  background: linear-gradient(145deg,#292220 0%,#211A19 100%) !important;
+  background-image: linear-gradient(145deg,#292220 0%,#211A19 100%) !important;
+  color: #F4EDE7 !important;
+  box-shadow: 0 34px 80px -48px rgba(0,0,0,.78), inset 0 1px rgba(255,255,255,.06) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+html body .sf-login-screen.sf-shell-v3 .sf-login-form-card::before {
+  background: linear-gradient(90deg,transparent,#D1B77B 45%,#8C424C 68%,transparent) !important;
+  opacity: .9 !important;
+}
+html body .sf-login-screen.sf-shell-v3 .sf-login-brand-mark-v4 {
+  border: 1px solid rgba(209,183,123,.38) !important;
+  color: #2D211F !important;
+  background: linear-gradient(145deg,#E4D4B8 0%,#C9A96F 56%,#8C424C 130%) !important;
+  box-shadow: 0 12px 26px -17px rgba(209,183,123,.50) !important;
+}
+html body .sf-login-screen.sf-shell-v3 .sf-login-brand-v4 b,
+html body .sf-login-screen.sf-shell-v3 .sf-login-form-heading h2 {
+  color: #F5EEE8 !important;
+}
+html body .sf-login-screen.sf-shell-v3 .sf-login-brand-v4 small,
+html body .sf-login-screen.sf-shell-v3 .sf-login-form-heading > p:last-child,
+html body .sf-login-screen.sf-shell-v3 .sf-login-security p {
+  color: #BDB0A5 !important;
+}
+html body .sf-login-screen.sf-shell-v3 .sf-auth-eyebrow,
+html body .sf-login-screen.sf-shell-v3 .sf-login-eyebrow {
+  color: #D1B77B !important;
+}
+html body .sf-login-screen.sf-shell-v3 .sf-login-form label {
+  color: #E9DED3 !important;
+}
+html body .sf-login-screen.sf-shell-v3 .sf-auth-mode-tabs {
+  border: 1px solid rgba(230,210,190,.15) !important;
+  border-radius: 15px !important;
+  background: rgba(12,10,10,.36) !important;
+}
+html body .sf-login-screen.sf-shell-v3 .sf-auth-mode-tabs button {
+  color: #C8BBAF !important;
+  background: transparent !important;
+}
+html body .sf-login-screen.sf-shell-v3 .sf-auth-mode-tabs button[aria-selected="true"],
+html body .sf-login-screen.sf-shell-v3 .sf-auth-mode-tabs button[aria-pressed="true"] {
+  border: 1px solid rgba(209,183,123,.30) !important;
+  border-radius: 11px !important;
+  color: #FFF8F2 !important;
+  background: rgba(140,66,76,.38) !important;
+  background-image: none !important;
+  box-shadow: 0 8px 22px -17px rgba(140,66,76,.75) !important;
+}
+html body .sf-login-screen.sf-shell-v3 input.sf-auth-input,
+html body .sf-login-screen.sf-shell-v3 .sf-auth-input {
+  border: 1px solid rgba(230,210,190,.22) !important;
+  border-radius: 13px !important;
+  color: #F4EDE7 !important;
+  background: rgba(12,10,10,.42) !important;
+  background-image: none !important;
+  box-shadow: inset 0 1px rgba(255,255,255,.025) !important;
+}
+html body .sf-login-screen.sf-shell-v3 .sf-auth-input::placeholder {
+  color: #9E9187 !important;
+}
+html body .sf-login-screen.sf-shell-v3 .sf-auth-input:focus-visible {
+  border-color: #D1B77B !important;
+  box-shadow: 0 0 0 3px rgba(209,183,123,.16) !important;
+}
+html body .sf-login-screen.sf-shell-v3 .sf-login-form-card button.sf-auth-submit,
+html body .sf-login-screen.sf-shell-v3 button.sf-auth-submit,
+html body .sf-login-screen.sf-shell-v3 .sf-login-form-card button.bg-primary {
+  min-height: 50px !important;
+  border: 1px solid rgba(209,183,123,.34) !important;
+  border-radius: 13px !important;
+  color: #FFF8F2 !important;
+  background: linear-gradient(135deg,#8C424C 0%,#71363F 56%,#522B31 100%) !important;
+  background-image: linear-gradient(135deg,#8C424C 0%,#71363F 56%,#522B31 100%) !important;
+  box-shadow: 0 13px 28px -19px rgba(140,66,76,.72), inset 0 1px rgba(255,255,255,.10) !important;
+}
+html body .sf-login-screen.sf-shell-v3 .sf-login-form-card button.sf-auth-submit:hover,
+html body .sf-login-screen.sf-shell-v3 button.sf-auth-submit:hover {
+  color: #FFF8F2 !important;
+  background: linear-gradient(135deg,#9A4B55 0%,#783A43 56%,#5B3037 100%) !important;
+  background-image: linear-gradient(135deg,#9A4B55 0%,#783A43 56%,#5B3037 100%) !important;
+}
+html body .sf-login-screen.sf-shell-v3 .sf-auth-mode-switch {
+  color: #D1B77B !important;
+  background: transparent !important;
+}
+html body .sf-login-screen.sf-shell-v3 .sf-login-security {
+  border-color: rgba(230,210,190,.13) !important;
+  background: rgba(255,255,255,.035) !important;
+}
+html body .sf-login-screen.sf-shell-v3 .sf-security-mark {
+  background: rgba(209,183,123,.12) !important;
+}
+html body .sf-login-screen.sf-shell-v3 .sf-security-mark span {
+  background: #D1B77B !important;
+  box-shadow: 0 0 0 4px rgba(209,183,123,.11) !important;
+}
