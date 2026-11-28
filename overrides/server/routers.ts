@@ -1861,7 +1861,7 @@ const plannerAssistantPatchSchema = z.object({
     detail: z.string().trim().min(5).max(1_200).optional(),
     category: z.string().trim().min(2).max(80).optional(),
     priority: z.enum(["critical", "high", "medium", "low"]).optional(),
-    phaseId: z.enum(["backlog", "teacher_sync", "steady", "review_later"]).optional(),
+    phaseId: z.enum(["exam_focus", "backlog", "teacher_sync", "steady", "review_later"]).optional(),
   }).strict()).max(60).optional(),
   removeIndexes: z.array(z.number().int().nonnegative()).max(60).optional(),
   order: z.array(z.number().int().nonnegative()).max(240).optional(),

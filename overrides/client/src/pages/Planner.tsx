@@ -1531,7 +1531,7 @@ function PlanCard({ plan, subjectIds, teacherSessions, teacherChoices, title, st
                       const nodeId=step.curriculumNodeIds?.[0];
                       const branchId=curriculum&&nodeId?getSIECheckpointProgressBranches(curriculum.subjectId).find(branch=>branch.choices.some(choice=>choice.nodeId===nodeId))?.branchId:undefined;
                       return (
-                        <article key={step.plannerTaskId??step.existingTask?.id??step.sourceStepIndex??index} className={"sf-execution-step"+(isDone?" is-done":isNext?" is-next":isReview?" is-review":"")} data-testid={"planner-step-"+(nodeId??step.existingTask?.id??index)}>
+                        <article key={step.plannerTaskId??step.existingTask?.id??step.sourceStepIndex??index} className={"sf-execution-step"+(step.examFocus?" is-exam-focus":"")+(isDone?" is-done":isNext?" is-next":isReview?" is-review":"")} data-testid={"planner-step-"+(nodeId??step.existingTask?.id??index)}>
                           <span className="sf-execution-step-index">{isDone?<CheckCircle2 className="size-4"/>:(laneStepIndex+1).toLocaleString("ar-EG")}</span>
                           <details className="sf-execution-step-details" open={selectedMapStepIndex===index} onToggle={event=>{if(event.currentTarget.open)setSelectedMapStepIndex(index);else if(selectedMapStepIndex===index)setSelectedMapStepIndex(null);}}>
                             <summary>
