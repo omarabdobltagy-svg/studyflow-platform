@@ -1,4 +1,20 @@
 export type PlannerMemoryConfidence = "high" | "medium" | "low" | "unknown";
+export type PlannerEvidenceFreshness = "fresh" | "aging" | "stale" | "unknown";
+
+const EVIDENCE_FRESHNESS_WINDOWS_DAYS: Record<string, { freshThroughDays: number; agingThroughDays: number }> = {
+  student_frontier: { freshThroughDays: 14, agingThroughDays: 45 },
+  teacher_frontier: { freshThroughDays: 14, agingThroughDays: 30 },
+  school_frontier: { freshThroughDays: 14, agingThroughDays: 30 },
+  sq3r_learning_signal: { freshThroughDays: 30, agingThroughDays: 90 },
+  teacher_class_schedule: { freshThroughDays: 14, agingThroughDays: 60 },
+  teacher_public_update: { freshThroughDays: 7, agingThroughDays: 30 },
+  open_task: { freshThroughDays: 14, agingThroughDays: 60 },
+  completed_task: { freshThroughDays: 30, agingThroughDays: 90 },
+  calendar_commitment: { freshThroughDays: 7, agingThroughDays: 30 },
+  active_goal: { freshThroughDays: 30, agingThroughDays: 90 },
+  study_routine: { freshThroughDays: 14, agingThroughDays: 60 },
+  study_resource: { freshThroughDays: 30, agingThroughDays: 120 },
+};
 
 export type PlannerEvidence<T = unknown> = {
   kind: string;
@@ -10,6 +26,8 @@ export type PlannerEvidence<T = unknown> = {
     source: string;
     observedAt: string | null;
     confidence: PlannerMemoryConfidence;
+    freshness: PlannerEvidenceFreshness;
+    ageDays: number | null;
   };
 };
 
@@ -76,8 +94,35 @@ function safeTimestamp(value: unknown): string | null {
 
 function confidenceFromFrontier(value: unknown, confirmedAt: unknown, level: "student" | "teacher" | "school"): PlannerMemoryConfidence {
   if (typeof value !== "string" || !value || value === "__UNKNOWN__" || value === "__NOT_STARTED__") return "unknown";
-  if (confirmedAt) return "high";
+  if (safeTimestamp(confirmedAt)) return "high";
   return level === "student" ? "medium" : "low";
+}
+
+function classifyEvidenceFreshness(
+  kind: string,
+  observedAt: unknown,
+  now: Date,
+): { freshness: PlannerEvidenceFreshness; ageDays: number | null } {
+  const timestamp = safeTimestamp(observedAt);
+  if (!timestamp) return { freshness: "unknown", ageDays: null };
+
+  const ageMs = now.getTime() - Date.parse(timestamp);
+  // Future timestamps beyond small clock skew are not treated as fresh evidence.
+  if (!Number.isFinite(ageMs) || ageMs < -5 * 60 * 1_000) {
+    return { freshness: "unknown", ageDays: null };
+  }
+
+  const ageDays = Math.floor(Math.max(0, ageMs) / 86_400_000);
+  const windows = EVIDENCE_FRESHNESS_WINDOWS_DAYS[kind] ?? {
+    freshThroughDays: 14,
+    agingThroughDays: 60,
+  };
+  const freshness: PlannerEvidenceFreshness = ageDays <= windows.freshThroughDays
+    ? "fresh"
+    : ageDays <= windows.agingThroughDays
+      ? "aging"
+      : "stale";
+  return { freshness, ageDays };
 }
 
 function evidence<T>(
@@ -87,6 +132,7 @@ function evidence<T>(
   confidence: PlannerMemoryConfidence,
   observedAt: unknown,
   extra: Pick<PlannerEvidence, "subjectId" | "branchId" | "entityId"> = {},
+  now = new Date(),
 ): PlannerEvidence<T> {
   return {
     kind,
@@ -96,6 +142,7 @@ function evidence<T>(
       source,
       observedAt: safeTimestamp(observedAt),
       confidence,
+      ...classifyEvidenceFreshness(kind, observedAt, now),
     },
   };
 }
@@ -155,6 +202,7 @@ export function buildPlannerMemorySnapshot(input: PlannerMemoryInput): PlannerMe
           confidenceFromFrontier(studentFrontier, branch.studentFrontierConfirmedAt, "student"),
           branch.studentFrontierConfirmedAt ?? branch.updatedAt,
           { subjectId, branchId },
+          now,
         ));
       }
       if (teacherFrontier !== "__UNKNOWN__" && teacherFrontier !== "__NOT_STARTED__") {
@@ -165,6 +213,7 @@ export function buildPlannerMemorySnapshot(input: PlannerMemoryInput): PlannerMe
           confidenceFromFrontier(teacherFrontier, branch.teacherFrontierConfirmedAt, "teacher"),
           branch.teacherFrontierConfirmedAt ?? branch.updatedAt,
           { subjectId, branchId },
+          now,
         ));
       }
       if (schoolFrontier !== "__UNKNOWN__" && schoolFrontier !== "__NOT_STARTED__") {
@@ -175,6 +224,7 @@ export function buildPlannerMemorySnapshot(input: PlannerMemoryInput): PlannerMe
           confidenceFromFrontier(schoolFrontier, branch.schoolFrontierConfirmedAt, "school"),
           branch.schoolFrontierConfirmedAt ?? branch.updatedAt,
           { subjectId, branchId },
+          now,
         ));
       }
     }
@@ -196,6 +246,7 @@ export function buildPlannerMemorySnapshot(input: PlannerMemoryInput): PlannerMe
         lesson.difficulty ? "high" : "medium",
         lesson.updatedAt ?? lesson.completedAt,
         { subjectId, entityId: lessonId },
+        now,
       ));
     }
   }
@@ -205,16 +256,18 @@ export function buildPlannerMemorySnapshot(input: PlannerMemoryInput): PlannerMe
     if (!subjects.includes(subjectId) || !Array.isArray(slots)) continue;
     for (const slot of slots) {
       if (!slot || typeof slot !== "object") continue;
-      const dayOfWeek = Number((slot as Record<string, unknown>).dayOfWeek);
-      const startTime = String((slot as Record<string, unknown>).startTime ?? "");
+      const schedule = slot as Record<string, unknown>;
+      const dayOfWeek = Number(schedule.dayOfWeek);
+      const startTime = String(schedule.startTime ?? "");
       if (!Number.isInteger(dayOfWeek) || dayOfWeek < 0 || dayOfWeek > 6 || !/^([01]\d|2[0-3]):[0-5]\d$/.test(startTime)) continue;
       teacherSchedule.push(evidence(
         "teacher_class_schedule",
         { dayOfWeek, startTime },
         "student_profile.teacherSchedules",
         "medium",
-        null,
+        schedule.updatedAt ?? schedule.createdAt,
         { subjectId },
+        now,
       ));
     }
   }
@@ -238,6 +291,8 @@ export function buildPlannerMemorySnapshot(input: PlannerMemoryInput): PlannerMe
       "teacher_public_updates",
       confidence,
       row.publishedAt,
+      {},
+      now,
     ));
   }
 
@@ -257,6 +312,7 @@ export function buildPlannerMemorySnapshot(input: PlannerMemoryInput): PlannerMe
     "high",
     task.updatedAt ?? task.completedAt ?? task.createdAt,
     { entityId: String(task.id ?? "") },
+    now,
   );
 
   const routineEvidence = (input.routines ?? [])
@@ -279,6 +335,7 @@ export function buildPlannerMemorySnapshot(input: PlannerMemoryInput): PlannerMe
         "high",
         routine.updatedAt ?? routine.createdAt,
         { entityId: String(routine.id ?? "") },
+        now,
       );
     });
 
@@ -301,10 +358,11 @@ export function buildPlannerMemorySnapshot(input: PlannerMemoryInput): PlannerMe
       "high",
       event.updatedAt ?? event.createdAt,
       { entityId: String(event.id ?? "") },
+      now,
     ));
 
   return {
-    version: 1,
+    version: 2,
     capturedAt: now.toISOString(),
     student: {
       educationSystem: String(profile?.educationSystem ?? "unknown"),
@@ -333,6 +391,7 @@ export function buildPlannerMemorySnapshot(input: PlannerMemoryInput): PlannerMe
       "high",
       goal.updatedAt ?? goal.createdAt,
       { entityId: String(goal.id ?? "") },
+      now,
     )),
     routines: routineEvidence,
     availableBooks: (input.books ?? []).slice(0, 20).map(book => evidence(
@@ -342,6 +401,7 @@ export function buildPlannerMemorySnapshot(input: PlannerMemoryInput): PlannerMe
       "high",
       book.updatedAt ?? book.createdAt,
       { entityId: String(book.id ?? "") },
+      now,
     )),
     sourceCoverage: {
       profileAvailable: Boolean(profile),
