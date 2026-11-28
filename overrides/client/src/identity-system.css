@@ -1,0 +1,304 @@
+/* StudyFlow identity: obsidian / crimson / antique brass.
+   This is intentionally the final stylesheet import so older feature skins cannot
+   repaint the application with blue, green, violet or burnt-orange legacy values. */
+:root {
+  color-scheme: light;
+  --background: #F1F0ED;
+  --foreground: #242321;
+  --card: #FEFDFC;
+  --card-foreground: #242321;
+  --popover: #FEFDFC;
+  --popover-foreground: #242321;
+  --primary: #A93340;
+  --primary-foreground: #FFFFFF;
+  --secondary: #EAE6E1;
+  --secondary-foreground: #3B3532;
+  --muted: #EEECE7;
+  --muted-foreground: #706B66;
+  --accent: #F3E5E5;
+  --accent-foreground: #792D37;
+  --destructive: #B83A43;
+  --destructive-foreground: #FFFFFF;
+  --border: #DDD7D1;
+  --input: #CFC6C0;
+  --ring: #BD5962;
+  --sidebar: #171616;
+  --sidebar-foreground: #F4F0EA;
+  --sidebar-primary: #D5B879;
+  --sidebar-primary-foreground: #211B17;
+  --sidebar-accent: #292625;
+  --sidebar-accent-foreground: #F4F0EA;
+  --sidebar-border: rgba(225, 215, 198, .13);
+  --sidebar-ring: #D5B879;
+  --chart-1: #A93340;
+  --chart-2: #B58C50;
+  --chart-3: #777C74;
+  --chart-4: #816D62;
+  --chart-5: #A8A39A;
+  --sf-ember: #A93340;
+  --sf-ember-deep: #702630;
+  --sf-brass: #B58C50;
+  --sf-brass-bright: #CDAF73;
+  --sf-brass-soft: #EEE3CC;
+  --sf-wine: var(--sf-ember);
+  --sf-wine-deep: var(--sf-ember-deep);
+  --sf-gold: var(--sf-brass);
+  --sf-gold-bright: var(--sf-brass-bright);
+  --sf-gold-soft: var(--sf-brass-soft);
+  --sf-canvas: #F1F0ED;
+  --sf-surface: #FEFDFC;
+  --sf-surface-raised: #FFFFFF;
+  --sf-surface-soft: #EAE6E1;
+  --sf-text: #242321;
+  --sf-text-muted: #706B66;
+  --sf-line: #DDD7D1;
+  --sf-success: #66846D;
+  --sf-warning: #B58C50;
+  --sf-danger: #B83A43;
+  --sf-shadow: 0 18px 48px -38px rgba(35, 28, 25, .22);
+  --sf-shadow-raised: 0 24px 58px -42px rgba(35, 28, 25, .30);
+  --sf-navigation-active: rgba(169, 51, 64, .17);
+  --sf-navigation-hover: rgba(255, 255, 255, .07);
+}
+
+html.dark {
+  color-scheme: dark;
+  --background: #141313;
+  --foreground: #F4F0EA;
+  --card: #201E1D;
+  --card-foreground: #F4F0EA;
+  --popover: #282524;
+  --popover-foreground: #F4F0EA;
+  --primary: #D65A64;
+  --primary-foreground: #FFFFFF;
+  --secondary: #2C2927;
+  --secondary-foreground: #F4F0EA;
+  --muted: #252322;
+  --muted-foreground: #B9B2AA;
+  --accent: #43272B;
+  --accent-foreground: #FFE9E8;
+  --destructive: #DF7378;
+  --destructive-foreground: #211415;
+  --border: #403A37;
+  --input: #514844;
+  --ring: #D65A64;
+  --sidebar: #101010;
+  --sidebar-foreground: #F4F0EA;
+  --sidebar-primary: #E0C78D;
+  --sidebar-primary-foreground: #211B17;
+  --sidebar-accent: #252221;
+  --sidebar-accent-foreground: #F4F0EA;
+  --sidebar-border: rgba(225, 215, 198, .13);
+  --sidebar-ring: #E0C78D;
+  --chart-1: #D65A64;
+  --chart-2: #E0C78D;
+  --chart-3: #91A18E;
+  --chart-4: #C18D77;
+  --chart-5: #B6ADA2;
+  --sf-ember: #D65A64;
+  --sf-ember-deep: #762C35;
+  --sf-brass: #C6A36A;
+  --sf-brass-bright: #E0C78D;
+  --sf-brass-soft: #403629;
+  --sf-wine: var(--sf-ember);
+  --sf-wine-deep: var(--sf-ember-deep);
+  --sf-gold: var(--sf-brass);
+  --sf-gold-bright: var(--sf-brass-bright);
+  --sf-gold-soft: var(--sf-brass-soft);
+  --sf-canvas: #141313;
+  --sf-surface: #201E1D;
+  --sf-surface-raised: #282524;
+  --sf-surface-soft: #252322;
+  --sf-text: #F4F0EA;
+  --sf-text-muted: #B9B2AA;
+  --sf-line: #403A37;
+  --sf-success: #91A18E;
+  --sf-warning: #E0C78D;
+  --sf-danger: #E27A80;
+  --sf-shadow: 0 18px 48px -34px rgba(0, 0, 0, .66);
+  --sf-shadow-raised: 0 28px 72px -42px rgba(0, 0, 0, .74);
+  --sf-navigation-active: rgba(214, 90, 100, .19);
+}
+
+html, body {
+  background: var(--background) !important;
+  color: var(--foreground);
+}
+
+html body .sf-app-shell.sf-shell-v3 {
+  background:
+    radial-gradient(ellipse at 4% 0%, rgba(169, 51, 64, .16), transparent 34rem),
+    radial-gradient(ellipse at 100% 100%, rgba(205, 175, 115, .08), transparent 35rem),
+    linear-gradient(145deg, #101010 0%, #191716 54%, #111010 100%) !important;
+}
+html body .sf-shell-v3 .sf-app-frame {
+  border-color: rgba(225, 215, 198, .12) !important;
+  background: var(--background) !important;
+}
+html body .sf-shell-v3 .sf-sidebar {
+  color: var(--sidebar-foreground) !important;
+  background:
+    radial-gradient(ellipse at 100% 0%, rgba(169, 51, 64, .14), transparent 25rem),
+    linear-gradient(180deg, #1B1918 0%, #101010 100%) !important;
+  border-left-color: var(--sidebar-border) !important;
+}
+html body .sf-shell-v3 .sf-brand-mark,
+html body .sf-shell-v3 .sf-account-avatar {
+  color: #211B17 !important;
+  border-color: rgba(224, 199, 141, .34) !important;
+  background: linear-gradient(145deg, #F0DDAA, #D5B879 58%, #A93340 130%) !important;
+}
+html body .sf-shell-v3 .sf-nav-item.is-active {
+  border-color: rgba(214, 90, 100, .28) !important;
+  background: linear-gradient(105deg, rgba(169, 51, 64, .30), rgba(169, 51, 64, .12)) !important;
+}
+html body .sf-shell-v3 .sf-nav-item.is-active .sf-nav-icon,
+html body .sf-shell-v3 .sf-nav-indicator {
+  color: var(--sf-brass-bright) !important;
+  background: var(--sf-brass-bright) !important;
+}
+html body .sf-shell-v3 .sf-topbar {
+  color: var(--foreground) !important;
+  background: color-mix(in srgb, var(--card) 94%, transparent) !important;
+  border-bottom-color: var(--border) !important;
+}
+html body .sf-shell-v3 .sf-main {
+  color: var(--foreground) !important;
+  background:
+    radial-gradient(ellipse at 100% 0%, rgba(169, 51, 64, .045), transparent 32rem),
+    var(--background) !important;
+}
+html body .sf-shell-v3 .sf-main .app-card,
+html body .sf-shell-v3 .sf-main :is([data-slot="card"], .sf-stat-card) {
+  color: var(--card-foreground) !important;
+  background-color: var(--card) !important;
+  border-color: var(--border) !important;
+}
+html body .sf-shell-v3 .sf-main :is(button.bg-primary, a.bg-primary) {
+  color: var(--primary-foreground) !important;
+  background: linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 70%, #772C35)) !important;
+}
+html body .sf-shell-v3 .sf-main :is(button.bg-primary, a.bg-primary):hover {
+  filter: brightness(1.08);
+}
+
+/* Login screen: neutral charcoal, crimson action, brass mark — no green/brown cast. */
+html body .sf-login-screen.sf-shell-v3 {
+  color: #F4F0EA !important;
+  background:
+    radial-gradient(ellipse at 12% 8%, rgba(169, 51, 64, .22), transparent 37rem),
+    radial-gradient(ellipse at 88% 92%, rgba(205, 175, 115, .10), transparent 34rem),
+    linear-gradient(145deg, #101010 0%, #1B1918 58%, #111010 100%) !important;
+}
+html body .sf-login-screen.sf-shell-v3 .sf-login-frame-v4,
+html body .sf-login-screen.sf-shell-v3 .sf-login-form-side {
+  background: transparent !important;
+}
+html body .sf-login-screen.sf-shell-v3 .sf-login-frame-v4 .sf-login-form-card {
+  border: 1px solid rgba(225, 215, 198, .17) !important;
+  border-radius: 25px !important;
+  color: #F4F0EA !important;
+  background: linear-gradient(145deg, #242120 0%, #1B1918 100%) !important;
+  background-image: linear-gradient(145deg, #242120 0%, #1B1918 100%) !important;
+  box-shadow: 0 34px 80px -48px rgba(0,0,0,.82), inset 0 1px rgba(255,255,255,.055) !important;
+}
+html body .sf-login-screen.sf-shell-v3 .sf-login-form-card::before {
+  background: linear-gradient(90deg, transparent, #E0C78D 45%, #D65A64 70%, transparent) !important;
+}
+html body .sf-login-screen.sf-shell-v3 .sf-login-brand-mark-v4 {
+  border: 1px solid rgba(224, 199, 141, .42) !important;
+  color: #211B17 !important;
+  background: linear-gradient(145deg, #F0DDAA 0%, #D5B879 56%, #A93340 130%) !important;
+  box-shadow: 0 12px 26px -17px rgba(224, 199, 141, .50) !important;
+}
+html body .sf-login-screen.sf-shell-v3 .sf-login-brand-v4 b,
+html body .sf-login-screen.sf-shell-v3 .sf-login-form-heading h2 {
+  color: #F4F0EA !important;
+}
+html body .sf-login-screen.sf-shell-v3 :is(.sf-login-brand-v4 small, .sf-login-form-heading > p:last-child, .sf-login-security p) {
+  color: #B9B2AA !important;
+}
+html body .sf-login-screen.sf-shell-v3 :is(.sf-auth-eyebrow, .sf-login-eyebrow) {
+  color: #E0C78D !important;
+}
+html body .sf-login-screen.sf-shell-v3 .sf-login-form label {
+  color: #E8E1D7 !important;
+}
+html body .sf-login-screen.sf-shell-v3 .sf-auth-mode-tabs {
+  border: 1px solid rgba(225, 215, 198, .15) !important;
+  background: rgba(0, 0, 0, .30) !important;
+}
+html body .sf-login-screen.sf-shell-v3 .sf-auth-mode-tabs button {
+  color: #C7BFB5 !important;
+  background: transparent !important;
+}
+html body .sf-login-screen.sf-shell-v3 .sf-auth-mode-tabs button[aria-selected="true"],
+html body .sf-login-screen.sf-shell-v3 .sf-auth-mode-tabs button[aria-pressed="true"] {
+  border: 1px solid rgba(224, 199, 141, .26) !important;
+  color: #FFF9F4 !important;
+  background: rgba(169, 51, 64, .34) !important;
+  box-shadow: 0 8px 22px -17px rgba(169, 51, 64, .45) !important;
+}
+html body .sf-login-screen.sf-shell-v3 :is(input.sf-auth-input, .sf-auth-input) {
+  border: 1px solid rgba(225, 215, 198, .20) !important;
+  color: #F4F0EA !important;
+  background: rgba(8, 8, 8, .38) !important;
+}
+html body .sf-login-screen.sf-shell-v3 .sf-auth-input::placeholder { color: #9E958B !important; }
+html body .sf-login-screen.sf-shell-v3 .sf-auth-input:focus-visible {
+  border-color: #E0C78D !important;
+  box-shadow: 0 0 0 3px rgba(224, 199, 141, .15) !important;
+}
+html body .sf-login-screen.sf-shell-v3 .sf-login-form-card :is(button.sf-auth-submit, button.bg-primary) {
+  min-height: 50px !important;
+  border: 1px solid rgba(224, 199, 141, .30) !important;
+  border-radius: 13px !important;
+  color: #FFF9F4 !important;
+  background: linear-gradient(135deg, #D65A64 0%, #B53D49 58%, #762C35 100%) !important;
+  background-image: linear-gradient(135deg, #D65A64 0%, #B53D49 58%, #762C35 100%) !important;
+  box-shadow: 0 13px 28px -19px rgba(169, 51, 64, .55), inset 0 1px rgba(255,255,255,.10) !important;
+}
+html body .sf-login-screen.sf-shell-v3 .sf-login-form-card :is(button.sf-auth-submit, button.bg-primary):hover {
+  filter: brightness(1.10);
+}
+html body .sf-login-screen.sf-shell-v3 .sf-auth-mode-switch {
+  color: #E0C78D !important;
+  background: transparent !important;
+}
+html body .sf-login-screen.sf-shell-v3 .sf-login-security {
+  border-color: rgba(225, 215, 198, .13) !important;
+  background: rgba(255,255,255,.035) !important;
+}
+
+/* High-visibility accents without turning every card into a red surface. */
+html body .sf-shell-v3 .sf-main .sf-home-ai-decision {
+  border: 1px solid rgba(224, 199, 141, .22) !important;
+  color: var(--foreground) !important;
+  background:
+    radial-gradient(ellipse at 92% 0%, rgba(224, 199, 141, .11), transparent 34%),
+    radial-gradient(ellipse at 5% 100%, rgba(169, 51, 64, .18), transparent 42%),
+    linear-gradient(125deg, #242120 0%, #1B1918 60%, #171514 100%) !important;
+}
+html body .sf-shell-v3 .sf-main .sf-home-ai-decision :is(h3, .sf-home-ai-decision-kicker) {
+  color: #F4F0EA !important;
+}
+html body .sf-shell-v3 .sf-main .sf-home-ai-decision .sf-home-ai-decision-copy > p {
+  color: #C7BFB5 !important;
+}
+html body .sf-shell-v3 .sf-main .sf-home-ai-triggers span {
+  border-color: rgba(224, 199, 141, .25) !important;
+  color: #E0C78D !important;
+  background: rgba(0, 0, 0, .16) !important;
+}
+
+@media (max-width: 900px) {
+  html body .sf-shell-v3 .sf-mobile-dock {
+    border-color: rgba(225, 215, 198, .15) !important;
+    background: rgba(29, 27, 26, .97) !important;
+  }
+  html body .sf-shell-v3 .sf-mobile-dock-item.is-active {
+    color: #FFF9F4 !important;
+    background: rgba(169, 51, 64, .28) !important;
+  }
+  html body .sf-shell-v3 .sf-mobile-dock-item.is-active svg { color: #E0C78D !important; }
+}

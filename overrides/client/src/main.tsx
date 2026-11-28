@@ -18,6 +18,7 @@ import "./studyflow-final-theme.css";
 import "./experience-refinement.css";
 import "./feature-experience.css";
 import "./design-quality.css";
+import "./identity-system.css";
 
 // Analytics is optional. Do not emit a broken /umami request when no endpoint is configured.
 const analyticsEndpoint = import.meta.env.VITE_ANALYTICS_ENDPOINT?.trim();

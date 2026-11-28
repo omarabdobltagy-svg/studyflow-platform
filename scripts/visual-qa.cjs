@@ -145,31 +145,31 @@ async function run() {
       }
 
       assert(initialState.themeClass.split(/\\s+/).includes("dark"), viewport.name + ": expected dark premium theme");
-      assert(initialState.primary.toUpperCase() === "#F0784B", viewport.name + ": ember primary token is missing");
-      assert(initialState.ember.toUpperCase() === "#F0784B", viewport.name + ": ember brand token is missing");
-      assert(initialState.brass.toUpperCase() === "#E3B982", viewport.name + ": brass brand token is missing");
+      assert(initialState.primary.toUpperCase() === "#D65A64", viewport.name + ": crimson primary token is missing");
+      assert(initialState.ember.toUpperCase() === "#D65A64", viewport.name + ": crimson brand token is missing");
+      assert(initialState.brass.toUpperCase() === "#E0C78D", viewport.name + ": antique brass brand token is missing");
       assert(
         initialState.loginCardSurface
           && (initialState.loginCardSurface.image !== "none" || initialState.loginCardSurface.color !== "rgba(0, 0, 0, 0)"),
         viewport.name + ": login card surface is not rendered",
       );
       assert(
-        initialState.loginCardSurface.image.includes("37, 41, 34")
+        initialState.loginCardSurface.image.includes("36, 33, 32")
           && !initialState.loginCardSurface.image.includes("27, 35, 23"),
         viewport.name + ": legacy green login card palette is still active: " + JSON.stringify(initialState.loginCardSurface),
       );
       assert(
-        initialState.loginSubmitSurface?.image.includes("240, 120, 75")
+        initialState.loginSubmitSurface?.image.includes("214, 90, 100")
           && !initialState.loginSubmitSurface.image.includes("86, 111, 230")
           && !initialState.loginSubmitSurface.image.includes("216, 241, 124"),
-        viewport.name + ": login button is not using the ember palette: " + JSON.stringify(initialState.loginSubmitSurface),
+        viewport.name + ": login button is not using the crimson palette: " + JSON.stringify(initialState.loginSubmitSurface),
       );
       assert(
-        initialState.loginActiveTabSurface?.background.includes("215, 92, 53"),
+        initialState.loginActiveTabSurface?.background.includes("169, 51, 64"),
         viewport.name + ": active auth tab is not using the ember palette: " + JSON.stringify(initialState.loginActiveTabSurface),
       );
       assert(
-        initialState.loginBrandSurface?.image.includes("229, 193, 139"),
+        initialState.loginBrandSurface?.image.includes("240, 221, 170"),
         viewport.name + ": login brand mark is not using the brass palette: " + JSON.stringify(initialState.loginBrandSurface),
       );
       assert(initialState.inputCount >= 2, viewport.name + ": login fields are missing");
