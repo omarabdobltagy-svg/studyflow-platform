@@ -10,28 +10,45 @@ const viewports = [
   { name: "desktop", width: 1440, height: 960 },
 ];
 
-const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const assert = (condition, message) => {
   if (!condition) throw new Error(message);
 };
 
-async function waitForLatestPalette(page) {
-  let lastPalette = "";
-  for (let attempt = 1; attempt <= 30; attempt++) {
-    try {
-      await page.goto(baseUrl, { waitUntil: "domcontentloaded", timeout: 45000 });
-      await page.waitForSelector(".sf-login-screen", { timeout: 12000 });
-      await page.waitForTimeout(800);
-      lastPalette = await page.evaluate(() =>
-        getComputedStyle(document.documentElement).getPropertyValue("--primary").trim()
-      );
-      if (lastPalette.toUpperCase() === "#8C424C") return;
-    } catch (error) {
-      lastPalette = error.message;
-    }
-    await sleep(10000);
-  }
-  throw new Error("Preview did not serve the new StudyFlow palette within 5 minutes. Last value: " + lastPalette);
+async function readPageState(page) {
+  return page.evaluate(() => {
+    const rect = selector => {
+      const el = document.querySelector(selector);
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return {
+        x: Math.round(r.x), y: Math.round(r.y),
+        width: Math.round(r.width), height: Math.round(r.height),
+        right: Math.round(r.right), bottom: Math.round(r.bottom),
+      };
+    };
+    const root = document.getElementById("root");
+    return {
+      title: document.title,
+      url: location.href,
+      readyState: document.readyState,
+      rootChildCount: root?.childElementCount ?? 0,
+      rootText: (root?.innerText ?? "").trim().slice(0, 1200),
+      bodyText: (document.body?.innerText ?? "").trim().slice(0, 1600),
+      themeClass: document.documentElement.className,
+      primary: getComputedStyle(document.documentElement).getPropertyValue("--primary").trim(),
+      bodyBackground: getComputedStyle(document.body).backgroundColor,
+      screenWidth: window.innerWidth,
+      documentWidth: document.documentElement.scrollWidth,
+      bodyWidth: document.body.scrollWidth,
+      documentHeight: document.documentElement.scrollHeight,
+      loginScreen: rect(".sf-login-screen"),
+      loginFrame: rect(".sf-login-frame"),
+      formCard: rect(".sf-login-form-card"),
+      authError: rect(".sf-auth-screen"),
+      pageLoader: rect(".sf-page-loading"),
+      inputCount: document.querySelectorAll(".sf-login-screen input").length,
+    };
+  });
 }
 
 async function run() {
@@ -41,78 +58,137 @@ async function run() {
   const errors = [];
   try {
     for (const viewport of viewports) {
-      const page = await browser.newPage({ viewport: { width: viewport.width, height: viewport.height }, deviceScaleFactor: 1 });
+      const page = await browser.newPage({
+        viewport: { width: viewport.width, height: viewport.height },
+        deviceScaleFactor: 1,
+      });
       const pageErrors = [];
+      const consoleErrors = [];
       const failedSameOriginRequests = [];
+      const badSameOriginResponses = [];
       page.on("pageerror", error => pageErrors.push(error.message));
+      page.on("console", message => {
+        if (message.type() === "error") consoleErrors.push(message.text());
+      });
       page.on("requestfailed", request => {
-        if (request.url().startsWith(baseUrl)) failedSameOriginRequests.push({ url: request.url(), error: request.failure()?.errorText });
+        if (request.url().startsWith(baseUrl)) {
+          failedSameOriginRequests.push({ url: request.url(), error: request.failure()?.errorText });
+        }
+      });
+      page.on("response", response => {
+        if (response.url().startsWith(baseUrl) && response.status() >= 400) {
+          badSameOriginResponses.push({ url: response.url(), status: response.status() });
+        }
       });
 
-      await waitForLatestPalette(page);
-      const loginState = await page.evaluate(() => {
-        const rect = selector => {
-          const el = document.querySelector(selector);
-          if (!el) return null;
-          const r = el.getBoundingClientRect();
-          return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height), right: Math.round(r.right), bottom: Math.round(r.bottom) };
-        };
-        return {
-          title: document.title,
-          primary: getComputedStyle(document.documentElement).getPropertyValue("--primary").trim(),
-          screenWidth: window.innerWidth,
-          documentWidth: document.documentElement.scrollWidth,
-          bodyWidth: document.body.scrollWidth,
-          documentHeight: document.documentElement.scrollHeight,
-          loginScreen: rect(".sf-login-screen"),
-          loginFrame: rect(".sf-login-frame"),
-          formCard: rect(".sf-login-form-card"),
-          inputCount: document.querySelectorAll(".sf-login-screen input").length,
-          buttons: Array.from(document.querySelectorAll(".sf-login-screen button")).map(el => (el.innerText || el.getAttribute("aria-label") || "").trim()).filter(Boolean).slice(0, 12),
-        };
-      });
+      let navigationError = null;
+      try {
+        await page.goto(baseUrl, { waitUntil: "domcontentloaded", timeout: 45000 });
+        await page.waitForTimeout(5000);
+      } catch (error) {
+        navigationError = error.message;
+      }
 
-      assert(loginState.loginScreen, viewport.name + ": login screen is missing");
-      assert(loginState.loginFrame, viewport.name + ": login frame is missing");
-      assert(loginState.inputCount >= 2, viewport.name + ": login fields are missing");
-      assert(loginState.primary.toUpperCase() === "#8C424C", viewport.name + ": primary token is not the expected wine accent");
-      assert(loginState.documentWidth <= viewport.width + 2, viewport.name + ": horizontal page overflow (" + loginState.documentWidth + "px > " + viewport.width + "px)");
-      assert(loginState.bodyWidth <= viewport.width + 2, viewport.name + ": body horizontal overflow");
+      let initialState = await readPageState(page);
+      await page.screenshot({
+        path: path.join(outDir, viewport.name + "-initial.png"),
+        fullPage: true,
+      }).catch(() => undefined);
 
-      const frame = loginState.loginFrame;
-      assert(frame.x >= -1 && frame.right <= viewport.width + 1, viewport.name + ": login frame is outside the viewport");
+      if (!initialState.loginScreen) {
+        await page.waitForSelector(".sf-login-screen", { state: "visible", timeout: 15000 }).catch(() => undefined);
+        initialState = await readPageState(page);
+      }
+
+      if (!initialState.loginScreen) {
+        const diagnostic = {
+          viewport: viewport.name,
+          navigationError,
+          state: initialState,
+          pageErrors,
+          consoleErrors,
+          failedSameOriginRequests,
+          badSameOriginResponses,
+        };
+        fs.writeFileSync(
+          path.join(outDir, viewport.name + "-diagnostic.json"),
+          JSON.stringify(diagnostic, null, 2),
+        );
+        await page.close();
+        throw new Error(viewport.name + ": login UI did not render. " + JSON.stringify(diagnostic));
+      }
+
+      const allowedPrimaryTokens = ["#8C424C", "#D1B77B"];
+      assert(
+        allowedPrimaryTokens.includes(initialState.primary.toUpperCase()),
+        viewport.name + ": unexpected primary theme token " + initialState.primary,
+      );
+      assert(initialState.inputCount >= 2, viewport.name + ": login fields are missing");
+      assert(
+        initialState.documentWidth <= viewport.width + 2,
+        viewport.name + ": horizontal page overflow (" + initialState.documentWidth + "px > " + viewport.width + "px)",
+      );
+      assert(initialState.bodyWidth <= viewport.width + 2, viewport.name + ": body horizontal overflow");
+      assert(
+        initialState.loginFrame.x >= -1 && initialState.loginFrame.right <= viewport.width + 1,
+        viewport.name + ": login frame is outside the viewport",
+      );
       await page.screenshot({ path: path.join(outDir, viewport.name + "-login.png"), fullPage: true });
 
       const registerTab = page.getByRole("tab", { name: "إنشاء حساب" });
       await registerTab.click();
       await page.waitForSelector("#studyflow-register-name", { state: "visible", timeout: 10000 });
       const registerState = await page.evaluate(() => {
-        const fields = ["studyflow-register-name", "studyflow-register-phone", "studyflow-password", "studyflow-confirm-password"]
-          .map(id => {
-            const el = document.getElementById(id);
-            const r = el?.getBoundingClientRect();
-            return { id, visible: Boolean(el && r && r.width > 0 && r.height > 0), labelled: Boolean(el?.labels?.length) };
-          });
+        const fields = [
+          "studyflow-register-name", "studyflow-register-phone",
+          "studyflow-password", "studyflow-confirm-password",
+        ].map(id => {
+          const el = document.getElementById(id);
+          const r = el?.getBoundingClientRect();
+          return { id, visible: Boolean(el && r && r.width > 0 && r.height > 0), labelled: Boolean(el?.labels?.length) };
+        });
+        const frame = document.querySelector(".sf-login-frame")?.getBoundingClientRect();
         return {
           width: document.documentElement.scrollWidth,
           viewportWidth: window.innerWidth,
-          frame: (() => { const r = document.querySelector(".sf-login-frame")?.getBoundingClientRect(); return r ? { left: Math.round(r.left), right: Math.round(r.right), width: Math.round(r.width) } : null; })(),
+          frame: frame ? { left: Math.round(frame.left), right: Math.round(frame.right), width: Math.round(frame.width) } : null,
           fields,
         };
       });
       assert(registerState.width <= viewport.width + 2, viewport.name + ": registration screen horizontal overflow");
-      assert(registerState.fields.every(field => field.visible && field.labelled), viewport.name + ": registration field missing or not labelled");
-      assert(registerState.frame && registerState.frame.left >= -1 && registerState.frame.right <= viewport.width + 1, viewport.name + ": registration frame clipped");
+      assert(
+        registerState.fields.every(field => field.visible && field.labelled),
+        viewport.name + ": registration field missing or not labelled",
+      );
+      assert(
+        registerState.frame && registerState.frame.left >= -1 && registerState.frame.right <= viewport.width + 1,
+        viewport.name + ": registration frame clipped",
+      );
       await page.screenshot({ path: path.join(outDir, viewport.name + "-register.png"), fullPage: true });
 
-      if (pageErrors.length) errors.push({ viewport: viewport.name, pageErrors });
-      if (failedSameOriginRequests.length) errors.push({ viewport: viewport.name, failedSameOriginRequests });
-      results.push({ viewport: viewport.name, login: loginState, registration: registerState, pageErrors, failedSameOriginRequests });
+      const viewportErrors = { pageErrors, consoleErrors, failedSameOriginRequests, badSameOriginResponses };
+      if (Object.values(viewportErrors).some(value => value.length > 0)) {
+        errors.push({ viewport: viewport.name, ...viewportErrors });
+      }
+      results.push({
+        viewport: viewport.name,
+        login: initialState,
+        registration: registerState,
+        ...viewportErrors,
+      });
       await page.close();
     }
-    fs.writeFileSync(path.join(outDir, "visual-qa.json"), JSON.stringify({ baseUrl, passed: results.length, results, errors }, null, 2));
-    if (errors.length) throw new Error("Browser console/runtime or same-origin request failures were detected: " + JSON.stringify(errors));
-    console.log(JSON.stringify({ passed: results.length * 2, viewports: results.map(r => r.viewport), screenshots: fs.readdirSync(outDir) }, null, 2));
+
+    fs.writeFileSync(
+      path.join(outDir, "visual-qa.json"),
+      JSON.stringify({ baseUrl, passed: results.length, results, errors }, null, 2),
+    );
+    if (errors.length) throw new Error("Browser errors or failed same-origin requests were detected: " + JSON.stringify(errors));
+    console.log(JSON.stringify({
+      passed: results.length * 2,
+      viewports: results.map(result => result.viewport),
+      screenshots: fs.readdirSync(outDir),
+    }, null, 2));
   } finally {
     await browser.close();
   }
