@@ -356,31 +356,8 @@ export default function Home() {
     : dailyPlan.data?.plan
       ? dailyPlanPriority
       : taskPriority ?? nextTopicInTaskBranch ?? priority;
-  const teacherScheduleAnnouncements = useMemo(() => {
-    const selection = (profile.data?.selection ?? {}) as Record<string, any>;
-    const updates = Array.isArray(selection.teacherPublicUpdates) ? selection.teacherPublicUpdates : [];
-    return updates
-      .filter((update: any) =>
-        update.confidence === "high"
-        && ["lecture_cancelled", "class_suspended", "schedule_changed"].includes(update.announcementType)
-      )
-      .sort((left: any, right: any) => Date.parse(String(right.publishedAt)) - Date.parse(String(left.publishedAt)))
-      .slice(0, 4) as Array<{
-        externalId: string;
-        teacherId: string;
-        teacherName: string;
-        sourceType: "youtube" | "facebook";
-        title: string;
-        description: string;
-        url: string;
-        publishedAt: string;
-        announcementType: "lecture_cancelled" | "class_suspended" | "schedule_changed";
-        confidence: "high";
-        affectedDate?: string;
-      }>;
-  }, [profile.data?.selection]);
-
   const plan = dailyPlan.data?.plan;
+  const planStrategy = (plan as any)?.strategy ?? null;
   const homeStudySteps = plan?.steps ?? [];
   const homeDoneSteps = homeStudySteps.filter((step: any) =>
     step.plannerTaskStatus === "done" || step.existingTask?.status === "done"
@@ -488,27 +465,26 @@ export default function Home() {
           </div>
         </header>
 
-        {teacherScheduleAnnouncements.length > 0 && (
-          <section className="overflow-hidden rounded-[1.6rem] border border-[#C9ED62]/25 bg-[#141B12] text-[#F1F0E8] shadow-[0_24px_70px_-48px_rgba(0,0,0,.8)]">
-            <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3 sm:px-5">
-              <div className="flex items-center gap-2">
-                <span className="flex size-8 items-center justify-center rounded-xl bg-[#C9ED62]/15 text-[#C9ED62]"><CalendarDays className="size-4" /></span>
-                <div><h3 className="text-sm font-bold">تحديثات مهمة من المدرسين</h3><p className="mt-0.5 text-[10px] text-[#AAB09E]">إعلانات عامة واضحة تم التحقق من نوعها</p></div>
-              </div>
-              <Badge className="rounded-full border border-[#C9ED62]/25 bg-[#C9ED62]/10 text-[#DCE8B7]">{teacherScheduleAnnouncements.length} جديد</Badge>
+        {plan && (
+          <section className="sf-home-ai-decision" data-testid="home-ai-decision" data-scroll-reveal>
+            <div className="sf-home-ai-decision-orbit" aria-hidden="true"><span /><i /><b /></div>
+            <div className="sf-home-ai-decision-copy">
+              <div className="sf-home-ai-decision-kicker"><span className="sf-home-ai-pulse" /> قرار محرك التخطيط <span>STUDYFLOW INTELLIGENCE</span></div>
+              <h3>{planStrategy?.revision?.headline || "أولوياتك مبنية على بياناتك الدراسية"}</h3>
+              <p>{planStrategy?.revision?.rationale || plan.summary || "يربط StudyFlow موضعك في المنهج والمهام المفتوحة وجدول المدرس في ترتيب واحد قابل للتنفيذ."}</p>
+              {Array.isArray(planStrategy?.revision?.triggers) && planStrategy.revision.triggers.length > 0 && (
+                <div className="sf-home-ai-triggers">
+                  {planStrategy.revision.triggers.slice(0, 3).map((trigger: any, index: number) => (
+                    <span key={trigger.code || index}>{trigger.label}</span>
+                  ))}
+                </div>
+              )}
             </div>
-            <div className="divide-y divide-white/10">
-              {teacherScheduleAnnouncements.map(update => (
-                <article key={update.externalId} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-[#C9ED62]">{update.announcementType === "lecture_cancelled" ? "إلغاء محاضرة" : update.announcementType === "class_suspended" ? "توقف / راحة من المحاضرات" : "تغيير موعد محاضرة"} · {update.teacherName}</p>
-                    <p className="mt-1 text-sm font-bold">{update.title}</p>
-                    {update.description && update.description !== update.title && <p className="mt-1 line-clamp-2 text-xs leading-5 text-[#B9C1AF]">{update.description}</p>}
-                    {update.affectedDate && <p className="mt-1 text-[10px] text-[#AAB09E]">التاريخ المذكور: {update.affectedDate}</p>}
-                  </div>
-                  <a href={update.url} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-[#C9ED62]/25 bg-white/[.04] px-3 py-2 text-[11px] font-bold text-[#DCE8B7] hover:bg-white/[.08]">فتح المصدر <ArrowLeft className="size-3" /></a>
-                </article>
-              ))}
+            <div className="sf-home-ai-decision-compare">
+              <div><small>الخطة الأصلية</small><strong>{(planStrategy?.baseline?.steps?.length ?? homeStudySteps.length).toLocaleString("ar-EG")}</strong><span>خطوة</span></div>
+              <i aria-hidden="true" />
+              <div><small>التوزيع الحالي</small><strong>{homeStudySteps.length.toLocaleString("ar-EG")}</strong><span>خطوة</span></div>
+              <Button type="button" variant="outline" onClick={() => setLocation("/planner")}>تفاصيل التعديل <ArrowLeft className="size-4" /></Button>
             </div>
           </section>
         )}
@@ -527,7 +503,7 @@ export default function Home() {
             </div>
             <div className="grid gap-5 p-5 sm:grid-cols-[1fr_auto] sm:items-center sm:px-6">
               <div className="min-w-0">
-                <p className="text-xs font-semibold text-muted-foreground">{sessionInfo?.subject} · {sessionInfo?.branch}</p>
+                <p className="text-xs font-semibold text-muted-foreground">{sessionInfo?.subject}</p>
                 <h3 className="mt-1 text-lg font-bold">{sessionInfo?.lesson}</h3>
                 <p className="mt-1 text-sm text-muted-foreground">كمّل مذاكرتك أو افتح خطوات الفهم والاسترجاع، ثم أنهِ الجلسة لحفظ مدتها.</p>
                 <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -633,7 +609,7 @@ export default function Home() {
                 </div>
               ) : activePriority?.nextLesson || activePriority?.planStepTitle ? (
                 <>
-                  <p className="mt-6 text-xs font-semibold text-muted-foreground">{activePriority.subjectName} · {activePriority.branchTitle}</p>
+                  <p className="mt-6 text-xs font-semibold text-muted-foreground">{activePriority.subjectName}</p>
                   <h3 className="mt-2 text-2xl font-bold leading-tight sm:text-3xl">{activePriority.nextLesson?.title ?? activePriority.planStepTitle}</h3>
                   <p className="mt-3 max-w-2xl text-sm leading-7 text-muted-foreground">
                     {activePriority.source === "task"
@@ -875,14 +851,14 @@ export default function Home() {
                       </summary>
                       {examScope.length ? (
                         <div className="sf-home-exam-scope-content">
-                          {examScope.map(branch => (
-                            <section key={branch.branchId}>
-                              <strong>{branch.branchTitle}</strong>
-                              <ul>{branch.lessonTitles.map((title, lessonIndex) => (
-                                <li key={branch.lessonIds[lessonIndex] || title}>{title}</li>
-                              ))}</ul>
-                            </section>
-                          ))}
+                          <section>
+                            <ul>{examScope.flatMap(branch => branch.lessonTitles.map((title, lessonIndex) => ({
+                              id: branch.lessonIds[lessonIndex] || branch.branchId + "-" + lessonIndex,
+                              title,
+                            }))).map(lesson => (
+                              <li key={lesson.id}>{lesson.title}</li>
+                            ))}</ul>
+                          </section>
                         </div>
                       ) : (
                         <p className="sf-home-exam-scope-empty">

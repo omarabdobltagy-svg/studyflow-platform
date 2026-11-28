@@ -225,7 +225,6 @@ function displayPlanStepDetail(step: PlanStep, subjectIds: string[]): string {
 
 function PlanReviewSubtasks({ step }: { step: PlanStep }) {
   if (!step.subtasks?.length && !step.aiReviewBrief) return null;
-  const baseUrl = step.resourceRecommendation?.url || "";
   return (
     <section className="sf-sp-composite-subtasks">
       {step.aiReviewBrief && (
@@ -237,8 +236,8 @@ function PlanReviewSubtasks({ step }: { step: PlanStep }) {
           <p>{displayArabicText(step.aiReviewBrief.summaryAr, "حلّل المساعد محتوى هذا المصدر وربط الأجزاء المطابقة بالدروس التي تحتاج إلى مراجعة.")}</p>
           {step.aiReviewBrief.topicsNotCovered.length > 0 && (
             <div className="sf-sp-review-scope-note">
-              <strong>نطاقات لم يغطّها هذا المصدر</strong>
-              <ul>{step.aiReviewBrief.topicsNotCovered.map((topic, index) => <li key={index}>{displayArabicText(topic, "موضوع خارج نطاق الفيديو")}</li>)}</ul>
+              <strong>موضوعات تحتاج تغطية منفصلة</strong>
+              <ul>{step.aiReviewBrief.topicsNotCovered.map((topic, index) => <li key={index}>{displayArabicText(topic, "موضوع خارج نطاق المراجعة")}</li>)}</ul>
             </div>
           )}
         </div>
@@ -251,14 +250,12 @@ function PlanReviewSubtasks({ step }: { step: PlanStep }) {
           </header>
           <ol>
             {step.subtasks.map((subtask, index) => {
-              const timestampUrl = baseUrl ? baseUrl + "#t=" + subtask.startSeconds : "";
               return (
                 <li key={subtask.id}>
                   <span className="sf-sp-composite-subtask-index">{(index + 1).toLocaleString("ar-EG")}</span>
                   <div>
                     <strong>{displayArabicText(subtask.title, "موضوع مراجعة")}</strong>
-                    <p>{displayArabicText(subtask.detail, "راجع الجزء المحدد من الفيديو.")}</p>
-                    {timestampUrl && <a href={timestampUrl} target="_blank" rel="noreferrer">ابدأ من هذا الجزء <ArrowUpRight className="size-3.5" /></a>}
+                    <p>{displayArabicText(subtask.detail, "راجع الجزء المحدد من المراجعة.")}</p>
                   </div>
                 </li>
               );
@@ -1358,10 +1355,23 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
       </header>
 
       {plan.strategy && <section className="sf-sp-plan-rationale" data-testid="planner-strategy-delta">
-        <span className="sf-sp-eyebrow">قرار المحرك</span>
+        <span className="sf-sp-eyebrow">{plan.strategy.revision.hasPreviousVersion ? "لماذا تغيّرت خطتك؟" : "أساس بناء الخطة"}</span>
         <h3>{plan.strategy.revision.headline}</h3>
         <p>{plan.strategy.revision.rationale}</p>
-        <div className="sf-sp-review-scope-note"><strong>{plan.strategy.baseline.title}</strong><p>{displayArabicText(plan.strategy.baseline.summary, "نسخة البداية المحفوظة قبل أي إعادة تخطيط.")}</p></div>
+        <div className="sf-sp-comparison-grid" data-testid="planner-before-after">
+          <article className="sf-sp-comparison-original">
+            <span>قبل التعديل</span>
+            <strong>{plan.strategy.baseline.title}</strong>
+            <p>{displayArabicText(plan.strategy.baseline.summary, "نسخة البداية المحفوظة قبل أي إعادة تخطيط.")}</p>
+            <b>{plan.strategy.baseline.steps.length.toLocaleString("ar-EG")} <small>خطوة</small></b>
+          </article>
+          <article className="sf-sp-comparison-current">
+            <span>التوزيع الحالي</span>
+            <strong>{displayArabicText(plan.title, "خطة المذاكرة")}</strong>
+            <p>{displayArabicText(summary, "التوزيع الحالي المبني على آخر بياناتك الدراسية.")}</p>
+            <b>{plan.steps.length.toLocaleString("ar-EG")} <small>خطوة</small></b>
+          </article>
+        </div>
         <div className="sf-sp-board-metrics">
           <article><span>مهام الخطة الأساسية</span><strong>{plan.strategy.baseline.steps.length.toLocaleString("ar-EG")}</strong></article>
           <article><span>المهام الحالية</span><strong>{plan.steps.length.toLocaleString("ar-EG")}</strong></article>
