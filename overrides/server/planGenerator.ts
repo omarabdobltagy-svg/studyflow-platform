@@ -200,6 +200,10 @@ const planSchema = z.object({
     priorityScore: z.number().min(0).max(100).optional(),
     priorityReason: z.string().trim().max(500).optional(),
     priorityEvidenceConfidence: z.enum(["low", "medium", "high"]).optional(),
+    aiReviewBrief: z.object({
+      summaryAr: z.string().trim().min(10).max(1_800),
+      topicsNotCovered: z.array(z.string().trim().min(1).max(180)).max(12).default([]),
+    }).optional(),
     resourceRecommendation: z.object({
       title: z.string().trim().min(2).max(240),
       url: z.string().trim().url().max(1_000).refine(value => value.startsWith("https://")),
@@ -1666,6 +1670,12 @@ export function applyDailyPlanDepth(
       difficultyConfidence: "medium",
       sourcePages: [],
       phaseId: "teacher_sync",
+      aiReviewBrief: {
+        summaryAr: String(analysis.summaryAr || "حلّل المساعد محتوى المراجعة وربط الأجزاء المطابقة بالدروس التي تحتاج إلى مراجعة.").trim().slice(0, 1_800),
+        topicsNotCovered: Array.isArray(analysis.topicsNotCovered)
+          ? analysis.topicsNotCovered.filter((item: unknown): item is string => typeof item === "string").slice(0, 12).map((item: string) => item.slice(0, 180))
+          : [],
+      },
       resourceRecommendation: {
         title: videoTitle,
         url: videoUrl,

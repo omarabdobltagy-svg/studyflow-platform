@@ -7,7 +7,7 @@ import { getNextOpenPlanStep } from "@/lib/plan-actions";
 import { getPlannerTeacherSessions, groupPlannerTeacherSessions, type PlannerTeacherSession } from "@/lib/teacher-sessions";
 import { formatTime12Hour, getDateKeyInTimeZone } from "@shared/date-time";
 import { buildPlannerCurriculumLanes, getPlannerStepCurriculum as getPlanStepCurriculum, getTeacherSessionPreparationSteps } from "@/lib/planner-curriculum";
-import { ENGLISH_CURRICULUM_LABELS, displayBranchTitle, displayCurriculumTitle } from "@/lib/curriculum-display";
+import { ENGLISH_CURRICULUM_LABELS, displayCurriculumTitle } from "@/lib/curriculum-display";
 import {
   SIE_CATALOG_META,
   getSIECheckpointProgressBranches,
@@ -70,6 +70,7 @@ type PlanStep = {
   curriculumNodeIds?: string[];
   existingTask?: { id: number; title: string; status: "todo" | "done"; confidence: "exact" | "strong"; dueAt?: string | null };
   resourceRecommendation?: { title: string; url: string; teacherName?: string; reason: string };
+  aiReviewBrief?: { summaryAr: string; topicsNotCovered: string[] };
   subtasks?: Array<{ id: string; title: string; detail: string; curriculumNodeIds?: string[]; startSeconds: number }>;
   difficulty?: "easy" | "medium" | "hard" | "unknown";
   lessonSize?: "small" | "medium" | "large" | "unknown";
@@ -223,29 +224,48 @@ function displayPlanStepDetail(step: PlanStep, subjectIds: string[]): string {
 }
 
 function PlanReviewSubtasks({ step }: { step: PlanStep }) {
-  if (!step.subtasks?.length) return null;
+  if (!step.subtasks?.length && !step.aiReviewBrief) return null;
   const baseUrl = step.resourceRecommendation?.url || "";
   return (
     <section className="sf-sp-composite-subtasks">
-      <header>
-        <strong>خطوات المراجعة داخل المهمة</strong>
-        <span>{step.subtasks.length.toLocaleString("ar-EG")} موضوعات</span>
-      </header>
-      <ol>
-        {step.subtasks.map((subtask, index) => {
-          const timestampUrl = baseUrl ? baseUrl + "#t=" + subtask.startSeconds : "";
-          return (
-            <li key={subtask.id}>
-              <span className="sf-sp-composite-subtask-index">{(index + 1).toLocaleString("ar-EG")}</span>
-              <div>
-                <strong>{displayArabicText(subtask.title, "موضوع مراجعة")}</strong>
-                <p>{displayArabicText(subtask.detail, "راجع الجزء المحدد من الفيديو.")}</p>
-                {timestampUrl && <a href={timestampUrl} target="_blank" rel="noreferrer">شاهد هذا الجزء <ArrowUpRight className="size-3.5" /></a>}
-              </div>
-            </li>
-          );
-        })}
-      </ol>
+      {step.aiReviewBrief && (
+        <div className="sf-sp-ai-review-brief" data-testid="ai-review-brief">
+          <header>
+            <strong>تحليل StudyFlow للمراجعة</strong>
+            {step.resourceRecommendation?.teacherName && <span>{step.resourceRecommendation.teacherName}</span>}
+          </header>
+          <p>{displayArabicText(step.aiReviewBrief.summaryAr, "حلّل المساعد محتوى هذا المصدر وربط الأجزاء المطابقة بالدروس التي تحتاج إلى مراجعة.")}</p>
+          {step.aiReviewBrief.topicsNotCovered.length > 0 && (
+            <div className="sf-sp-review-scope-note">
+              <strong>نطاقات لم يغطّها هذا المصدر</strong>
+              <ul>{step.aiReviewBrief.topicsNotCovered.map((topic, index) => <li key={index}>{displayArabicText(topic, "موضوع خارج نطاق الفيديو")}</li>)}</ul>
+            </div>
+          )}
+        </div>
+      )}
+      {step.subtasks?.length ? (
+        <>
+          <header>
+            <strong>الموضوعات المطابقة لمنهجك</strong>
+            <span>{step.subtasks.length.toLocaleString("ar-EG")} موضوعات</span>
+          </header>
+          <ol>
+            {step.subtasks.map((subtask, index) => {
+              const timestampUrl = baseUrl ? baseUrl + "#t=" + subtask.startSeconds : "";
+              return (
+                <li key={subtask.id}>
+                  <span className="sf-sp-composite-subtask-index">{(index + 1).toLocaleString("ar-EG")}</span>
+                  <div>
+                    <strong>{displayArabicText(subtask.title, "موضوع مراجعة")}</strong>
+                    <p>{displayArabicText(subtask.detail, "راجع الجزء المحدد من الفيديو.")}</p>
+                    {timestampUrl && <a href={timestampUrl} target="_blank" rel="noreferrer">ابدأ من هذا الجزء <ArrowUpRight className="size-3.5" /></a>}
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </>
+      ) : null}
     </section>
   );
 }
@@ -316,28 +336,38 @@ export default function Planner() {
   const progressPreview = useMemo(() => {
     const subjects = profile.data?.subjectIds ?? [];
     const gaps = (learning.data as any)?.gapByBranch ?? {};
-    return subjects.flatMap(subjectId =>
-      getSIEStudentVisibleBranches(subjectId).map(branch => {
+    return subjects.map(subjectId => {
+      const branches = getSIEStudentVisibleBranches(subjectId);
+      const snapshots = branches.map(branch => {
         const gap = gaps[subjectId]?.[branch.branchId];
-        const nextIndex = gap?.studentPosition;
-        const next = typeof nextIndex === "number" ? branch.choices[nextIndex] : null;
+        const position = typeof gap?.studentPosition === "number" ? gap.studentPosition : null;
+        const next = position !== null && position < branch.choices.length ? branch.choices[position] : null;
         return {
-          key: subjectId + "::" + branch.branchId,
-          subjectId,
-          branchId: branch.branchId,
-          subject: getSIESubject(subjectId)?.nameAr ?? subjectId,
-          branch: displayBranchTitle(branch.branchTitle),
-          lastCompleted: gap?.studentFrontierTitle ? displayCurriculumTitle(gap.studentFrontierTitle) : (nextIndex === 0 ? "لم يبدأ بعد" : "غير محدد"),
-          next: next?.title ? displayCurriculumTitle(next.title) : (gap?.studentPosition === branch.choices.length ? "اكتمل الفرع" : "غير محدد"),
-          completedCount: typeof nextIndex === "number" ? Math.max(0, Math.min(nextIndex, branch.choices.length)) : null,
-          totalCount: branch.choices.length,
-          gapCount: gap?.gapCount ?? null,
-          reference: gap?.referenceFrontierTitle ? displayCurriculumTitle(gap.referenceFrontierTitle) : "غير مسجل",
+          next: next?.title ? displayCurriculumTitle(next.title) : null,
+          lastCompleted: gap?.studentFrontierTitle ? displayCurriculumTitle(gap.studentFrontierTitle) : null,
+          completed: position === null ? 0 : Math.max(0, Math.min(position, branch.choices.length)),
+          total: branch.choices.length,
+          gapCount: typeof gap?.gapCount === "number" ? gap.gapCount : null,
         };
-      })
-    );
+      });
+      const next = snapshots.find(item => item.next)?.next ?? null;
+      const lastCompleted = [...snapshots].reverse().find(item => item.lastCompleted)?.lastCompleted ?? "لم يبدأ بعد";
+      const completedCount = snapshots.reduce((sum, item) => sum + item.completed, 0);
+      const totalCount = snapshots.reduce((sum, item) => sum + item.total, 0);
+      const allGapsKnown = snapshots.length > 0 && snapshots.every(item => item.gapCount !== null);
+      const gapCount = allGapsKnown ? snapshots.reduce((sum, item) => sum + (item.gapCount ?? 0), 0) : null;
+      return {
+        key: subjectId,
+        subjectId,
+        subject: getSIESubject(subjectId)?.nameAr ?? subjectId,
+        lastCompleted,
+        next: next ?? (totalCount > 0 && completedCount >= totalCount ? "اكتمل المنهج المسجل" : "غير محدد"),
+        completedCount,
+        totalCount,
+        gapCount,
+      };
+    });
   }, [profile.data?.subjectIds, learning.data]);
-
   const mappedOpenTasks = useMemo(() => {
     const subjects = profile.data?.subjectIds ?? [];
     return (tasksQuery.data ?? [])
@@ -351,7 +381,6 @@ export default function Planner() {
     type PathLesson = {
       key: string;
       subject: string;
-      branch: string;
       lesson: string;
       state: StudentLessonState;
     };
@@ -362,7 +391,6 @@ export default function Planner() {
     const gaps = (learning.data as any)?.gapByBranch ?? {};
     const unseen: PathLesson[] = [];
     const deferred: PathLesson[] = [];
-    let unknownBranches = 0;
     let unknownLessons = 0;
 
     for (const subjectId of profile.data?.subjectIds ?? []) {
@@ -391,7 +419,6 @@ export default function Planner() {
         const studentPosition = typeof gap?.studentPosition === "number" ? gap.studentPosition : null;
         const referencePosition = typeof gap?.referencePosition === "number" ? gap.referencePosition : null;
         const studentFrontierId = gap?.studentFrontierId ?? "__UNKNOWN__";
-        let branchHasUnknownState = false;
 
         for (const [index, choice] of branch.choices.entries()) {
           const saved = savedLessonStates[choice.nodeId];
@@ -422,14 +449,12 @@ export default function Planner() {
           if (state === "not_recorded") {
             if (referencePosition !== null && index < referencePosition) {
               unknownLessons += 1;
-              branchHasUnknownState = true;
             }
             continue;
           }
           const item: PathLesson = {
             key: subjectId + "::" + branch.branchId + "::" + choice.nodeId,
             subject: subjectLabel,
-            branch: displayBranchTitle(branch.branchTitle) === "الدروس" ? "" : displayBranchTitle(branch.branchTitle),
             lesson: displayCurriculumTitle(choice.title),
             state,
           };
@@ -437,11 +462,10 @@ export default function Planner() {
           else if (state === "watched_only" || state === "needs_review") deferred.push(item);
         }
 
-        if (branchHasUnknownState && branch.choices.length > 0) unknownBranches += 1;
       }
     }
 
-    return { unseen, deferred, unknownBranches, unknownLessons };
+    return { unseen, deferred, unknownLessons };
   }, [profile.data?.selection, profile.data?.subjectIds, learning.data]);
   const isPreflightReady = !profile.isLoading && !learning.isLoading && !tasksQuery.isLoading
     && !profile.isError && !learning.isError && !tasksQuery.isError;
@@ -939,7 +963,7 @@ export default function Planner() {
             <section className="sf-sp-snapshot" data-scroll-reveal>
               <div className="sf-sp-section-heading">
                 <div><span className="sf-sp-eyebrow">صورة المنهج</span><h2>أين وصلت في المواد؟</h2></div>
-                <button type="button" className="sf-sp-text-action" onClick={() => setPlannerTab("curriculum")}>عرض كل الفروع <ArrowUpRight className="size-4" /></button>
+                <button type="button" className="sf-sp-text-action" onClick={() => setPlannerTab("curriculum")}>عرض تفاصيل المواد <ArrowUpRight className="size-4" /></button>
               </div>
               {profile.isLoading || learning.isLoading ? (
                 <div className="sf-sp-skeletons"><span /><span /><span /></div>
@@ -947,7 +971,7 @@ export default function Planner() {
                 <div className="sf-sp-snapshot-grid">
                   {progressPreview.slice(0,4).map(item => (
                     <article key={item.key} className="sf-sp-branch-card">
-                      <div className="sf-sp-branch-heading"><span>{item.subject}</span><small>{item.branch}</small></div>
+                      <div className="sf-sp-branch-heading"><span>{item.subject}</span><small>{item.next === "غير محدد" ? "التقدم الدراسي" : "الدرس التالي"}</small></div>
                       <strong>{item.next}</strong>
                       <p>آخر موضع مكتمل: {item.lastCompleted}</p>
                       <div className="sf-sp-branch-foot"><span>{item.gapCount === null ? "الفجوة غير محسوبة" : item.gapCount.toLocaleString("ar-EG") + " درس متأخر عن المرجع"}</span><span>{item.completedCount === null ? "التقدم غير محدد" : Math.round(item.completedCount / Math.max(1,item.totalCount) * 100).toLocaleString("ar-EG") + "%"}</span></div>
@@ -955,7 +979,7 @@ export default function Planner() {
                   ))}
                 </div>
               ) : (
-                <div className="sf-sp-empty-inline">لا توجد فروع منهج متاحة للمواد المحددة في ملفك بعد.</div>
+                <div className="sf-sp-empty-inline">لا توجد بيانات منهج متاحة للمواد المحددة في ملفك بعد.</div>
               )}
             </section>
 
@@ -998,7 +1022,7 @@ export default function Planner() {
             ) : activeDailyPlan.isLoading || history.isLoading ? (
               <section className="sf-sp-empty" role="status" aria-live="polite">
                 <h2>بنحمّل خريطة خطتك</h2>
-                <p>نقرأ آخر نسخة محفوظة ونربط خطواتها بالمواد والفروع وحالة التنفيذ.</p>
+                <p>نقرأ آخر نسخة محفوظة ونربط خطواتها بالمواد وحالة التنفيذ.</p>
                 <div className="sf-sp-skeletons"><span /><span /><span /></div>
               </section>
             ) : plan ? (
@@ -1033,7 +1057,7 @@ export default function Planner() {
 
               {progressivePath.unknownLessons > 0 && (
                 <div className="sf-sp-empty-inline" role="status">
-                  هناك {progressivePath.unknownLessons.toLocaleString("ar-EG")} درس داخل نطاق شرح المدرس لم تُسجّل حالته في {progressivePath.unknownBranches.toLocaleString("ar-EG")} فروع. حدّد موضعك حتى نميّز الدروس المتراكمة من الدروس التي لم يشرحها المدرس بعد.
+                  هناك {progressivePath.unknownLessons.toLocaleString("ar-EG")} درس داخل نطاق شرح المدرس لم تُسجّل حالته. حدّد موضعك حتى نميّز الدروس المتراكمة من الدروس التي لم يشرحها المدرس بعد.
                 </div>
               )}
 
@@ -1053,7 +1077,7 @@ export default function Planner() {
                             <span className="sf-sp-task-check" aria-hidden="true" />
                             <div className="min-w-0 flex-1">
                               <strong>{item.subject} · {item.lesson}</strong>
-                              <small className="block mt-1">{item.branch ? item.branch + " · " : ""}شرح غير مشاهد</small>
+                              <small className="block mt-1">شرح غير مشاهد</small>
                             </div>
                             <span className="sf-sp-task-meta">ابدأ الآن</span>
                           </article>
@@ -1076,7 +1100,7 @@ export default function Planner() {
                             <span className="sf-sp-task-check" aria-hidden="true" />
                             <div className="min-w-0 flex-1">
                               <strong>{item.subject} · {item.lesson}</strong>
-                              <small className="block mt-1">{item.branch ? item.branch + " · " : ""}{item.state === "watched_only" ? "شاهدت الشرح ولم تسجل المذاكرة" : "درس يحتاج مراجعة"}</small>
+                              <small className="block mt-1">{item.state === "watched_only" ? "شاهدت الشرح ولم تسجل المذاكرة" : "درس يحتاج مراجعة"}</small>
                             </div>
                             <span className="sf-sp-task-meta">مؤجل</span>
                           </article>
@@ -1089,7 +1113,7 @@ export default function Planner() {
 
                   {progressivePath.unseen.length === 0
                     && progressivePath.deferred.length === 0
-                    && progressivePath.unknownBranches === 0 && (
+                    && progressivePath.unknownLessons === 0 && (
                       <div className="sf-sp-empty-inline">لا يوجد تراكم مؤكد حاليًا. يتحدث المسار تلقائيًا عند تسجيل تقدمك في الدروس.</div>
                     )}
                 </>
@@ -1107,7 +1131,7 @@ export default function Planner() {
                   {mappedOpenTasks.map(({task,match}) => (
                     <article key={task.id} className="sf-sp-task-row">
                       <span className="sf-sp-task-check" aria-hidden="true" />
-                      <div className="min-w-0 flex-1"><strong>{match ? (getSIESubject(match.subjectId)?.nameAr ?? "مادة دراسية") + " · " + displayBranchTitle(match.branchTitle) + " · " + displayCurriculumTitle(match.title) : displayArabicText(task.title, "مهمة مسجلة")}</strong><small className="block mt-1">{match ? (getSIESubject(match.subjectId)?.nameAr ?? "مادة دراسية") : displayArabicText(task.category, "مهمة عامة")}</small>{task.notes && <details className="mt-2"><summary className="cursor-pointer text-xs text-primary">عرض التفاصيل</summary><p className="mt-2 text-sm leading-6 text-muted-foreground">{displayArabicText(task.notes, "التفاصيل محفوظة في التكليف الأصلي.")}</p></details>}</div>
+                      <div className="min-w-0 flex-1"><strong>{match ? (getSIESubject(match.subjectId)?.nameAr ?? "مادة دراسية") + " · " + displayCurriculumTitle(match.title) : displayArabicText(task.title, "مهمة مسجلة")}</strong><small className="block mt-1">{match ? (getSIESubject(match.subjectId)?.nameAr ?? "مادة دراسية") : displayArabicText(task.category, "مهمة عامة")}</small>{task.notes && <details className="mt-2"><summary className="cursor-pointer text-xs text-primary">عرض التفاصيل</summary><p className="mt-2 text-sm leading-6 text-muted-foreground">{displayArabicText(task.notes, "التفاصيل محفوظة في التكليف الأصلي.")}</p></details>}</div>
                       <div className="sf-sp-task-meta"><span>{task.priority === "high" ? "أولوية عالية" : task.priority === "low" ? "مرنة" : "متوسطة"}</span><small>{task.dueAt ? new Intl.DateTimeFormat("ar-EG",{timeZone:"Africa/Cairo",day:"numeric",month:"short"}).format(new Date(task.dueAt)) : "بلا موعد"}</small></div>
                     </article>
                   ))}
@@ -1337,8 +1361,9 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
         <span className="sf-sp-eyebrow">قرار المحرك</span>
         <h3>{plan.strategy.revision.headline}</h3>
         <p>{plan.strategy.revision.rationale}</p>
+        <div className="sf-sp-review-scope-note"><strong>{plan.strategy.baseline.title}</strong><p>{displayArabicText(plan.strategy.baseline.summary, "نسخة البداية المحفوظة قبل أي إعادة تخطيط.")}</p></div>
         <div className="sf-sp-board-metrics">
-          <article><span>الخطة الأساسية</span><strong>{plan.strategy.baseline.steps.length.toLocaleString("ar-EG")}</strong></article>
+          <article><span>مهام الخطة الأساسية</span><strong>{plan.strategy.baseline.steps.length.toLocaleString("ar-EG")}</strong></article>
           <article><span>المهام الحالية</span><strong>{plan.steps.length.toLocaleString("ar-EG")}</strong></article>
           {plan.strategy.revision.hasPreviousVersion && <>
             <article><span>أُضيفت</span><strong>{plan.strategy.revision.diff.added.length.toLocaleString("ar-EG")}</strong></article>
@@ -1352,6 +1377,9 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
         </div>}
         {plan.strategy.revision.hasPreviousVersion && <div className="sf-sp-task-list">
           {plan.strategy.revision.diff.added.slice(0, 3).map(step => <article className="sf-sp-task-row" key={"add-" + step.key}><strong>أُضيفت: {step.title}</strong></article>)}
+          {plan.strategy.revision.diff.removed.slice(0, 3).map(step => <article className="sf-sp-task-row" key={"remove-" + step.key}><strong>لم تعد ضمن التنفيذ الحالي: {step.title}</strong></article>)}
+          {plan.strategy.revision.diff.rescheduled.slice(0, 3).map(step => <article className="sf-sp-task-row" key={"move-" + step.key}><strong>أُعيد توقيتها: {step.title}</strong></article>)}
+          {plan.strategy.revision.diff.reprioritized.slice(0, 3).map(step => <article className="sf-sp-task-row" key={"priority-" + step.key}><strong>تغيّرت أولويتها: {step.title}</strong></article>)}
           {plan.strategy.revision.diff.deferred.slice(0, 3).map(step => <article className="sf-sp-task-row" key={"defer-" + step.key}><strong>أُجّلت: {step.title}</strong></article>)}
         </div>}
       </section>}
@@ -1460,7 +1488,7 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
       <div className="sf-sp-board-toolbar sf-sp-map-toolbar">
         <div>
           <h3>خريطة تنفيذ الخطة</h3>
-          <p>الخريطة مرتبة حسب وحدات المنهج الفعلية، وتُظهر فروع كل وحدة ودروسها. افتح أي خطوة لعرض تفاصيلها.</p>
+          <p>الخريطة تجمع دروس كل مادة في تسلسل واحد واضح. افتح أي خطوة لعرض المطلوب وسبب ترتيبها.</p>
         </div>
         <div className="sf-sp-map-controls">
           <div className="sf-sp-filter-group" role="group" aria-label="تصفية مهام الخطة">
@@ -1505,11 +1533,6 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
                     <div className="sf-sp-flow-lane-heading">
                       <small>{lane.subjectId ? lane.isOfficialUnit ? "وحدة من الكتاب" : lane.unitNumber ? "مجموعة دروس" : "مسار إضافي" : "التزامات ومهام"}</small>
                       <h4>{lane.title}</h4>
-                      {lane.branchLabels.length > 0 && (
-                        <div className="sf-sp-flow-lane-branches" aria-label="فروع الوحدة">
-                          {lane.branchLabels.map(label => <span key={label}>{label}</span>)}
-                        </div>
-                      )}
                     </div>
                     <strong>{lane.items.length.toLocaleString("ar-EG")} خطوة</strong>
                   </header>
@@ -1560,7 +1583,6 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
                               <h5>{titleText}</h5>
                               <span>{selectedMapStepIndex === index ? "محددة الآن" : "عرض تفاصيل الخطوة"}</span>
                             </button>
-                            {curriculum?.branch && curriculum.branch !== "الدروس" && <small className="sf-sp-flow-node-branch">{curriculum.branch}</small>}
                             <details className="sf-sp-flow-node-details">
                               <summary>تفاصيل هذه الخطوة</summary>
                               <p>{detailText}</p>
@@ -1703,7 +1725,6 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
                         <div className="sf-sp-step-content">
                           <div className="sf-sp-step-tags">
                             {curriculum && <span>{curriculum.subject}</span>}
-                            {curriculum && curriculum.branch !== "الدروس" && <span>{curriculum.branch}</span>}
                             {step.phaseId && <span>{phaseLabel[step.phaseId] || "مرحلة الخطة"}</span>}
                             {step.priority && <span>{priorityLabel[step.priority] || "أولوية عادية"}</span>}
                             {step.difficulty && <span>{difficultyLabel[step.difficulty] || "غير محدد"}</span>}
