@@ -1,10 +1,13 @@
 import { formatStudyMethodNotes } from "./study-method";
+import { normalizeAssistantConversationDraft } from "./assistant-conversations";
 import { and, asc, desc, eq, inArray, isNull, like, lt, lte, or, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { storageDelete } from "./storage";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   aiPlans,
+  assistantConversations,
+  assistantMessages,
   bookChapters,
   books,
   calendarEvents,
@@ -1770,6 +1773,100 @@ function logAiPlanPersistenceFailure(
     payloadBytes: new TextEncoder().encode(planJson).byteLength,
     ...details,
   });
+}
+
+export async function listAssistantConversations(userId: number) {
+  const db = await requireDb();
+  const conversations = await db.select()
+    .from(assistantConversations)
+    .where(eq(assistantConversations.userId, userId))
+    .orderBy(desc(assistantConversations.updatedAt))
+    .limit(30);
+  if (conversations.length === 0) return [];
+
+  const ids = conversations.map(conversation => conversation.id);
+  const messages = await db.select()
+    .from(assistantMessages)
+    .where(inArray(assistantMessages.conversationId, ids))
+    .orderBy(asc(assistantMessages.conversationId), asc(assistantMessages.sortOrder), asc(assistantMessages.id));
+  const grouped = new Map<number, typeof messages>();
+  for (const message of messages) {
+    const bucket = grouped.get(message.conversationId) ?? [];
+    bucket.push(message);
+    grouped.set(message.conversationId, bucket);
+  }
+
+  return conversations.map(conversation => ({
+    clientId: conversation.clientId,
+    title: conversation.title,
+    createdAt: conversation.createdAt,
+    updatedAt: conversation.updatedAt,
+    messages: (grouped.get(conversation.id) ?? []).map(message => ({
+      role: message.role,
+      content: message.content,
+    })),
+  }));
+}
+
+/**
+ * Saves a whole bounded conversation atomically. The client ID is scoped to the
+ * authenticated user, so a guessed ID can never overwrite another account's chat.
+ */
+export async function saveAssistantConversation(userId: number, input: unknown) {
+  const draft = normalizeAssistantConversationDraft(input);
+  if (!draft) throw new Error("بيانات المحادثة غير صالحة للحفظ.");
+  const db = await requireDb();
+  const updatedAt = new Date();
+
+  await db.transaction(async tx => {
+    const existing = await tx.select({ id: assistantConversations.id })
+      .from(assistantConversations)
+      .where(and(
+        eq(assistantConversations.userId, userId),
+        eq(assistantConversations.clientId, draft.clientId),
+      ))
+      .limit(1);
+    let conversationId = existing[0]?.id;
+
+    if (conversationId) {
+      await tx.update(assistantConversations)
+        .set({ title: draft.title, updatedAt })
+        .where(and(
+          eq(assistantConversations.id, conversationId),
+          eq(assistantConversations.userId, userId),
+        ));
+      await tx.delete(assistantMessages).where(eq(assistantMessages.conversationId, conversationId));
+    } else {
+      const inserted = await tx.insert(assistantConversations).values({
+        userId,
+        clientId: draft.clientId,
+        title: draft.title,
+        createdAt: updatedAt,
+        updatedAt,
+      });
+      conversationId = Number(inserted[0].insertId);
+    }
+
+    if (draft.messages.length > 0) {
+      await tx.insert(assistantMessages).values(draft.messages.map((message, index) => ({
+        conversationId: conversationId!,
+        role: message.role,
+        content: message.content,
+        sortOrder: index,
+      })));
+    }
+  });
+
+  return { ...draft, updatedAt };
+}
+
+export async function deleteAssistantConversation(userId: number, clientId: string) {
+  const db = await requireDb();
+  await db.delete(assistantConversations).where(and(
+    eq(assistantConversations.userId, userId),
+    eq(assistantConversations.clientId, clientId),
+  ));
+  return { success: true };
 }
 
 export async function saveAiPlan(userId: number, data: { prompt: string; title: string; planJson: string }) {
