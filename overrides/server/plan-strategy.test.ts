@@ -33,6 +33,16 @@ describe("plan strategy snapshots", () => {
     expect(result.revision.triggers.map(item => item.code)).toEqual(["exam_imminent", "low_energy", "limited_capacity", "heavy_backlog"]);
     expect(result.history).toHaveLength(1);
   });
+
+  it("starts revision numbers at zero for the baseline and increments only on later replans", () => {
+    const plan = { title: "خطة", summary: "", steps: [{ title: "درس", curriculumNodeIds: ["ARB_1"], dayIndex: 0 }] };
+    const baseline = buildPlanStrategySnapshot(null, plan, {}, new Date("2026-11-28T10:00:00.000Z"));
+    const next = buildPlanStrategySnapshot({ ...plan, strategy: baseline }, { ...plan, steps: [{ ...plan.steps[0], priority: "high" }] }, {}, new Date("2026-11-29T10:00:00.000Z"));
+    expect(baseline.revision.number).toBe(0);
+    expect(next.revision.number).toBe(1);
+    expect(next.revision.diff.reprioritized).toHaveLength(1);
+  });
+
   it("does not treat display-date changes as rescheduling when the planned day index is unchanged", () => {
     const previous = { title: "خطة", summary: "", steps: [{ title: "درس", curriculumNodeIds: ["ARB_1"], dayIndex: 1, day: "الأحد" }] };
     const next = { title: "خطة", summary: "", steps: [{ title: "درس", curriculumNodeIds: ["ARB_1"], dayIndex: 1, day: "الإثنين" }] };

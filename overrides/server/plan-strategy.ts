@@ -101,7 +101,10 @@ export function buildPlanStrategySnapshot(
     ?? (previousPlan ? snapshotBaseline(previousPlan, previousGeneratedAt || nowIso) : snapshotBaseline(nextPlan, nowIso));
   const hasPreviousVersion = Boolean(previousPlan && Array.isArray(previousPlan.steps));
   const previousSteps = hasPreviousVersion ? snapshotSteps(previousPlan) : [];
-  const diff = compareSteps(previousSteps, currentSteps), triggers = buildTriggers(signals);
+  const diff = hasPreviousVersion
+    ? compareSteps(previousSteps, currentSteps)
+    : { added: [], removed: [], rescheduled: [], reprioritized: [], deferred: [], preservedCount: 0 };
+  const triggers = buildTriggers(signals);
   const changeCount = diff.added.length + diff.removed.length + diff.rescheduled.length + diff.reprioritized.length + diff.deferred.length;
   const adapted = hasPreviousVersion && (changeCount > 0 || triggers.length > 0);
   const nearestExam = (signals.exams ?? []).filter(exam => exam.daysUntil >= 0).slice().sort((a, b) => a.daysUntil - b.daysUntil)[0];
