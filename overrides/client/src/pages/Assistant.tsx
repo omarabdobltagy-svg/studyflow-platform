@@ -39,7 +39,7 @@ function loadThreads(): ChatThread[] {
         const entry = message as Record<string, unknown>;
         return ["user", "assistant"].includes(String(entry.role))
           && typeof entry.content === "string"
-          && (entry.content as string).length <= 6_000;
+          && (entry.content as string).length <= 12_000;
       }) as ChatMessage[];
       return {
         id: String(record.id),
@@ -128,7 +128,7 @@ export default function Assistant() {
         messages: thread.messages,
         updatedAt: thread.updatedAt instanceof Date
           ? thread.updatedAt.getTime()
-          : new Date(thread.updatedAt).getTime(),
+          : Date.parse(String(thread.updatedAt)) || Date.now(),
       }));
       const localThreads = loadThreads();
       const merged = new Map(serverThreads.map(thread => [thread.id, thread]));
