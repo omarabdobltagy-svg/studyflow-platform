@@ -40,7 +40,7 @@ export default function StudyOrbScene({ className = "" }: StudyOrbSceneProps) {
     renderer.domElement.style.display = "block";
 
     scene.add(new THREE.AmbientLight(0xeaf2d6, 1.4));
-    const keyLight = new THREE.PointLight(0xc9ed62, 19, 18);
+    const keyLight = new THREE.PointLight(0xd1b77b, 19, 18);
     keyLight.position.set(3.1, 2.4, 4.2);
     scene.add(keyLight);
     const rimLight = new THREE.PointLight(0xd1b77b, 10, 14);
@@ -51,7 +51,7 @@ export default function StudyOrbScene({ className = "" }: StudyOrbSceneProps) {
     scene.add(core);
     const geometry = new THREE.IcosahedronGeometry(1.08, 4);
     const material = new THREE.MeshPhysicalMaterial({
-      color: 0xc9ed62,
+      color: 0xd1b77b,
       metalness: 0.56,
       roughness: 0.24,
       clearcoat: 0.72,
@@ -64,7 +64,7 @@ export default function StudyOrbScene({ className = "" }: StudyOrbSceneProps) {
 
     const wire = new THREE.LineSegments(
       new THREE.EdgesGeometry(new THREE.IcosahedronGeometry(1.19, 1)),
-      new THREE.LineBasicMaterial({ color: 0xe1edb7, transparent: true, opacity: 0.24 }),
+      new THREE.LineBasicMaterial({ color: 0xe0cdaf, transparent: true, opacity: 0.24 }),
     );
     core.add(wire);
 
@@ -91,7 +91,7 @@ export default function StudyOrbScene({ className = "" }: StudyOrbSceneProps) {
     particlesGeometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     const particles = new THREE.Points(
       particlesGeometry,
-      new THREE.PointsMaterial({ color: 0xdbe9ac, size: 0.014, transparent: true, opacity: 0.58 }),
+      new THREE.PointsMaterial({ color: 0xe0cdaf, size: 0.014, transparent: true, opacity: 0.58 }),
     );
     scene.add(particles);
 
