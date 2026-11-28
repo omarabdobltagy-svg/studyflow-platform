@@ -751,8 +751,8 @@ body[data-studyflow-sections-open="true"] .sf-hub-root {
   grid-column:2; grid-row:1; align-self:start; padding:3px 7px; border-radius:999px;
   background:var(--muted); color:var(--muted-foreground); font-size:9px; font-style:normal; font-weight:800; white-space:nowrap;
 }
-.sf-map-step-completed { border-color:rgba(112,142,117,.35); background:color-mix(in srgb,#8E7E94 8%,var(--card)); }
-.sf-map-step-completed > em { background:rgba(112,142,117,.16); color:#8E7E94; }
+.sf-map-step-completed { border-color:rgba(185, 154, 100,.35); background:color-mix(in srgb,#8E7E94 8%,var(--card)); }
+.sf-map-step-completed > em { background:rgba(185, 154, 100,.16); color:#8E7E94; }
 .sf-map-step-next { border-color:var(--sf-navigation-accent); background:color-mix(in srgb,var(--sf-navigation-accent) 13%,var(--card)); box-shadow:0 0 0 2px color-mix(in srgb,var(--sf-navigation-accent) 15%,transparent); }
 .sf-map-step-next > em { background:color-mix(in srgb,var(--sf-navigation-accent) 25%,var(--card)); color:var(--foreground); }
 .sf-map-step-untracked { border-style:dashed; }
