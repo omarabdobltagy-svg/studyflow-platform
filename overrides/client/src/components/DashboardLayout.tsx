@@ -129,23 +129,6 @@ export default function DashboardLayout({ title, description, children, action }
     { label: "الخطة", path: "/planner", icon: CalendarRange, group: "التخطيط" },
   ];
   const studentProfile = trpc.studentProfile.get.useQuery(undefined, { enabled: Boolean(user) });
-  const dailyEnginePlan = trpc.plans.currentDaily.useQuery(undefined, {
-    enabled: Boolean(user),
-    staleTime: 20_000,
-    refetchOnWindowFocus: false,
-  });
-  const engineState = dailyEnginePlan.isLoading
-    ? "يربط بياناتك الدراسية"
-    : dailyEnginePlan.data?.needsRefresh
-      ? "هناك تغيير يحتاج تحديث الخطة"
-      : dailyEnginePlan.data?.plan
-        ? "الخطة مرتبطة بتقدمك"
-        : "الخطة لم تُبنَ بعد";
-  const engineDescription = dailyEnginePlan.data?.needsRefresh
-    ? "تغيّرت بياناتك منذ آخر توزيع؛ راجع التحديث الجاري."
-    : dailyEnginePlan.data?.plan
-      ? "الأولويات تُبنى على المنهج والمهام والتقدم المسجل."
-      : "أكمل ملفك الدراسي ليبدأ المحرك بناء أولوياتك.";
   const aiInbox = trpc.ai.inbox.useQuery(undefined, {
     enabled: Boolean(user),
     refetchInterval: 15_000,
@@ -466,8 +449,7 @@ export default function DashboardLayout({ title, description, children, action }
     { label: "اليوم", path: "/", icon: LayoutDashboard },
     { label: "المهام", path: "/tasks", icon: CheckSquare2 },
     { label: "المذاكرة", path: "/study", icon: BookOpenText },
-    { label: "الخطة", path: "/planner", icon: CalendarRange },
-    { label: "المساعد", path: "/assistant", icon: MessageCircle },
+    { label: "الخريطة", path: "/learning-map", icon: BrainCircuit },
   ];
 
   const renderNavigation = (mobile = false) => (
@@ -490,7 +472,7 @@ export default function DashboardLayout({ title, description, children, action }
                   whileHover={{ x: -3 }}
                   whileTap={{ scale: 0.98 }}
                 >
-                  <item.icon className="sf-nav-icon" color={active ? "#D5AD70" : "#8D8179"} strokeWidth={1.9} />
+                  <item.icon className="sf-nav-icon" color={active ? "#C9ED62" : "#A7B09E"} strokeWidth={1.9} />
                   <span>{item.label}</span>
                 </motion.button>
               );
@@ -517,29 +499,6 @@ export default function DashboardLayout({ title, description, children, action }
   return (
     <div className="sf-app-shell sf-shell-v3">
       <div className="sf-app-frame" data-page={pageKey}>
-        <aside className="sf-sidebar sf-sidebar-v4" aria-label="مساحات StudyFlow">
-          <div className="sf-sidebar-top-v4">
-            <button type="button" onClick={() => navigate("/")} className="sf-sidebar-brand" aria-label="العودة إلى مساحة اليوم">
-              <span className="sf-brand-mark"><BrandMark className="size-5" /></span>
-              <span className="sf-brand-copy"><b>StudyFlow</b><small>STUDENT INTELLIGENCE</small></span>
-            </button>
-            <div className="sf-sidebar-caption-v4">مساحة الطالب</div>
-          </div>
-          <div className="sf-sidebar-nav-v4">{renderNavigation()}</div>
-          <section className="sf-sidebar-engine" data-testid="studyflow-engine-status">
-            <div className="sf-sidebar-engine-top">
-              <span className="sf-engine-orbit"><i /><b /></span>
-              <span className="sf-engine-live"><i /> ENGINE</span>
-            </div>
-            <small>محرك StudyFlow</small>
-            <strong>{engineState}</strong>
-            <p>{engineDescription}</p>
-            <button type="button" onClick={() => navigate("/planner")}>
-              افهم قرار الخطة <ChevronLeft className="size-3.5" />
-            </button>
-          </section>
-          <div className="sf-sidebar-account-v4">{account}</div>
-        </aside>
         <DeferredStudyOrbScene className="sf-workspace-3d" />
         <div className="sf-app-main">
           <motion.header
