@@ -91,7 +91,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { buildPlannerProgressSnapshot, generatePersonalPlan, getPlanGenerationProgress, markPlanGenerationFailed } from "./planGenerator";
-import { completeAIActivity, failAIActivity, getAIActivitySnapshot, startAIActivity, updateAIActivity } from "./aiActivity";
+import { completeAIActivity, failAIActivity, getDurableAIActivitySnapshot, startAIActivity, updateAIActivity } from "./aiActivity";
 import { classifyTeacherPublicUpdate, isHighConfidenceScheduleAnnouncement, isSecondYearBaccalaureateUpdate, isTeacherVideoUpdateAllowed, parseYoutubeAtomFeed, scanSelectedTeacherSources, selectedTeacherIds, type TeacherPublicUpdate } from "./teacher-content-monitor";
 import { getTeacherVideoAnalysis, isTeacherVideoAnalysisConfigured, startTeacherVideoAnalysis } from "./teacher-video-analysis";
 import { isDailyPlanStale } from "./planLifecycle";
@@ -3711,7 +3711,7 @@ export const appRouter = router({
   }),
 
   ai: router({
-    activity: protectedProcedure.query(({ ctx }) => getAIActivitySnapshot(ctx.user.id)),
+    activity: protectedProcedure.query(({ ctx }) => getDurableAIActivitySnapshot(ctx.user.id)),
     history: protectedProcedure
       .input(z.object({ limit: z.number().int().min(1).max(100).default(60) }).optional())
       .query(({ ctx, input }) => listRecentAIBackgroundActivityEvents(ctx.user.id, input?.limit ?? 60)),
