@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
+import { useServerClock } from "@/lib/server-clock";
 
 type Priority = {
   subjectId: string; subjectName: string; branchId: string; branchTitle: string;
@@ -39,9 +40,11 @@ type ExternalSession = {
   startedAt: string; status: "active" | "completed";
 };
 
-const cairoDate = () => new Intl.DateTimeFormat("ar-EG", {
-  weekday: "long", day: "numeric", month: "long", timeZone: "Africa/Cairo",
-}).format(new Date());
+const cairoDate = (value: Date | null) => value
+  ? new Intl.DateTimeFormat("ar-EG", {
+      weekday: "long", day: "numeric", month: "long", timeZone: "Africa/Cairo",
+    }).format(value)
+  : "جارٍ مزامنة التاريخ والوقت من الخادم";
 
 function durationLabel(seconds: number) {
   const value = Math.max(0, Math.floor(seconds));
@@ -72,6 +75,7 @@ export default function Home() {
   const { user, loading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
   const utils = trpc.useUtils();
+  const { now: serverNow, status: serverClockStatus, refresh: refreshServerClock } = useServerClock();
   const summary = trpc.dashboard.summary.useQuery({ timeZone: "Africa/Cairo" }, { enabled: Boolean(user) && !authLoading });
   const tasksQuery = trpc.tasks.list.useQuery(undefined, { enabled: Boolean(user) && !authLoading });
   const learning = trpc.learning.get.useQuery(undefined, { enabled: Boolean(user) && !authLoading });
@@ -169,14 +173,8 @@ export default function Home() {
     onError: error => toast.error(error.message || "تعذّر إنهاء الجلسة."),
   });
 
-  const [now, setNow] = useState(Date.now());
   const session = (activeSessionQuery.data ?? null) as ExternalSession | null;
   const sessionInfo = useMemo(() => sessionLesson(session), [session]);
-  useEffect(() => {
-    if (!session) return;
-    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
-    return () => window.clearInterval(timer);
-  }, [session?.sessionId]);
 
   const priority = useMemo<Priority | null>(() => {
     const gaps = ((learning.data as any)?.gapByBranch ?? {}) as Record<string, Record<string, any>>;
@@ -389,10 +387,11 @@ export default function Home() {
   ).length;
   const homeStudyProgress = homeStudySteps.length ? Math.round(homeDoneSteps / homeStudySteps.length * 100) : 0;
   const homeNextStep = getNextOpenPlanStep(homeStudySteps as any[] | undefined);
-  const cairoExamDate = getDateKeyInTimeZone(new Date(), "Africa/Cairo");
+  const cairoExamDate = serverNow ? getDateKeyInTimeZone(serverNow, "Africa/Cairo") : null;
   const upcomingExams = useMemo(
-    () => getCairoSecondYearBaccalaureateExams(profile.data)
-      .filter(exam => exam.date >= cairoExamDate),
+    () => cairoExamDate
+      ? getCairoSecondYearBaccalaureateExams(profile.data).filter(exam => exam.date >= cairoExamDate)
+      : [],
     [profile.data?.educationSystem, profile.data?.gradeYear, profile.data?.subjectIds, cairoExamDate],
   );
   const monthlyExamCoveredScope = useMemo(() => {
@@ -403,7 +402,7 @@ export default function Home() {
       (selection.courseModes ?? {}) as Record<string, string>,
     );
   }, [profile.data?.subjectIds, profile.data?.selection]);
-  const daysUntilExam = (date: string) => Math.max(0, getCalendarDaysBetween(cairoExamDate, date));
+  const daysUntilExam = (date: string) => cairoExamDate ? Math.max(0, getCalendarDaysBetween(cairoExamDate, date)) : 0;
   const homeNextStepIndex = homeNextStep ? homeStudySteps.indexOf(homeNextStep) : -1;
   const tasks = summary.data?.tasks ?? [];
   const taskCount = summary.data?.taskStats.total ?? 0;
@@ -411,7 +410,9 @@ export default function Home() {
   const remaining = summary.data?.taskStats.remaining ?? 0;
   const completion = taskCount ? Math.round(completed / taskCount * 100) : 0;
   const startedAt = session?.startedAt ? Date.parse(session.startedAt) : NaN;
-  const elapsed = Number.isFinite(startedAt) ? Math.max(0, Math.floor((now - startedAt) / 1000)) : 0;
+  const elapsed = serverNow && Number.isFinite(startedAt)
+    ? Math.max(0, Math.floor((serverNow.getTime() - startedAt) / 1000))
+    : 0;
   const firstName = profile.data?.studentName?.trim().split(/\s+/)[0] || user?.name?.trim().split(/\s+/)[0] || "بك";
 
   const openStudySteps = (subjectId: string, branchId: string, lessonId: string) => {
@@ -424,7 +425,7 @@ export default function Home() {
   const confirmFinishCurrentSession = () => {
     if (session) finishSession.mutate({ sessionId: session.sessionId, markLessonCompleted: markComplete });
   };
-  const finishTimeLabel = formatTime12Hour(new Date(now), "ar-EG", "Africa/Cairo");
+  const finishTimeLabel = serverNow ? formatTime12Hour(serverNow, "ar-EG", "Africa/Cairo") : "—";
 
   const welcomeGuide = [
     {
@@ -473,7 +474,7 @@ export default function Home() {
       <div className="space-y-6 pb-6">
         <header className="sf-home-greeting flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="text-sm font-medium text-muted-foreground">{cairoDate()}</p>
+            <p className="text-sm font-medium text-muted-foreground">{cairoDate(serverNow)}</p>
             <h2 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">أهلًا {firstName}، نبدأ بإيه النهارده؟</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
               ابدأ بخطوة واحدة واضحة. خطتك ومهامك وتقدمك موجودين هنا من غير ما تحتاج تدور بينهم.
@@ -817,6 +818,20 @@ export default function Home() {
           )}
         </section>
 
+        {!serverNow && (
+          <section className="app-card flex flex-wrap items-center justify-between gap-3 p-4" role="status" aria-live="polite">
+            <p className="text-sm text-muted-foreground">
+              {serverClockStatus === "unavailable"
+                ? "تعذرت مزامنة التاريخ والوقت من الخادم؛ لم نستخدم ساعة جهازك."
+                : "جارٍ مزامنة التاريخ والوقت من خادم StudyFlow."}
+            </p>
+            {serverClockStatus === "unavailable" && (
+              <Button type="button" size="sm" variant="outline" onClick={() => void refreshServerClock()}>
+                إعادة المحاولة
+              </Button>
+            )}
+          </section>
+        )}
         {upcomingExams.length > 0 && (
           <section className="sf-home-exam-calendar" aria-labelledby="sf-home-exam-calendar-title">
             <header className="sf-home-exam-calendar-header">

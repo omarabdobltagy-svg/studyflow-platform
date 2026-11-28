@@ -73,6 +73,17 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "12mb", extended: true }));
   registerStorageProxy(app);
 
+  // Authoritative server time. Date-sensitive UI must not read the device wall clock.
+  app.get("/api/system/time", (_req, res) => {
+    const serverTimeMs = Date.now();
+    return res.status(200).json({
+      serverTimeMs,
+      serverTime: new Date(serverTimeMs).toISOString(),
+      timeZone: "Africa/Cairo",
+      source: "application-server",
+    });
+  });
+
   // YouTube WebSub verification and delivery endpoint. Only public channel feed
   // events are accepted; the signature is validated before ingestion.
   app.get("/webhooks/youtube", (req, res) => {

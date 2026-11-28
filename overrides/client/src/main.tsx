@@ -6,6 +6,7 @@ import { createRoot } from "react-dom/client";
 import { toast } from "sonner";
 import superjson from "superjson";
 import App from "./App";
+import { ServerClockProvider } from "./lib/server-clock";
 import "./index.css";
 import "./experience.css";
 import "./workspace-motion.css";
@@ -119,7 +120,9 @@ const trpcClient = trpc.createClient({
 createRoot(document.getElementById("root")!).render(
   <trpc.Provider client={trpcClient} queryClient={queryClient}>
     <QueryClientProvider client={queryClient}>
-      <App />
+      <ServerClockProvider>
+        <App />
+      </ServerClockProvider>
     </QueryClientProvider>
   </trpc.Provider>
 );
