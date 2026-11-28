@@ -164,7 +164,7 @@ body {
   background:
     radial-gradient(ellipse at 7% 4%, color-mix(in srgb, var(--sf-wine) 18%, transparent), transparent 34rem),
     radial-gradient(ellipse at 93% 96%, color-mix(in srgb, var(--sf-gold) 12%, transparent), transparent 36rem),
-    linear-gradient(145deg, #151715 0%, #20231F 50%, #151715 100%) !important;
+    linear-gradient(145deg, #101114 0%, #191A1F 50%, #101114 100%) !important;
 }
 .sf-shell-v3 .sf-app-frame {
   width: min(100%, 1740px);
@@ -179,14 +179,14 @@ body {
   border-inline-start: 1px solid rgba(220, 222, 230, .10) !important;
   background:
     radial-gradient(ellipse at 100% 0%, rgba(76, 58, 79, .19), transparent 25rem),
-    linear-gradient(180deg, #20231F 0%, #151715 100%) !important;
+    linear-gradient(180deg, #191A1F 0%, #101114 100%) !important;
   color: #F1EEE7 !important;
 }
 .sf-shell-v3 .sf-brand-mark,
 .sf-shell-v3 .sf-login-brand-mark-v4 {
   border: 1px solid rgba(227, 185, 130, .30) !important;
-  background: linear-gradient(145deg, #F0D8B1 0%, #E0B982 56%, #4C3A4F 130%) !important;
-  color: #2D211F !important;
+  background: linear-gradient(145deg, #F0E1B8 0%, #D6BC83 56%, #4C3A4F 130%) !important;
+  color: #171612 !important;
   box-shadow: 0 12px 26px -17px rgba(227, 185, 130, .50) !important;
 }
 .sf-shell-v3 .sf-brand-copy b,
@@ -234,7 +234,7 @@ body {
   border-radius: 21px !important;
   background:
     radial-gradient(ellipse at 5% 0%, rgba(76,58,79,.28), transparent 38%),
-    linear-gradient(112deg, #20231F 0%, #252B35 56%, #211B19 100%) !important;
+    linear-gradient(112deg, #191A1F 0%, #302D38 56%, #141317 100%) !important;
   box-shadow: 0 17px 38px -30px rgba(0,0,0,.68), inset 0 1px rgba(255,255,255,.055) !important;
 }
 .sf-shell-v3 .sf-topbar h1,
@@ -261,7 +261,7 @@ body {
 }
 .sf-shell-v3 .sf-dock-tooltip {
   border-color: rgba(224,216,202,.16) !important;
-  background: #2A2321 !important;
+  background: #2B2630 !important;
   color: #F1EEE7 !important;
 }
 .sf-shell-v3 .sf-main {
@@ -318,7 +318,7 @@ body {
   background:
     radial-gradient(ellipse at 8% 0%, rgba(169, 91, 98, .22), transparent 38%),
     radial-gradient(ellipse at 92% 100%, rgba(227, 185, 130, .10), transparent 35%),
-    linear-gradient(132deg, #20231F 0%, #342321 58%, #211D1B 100%) !important;
+    linear-gradient(132deg, #191A1F 0%, #302432 58%, #212228 100%) !important;
   box-shadow: 0 26px 58px -42px rgba(0,0,0,.62), inset 0 1px rgba(255,255,255,.07) !important;
 }
 .sf-shell-v3 .sf-main :is(
@@ -644,14 +644,14 @@ body [data-slot="sheet-overlay"] { background: rgba(14, 11, 10, .66) !important;
   background:
     radial-gradient(ellipse at 12% 8%, rgba(76,58,79,.22), transparent 36rem),
     radial-gradient(ellipse at 88% 92%, rgba(227,185,130,.11), transparent 34rem),
-    linear-gradient(145deg,#151715,#1B1C18 55%,#151715) !important;
+    linear-gradient(145deg,#101114,#201E24 55%,#101114) !important;
 }
 .sf-login-screen.sf-shell-v3 .sf-login-frame,
 .sf-login-screen.sf-shell-v3 .sf-login-form-side { background: transparent !important; }
 .sf-login-screen.sf-shell-v3 .sf-login-form-card {
   border: 1px solid rgba(224,216,202,.17) !important;
   border-radius: 25px !important;
-  background: linear-gradient(145deg,#252922,#20231F) !important;
+  background: linear-gradient(145deg,#232329,#191A1F) !important;
   color: #F1EEE7 !important;
   box-shadow: 0 34px 80px -48px rgba(0,0,0,.78), inset 0 1px rgba(255,255,255,.06) !important;
 }
@@ -732,7 +732,7 @@ html body .sf-login-screen.sf-shell-v3 {
   background:
     radial-gradient(ellipse at 12% 8%, rgba(76,58,79,.22), transparent 36rem),
     radial-gradient(ellipse at 88% 92%, rgba(227,185,130,.11), transparent 34rem),
-    linear-gradient(145deg,#151715 0%,#1B1C18 55%,#151715 100%) !important;
+    linear-gradient(145deg,#101114 0%,#201E24 55%,#101114 100%) !important;
   color: #F1EEE7 !important;
 }
 html body .sf-login-screen.sf-shell-v3 .sf-login-frame-v4 {
@@ -746,8 +746,8 @@ html body .sf-login-screen.sf-shell-v3 .sf-login-form-side {
 html body .sf-login-screen.sf-shell-v3 .sf-login-frame-v4 .sf-login-form-card {
   border: 1px solid rgba(224,216,202,.18) !important;
   border-radius: 25px !important;
-  background: linear-gradient(145deg,#252922 0%,#20231F 100%) !important;
-  background-image: linear-gradient(145deg,#252922 0%,#20231F 100%) !important;
+  background: linear-gradient(145deg,#232329 0%,#191A1F 100%) !important;
+  background-image: linear-gradient(145deg,#232329 0%,#191A1F 100%) !important;
   color: #F1EEE7 !important;
   box-shadow: 0 34px 80px -48px rgba(0,0,0,.78), inset 0 1px rgba(255,255,255,.06) !important;
   -webkit-backdrop-filter: none !important;
@@ -759,8 +759,8 @@ html body .sf-login-screen.sf-shell-v3 .sf-login-form-card::before {
 }
 html body .sf-login-screen.sf-shell-v3 .sf-login-brand-mark-v4 {
   border: 1px solid rgba(227,185,130,.38) !important;
-  color: #2D211F !important;
-  background: linear-gradient(145deg,#F0D8B1 0%,#E5C18B 56%,#4C3A4F 130%) !important;
+  color: #171612 !important;
+  background: linear-gradient(145deg,#F0E1B8 0%,#D6BC83 56%,#4C3A4F 130%) !important;
   box-shadow: 0 12px 26px -17px rgba(227,185,130,.50) !important;
 }
 html body .sf-login-screen.sf-shell-v3 .sf-login-brand-v4 b,
@@ -820,15 +820,15 @@ html body .sf-login-screen.sf-shell-v3 .sf-login-form-card button.bg-primary {
   border: 1px solid rgba(227,185,130,.34) !important;
   border-radius: 13px !important;
   color: #FFF8F2 !important;
-  background: linear-gradient(135deg,#D6BC83 0%,#D56A47 56%,#8B432D 100%) !important;
-  background-image: linear-gradient(135deg,#D6BC83 0%,#D56A47 56%,#8B432D 100%) !important;
+  background: linear-gradient(135deg,#D6BC83 0%,#B99A64 56%,#725D3F 100%) !important;
+  background-image: linear-gradient(135deg,#D6BC83 0%,#B99A64 56%,#725D3F 100%) !important;
   box-shadow: 0 13px 28px -19px rgba(76,58,79,.54), inset 0 1px rgba(255,255,255,.10) !important;
 }
 html body .sf-login-screen.sf-shell-v3 .sf-login-form-card button.sf-auth-submit:hover,
 html body .sf-login-screen.sf-shell-v3 button.sf-auth-submit:hover {
   color: #FFF8F2 !important;
-  background: linear-gradient(135deg,#F58B61 0%,#B74D2C 56%,#783C29 100%) !important;
-  background-image: linear-gradient(135deg,#F58B61 0%,#B74D2C 56%,#783C29 100%) !important;
+  background: linear-gradient(135deg,#D6BC83 0%,#B99A64 56%,#725D3F 100%) !important;
+  background-image: linear-gradient(135deg,#D6BC83 0%,#B99A64 56%,#725D3F 100%) !important;
 }
 html body .sf-login-screen.sf-shell-v3 .sf-auth-mode-switch {
   color: #D6BC83 !important;
@@ -869,7 +869,7 @@ html body .sf-login-screen.sf-shell-v3 .sf-security-mark span {
   background:
     radial-gradient(ellipse at 92% 0%,rgba(227,185,130,.14),transparent 32%),
     radial-gradient(ellipse at 5% 100%,rgba(76,58,79,.28),transparent 44%),
-    linear-gradient(125deg,#20231F 0%,#292F3A 58%,#191F1C 100%);
+    linear-gradient(125deg,#191A1F 0%,#302D38 58%,#1C1B21 100%);
   box-shadow: 0 26px 62px -44px rgba(0,0,0,.68), inset 0 1px rgba(255,255,255,.06);
 }
 .sf-home-ai-decision-copy { position: relative; z-index: 2; display: grid; min-width: 0; gap: 10px; }
@@ -1124,7 +1124,7 @@ html body .sf-login-screen.sf-shell-v3 .sf-security-mark span {
   background:
     radial-gradient(ellipse at 12% 5%,rgba(76,58,79,.28),transparent 43%),
     radial-gradient(ellipse at 95% 100%,rgba(227,185,130,.12),transparent 36%),
-    linear-gradient(125deg,#20231F 0%,#332124 60%,#20231F 100%) !important;
+    linear-gradient(125deg,#191A1F 0%,#382E3B 60%,#191A1F 100%) !important;
   box-shadow: 0 24px 58px -42px rgba(0,0,0,.68) !important;
 }
 .sf-shell-v3 .sf-main .sf-map-hero::after {
@@ -1170,7 +1170,7 @@ html body .sf-login-screen.sf-shell-v3 .sf-security-mark span {
   background:
     radial-gradient(ellipse at 94% 0%,rgba(227,185,130,.15),transparent 28rem),
     radial-gradient(ellipse at 4% 100%,rgba(76,58,79,.27),transparent 40%),
-    linear-gradient(120deg,#20231F 0%,#292F3A 58%,#241B1A 100%) !important;
+    linear-gradient(120deg,#191A1F 0%,#302D38 58%,#29262D 100%) !important;
   box-shadow: 0 22px 54px -40px rgba(0,0,0,.66) !important;
 }
 .sf-shell-v3 .sf-main .sf-task-overview-heading > p { color: #D6BC83 !important; }
@@ -1276,7 +1276,7 @@ html body .sf-login-screen.sf-shell-v3 .sf-security-mark span {
   background:
     radial-gradient(ellipse at 50% 48%,rgba(76,58,79,.28),transparent 48%),
     radial-gradient(ellipse at 50% 100%,rgba(227,185,130,.10),transparent 52%),
-    linear-gradient(145deg,#181413,#2B1E1E 56%,#181413) !important;
+    linear-gradient(145deg,#101114,#302432 56%,#101114) !important;
 }
 .sf-shell-v3 .sf-main .sf-ops-scene-hint {
   border-color: rgba(227,185,130,.20) !important;
@@ -1430,11 +1430,11 @@ html body .sf-shell-v3 .sf-main .sf-home-ai-decision {
   background:
     radial-gradient(ellipse at 92% 0%,rgba(227,185,130,.14),transparent 32%),
     radial-gradient(ellipse at 5% 100%,rgba(76,58,79,.28),transparent 44%),
-    linear-gradient(125deg,#20231F 0%,#292F3A 58%,#191F1C 100%) !important;
+    linear-gradient(125deg,#191A1F 0%,#302D38 58%,#1C1B21 100%) !important;
   background-image:
     radial-gradient(ellipse at 92% 0%,rgba(227,185,130,.14),transparent 32%),
     radial-gradient(ellipse at 5% 100%,rgba(76,58,79,.28),transparent 44%),
-    linear-gradient(125deg,#20231F 0%,#292F3A 58%,#191F1C 100%) !important;
+    linear-gradient(125deg,#191A1F 0%,#302D38 58%,#1C1B21 100%) !important;
   box-shadow: 0 26px 62px -44px rgba(0,0,0,.68), inset 0 1px rgba(255,255,255,.06) !important;
 }
 html body .sf-shell-v3 .sf-main .sf-home-ai-decision .sf-home-ai-decision-copy h3 { color: #FFF8F2 !important; }
