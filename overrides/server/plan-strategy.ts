@@ -120,7 +120,7 @@ export function buildPlanStrategySnapshot(
       : "قارن المحرك النسخة الحالية بالخطة الأساسية. لم يظهر سبب طارئ جديد؛ التغييرات ناتجة عن تقدمك والمهام المسجلة.";
   const previousRevision = previousStrategy?.revision;
   const history = [...(Array.isArray(previousStrategy?.history) ? previousStrategy.history : []), ...(previousRevision ? [previousRevision] : [])].slice(-8);
-  return { version: 1, baseline, revision: { number: (previousRevision?.number ?? 0) + 1, createdAt: nowIso,
+  return { version: 1, baseline, revision: { number: hasPreviousVersion ? (previousRevision?.number ?? 0) + 1 : 0, createdAt: nowIso,
     status: !hasPreviousVersion ? "baseline" : adapted ? "adapted" : "stable", headline, rationale,
     hasPreviousVersion, triggers, diff }, history };
 }
