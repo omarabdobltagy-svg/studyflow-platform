@@ -315,20 +315,20 @@ export default function DashboardLayout({ title, description, children, action }
           <defs>
             <radialGradient id="sfOrbCore" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(380 370) rotate(90) scale(170)">
               <stop offset="0" stopColor="#F2F0D9"/>
-              <stop offset=".18" stopColor="#D9EF8C"/>
-              <stop offset=".52" stopColor="#A8C84E"/>
-              <stop offset=".82" stopColor="#536B32"/>
-              <stop offset="1" stopColor="#1D2A18" stopOpacity=".2"/>
+              <stop offset=".18" stopColor="#E0CDAF"/>
+              <stop offset=".52" stopColor="#B99272"/>
+              <stop offset=".82" stopColor="#74533E"/>
+              <stop offset="1" stopColor="#2A2220" stopOpacity=".2"/>
             </radialGradient>
             <radialGradient id="sfOrbGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(380 370) rotate(90) scale(220)">
-              <stop stopColor="#C9ED62" stopOpacity=".22"/>
-              <stop offset="1" stopColor="#C9ED62" stopOpacity="0"/>
+              <stop stopColor="#D1B77B" stopOpacity=".22"/>
+              <stop offset="1" stopColor="#D1B77B" stopOpacity="0"/>
             </radialGradient>
             <linearGradient id="sfOrbRing" x1="95" y1="300" x2="670" y2="475" gradientUnits="userSpaceOnUse">
               <stop stopColor="#D1B77B" stopOpacity="0"/>
               <stop offset=".32" stopColor="#D1B77B" stopOpacity=".8"/>
-              <stop offset=".68" stopColor="#C9ED62" stopOpacity=".65"/>
-              <stop offset="1" stopColor="#C9ED62" stopOpacity="0"/>
+              <stop offset=".68" stopColor="#D1B77B" stopOpacity=".65"/>
+              <stop offset="1" stopColor="#D1B77B" stopOpacity="0"/>
             </linearGradient>
             <filter id="sfOrbBlur" x="30" y="20" width="700" height="700" filterUnits="userSpaceOnUse">
               <feGaussianBlur stdDeviation="28"/>
@@ -338,20 +338,20 @@ export default function DashboardLayout({ title, description, children, action }
           <g data-sf-orbit>
             <ellipse cx="380" cy="370" rx="286" ry="104" transform="rotate(-27 380 370)" stroke="url(#sfOrbRing)" strokeWidth="1.5"/>
             <ellipse cx="380" cy="370" rx="250" ry="76" transform="rotate(43 380 370)" stroke="#D1B77B" strokeOpacity=".44" strokeWidth="1"/>
-            <path d="M120 476C230 350 464 282 650 328" stroke="#C9ED62" strokeOpacity=".38" strokeWidth="1"/>
+            <path d="M120 476C230 350 464 282 650 328" stroke="#D1B77B" strokeOpacity=".38" strokeWidth="1"/>
             <path d="M126 258C296 143 531 202 657 391" stroke="#E8E3D1" strokeOpacity=".24" strokeWidth="1"/>
           </g>
           <g data-sf-float>
-            <circle cx="380" cy="370" r="150" fill="url(#sfOrbCore)" stroke="#E8F4B9" strokeOpacity=".48"/>
+            <circle cx="380" cy="370" r="150" fill="url(#sfOrbCore)" stroke="#F2E7D8" strokeOpacity=".48"/>
             <path d="M286 296C321 236 397 215 455 245" stroke="#FFFFFF" strokeOpacity=".58" strokeWidth="7" strokeLinecap="round"/>
-            <path d="M254 393C286 480 379 531 467 489" stroke="#314422" strokeOpacity=".58" strokeWidth="16" strokeLinecap="round"/>
+            <path d="M254 393C286 480 379 531 467 489" stroke="#4A382B" strokeOpacity=".58" strokeWidth="16" strokeLinecap="round"/>
             <path d="M380 220L430 285L380 370L315 300Z" fill="#F5F4DD" fillOpacity=".12"/>
-            <path d="M380 370L430 285L505 345L468 449Z" fill="#13200F" fillOpacity=".25"/>
-            <path d="M380 370L315 300L258 385L334 468Z" fill="#EAF3CC" fillOpacity=".08"/>
+            <path d="M380 370L430 285L505 345L468 449Z" fill="#2D231F" fillOpacity=".25"/>
+            <path d="M380 370L315 300L258 385L334 468Z" fill="#EADCC8" fillOpacity=".08"/>
             <circle cx="332" cy="278" r="5" fill="#FFFFFF" fillOpacity=".7"/>
             <circle cx="476" cy="435" r="3" fill="#D1B77B"/>
           </g>
-          <g fill="#DCE8B7">
+          <g fill="#EADCC8">
             <circle cx="139" cy="343" r="3"/><circle cx="178" cy="517" r="2"/>
             <circle cx="584" cy="238" r="3"/><circle cx="626" cy="489" r="2.5"/>
             <circle cx="524" cy="580" r="2"/><circle cx="258" cy="153" r="2"/>
@@ -472,7 +472,7 @@ export default function DashboardLayout({ title, description, children, action }
                   whileHover={{ x: -3 }}
                   whileTap={{ scale: 0.98 }}
                 >
-                  <item.icon className="sf-nav-icon" color={active ? "#C9ED62" : "#A7B09E"} strokeWidth={1.9} />
+                  <item.icon className="sf-nav-icon" color={active ? "#D1B77B" : "#C8BBAF"} strokeWidth={1.9} />
                   <span>{item.label}</span>
                 </motion.button>
               );
@@ -535,7 +535,7 @@ export default function DashboardLayout({ title, description, children, action }
                     whileTap={{ scale: 0.92 }}
                     transition={{ type: "spring", stiffness: 340, damping: 18 }}
                   >
-                    <span className="sf-dock-icon"><item.icon size={18} strokeWidth={1.9} color={active ? "#C9ED62" : "#A7B09E"} /></span>
+                    <span className="sf-dock-icon"><item.icon size={18} strokeWidth={1.9} color={active ? "#D1B77B" : "#C8BBAF"} /></span>
                     <span className="sf-dock-tooltip"><b>{item.label}</b><small>{item.group}</small></span>
                     {active && <motion.i layoutId="sf-active-dock" className="sf-dock-active" transition={{ type: "spring", stiffness: 380, damping: 28 }} />}
                   </motion.button>
@@ -644,7 +644,7 @@ export default function DashboardLayout({ title, description, children, action }
               aria-current={active ? "page" : undefined}
               className={cn("sf-mobile-dock-item", active && "is-active")}
             >
-              <item.icon className="size-[18px]" color={active ? "#C9ED62" : "#A7B09E"} strokeWidth={1.9} />
+              <item.icon className="size-[18px]" color={active ? "#D1B77B" : "#C8BBAF"} strokeWidth={1.9} />
               <span>{item.label}</span>
             </button>
           );
