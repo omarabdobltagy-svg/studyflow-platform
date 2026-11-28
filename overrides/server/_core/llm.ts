@@ -766,10 +766,11 @@ export type ModelsResponse = {
 
 export async function listLLMModels(): Promise<ModelsResponse> {
   assertApiKey(ENV.openrouterApiKey, "OPENROUTER_API_KEY (or AI_API_KEY)");
-  const modelsBase = (ENV.openrouterApiBaseUrl.trim() || "https://openrouter.ai/api/v1")
-    .replace(/\\/+$/, "")
-    .replace(/\\/chat\\/completions$/i, "")
-    .replace(/\\/models$/i, "");
+  let modelsBase = ENV.openrouterApiBaseUrl.trim() || "https://openrouter.ai/api/v1";
+  const lowerModelsBase = modelsBase.toLowerCase();
+  if (lowerModelsBase.endsWith("/chat/completions")) modelsBase = modelsBase.slice(0, -"/chat/completions".length);
+  if (modelsBase.toLowerCase().endsWith("/models")) modelsBase = modelsBase.slice(0, -"/models".length);
+  while (modelsBase.endsWith("/")) modelsBase = modelsBase.slice(0, -1);
   const response = await fetchWithBackoff(`${modelsBase}/models`, {
     headers: { authorization: "Bearer " + ENV.openrouterApiKey },
   });
