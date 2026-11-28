@@ -23,10 +23,10 @@ function newThread(): ChatThread {
 }
 
 function loadThreads(): ChatThread[] {
-  if (typeof window === "undefined") return [newThread()];
+  if (typeof window === "undefined") return [];
   try {
     const parsed = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || "[]");
-    if (!Array.isArray(parsed)) return [newThread()];
+    if (!Array.isArray(parsed)) return [];
     const valid = parsed.filter((item: unknown) => {
       if (!item || typeof item !== "object") return false;
       const record = item as Record<string, unknown>;
@@ -48,9 +48,9 @@ function loadThreads(): ChatThread[] {
         messages: messages.slice(-40),
       };
     }).slice(0, 30);
-    return valid.length ? valid : [newThread()];
+    return valid;
   } catch {
-    return [newThread()];
+    return [];
   }
 }
 
@@ -73,12 +73,23 @@ function updateThreadMessage(
 }
 
 export default function Assistant() {
-  const [entryThread] = useState<ChatThread>(() => newThread());
-  const [threads, setThreads] = useState<ChatThread[]>(() => [entryThread, ...loadThreads()].slice(0, 30));
-  const [selectedId, setSelectedId] = useState(entryThread.id);
+  const [initialThreads] = useState<ChatThread[]>(() => {
+    const local = loadThreads();
+    return local.length ? local : [newThread()];
+  });
+  const [threads, setThreads] = useState<ChatThread[]>(initialThreads);
+  const [selectedId, setSelectedId] = useState(initialThreads[0]?.id ?? "");
+  const [historyMode, setHistoryMode] = useState<"loading" | "remote" | "local">("loading");
+  const historyHydrationRef = useRef(false);
   const [streamingThreadId, setStreamingThreadId] = useState<string | null>(null);
   const [pendingAttachments, setPendingAttachments] = useState<AssistantTextAttachment[]>([]);
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
+  const assistantThreadsQuery = trpc.assistant.threads.list.useQuery(undefined, {
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
+  const saveAssistantThread = trpc.assistant.threads.save.useMutation();
+  const deleteAssistantThread = trpc.assistant.threads.delete.useMutation();
   const activeThread = useMemo(
     () => threads.find(thread => thread.id === selectedId) || threads[0],
     [threads, selectedId],
@@ -98,6 +109,81 @@ export default function Assistant() {
   const abortControllerRef = useRef<AbortController | null>(null);
   const streamingThreadRef = useRef<string | null>(null);
 
+  useEffect(() => {
+    if (historyHydrationRef.current) return;
+    if (assistantThreadsQuery.isError) {
+      historyHydrationRef.current = true;
+      setHistoryMode("local");
+      toast.error("تعذّر تحميل سجل المحادثات من الحساب؛ سيظل السجل المحلي محفوظًا على هذا الجهاز.");
+      return;
+    }
+    if (!assistantThreadsQuery.isSuccess) return;
+
+    historyHydrationRef.current = true;
+    let cancelled = false;
+    void (async () => {
+      const serverThreads: ChatThread[] = assistantThreadsQuery.data.map(thread => ({
+        id: thread.clientId,
+        title: thread.title,
+        messages: thread.messages,
+        updatedAt: thread.updatedAt instanceof Date
+          ? thread.updatedAt.getTime()
+          : new Date(thread.updatedAt).getTime(),
+      }));
+      const localThreads = loadThreads();
+      const merged = new Map(serverThreads.map(thread => [thread.id, thread]));
+      const threadsToMigrate: ChatThread[] = [];
+      for (const localThread of localThreads) {
+        const serverVersion = merged.get(localThread.id);
+        if (!serverVersion || localThread.updatedAt > serverVersion.updatedAt) {
+          merged.set(localThread.id, localThread);
+          threadsToMigrate.push(localThread);
+        }
+      }
+      const nextThreads = [...merged.values()]
+        .sort((a, b) => b.updatedAt - a.updatedAt)
+        .slice(0, 30);
+      const resolvedThreads = nextThreads.length ? nextThreads : [newThread()];
+      if (cancelled) return;
+      setThreads(resolvedThreads);
+      setSelectedId(current => resolvedThreads.some(thread => thread.id === current)
+        ? current : resolvedThreads[0].id);
+
+      try {
+        for (const thread of threadsToMigrate) {
+          await saveAssistantThread.mutateAsync({
+            clientId: thread.id,
+            title: thread.title,
+            messages: thread.messages.filter(message => message.content.trim()).slice(-40),
+          });
+        }
+        if (cancelled) return;
+        setHistoryMode("remote");
+        try { window.localStorage.removeItem(STORAGE_KEY); } catch { /* server copy is authoritative */ }
+      } catch {
+        if (cancelled) return;
+        setHistoryMode("local");
+        toast.error("لم يكتمل نقل بعض المحادثات إلى الحساب؛ احتفظنا بالنسخة المحلية ولم نحذفها.");
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [assistantThreadsQuery.data, assistantThreadsQuery.isError, assistantThreadsQuery.isSuccess]);
+
+  const persistThread = async (thread: ChatThread) => {
+    if (historyMode !== "remote") return;
+    try {
+      await saveAssistantThread.mutateAsync({
+        clientId: thread.id,
+        title: thread.title,
+        messages: thread.messages.filter(message => message.content.trim()).slice(-40),
+      });
+    } catch {
+      setHistoryMode("local");
+      toast.error("تعذّر مزامنة هذه المحادثة مع الحساب؛ احتفظنا بها محليًا على هذا الجهاز.");
+    }
+  };
+
   const stopCurrentStream = (preservePartial = true) => {
     const threadId = streamingThreadRef.current;
     abortControllerRef.current?.abort();
@@ -115,18 +201,23 @@ export default function Assistant() {
   }, []);
 
   useEffect(() => {
+    if (historyMode === "remote") {
+      try { window.localStorage.removeItem(STORAGE_KEY); } catch { /* remote history is authoritative */ }
+      return;
+    }
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(threads.slice(0, 30)));
     } catch {
-      toast.error("تعذّر حفظ المحادثات على هذا الجهاز.");
+      toast.error("تعذّر حفظ النسخة المحلية من المحادثات.");
     }
-  }, [threads, activeThread?.id]);
+  }, [threads, activeThread?.id, historyMode]);
 
   const createConversation = () => {
     stopCurrentStream(true);
     const thread = newThread();
     setThreads(current => [thread, ...current].slice(0, 30));
     setSelectedId(thread.id);
+    void persistThread(thread);
   };
 
   const chooseConversation = (threadId: string) => {
@@ -136,14 +227,25 @@ export default function Assistant() {
     setSelectedId(threadId);
   };
 
-  const deleteConversation = () => {
+  const deleteConversation = async () => {
     if (!activeThread) return;
-    if (streamingThreadRef.current === activeThread.id) stopCurrentStream(false);
-    const remaining = threads.filter(thread => thread.id !== activeThread.id);
+    const deletedThread = activeThread;
+    if (streamingThreadRef.current === deletedThread.id) stopCurrentStream(false);
+    const remaining = threads.filter(thread => thread.id !== deletedThread.id);
     const next = remaining.length ? remaining : [newThread()];
     setThreads(next);
     setSelectedId(next[0].id);
-    toast.success("تم حذف المحادثة من سجل هذا الجهاز.");
+    if (historyMode === "remote") {
+      try {
+        await deleteAssistantThread.mutateAsync({ clientId: deletedThread.id });
+      } catch {
+        setThreads(current => [deletedThread, ...current.filter(thread => thread.id !== deletedThread.id)].slice(0, 30));
+        setSelectedId(deletedThread.id);
+        toast.error("تعذّر حذف المحادثة من الحساب؛ أُعيدت إلى السجل.");
+        return;
+      }
+    }
+    toast.success("تم حذف المحادثة من سجل الحساب.");
   };
 
   const sendMessage = async (content: string) => {
@@ -244,11 +346,34 @@ export default function Assistant() {
       buffer += decoder.decode();
       if (buffer.trim()) consumeEvent(buffer);
       if (!streamedText.trim()) throw new Error("وصلت استجابة فارغة. جرّب السؤال مرة أخرى.");
+      const completedMessages: ChatMessage[] = [
+        ...activeThread.messages,
+        userMessage,
+        { role: "assistant", content: streamedText },
+      ].slice(-40);
+      const completedThread = {
+        ...activeThread,
+        title: activeThread.messages.length ? activeThread.title : trimmed.slice(0, 42),
+        messages: completedMessages,
+        updatedAt: Date.now(),
+      };
+      setThreads(current => current.map(thread => thread.id === threadId ? completedThread : thread));
+      await persistThread(completedThread);
     } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") {
-        // A deliberate conversation switch keeps any partial text but stops the request.
-      } else {
-        setThreads(current => updateThreadMessage(current, threadId, streamedText, !streamedText));
+      const finalMessages: ChatMessage[] = [
+        ...activeThread.messages,
+        userMessage,
+        ...(streamedText.trim() ? [{ role: "assistant" as const, content: streamedText }] : []),
+      ].slice(-40);
+      const finalThread = {
+        ...activeThread,
+        title: activeThread.messages.length ? activeThread.title : trimmed.slice(0, 42),
+        messages: finalMessages,
+        updatedAt: Date.now(),
+      };
+      setThreads(current => current.map(thread => thread.id === threadId ? finalThread : thread));
+      void persistThread(finalThread);
+      if (!(error instanceof DOMException && error.name === "AbortError")) {
         toast.error(error instanceof Error ? error.message : "تعذّر الرد الآن. حاول مرة أخرى.");
       }
     } finally {
