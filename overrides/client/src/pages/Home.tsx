@@ -873,7 +873,6 @@ export default function Home() {
         )}
 
         <PlannerOperationsScene />
-        </div>
       </div>
         <AnimatePresence>
           {showWelcomeGuide && (
