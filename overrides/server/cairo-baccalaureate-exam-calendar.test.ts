@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CAIRO_BAC_EXAM_CALENDAR_NOTICE, getCairoSecondYearBaccalaureateExams, getUpcomingCairoSecondYearBaccalaureateExams } from "@shared/cairo-baccalaureate-exam-calendar";
+import { CAIRO_BAC_EXAM_CALENDAR_NOTICE, getCairoMonthlyExamCompletionKey, getCairoSecondYearBaccalaureateExams, getUpcomingCairoSecondYearBaccalaureateExams } from "@shared/cairo-baccalaureate-exam-calendar";
 
 describe("Cairo second-year Baccalaureate exam calendar", () => {
   it("returns only added-to-total subjects for the matching second-year Baccalaureate profile", () => {
@@ -45,6 +45,20 @@ describe("Cairo second-year Baccalaureate exam calendar", () => {
     expect(getUpcomingCairoSecondYearBaccalaureateExams(profile, new Date("2026-11-28T21:59:59.000Z")).map(item => item.date))
       .toEqual(["2026-11-29", "2026-11-30", "2026-12-01", "2026-12-02"]);
     expect(getUpcomingCairoSecondYearBaccalaureateExams(profile, new Date("2026-12-02T22:00:00.000Z"))).toEqual([]);
+  });
+
+  it("removes today's exam immediately after the student records completion", () => {
+    const profile = {
+      educationSystem: "baccalaureate",
+      gradeYear: "الصف الثاني الثانوي – دفعة 2027",
+      subjectIds: ["ARB_G2_BAC", "ENG1_G2_BAC", "HIS_G2_BAC"],
+    };
+    const now = new Date("2026-11-29T10:00:00.000Z");
+    expect(getUpcomingCairoSecondYearBaccalaureateExams(profile, now).map(item => item.subjectId))
+      .toContain("ARB_G2_BAC");
+    const completedKey = getCairoMonthlyExamCompletionKey("ARB_G2_BAC", "2026-11-29");
+    expect(getUpcomingCairoSecondYearBaccalaureateExams(profile, now, [completedKey]).map(item => item.subjectId))
+      .not.toContain("ARB_G2_BAC");
   });
 
   it("marks the Cairo table as a proposal and explicitly excludes non-added subjects", () => {

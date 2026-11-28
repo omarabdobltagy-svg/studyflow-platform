@@ -7,7 +7,7 @@ import { SignJWT } from "jose";
 import { TRPCError } from "@trpc/server";
 import { COOKIE_NAME } from "@shared/const";
 import { SIE_CATALOG_META, SIE_SYSTEMS, SIE_TEACHERS, SIE_SUBJECTS, getSIEEducationSystem, getSIESubject, getSIETeacher, getSIETeachersForSubject, getSIETrack, getSIECheckpointChoices, getSIECheckpointBranches, normalizeSIECheckpointFrontier, getSIECheckpointProgressBranches, matchSIECheckpointTask, validateSIESubjectSelection } from "@shared/sie-catalog";
-import { getCairoSecondYearBaccalaureateExams } from "@shared/cairo-baccalaureate-exam-calendar";
+import { getCairoMonthlyExamCompletionKey, getCairoSecondYearBaccalaureateExams } from "@shared/cairo-baccalaureate-exam-calendar";
 import { matchTeacherReviewDescription } from "./teacher-review-description";
 import { calculateLearningGap, selectLegacyLinearFrontier } from "@shared/sie-learning-progress";
 import { buildMonthlyExamCoveredScope } from "@shared/monthly-exam-scope";
@@ -2534,6 +2534,35 @@ export const appRouter = router({
           });
         }
         return { success: true };
+      }),
+    markMonthlyExamCompleted: protectedProcedure
+      .input(z.object({
+        subjectId: z.string().trim().min(1).max(80),
+        date: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const profile = await getStudentProfile(ctx.user.id);
+        if (!profile) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "أكمل ملفك الدراسي أولًا." });
+        }
+        const exam = getCairoSecondYearBaccalaureateExams(profile)
+          .find(item => item.subjectId === input.subjectId && item.date === input.date);
+        if (!exam) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "الاختبار ده مش موجود في جدول المواد المسجلة عندك." });
+        }
+        const completedAt = new Date();
+        if (getDateKeyInTimeZone(completedAt, "Africa/Cairo") !== exam.date) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "تقدر تسجّل انتهاء الاختبار في يومه فقط." });
+        }
+        const selection = (profile.selection ?? {}) as Record<string, any>;
+        const completions = { ...((selection.monthlyExamCompletions ?? {}) as Record<string, string>) };
+        const key = getCairoMonthlyExamCompletionKey(input.subjectId, input.date);
+        completions[key] ??= completedAt.toISOString();
+        await updateStudentProfileSelection(ctx.user.id, {
+          ...selection,
+          monthlyExamCompletions: completions,
+        });
+        return { success: true, completedAt: completions[key] };
       }),
     completeProgressPickerGuide: protectedProcedure
       .mutation(async ({ ctx }) => {

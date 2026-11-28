@@ -66,13 +66,22 @@ export function getCairoSecondYearBaccalaureateExams(
     .sort((left, right) => left.date.localeCompare(right.date) || left.subjectName.localeCompare(right.subjectName, "ar"));
 }
 
+export function getCairoMonthlyExamCompletionKey(subjectId: string, date: string): string {
+  return subjectId + "::" + date;
+}
+
 export function getUpcomingCairoSecondYearBaccalaureateExams(
   profile: CairoSecondYearBaccalaureateExamProfile | null | undefined,
   now: Date,
+  completedExamKeys: readonly string[] = [],
 ): CairoSecondYearBaccalaureateExam[] {
   if (!(now instanceof Date) || !Number.isFinite(now.getTime())) return [];
   const cairoToday = getDateKeyInTimeZone(now, "Africa/Cairo");
-  return getCairoSecondYearBaccalaureateExams(profile).filter(exam => exam.date >= cairoToday);
+  const completed = new Set(completedExamKeys);
+  return getCairoSecondYearBaccalaureateExams(profile).filter(exam =>
+    exam.date >= cairoToday
+    && !completed.has(getCairoMonthlyExamCompletionKey(exam.subjectId, exam.date))
+  );
 }
 
 export const CAIRO_BAC_EXAM_CALENDAR_NOTICE = {

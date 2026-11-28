@@ -302,3 +302,31 @@ html body .sf-shell-v3 .sf-main .sf-home-ai-triggers span {
   }
   html body .sf-shell-v3 .sf-mobile-dock-item.is-active svg { color: #E0C78D !important; }
 }
+
+/* Action-first home refinements and consistent semantic surfaces. */
+html body .sf-shell-v3 .sf-main .sf-home-ai-decision { display: none !important; }
+html body .sf-shell-v3 .sf-main .sf-map-hero {
+  border-color: var(--border) !important;
+  background:
+    radial-gradient(ellipse at 92% 0%, rgba(205, 175, 115, .09), transparent 34%),
+    radial-gradient(ellipse at 6% 100%, rgba(169, 51, 64, .14), transparent 42%),
+    linear-gradient(125deg, #242120 0%, #1B1918 65%, #171514 100%) !important;
+}
+html body .sf-shell-v3 .sf-main .sf-task-overview {
+  border-color: var(--border) !important;
+  background:
+    radial-gradient(ellipse at 94% 0%, rgba(205, 175, 115, .10), transparent 36%),
+    radial-gradient(ellipse at 4% 100%, rgba(169, 51, 64, .13), transparent 42%),
+    linear-gradient(120deg, #242120 0%, #211D1C 62%, #191716 100%) !important;
+}
+html body .sf-shell-v3 .sf-main .sf-home-exam-complete {
+  gap: 7px !important;
+  border-color: rgba(224,199,141,.34) !important;
+  color: var(--foreground) !important;
+  background: color-mix(in srgb, var(--sf-brass) 13%, var(--card)) !important;
+}
+html body .sf-shell-v3 .sf-main .sf-home-exam-complete:hover {
+  border-color: var(--sf-brass) !important;
+  background: color-mix(in srgb, var(--sf-brass) 20%, var(--card)) !important;
+}
+.sf-home-exam-complete { min-height: 36px; border-radius: 11px !important; font-size: 11px !important; font-weight: 800 !important; }

@@ -350,17 +350,27 @@ export default function Home() {
       ? dailyPlanPriority
       : taskPriority ?? nextTopicInTaskBranch ?? priority;
   const plan = dailyPlan.data?.plan;
-  const planStrategy = (plan as any)?.strategy ?? null;
   const homeStudySteps = plan?.steps ?? [];
   const homeDoneSteps = homeStudySteps.filter((step: any) =>
     step.plannerTaskStatus === "done" || step.existingTask?.status === "done"
   ).length;
   const homeStudyProgress = homeStudySteps.length ? Math.round(homeDoneSteps / homeStudySteps.length * 100) : 0;
   const homeNextStep = getNextOpenPlanStep(homeStudySteps as any[] | undefined);
+  const completedMonthlyExamKeys = useMemo(() => {
+    const values = ((profile.data?.selection as Record<string, any> | undefined)?.monthlyExamCompletions ?? {}) as Record<string, unknown>;
+    return Object.entries(values).filter(([, completedAt]) => Boolean(completedAt)).map(([key]) => key);
+  }, [profile.data?.selection]);
+  const markMonthlyExamCompleted = trpc.studentProfile.markMonthlyExamCompleted.useMutation({
+    onSuccess: async () => {
+      await utils.studentProfile.get.invalidate();
+      toast.success("اتسجل انتهاء الامتحان، وشلنا بطاقته من الاختبارات القادمة.");
+    },
+    onError: error => toast.error(error.message || "تعذّر تسجيل انتهاء الامتحان."),
+  });
   const cairoExamDate = serverNow ? getDateKeyInTimeZone(serverNow, "Africa/Cairo") : null;
   const upcomingExams = useMemo(
-    () => serverNow ? getUpcomingCairoSecondYearBaccalaureateExams(profile.data, serverNow) : [],
-    [profile.data?.educationSystem, profile.data?.gradeYear, profile.data?.subjectIds, cairoExamDate, serverNow],
+    () => serverNow ? getUpcomingCairoSecondYearBaccalaureateExams(profile.data, serverNow, completedMonthlyExamKeys) : [],
+    [profile.data?.educationSystem, profile.data?.gradeYear, profile.data?.subjectIds, cairoExamDate, serverNow, completedMonthlyExamKeys],
   );
   const monthlyExamCoveredScope = useMemo(() => {
     const selection = (profile.data?.selection ?? {}) as Record<string, any>;
@@ -454,30 +464,6 @@ export default function Home() {
             <Badge variant="outline" className="rounded-full px-3 py-1.5 text-xs">مساحتك الدراسية</Badge>
           </div>
         </header>
-
-        {plan && (
-          <section className="sf-home-ai-decision" data-testid="home-ai-decision" data-scroll-reveal>
-            <div className="sf-home-ai-decision-orbit" aria-hidden="true"><span /><i /><b /></div>
-            <div className="sf-home-ai-decision-copy">
-              <div className="sf-home-ai-decision-kicker"><span className="sf-home-ai-pulse" /> قرار محرك التخطيط <span>STUDYFLOW INTELLIGENCE</span></div>
-              <h3>{planStrategy?.revision?.headline || "أولوياتك مبنية على بياناتك الدراسية"}</h3>
-              <p>{planStrategy?.revision?.rationale || plan.summary || "يربط StudyFlow موضعك في المنهج والمهام المفتوحة وجدول المدرس في ترتيب واحد قابل للتنفيذ."}</p>
-              {Array.isArray(planStrategy?.revision?.triggers) && planStrategy.revision.triggers.length > 0 && (
-                <div className="sf-home-ai-triggers">
-                  {planStrategy.revision.triggers.slice(0, 3).map((trigger: any, index: number) => (
-                    <span key={trigger.code || index}>{trigger.label}</span>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="sf-home-ai-decision-compare">
-              <div><small>الخطة الأصلية</small><strong>{(planStrategy?.baseline?.steps?.length ?? homeStudySteps.length).toLocaleString("ar-EG")}</strong><span>خطوة</span></div>
-              <i aria-hidden="true" />
-              <div><small>التوزيع الحالي</small><strong>{homeStudySteps.length.toLocaleString("ar-EG")}</strong><span>خطوة</span></div>
-              <Button type="button" variant="outline" onClick={() => setLocation("/planner")}>تفاصيل التعديل <ArrowLeft className="size-4" /></Button>
-            </div>
-          </section>
-        )}
 
         {summary.isError && <QueryErrorNotice onRetry={() => void summary.refetch()} label="تعذّر تحميل مهامك. أعد المحاولة؛ بياناتك لم تُحذف." />}
         {learning.isError && <QueryErrorNotice onRetry={() => void learning.refetch()} label="تعذّر تحميل تقدم المنهج. يمكنك متابعة مهامك أثناء إعادة المحاولة." />}
@@ -847,6 +833,19 @@ export default function Home() {
                     <span className="sf-home-exam-countdown">
                       {days === 0 ? "اليوم" : days === 1 ? "غدًا" : "بعد " + days.toLocaleString("ar-EG") + " يوم"}
                     </span>
+                    {days === 0 && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="sf-home-exam-complete"
+                        disabled={markMonthlyExamCompleted.isPending}
+                        onClick={() => markMonthlyExamCompleted.mutate({ subjectId: exam.subjectId, date: exam.date })}
+                      >
+                        {markMonthlyExamCompleted.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <CheckCircle2 className="size-3.5" />}
+                        خلصت الامتحان
+                      </Button>
+                    )}
                     <div className="sf-home-exam-scope" data-testid={"home-exam-scope-" + exam.subjectId}>
                       <div className="sf-home-exam-scope-heading">
                         <span>نطاق المراجعة المسجل</span>
@@ -879,35 +878,35 @@ export default function Home() {
         <AnimatePresence>
           {showWelcomeGuide && (
             <motion.div
-              className="fixed inset-0 z-[90] flex items-center justify-center bg-[#171312]/75 p-4 backdrop-blur-md"
+              className="fixed inset-0 z-[90] flex items-center justify-center bg-black/75 p-4 backdrop-blur-md"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               role="dialog" aria-modal="true" aria-labelledby="welcome-guide-title"
               onClick={event => { if (event.target === event.currentTarget) setShowWelcomeGuide(false); }}
             >
               <motion.section
-                className="relative w-full max-w-xl overflow-hidden rounded-[1.8rem] border border-[#D1B77B]/25 bg-[#2A2220] text-[#F4EFE9] shadow-[0_40px_130px_-45px_rgba(0,0,0,.95)]"
+                className="relative w-full max-w-xl overflow-hidden rounded-[1.8rem] border border-border bg-card text-card-foreground shadow-[0_40px_130px_-45px_rgba(0,0,0,.95)]"
                 initial={{ opacity: 0, y: 28, scale: .96, filter: "blur(8px)" }}
                 animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
                 exit={{ opacity: 0, y: 16, scale: .98, filter: "blur(6px)" }}
                 transition={{ duration: .38, ease: [.22, 1, .36, 1] }}
               >
-                <div className="pointer-events-none absolute -right-20 -top-24 size-72 rounded-full bg-[#D1B77B]/10 blur-3xl" />
+                <div className="pointer-events-none absolute -right-20 -top-24 size-72 rounded-full bg-primary/10 blur-3xl" />
                 <header className="relative flex items-start justify-between gap-3 border-b border-white/10 px-5 py-5 sm:px-7">
                   <div>
-                    <p className="text-[10px] font-bold tracking-[.2em] text-[#D1B77B]">YOUR FIRST 4 STEPS</p>
+                    <p className="text-[10px] font-bold tracking-[.2em] text-primary">ابدأ هنا</p>
                     <h2 id="welcome-guide-title" className="mt-2 text-xl font-bold sm:text-2xl">أهلاً بك في StudyFlow</h2>
-                    <p className="mt-1 text-xs leading-6 text-[#C8BBAF]">دليل عملي سريع يوضح تبدأ منين وإزاي تخلي المنصة تشتغل معاك.</p>
+                    <p className="mt-1 text-xs leading-6 text-muted-foreground">٤ خطوات تضبط بيها المنصة وتبدأ مذاكرتك.</p>
                   </div>
-                  <button type="button" onClick={() => finishWelcomeGuide()} className="rounded-lg px-2 py-1 text-xs text-[#C8BBAF] transition hover:bg-white/10 hover:text-white">تخطي</button>
+                  <button type="button" onClick={() => finishWelcomeGuide()} className="rounded-lg px-2 py-1 text-xs text-muted-foreground transition hover:bg-white/10 hover:text-white">تخطي</button>
                 </header>
                 <div className="relative px-5 py-6 sm:px-7">
                   <div className="mb-5 flex items-center gap-2">
                     {welcomeGuide.map((item, index) => (
                       <button type="button" key={item.title} onClick={() => setWelcomeGuideStep(index)}
                         aria-label={"الخطوة " + (index + 1)}
-                        className={"h-1.5 flex-1 rounded-full transition-all duration-300 " + (index <= welcomeGuideStep ? "bg-[#D1B77B]" : "bg-white/15")} />
+                        className={"h-1.5 flex-1 rounded-full transition-all duration-300 " + (index <= welcomeGuideStep ? "bg-primary" : "bg-white/15")} />
                     ))}
-                    <span className="mr-1 text-[10px] tabular-nums text-[#C8BBAF]">{welcomeGuideStep + 1}/4</span>
+                    <span className="mr-1 text-[10px] tabular-nums text-muted-foreground">{welcomeGuideStep + 1}/4</span>
                   </div>
                   <AnimatePresence mode="wait" initial={false}>
                     {(() => {
@@ -920,12 +919,12 @@ export default function Home() {
                           exit={{ opacity: 0, x: -18, filter: "blur(4px)" }}
                           transition={{ duration: .27, ease: "easeOut" }}
                         >
-                          <div className="flex size-14 items-center justify-center rounded-2xl border border-[#D1B77B]/25 bg-[#D1B77B]/10 text-[#D1B77B]">
+                          <div className="flex size-14 items-center justify-center rounded-2xl border border-[#D1B77B]/25 bg-primary/10 text-primary">
                             <StepIcon className="size-7" />
                           </div>
                           <h3 className="mt-5 text-xl font-bold leading-8">{step.title}</h3>
-                          <p className="mt-3 text-sm leading-8 text-[#C8BBAF]">{step.body}</p>
-                          <Button type="button" variant="outline" className="mt-5 rounded-xl border-[#D1B77B]/30 bg-white/[.04] text-[#EADCC8] hover:bg-white/[.08] hover:text-white"
+                          <p className="mt-3 text-sm leading-8 text-muted-foreground">{step.body}</p>
+                          <Button type="button" variant="outline" className="mt-5 rounded-xl border-border bg-muted/40 text-foreground hover:bg-muted"
                             onClick={() => { setShowWelcomeGuide(false); completeWelcomeGuide.mutate(undefined, { onSuccess: () => setLocation(step.path) }); }}>
                             {step.action} <ArrowLeft className="size-4" />
                           </Button>
@@ -935,16 +934,16 @@ export default function Home() {
                   </AnimatePresence>
                 </div>
                 <footer className="relative flex items-center justify-between border-t border-white/10 px-5 py-4 sm:px-7">
-                  <Button type="button" variant="ghost" className="text-[#C8BBAF] hover:bg-white/10 hover:text-white"
+                  <Button type="button" variant="ghost" className="text-muted-foreground hover:bg-white/10 hover:text-white"
                     disabled={welcomeGuideStep === 0} onClick={() => setWelcomeGuideStep(value => Math.max(0, value - 1))}>
                     السابق
                   </Button>
                   {welcomeGuideStep < welcomeGuide.length - 1 ? (
-                    <Button type="button" className="rounded-xl bg-[#D1B77B] text-[#251D1B] hover:bg-[#E1C48A]" onClick={() => setWelcomeGuideStep(value => Math.min(welcomeGuide.length - 1, value + 1))}>
+                    <Button type="button" className="rounded-xl bg-primary text-[#251D1B] hover:bg-[#E1C48A]" onClick={() => setWelcomeGuideStep(value => Math.min(welcomeGuide.length - 1, value + 1))}>
                       التالي <ArrowLeft className="size-4" />
                     </Button>
                   ) : (
-                    <Button type="button" className="rounded-xl bg-[#D1B77B] text-[#251D1B] hover:bg-[#E1C48A]" disabled={completeWelcomeGuide.isPending}
+                    <Button type="button" className="rounded-xl bg-primary text-[#251D1B] hover:bg-[#E1C48A]" disabled={completeWelcomeGuide.isPending}
                       onClick={() => finishWelcomeGuide()}>
                       {completeWelcomeGuide.isPending ? "جارٍ الحفظ..." : "إنهاء الدليل"}
                       <CheckCircle2 className="size-4" />
