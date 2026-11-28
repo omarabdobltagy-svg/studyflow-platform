@@ -235,15 +235,19 @@ export default function Assistant() {
     const next = remaining.length ? remaining : [newThread()];
     setThreads(next);
     setSelectedId(next[0].id);
-    try {
-      await deleteAssistantThread.mutateAsync({ clientId: deletedThread.id });
-    } catch {
-      setThreads(current => [deletedThread, ...current.filter(thread => thread.id !== deletedThread.id)].slice(0, 30));
-      setSelectedId(deletedThread.id);
-      toast.error("تعذّر حذف المحادثة من الحساب؛ أُعيدت إلى السجل.");
+    if (historyMode === "remote") {
+      try {
+        await deleteAssistantThread.mutateAsync({ clientId: deletedThread.id });
+      } catch {
+        setThreads(current => [deletedThread, ...current.filter(thread => thread.id !== deletedThread.id)].slice(0, 30));
+        setSelectedId(deletedThread.id);
+        toast.error("تعذّر حذف المحادثة من الحساب؛ أُعيدت إلى السجل.");
+        return;
+      }
+      toast.success("تم حذف المحادثة من سجل الحساب.");
       return;
     }
-    toast.success("تم حذف المحادثة من سجل الحساب.");
+    toast.success("حُذفت المحادثة من السجل المحلي على هذا الجهاز.");
   };
 
   const sendMessage = async (content: string) => {
