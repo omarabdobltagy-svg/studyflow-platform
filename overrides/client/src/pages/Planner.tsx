@@ -1,11 +1,15 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import PlanExportActions from "@/components/PlanExportActions";
+import TaskReviewResourcePanel from "@/components/TaskReviewResourcePanel";
+import ExamMissionScene from "@/components/ExamMissionScene";
 import QueryErrorNotice from "@/components/QueryErrorNotice";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { getNextOpenPlanStep } from "@/lib/plan-actions";
 import { getPlannerTeacherSessions, groupPlannerTeacherSessions, type PlannerTeacherSession } from "@/lib/teacher-sessions";
-import { formatTime12Hour, getDateKeyInTimeZone } from "@shared/date-time";
+import { formatTime12Hour, getDateKeyInTimeZone, getCalendarDaysBetween } from "@shared/date-time";
+import { getCairoSecondYearBaccalaureateExams } from "@shared/cairo-baccalaureate-exam-calendar";
+import { useServerClock } from "@/lib/server-clock";
 import { buildPlannerCurriculumLanes, getPlannerStepCurriculum as getPlanStepCurriculum, getTeacherSessionPreparationSteps } from "@/lib/planner-curriculum";
 import { ENGLISH_CURRICULUM_LABELS, displayCurriculumTitle } from "@/lib/curriculum-display";
 import {
@@ -266,10 +270,24 @@ function PlanDecisionPanel({plan}:{plan:PlanView}) {
   );
 }
 
-function PlanReviewSubtasks({ step }: { step: PlanStep }) {
-  if (!step.subtasks?.length && !step.aiReviewBrief) return null;
+function PlanReviewSubtasks({ step, subjectIds, teacherId }: { step: PlanStep; subjectIds: string[]; teacherId?: string }) {
+  if (!step.subtasks?.length && !step.aiReviewBrief && !step.resourceRecommendation && !step.examFocus) return null;
+  const curriculum = getPlanStepCurriculum(step, subjectIds);
+  const nodeId = step.curriculumNodeIds?.[0];
+  const branchId = curriculum && nodeId
+    ? getSIECheckpointProgressBranches(curriculum.subjectId).find(branch => branch.choices.some(choice => choice.nodeId === nodeId))?.branchId
+    : undefined;
   return (
     <section className="sf-sp-composite-subtasks">
+      {(step.resourceRecommendation || step.examFocus) && (
+        <TaskReviewResourcePanel
+          resource={step.resourceRecommendation}
+          subjectId={curriculum?.subjectId}
+          branchId={branchId}
+          nodeId={nodeId}
+          teacherId={teacherId}
+        />
+      )}
       {step.aiReviewBrief && (
         <div className="sf-sp-ai-review-brief" data-testid="ai-review-brief">
           <header>
@@ -339,6 +357,7 @@ function parseSavedPlan(record: { planJson: string }): PlanView | null {
 }
 
 export default function Planner() {
+  const { now: serverNow } = useServerClock();
   const utils = trpc.useUtils();
   const [plan, setPlan] = useState<PlanView | null>(null);
   const planningMode: PlanningMode = "smart";
@@ -363,6 +382,17 @@ export default function Planner() {
     () => getPlannerTeacherSessions(profile.data),
     [profile.data?.selection, profile.data?.subjectIds, profile.data?.teacherSelections, (profile.data?.selection as Record<string, any> | undefined)?.teacherSchedules],
   );
+  const todayCairo = getDateKeyInTimeZone(serverNow ?? new Date(), "Africa/Cairo");
+  const upcomingCairoExams = useMemo(
+    () => getCairoSecondYearBaccalaureateExams(profile.data)
+      .filter(exam => exam.date >= todayCairo)
+      .sort((left, right) => left.date.localeCompare(right.date)),
+    [profile.data, todayCairo],
+  );
+  const nearestCairoExam = upcomingCairoExams[0] ?? null;
+  const nearestExamDays = nearestCairoExam
+    ? Math.max(0, getCalendarDaysBetween(todayCairo, nearestCairoExam.date))
+    : Number.POSITIVE_INFINITY;
   const learning = trpc.learning.get.useQuery(undefined, { staleTime: 15_000 });
   const tasksQuery = trpc.tasks.list.useQuery(undefined, { staleTime: 15_000 });
   const activeDailyPlan = trpc.plans.currentDaily.useQuery(undefined, {
@@ -857,6 +887,15 @@ export default function Planner() {
             <p>{plan ? completedPlanCount.toLocaleString("ar-EG") + " من " + planStepCount.toLocaleString("ar-EG") + " مهمة مكتملة" : "ستظهر نسبة التنفيذ بعد إنشاء الخطة واعتمادها."}</p>
           </div>
         </header>
+
+        {nearestCairoExam && (
+          <ExamMissionScene
+            exam={nearestCairoExam}
+            daysUntil={nearestExamDays}
+            upcomingExams={upcomingCairoExams}
+            selection={profile.data?.selection as Record<string, any> | undefined}
+          />
+        )}
 
         {plan&&<PlanDecisionPanel plan={plan}/>}
         {plan&&<PlanAssistantChat plan={plan} subjectIds={profile.data?.subjectIds??[]} editable={true}
@@ -1496,7 +1535,11 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
                               {step.studyMethod&&<div className="sf-execution-method"><strong>طريقة التنفيذ</strong><ol>{step.studyMethod.stages.map((stage,stageIndex)=><li key={stageIndex}><b>{(stageIndex+1).toLocaleString("ar-EG")}. {displayArabicText(stage.title,"مرحلة المذاكرة")}</b><p>{displayArabicText(stage.instruction,"نفّذ هذه المرحلة من مصدر المادة ثم حدّث تقدمك.")}</p></li>)}</ol><small>تكتمل الخطوة عند: {displayArabicText(step.studyMethod.completionCriteria,"تنفيذ المراحل وتسجيل تقدمك الفعلي.")}</small></div>}
                               {step.scheduleNote&&<p className="sf-execution-note">{displayArabicText(step.scheduleNote,"تم تعديل موعد هذه الخطوة مع الحفاظ عليها في الخطة.")}</p>}
                               {step.existingTask&&<p className="sf-execution-note">هذه الخطوة مرتبطة بالتزام مسجل بالفعل؛ لن تُنشأ نسخة مكررة منها.</p>}
-                              <PlanReviewSubtasks step={step}/>
+                              <PlanReviewSubtasks
+                                step={step}
+                                subjectIds={subjectIds}
+                                teacherId={(profile.data?.selection as Record<string, any> | undefined)?.teacherChoices?.[curriculum?.subjectId ?? ""]}
+                              />
                               <div className="sf-execution-step-actions">
                                 {curriculum&&branchId&&nodeId&&<a href={"/study?subject="+encodeURIComponent(curriculum.subjectId)+"&branch="+encodeURIComponent(branchId)+"&lesson="+encodeURIComponent(nodeId)}>افتح الدرس في مساحة المذاكرة <ArrowUpRight className="size-3.5"/></a>}
                                 {step.existingTask&&<a href="/tasks">افتح المهمة المسجلة <ArrowUpRight className="size-3.5"/></a>}
