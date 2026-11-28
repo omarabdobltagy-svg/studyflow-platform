@@ -1,8 +1,15 @@
 /* StudyFlow cinematic graphite / gold glass system. Loaded last to supersede legacy UI layers. */
 html,html.dark {
- --primary:#E2C47D;--primary-foreground:#17130A;
+ --primary:#E2C47D;--primary-foreground:#17130A;--ring:#E2C47D;
+ --sidebar-primary:#E2C47D;--sidebar-ring:#E2C47D;--sidebar-border:rgba(226,196,125,.16);
+ --chart-1:#E2C47D;--chart-2:#A88445;--chart-3:#6F6656;--chart-4:#B89A61;--chart-5:#84775E;
  --sf-ember:#2B2923;--sf-brass:#A88445;--sf-brass-bright:#E2C47D;
- --sf-lavender:#A88445;--sf-lavender-bright:#E2C47D;
+ --sf-lavender:#A88445;--sf-lavender-bright:#E2C47D;--sf-lavender-soft:#EBD9AD;
+ --sf-gold:#A88445;--sf-gold-bright:#E2C47D;--sf-gold-soft:#EBD9AD;
+ --sf-wine:#2B2923;--sf-wine-deep:#111315;--sf-purple:#2B2923;--sf-blue:#A88445;
+ --sf-page-accent:#A88445;--sf-navigation-accent:#E2C47D;
+ --sf-navigation-active:rgba(226,196,125,.15);--sf-navigation-hover:rgba(226,196,125,.07);
+ --sf-warning:#E2C47D;
 }
 html body .sf-app-shell.sf-shell-v3{
  --background:#050608;--foreground:#F4F0E6;--card:rgba(15,17,20,.72);--card-foreground:#F4F0E6;
@@ -16,6 +23,12 @@ html body .sf-app-shell.sf-shell-v3{
  --sf-ember:#2B2923;--sf-brass:#A88445;--sf-brass-bright:#E2C47D;--sf-lavender-bright:#E2C47D;
  --sf-glass-shine:rgba(255,255,255,.17);--sf-glass-shadow:0 28px 80px rgba(0,0,0,.52),0 5px 20px rgba(0,0,0,.32);
  --sf-glass-inset:inset 0 1px 0 rgba(255,255,255,.10);
+ --sidebar-primary:#E2C47D;--sidebar-ring:#E2C47D;--sidebar-border:rgba(226,196,125,.16);
+ --sf-gold:#A88445;--sf-gold-bright:#E2C47D;--sf-gold-soft:#EBD9AD;
+ --sf-lavender:#A88445;--sf-lavender-bright:#E2C47D;--sf-lavender-soft:#EBD9AD;
+ --sf-page-accent:#A88445;--sf-navigation-accent:#E2C47D;
+ --sf-navigation-active:rgba(226,196,125,.15);--sf-navigation-hover:rgba(226,196,125,.07);
+ --sf-warning:#E2C47D;--sf-ember:#2B2923;--sf-brass:#A88445;--sf-brass-bright:#E2C47D;
  background:#030405!important;color:#F4F0E6!important;
  background-image:radial-gradient(ellipse 60rem 42rem at 4% 4%,rgba(160,119,55,.12),transparent 67%),
  radial-gradient(ellipse 54rem 46rem at 96% 78%,rgba(91,91,88,.15),transparent 70%),
@@ -23,6 +36,9 @@ html body .sf-app-shell.sf-shell-v3{
  linear-gradient(180deg,#030405 0%,#090B0E 52%,#030405 100%)!important;
 }
 html body,html body #root{background:#030405!important}
+/* Keep smoke particles inside the app's horizontal canvas; blur remains vertically cinematic. */
+html body .sf-app-shell.sf-shell-v3{overflow-x:clip!important}
+html body .sf-app-shell.sf-shell-v3::before,html body .sf-app-shell.sf-shell-v3::after{inset-inline:0!important}
 html body .sf-app-shell.sf-shell-v3::before,html body .sf-app-shell.sf-shell-v3::after{
  content:"";position:absolute;inset:-18% -12%;z-index:0;pointer-events:none;filter:blur(58px);transform:translate3d(0,0,0)
 }
@@ -487,4 +503,35 @@ html body .sf-shell-v3 .sf-main .sf-task-progress-rail{background:rgba(255,255,2
 html body .sf-shell-v3 .sf-main .sf-task-progress-rail i{background:linear-gradient(90deg,#98713B,#E2C47D)!important;box-shadow:0 0 14px rgba(226,196,125,.28)!important}
 html body .sf-shell-v3 .sf-main .sf-task-overview-stats article{
  border-color:rgba(226,196,125,.16)!important;border-radius:15px!important;background:rgba(255,255,255,.035)!important;
+}
+
+
+/* Navigation and brand marks use illuminated brass, not the former lavender accent. */
+html body .sf-app-shell.sf-shell-v3 .sf-brand-mark,
+html body .sf-app-shell.sf-shell-v3 .sf-account-avatar{
+ color:#17130A!important;border-color:rgba(226,196,125,.42)!important;
+ background:linear-gradient(145deg,#F2E1B1,#D4B66C 58%,#8D6A34 130%)!important;
+ box-shadow:0 10px 28px rgba(226,196,125,.13),inset 0 1px rgba(255,255,255,.45)!important;
+}
+html body .sf-app-shell.sf-shell-v3 .sf-nav-item.is-active{
+ border-color:rgba(226,196,125,.34)!important;
+ color:#FFF1CF!important;
+ background:linear-gradient(105deg,rgba(226,196,125,.18),rgba(226,196,125,.045))!important;
+ box-shadow:inset 3px 0 rgba(226,196,125,.72),0 0 22px rgba(226,196,125,.045)!important;
+}
+html body .sf-app-shell.sf-shell-v3 .sf-nav-item.is-active .sf-nav-icon,
+html body .sf-app-shell.sf-shell-v3 .sf-nav-indicator{
+ color:#E2C47D!important;background:#E2C47D!important;
+}
+@media(max-width:900px){
+ html body .sf-app-shell.sf-shell-v3 .sf-mobile-dock{
+  border:1px solid rgba(226,196,125,.2)!important;
+  background:linear-gradient(145deg,rgba(255,255,255,.07),transparent 48%),rgba(8,10,12,.94)!important;
+  box-shadow:0 16px 42px rgba(0,0,0,.42),inset 0 1px rgba(255,255,255,.08)!important;
+  -webkit-backdrop-filter:blur(28px) saturate(165%)!important;backdrop-filter:blur(28px) saturate(165%)!important;
+ }
+ html body .sf-app-shell.sf-shell-v3 .sf-mobile-dock-item.is-active{
+  color:#FFF0C9!important;background:rgba(226,196,125,.14)!important;border-radius:13px!important;
+ }
+ html body .sf-app-shell.sf-shell-v3 .sf-mobile-dock-item.is-active svg{color:#E2C47D!important}
 }
