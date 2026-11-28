@@ -3,56 +3,56 @@
    unifies surfaces, semantic tokens and identity accents. */
 :root {
   color-scheme: light;
-  --background: #F1EEE7;
-  --foreground: #262329;
-  --card: #FAF8F3;
-  --card-foreground: #262329;
-  --popover: #FCFAF6;
-  --popover-foreground: #262329;
-  --primary: #8E7348;
+  --background: #F1EFF4;
+  --foreground: #26222B;
+  --card: #F9F7FB;
+  --card-foreground: #26222B;
+  --popover: #FCFAFD;
+  --popover-foreground: #26222B;
+  --primary: #8F79AD;
   --primary-foreground: #FFFFFF;
-  --secondary: #E8E1D6;
+  --secondary: #E7E2ED;
   --secondary-foreground: #39333C;
-  --muted: #EDE9E1;
+  --muted: #ECE8F0;
   --muted-foreground: #6F6872;
   --accent: #E9E1EB;
   --accent-foreground: #49394D;
   --destructive: #A9444D;
   --destructive-foreground: #FFFFFF;
-  --border: #D8D0C5;
-  --input: #CBC1B4;
-  --ring: #9A7C50;
+  --border: #D5CEDD;
+  --input: #C9C0D2;
+  --ring: #8F79AD;
   --sidebar: #151419;
-  --sidebar-foreground: #F1EEE7;
+  --sidebar-foreground: #F1EFF4;
   --sidebar-primary: #C5B2DE;
   --sidebar-primary-foreground: #211C17;
   --sidebar-accent: #29252E;
-  --sidebar-accent-foreground: #F1EEE7;
+  --sidebar-accent-foreground: #F1EFF4;
   --sidebar-border: rgba(197,178,222,.14);
   --sidebar-ring: #C5B2DE;
-  --chart-1: #8E7348;
-  --chart-2: #B8945E;
+  --chart-1: #8F79AD;
+  --chart-2: #9C87B4;
   --chart-3: #76677D;
   --chart-4: #9A8799;
-  --chart-5: #B7AD9F;
+  --chart-5: #9B92A7;
   --sf-ember: #4C3A4F;
   --sf-ember-deep: #302432;
   --sf-brass: #8F79AD;
   --sf-brass-bright: #C5B2DE;
-  --sf-brass-soft: #F2E9D6;
+  --sf-brass-soft: #E8E0F0;
   --sf-wine: var(--sf-ember);
   --sf-wine-deep: var(--sf-ember-deep);
   --sf-gold: var(--sf-brass);
   --sf-gold-bright: var(--sf-brass-bright);
   --sf-gold-soft: var(--sf-brass-soft);
-  --sf-canvas: #F1EEE7;
-  --sf-surface: #FAF8F3;
+  --sf-canvas: #F1EFF4;
+  --sf-surface: #F9F7FB;
   --sf-surface-raised: #FFFFFF;
-  --sf-surface-soft: #E8E1D6;
-  --sf-text: #262329;
+  --sf-surface-soft: #E7E2ED;
+  --sf-text: #26222B;
   --sf-text-muted: #6F6872;
-  --sf-line: #D8D0C5;
-  --sf-success: #8E7348;
+  --sf-line: #D5CEDD;
+  --sf-success: #8F79AD;
   --sf-warning: #8F79AD;
   --sf-danger: #A9444D;
   --sf-shadow: 0 18px 48px -38px rgba(35, 28, 25, .22);
@@ -64,11 +64,11 @@
 html.dark {
   color-scheme: dark;
   --background: #101114;
-  --foreground: #F3EFE6;
+  --foreground: #F2EDF7;
   --card: #191A1F;
-  --card-foreground: #F3EFE6;
+  --card-foreground: #F2EDF7;
   --popover: #212228;
-  --popover-foreground: #F3EFE6;
+  --popover-foreground: #F2EDF7;
   --primary: #C5B2DE;
   --primary-foreground: #171612;
   --secondary: #29262D;
@@ -83,11 +83,11 @@ html.dark {
   --input: #4A444E;
   --ring: #C5B2DE;
   --sidebar: #0C0D10;
-  --sidebar-foreground: #F3EFE6;
+  --sidebar-foreground: #F2EDF7;
   --sidebar-primary: #C5B2DE;
   --sidebar-primary-foreground: #171612;
   --sidebar-accent: #201E24;
-  --sidebar-accent-foreground: #F3EFE6;
+  --sidebar-accent-foreground: #F2EDF7;
   --sidebar-border: rgba(197,178,222,.14);
   --sidebar-ring: #C5B2DE;
   --chart-1: #C5B2DE;
@@ -99,7 +99,7 @@ html.dark {
   --sf-ember-deep: #302432;
   --sf-brass: #8F79AD;
   --sf-brass-bright: #C5B2DE;
-  --sf-brass-soft: #453B2F;
+  --sf-brass-soft: #453B52;
   --sf-wine: var(--sf-ember);
   --sf-wine-deep: var(--sf-ember-deep);
   --sf-gold: var(--sf-brass);
@@ -109,7 +109,7 @@ html.dark {
   --sf-surface: #191A1F;
   --sf-surface-raised: #232329;
   --sf-surface-soft: #24232A;
-  --sf-text: #F3EFE6;
+  --sf-text: #F2EDF7;
   --sf-text-muted: #B6AEB6;
   --sf-line: #39353F;
   --sf-success: #8F79AD;
@@ -128,18 +128,18 @@ html, body {
 html body .sf-app-shell.sf-shell-v3 {
   background:
     radial-gradient(ellipse at 4% 0%, rgba(76, 58, 79, .16), transparent 34rem),
-    radial-gradient(ellipse at 100% 100%, rgba(214, 188, 131, .08), transparent 35rem),
-    linear-gradient(145deg, #101010 0%, #191716 54%, #111010 100%) !important;
+    radial-gradient(ellipse at 100% 100%, rgba(197, 178, 222, .08), transparent 35rem),
+    linear-gradient(145deg, #101114 0%, #191716 54%, #111010 100%) !important;
 }
 html body .sf-shell-v3 .sf-app-frame {
-  border-color: rgba(225, 215, 198, .12) !important;
+  border-color: rgba(190, 182, 202, .12) !important;
   background: var(--background) !important;
 }
 html body .sf-shell-v3 .sf-sidebar {
   color: var(--sidebar-foreground) !important;
   background:
     radial-gradient(ellipse at 100% 0%, rgba(76, 58, 79, .14), transparent 25rem),
-    linear-gradient(180deg, #1B1918 0%, #101010 100%) !important;
+    linear-gradient(180deg, #1B1922 0%, #101114 100%) !important;
   border-left-color: var(--sidebar-border) !important;
 }
 html body .sf-shell-v3 .sf-brand-mark,
@@ -149,7 +149,7 @@ html body .sf-shell-v3 .sf-account-avatar {
   background: linear-gradient(145deg, #E8E0F0, #C5B2DE 58%, #4C3A4F 130%) !important;
 }
 html body .sf-shell-v3 .sf-nav-item.is-active {
-  border-color: rgba(214, 188, 131, .28) !important;
+  border-color: rgba(197, 178, 222, .28) !important;
   background: linear-gradient(105deg, rgba(76, 58, 79, .30), rgba(76, 58, 79, .12)) !important;
 }
 html body .sf-shell-v3 .sf-nav-item.is-active .sf-nav-icon,
@@ -184,22 +184,22 @@ html body .sf-shell-v3 .sf-main :is(button.bg-primary, a.bg-primary):hover {
 
 /* Login screen: obsidian surfaces, lavender action, restrained plum accents. */
 html body .sf-login-screen.sf-shell-v3 {
-  color: #F4F0EA !important;
+  color: #F2EDF7 !important;
   background:
     radial-gradient(ellipse at 12% 8%, rgba(76, 58, 79, .22), transparent 37rem),
-    radial-gradient(ellipse at 88% 92%, rgba(214, 188, 131, .10), transparent 34rem),
-    linear-gradient(145deg, #101010 0%, #1B1918 58%, #111010 100%) !important;
+    radial-gradient(ellipse at 88% 92%, rgba(197, 178, 222, .10), transparent 34rem),
+    linear-gradient(145deg, #101114 0%, #1B1922 58%, #111010 100%) !important;
 }
 html body .sf-login-screen.sf-shell-v3 .sf-login-frame-v4,
 html body .sf-login-screen.sf-shell-v3 .sf-login-form-side {
   background: transparent !important;
 }
 html body .sf-login-screen.sf-shell-v3 .sf-login-frame-v4 .sf-login-form-card {
-  border: 1px solid rgba(225, 215, 198, .17) !important;
+  border: 1px solid rgba(190, 182, 202, .17) !important;
   border-radius: 25px !important;
-  color: #F4F0EA !important;
-  background: linear-gradient(145deg, #242120 0%, #1B1918 100%) !important;
-  background-image: linear-gradient(145deg, #242120 0%, #1B1918 100%) !important;
+  color: #F2EDF7 !important;
+  background: linear-gradient(145deg, #24222B 0%, #1B1922 100%) !important;
+  background-image: linear-gradient(145deg, #24222B 0%, #1B1922 100%) !important;
   box-shadow: 0 34px 80px -48px rgba(0,0,0,.82), inset 0 1px rgba(255,255,255,.055) !important;
 }
 html body .sf-login-screen.sf-shell-v3 .sf-login-form-card::before {
@@ -213,10 +213,10 @@ html body .sf-login-screen.sf-shell-v3 .sf-login-brand-mark-v4 {
 }
 html body .sf-login-screen.sf-shell-v3 .sf-login-brand-v4 b,
 html body .sf-login-screen.sf-shell-v3 .sf-login-form-heading h2 {
-  color: #F4F0EA !important;
+  color: #F2EDF7 !important;
 }
 html body .sf-login-screen.sf-shell-v3 :is(.sf-login-brand-v4 small, .sf-login-form-heading > p:last-child, .sf-login-security p) {
-  color: #B9B2AA !important;
+  color: #B8B0C2 !important;
 }
 html body .sf-login-screen.sf-shell-v3 :is(.sf-auth-eyebrow, .sf-login-eyebrow) {
   color: #C5B2DE !important;
@@ -225,7 +225,7 @@ html body .sf-login-screen.sf-shell-v3 .sf-login-form label {
   color: #E8E1D7 !important;
 }
 html body .sf-login-screen.sf-shell-v3 .sf-auth-mode-tabs {
-  border: 1px solid rgba(225, 215, 198, .15) !important;
+  border: 1px solid rgba(190, 182, 202, .15) !important;
   background: rgba(0, 0, 0, .30) !important;
 }
 html body .sf-login-screen.sf-shell-v3 .sf-auth-mode-tabs button {
@@ -235,13 +235,13 @@ html body .sf-login-screen.sf-shell-v3 .sf-auth-mode-tabs button {
 html body .sf-login-screen.sf-shell-v3 .sf-auth-mode-tabs button[aria-selected="true"],
 html body .sf-login-screen.sf-shell-v3 .sf-auth-mode-tabs button[aria-pressed="true"] {
   border: 1px solid rgba(197, 178, 222, .26) !important;
-  color: #FFF9F4 !important;
+  color: #F8F4FC !important;
   background: rgba(76, 58, 79, .34) !important;
   box-shadow: 0 8px 22px -17px rgba(76, 58, 79, .45) !important;
 }
 html body .sf-login-screen.sf-shell-v3 :is(input.sf-auth-input, .sf-auth-input) {
-  border: 1px solid rgba(225, 215, 198, .20) !important;
-  color: #F4F0EA !important;
+  border: 1px solid rgba(190, 182, 202, .20) !important;
+  color: #F2EDF7 !important;
   background: rgba(8, 8, 8, .38) !important;
 }
 html body .sf-login-screen.sf-shell-v3 .sf-auth-input::placeholder { color: #9E958B !important; }
@@ -251,7 +251,7 @@ html body .sf-login-screen.sf-shell-v3 .sf-auth-input:focus-visible {
 }
 html body .sf-login-screen.sf-shell-v3 .sf-login-form-card :is(button.sf-auth-submit, button.bg-primary) {
   min-height: 50px !important;
-  border: 1px solid rgba(214, 188, 131, .38) !important;
+  border: 1px solid rgba(197, 178, 222, .38) !important;
   border-radius: 13px !important;
   color: #171612 !important;
   background: linear-gradient(135deg, #D5C6E8 0%, #C5B2DE 58%, #8F79AD 100%) !important;
@@ -266,7 +266,7 @@ html body .sf-login-screen.sf-shell-v3 .sf-auth-mode-switch {
   background: transparent !important;
 }
 html body .sf-login-screen.sf-shell-v3 .sf-login-security {
-  border-color: rgba(225, 215, 198, .13) !important;
+  border-color: rgba(190, 182, 202, .13) !important;
   background: rgba(255,255,255,.035) !important;
 }
 
@@ -277,10 +277,10 @@ html body .sf-shell-v3 .sf-main .sf-home-ai-decision {
   background:
     radial-gradient(ellipse at 92% 0%, rgba(197, 178, 222, .11), transparent 34%),
     radial-gradient(ellipse at 5% 100%, rgba(76, 58, 79, .18), transparent 42%),
-    linear-gradient(125deg, #242120 0%, #1B1918 60%, #171514 100%) !important;
+    linear-gradient(125deg, #24222B 0%, #1B1922 60%, #17151D 100%) !important;
 }
 html body .sf-shell-v3 .sf-main .sf-home-ai-decision :is(h3, .sf-home-ai-decision-kicker) {
-  color: #F4F0EA !important;
+  color: #F2EDF7 !important;
 }
 html body .sf-shell-v3 .sf-main .sf-home-ai-decision .sf-home-ai-decision-copy > p {
   color: #C7BFB5 !important;
@@ -293,11 +293,11 @@ html body .sf-shell-v3 .sf-main .sf-home-ai-triggers span {
 
 @media (max-width: 900px) {
   html body .sf-shell-v3 .sf-mobile-dock {
-    border-color: rgba(225, 215, 198, .15) !important;
+    border-color: rgba(190, 182, 202, .15) !important;
     background: rgba(29, 27, 26, .97) !important;
   }
   html body .sf-shell-v3 .sf-mobile-dock-item.is-active {
-    color: #FFF9F4 !important;
+    color: #F8F4FC !important;
     background: rgba(76, 58, 79, .28) !important;
   }
   html body .sf-shell-v3 .sf-mobile-dock-item.is-active svg { color: #C5B2DE !important; }
@@ -308,16 +308,16 @@ html body .sf-shell-v3 .sf-main .sf-home-ai-decision { display: none !important;
 html body .sf-shell-v3 .sf-main .sf-map-hero {
   border-color: var(--border) !important;
   background:
-    radial-gradient(ellipse at 92% 0%, rgba(214, 188, 131, .09), transparent 34%),
+    radial-gradient(ellipse at 92% 0%, rgba(197, 178, 222, .09), transparent 34%),
     radial-gradient(ellipse at 6% 100%, rgba(76, 58, 79, .14), transparent 42%),
-    linear-gradient(125deg, #242120 0%, #1B1918 65%, #171514 100%) !important;
+    linear-gradient(125deg, #24222B 0%, #1B1922 65%, #17151D 100%) !important;
 }
 html body .sf-shell-v3 .sf-main .sf-task-overview {
   border-color: var(--border) !important;
   background:
-    radial-gradient(ellipse at 94% 0%, rgba(214, 188, 131, .10), transparent 36%),
+    radial-gradient(ellipse at 94% 0%, rgba(197, 178, 222, .10), transparent 36%),
     radial-gradient(ellipse at 4% 100%, rgba(76, 58, 79, .13), transparent 42%),
-    linear-gradient(120deg, #242120 0%, #211D1C 62%, #191716 100%) !important;
+    linear-gradient(120deg, #24222B 0%, #211D1C 62%, #191716 100%) !important;
 }
 html body .sf-shell-v3 .sf-main .sf-home-exam-complete {
   gap: 7px !important;
