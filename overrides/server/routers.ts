@@ -69,6 +69,9 @@ import {
   listTasks,
   saveStudentProfile,
   saveAiPlan,
+  listAssistantConversations,
+  saveAssistantConversation,
+  deleteAssistantConversation,
   saveSIEOnboarding,
   updateStudentProfileSelection,
   updateStudentLearningBaseline,
@@ -3769,6 +3772,22 @@ export const appRouter = router({
       teacherVideoAnalysis: isTeacherVideoAnalysisConfigured(),
       proactiveInbox: true,
     })),
+    threads: router({
+      list: protectedProcedure.query(({ ctx }) => listAssistantConversations(ctx.user.id)),
+      save: protectedProcedure
+        .input(z.object({
+          clientId: z.string().trim().min(1).max(80),
+          title: z.string().trim().min(1).max(80),
+          messages: z.array(z.object({
+            role: z.enum(["user", "assistant"]),
+            content: z.string().trim().min(1).max(6_000),
+          })).max(40),
+        }))
+        .mutation(({ ctx, input }) => saveAssistantConversation(ctx.user.id, input)),
+      delete: protectedProcedure
+        .input(z.object({ clientId: z.string().trim().min(1).max(80) }))
+        .mutation(({ ctx, input }) => deleteAssistantConversation(ctx.user.id, input.clientId)),
+    }),
     chat: protectedProcedure
       .input(assistantChatInputSchema)
       .mutation(({ ctx, input }) => runAssistantChat(ctx.user.id, input)),
