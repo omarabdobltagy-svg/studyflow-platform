@@ -239,6 +239,15 @@ async function fetchOfficialPage(
         status: { sourceId: source.sourceId, sourceLabel: source.label, status: "http_error", updateCount: 0, httpStatus: response.status },
       };
     }
+    const configuredHost = new URL(source.url).hostname;
+    const finalResponseUrl = new URL(response.url || source.url);
+    // Never accept a redirect to a non-official host, even from an official start URL.
+    if (finalResponseUrl.protocol !== "https:" || finalResponseUrl.hostname !== configuredHost) {
+      return {
+        updates: [],
+        status: { sourceId: source.sourceId, sourceLabel: source.label, status: "unavailable", updateCount: 0, httpStatus: response.status },
+      };
+    }
     const html = (await response.text()).slice(0, 1_200_000);
     const updates = parseOfficialEducationPage(html, source, scope, now);
     return {
