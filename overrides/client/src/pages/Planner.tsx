@@ -831,6 +831,13 @@ export default function Planner() {
             </div>
             <h1>أولوياتك مرتبة، وخطوتك التالية واضحة.</h1>
             <p>الخطة تجمع المتراكم والدروس الجديدة والاختبارات ومواعيد المدرسين، ثم تعرض ترتيب التنفيذ وسبب أولوية كل خطوة.</p>
+            <a
+              href="/reviews"
+              data-testid="planner-youtube-reviews-link"
+              className="inline-flex min-h-10 w-fit items-center gap-2 rounded-xl border border-primary/30 bg-primary/10 px-3.5 py-2 text-xs font-bold text-primary transition-colors hover:border-primary/55 hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            >
+              اكتشف مراجعات مدرسك المطابقة للمنهج <ArrowUpRight className="size-3.5" />
+            </a>
             <div className="sf-sp-context">
               {profile.data?.track && <span>{profile.data.track}</span>}
               <span>{(profile.data?.subjectIds?.length ?? 0).toLocaleString("ar-EG")} مواد دراسية</span>
