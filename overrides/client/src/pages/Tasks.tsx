@@ -113,10 +113,13 @@ function taskArabicPresentation(task: { title: string; category: string; notes: 
   }
   const match = matchSIECheckpointTask(subjectIds, [task.title, parsedNotes.description].join(" "));
   if (match) {
-    const subject = getSIESubject(match.subjectId)?.nameAr ?? "مادة دراسية";
+    const isEnglishSubject = match.subjectId.startsWith("ENG");
+    const subject = isEnglishSubject ? "English" : getSIESubject(match.subjectId)?.nameAr ?? "مادة دراسية";
+    const branchTitle = displayBranchTitle(match.branchTitle);
+    const lessonTitle = isEnglishSubject ? match.title : displayCurriculumTitle(match.title);
     return {
-      title: subject + " · " + displayBranchTitle(match.branchTitle) + " · " + displayCurriculumTitle(match.title),
-      category: subject + " · " + displayBranchTitle(match.branchTitle),
+      title: [subject, branchTitle, lessonTitle].filter(Boolean).join(" · "),
+      category: [subject, branchTitle].filter(Boolean).join(" · "),
       notes: hasEnglishWords(parsedNotes.description) ? "التفاصيل محفوظة في التكليف الأصلي. راجع المصدر المرتبط قبل التنفيذ." : parsedNotes.description,
       compositeTask: null,
     };
