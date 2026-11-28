@@ -8,8 +8,6 @@ import {
   aiPlans,
   assistantConversations,
   assistantMessages,
-  assistantConversations,
-  assistantMessages,
   bookChapters,
   books,
   calendarEvents,
