@@ -624,22 +624,114 @@ async function streamWithProvider(
   };
 }
 
-/** Stream text deltas from the configured primary OpenAI-compatible provider. */
+const geminiProvider: ProviderRequestConfig = {
+  apiBaseUrl: ENV.geminiApiBaseUrl,
+  fallbackBaseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+  apiKey: ENV.geminiApiKey,
+  apiKeyVariable: "GEMINI_API_KEY",
+  defaultModel: ENV.geminiModel,
+  errorPrefix: "Gemini invoke failed",
+  // This endpoint's OpenAI compatibility layer does not implement every
+  // structured response mode, so the application performs schema validation.
+  omitResponseFormat: true,
+};
+
+const openRouterProvider: ProviderRequestConfig = {
+  apiBaseUrl: ENV.openrouterApiBaseUrl,
+  fallbackBaseUrl: "https://openrouter.ai/api/v1",
+  apiKey: ENV.openrouterApiKey,
+  apiKeyVariable: "OPENROUTER_API_KEY (or AI_API_KEY)",
+  defaultModel: ENV.openrouterModel,
+  errorPrefix: "OpenRouter invoke failed",
+};
+
+function hasUsableAssistantOutput(result: InvokeResult): boolean {
+  const choice = result.choices?.[0];
+  if (!choice) return false;
+  if (choice.message.tool_calls?.length) return true;
+  return extractTextContent(choice.message.content ?? "").trim().length > 0
+    && choice.finish_reason !== "length";
+}
+
+function shouldFailOverFromGemini(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /GEMINI_API_KEY is not configured/i.test(message)
+    || /Gemini invoke failed:\s*(?:400|401|402|403|404|408|409|425|429|5\d\d)\b/i.test(message)
+    || /fetch failed|network error|timed out|socket|ECONNRESET|ENOTFOUND/i.test(message)
+    || /unsupported|not supported|response_format|json_schema|invalid argument/i.test(message);
+}
+
+/** Explicit OpenRouter route for the free-model fallback and schema-validation retry. */
+export async function invokeOpenRouterLLM(params: InvokeParams): Promise<InvokeResult> {
+  return invokeWithProvider({ ...params, model: ENV.openrouterModel }, openRouterProvider);
+}
+
+/** Gemini is the primary assistant/planner provider; OpenRouter free router is the failover. */
+export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
+  if (!ENV.geminiApiKey) {
+    console.warn("[StudyFlow AI] GEMINI_API_KEY is unavailable; using OpenRouter free-model fallback.");
+    return invokeOpenRouterLLM(params);
+  }
+  try {
+    const result = await invokeWithProvider(
+      { ...params, model: ENV.geminiModel },
+      geminiProvider,
+    );
+    if (!hasUsableAssistantOutput(result)) throw new Error("Gemini invoke failed: empty or truncated assistant content");
+    return result;
+  } catch (error) {
+    if (!shouldFailOverFromGemini(error)) throw error;
+    console.warn("[StudyFlow AI] Gemini request was unavailable or unusable; switching to OpenRouter free-model router.", {
+      reason: error instanceof Error ? error.message.slice(0, 180) : "provider_unavailable",
+    });
+    return invokeOpenRouterLLM(params);
+  }
+}
+
+/** Stream Gemini first; switch before output only, never append two partial answers. */
 export async function invokeLLMStream(
   params: InvokeParams,
   onToken: (token: string) => void,
 ): Promise<InvokeResult> {
-  return streamWithProvider(params, {
-    apiBaseUrl: ENV.aiApiBaseUrl,
-    fallbackBaseUrl: "https://openrouter.ai/api/v1",
-    apiKey: ENV.aiApiKey,
-    apiKeyVariable: "AI_API_KEY",
-    defaultModel: ENV.aiModel,
-    errorPrefix: "LLM streaming invoke failed",
-  }, onToken);
+  if (!ENV.geminiApiKey) {
+    console.warn("[StudyFlow AI] GEMINI_API_KEY is unavailable for streaming; using OpenRouter.");
+    return streamWithProvider({ ...params, model: ENV.openrouterModel }, openRouterProvider, onToken);
+  }
+  let emitted = false;
+  const deliver = (token: string) => {
+    if (token) emitted = true;
+    onToken(token);
+  };
+  try {
+    const result = await streamWithProvider({ ...params, model: ENV.geminiModel }, geminiProvider, deliver);
+    if (!hasUsableAssistantOutput(result)) throw new Error("Gemini streaming response was empty or truncated");
+    return result;
+  } catch (error) {
+    if (emitted || !shouldFailOverFromGemini(error)) throw error;
+    console.warn("[StudyFlow AI] Gemini streaming was unavailable before output; switching to OpenRouter.");
+    return streamWithProvider({ ...params, model: ENV.openrouterModel }, openRouterProvider, onToken);
+  }
 }
 
-/** Stream from NVIDIA NIM; 202/poll responses are delivered as a single final chunk. */
+/** Legacy NVIDIA exports retained for compatibility; production routes below no longer use them. */
+export async function invokeNvidiaLLM(params: InvokeParams): Promise<InvokeResult> {
+  return invokeWithProvider(params, {
+    apiBaseUrl: ENV.nvidiaApiBaseUrl,
+    fallbackBaseUrl: "https://integrate.api.nvidia.com/v1",
+    apiKey: ENV.nvidiaApiKey,
+    apiKeyVariable: "NVIDIA_API_KEY",
+    defaultModel: ENV.nvidiaModel,
+    errorPrefix: "NVIDIA LLM invoke failed",
+    pollPending: true,
+    additionalBody: {
+      reasoning_effort: "none",
+      chat_template_kwargs: { force_nonempty_content: true },
+      temperature: 0.2,
+      stream: false,
+    },
+  });
+}
+
 export async function invokeNvidiaLLMStream(
   params: InvokeParams,
   onToken: (token: string) => void,
@@ -660,39 +752,6 @@ export async function invokeNvidiaLLMStream(
   }, onToken);
 }
 
-export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
-  return invokeWithProvider(params, {
-    apiBaseUrl: ENV.aiApiBaseUrl,
-    fallbackBaseUrl: "https://openrouter.ai/api/v1",
-    apiKey: ENV.aiApiKey,
-    apiKeyVariable: "AI_API_KEY",
-    defaultModel: ENV.aiModel,
-    errorPrefix: "LLM invoke failed",
-  });
-}
-
-/** Dedicated NVIDIA NIM client with credentials isolated from the primary provider. */
-export async function invokeNvidiaLLM(params: InvokeParams): Promise<InvokeResult> {
-  return invokeWithProvider(params, {
-    apiBaseUrl: ENV.nvidiaApiBaseUrl,
-    fallbackBaseUrl: "https://integrate.api.nvidia.com/v1",
-    apiKey: ENV.nvidiaApiKey,
-    apiKeyVariable: "NVIDIA_API_KEY",
-    defaultModel: ENV.nvidiaModel,
-    errorPrefix: "NVIDIA LLM invoke failed",
-    pollPending: true,
-    // Disable hidden reasoning for this constrained JSON task so generation
-    // budget is spent on the actual plan content, not an internal reasoning trace.
-    // force_nonempty_content must be nested in chat_template_kwargs.
-    additionalBody: {
-      reasoning_effort: "none",
-      chat_template_kwargs: { force_nonempty_content: true },
-      temperature: 0.2,
-      stream: false,
-    },
-  });
-}
-
 export type ModelInfo = {
   id: string;
   object: string;
@@ -706,27 +765,17 @@ export type ModelsResponse = {
 };
 
 export async function listLLMModels(): Promise<ModelsResponse> {
-  assertApiKey(ENV.aiApiKey, "AI_API_KEY");
-
-  // Model discovery must use the same OpenAI-compatible provider and API key
-  // as chat completions; the old Forge endpoint belongs to the retired auth stack.
-  const configuredBase = ENV.aiApiBaseUrl.trim() || "https://openrouter.ai/api/v1";
-  const modelsBase = configuredBase
-    .replace(/\/+$/, "")
-    .replace(/\/chat\/completions$/i, "")
-    .replace(/\/models$/i, "");
-  const url = `${modelsBase}/models`;
-
-  const response = await fetchWithBackoff(url, {
-    headers: { authorization: `Bearer ${ENV.aiApiKey}` },
+  assertApiKey(ENV.openrouterApiKey, "OPENROUTER_API_KEY (or AI_API_KEY)");
+  const modelsBase = (ENV.openrouterApiBaseUrl.trim() || "https://openrouter.ai/api/v1")
+    .replace(/\\/+$/, "")
+    .replace(/\\/chat\\/completions$/i, "")
+    .replace(/\\/models$/i, "");
+  const response = await fetchWithBackoff(`${modelsBase}/models`, {
+    headers: { authorization: "Bearer " + ENV.openrouterApiKey },
   });
-
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(
-      `List LLM models failed: ${response.status} ${response.statusText} – ${errorText}`
-    );
+    throw new Error("List OpenRouter models failed: " + response.status + " " + response.statusText + " – " + errorText);
   }
-
-  return (await response.json()) as ModelsResponse;
+  return await response.json() as ModelsResponse;
 }

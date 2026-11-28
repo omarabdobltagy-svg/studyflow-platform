@@ -2,13 +2,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   invokeLLM: vi.fn(),
-  invokeNvidiaLLM: vi.fn(),
+  invokeOpenRouterLLM: vi.fn(),
   saveAiPlan: vi.fn(),
 }));
 
 vi.mock("./_core/llm", () => ({
   invokeLLM: mocks.invokeLLM,
-  invokeNvidiaLLM: mocks.invokeNvidiaLLM,
+  invokeOpenRouterLLM: mocks.invokeOpenRouterLLM,
 }));
 
 vi.mock("./db", () => ({
@@ -320,12 +320,12 @@ describe("planner completed-curriculum guard", () => {
   });
 });
 
-describe("smart planner NVIDIA fallback", () => {
-  it("switches to NVIDIA when the primary provider reports exhausted credits", async () => {
+describe("smart planner OpenRouter free-model fallback", () => {
+  it("switches to OpenRouter when the primary provider reports exhausted credits", async () => {
     mocks.invokeLLM.mockRejectedValue(new Error(
       'LLM invoke failed: 402 Payment Required – {"error":{"message":"Insufficient credits"}}'
     ));
-    mocks.invokeNvidiaLLM.mockResolvedValue(validResponse);
+    mocks.invokeOpenRouterLLM.mockResolvedValue(validResponse);
 
     const result = await generatePersonalPlan(
       7,
@@ -335,15 +335,15 @@ describe("smart planner NVIDIA fallback", () => {
     );
 
     expect(mocks.invokeLLM).toHaveBeenCalledOnce();
-    expect(mocks.invokeNvidiaLLM).toHaveBeenCalledOnce();
-    const nvidiaRequest = mocks.invokeNvidiaLLM.mock.calls[0][0];
+    expect(mocks.invokeOpenRouterLLM).toHaveBeenCalledOnce();
+    const nvidiaRequest = mocks.invokeOpenRouterLLM.mock.calls[0][0];
     expect(nvidiaRequest.maxTokens).toBe(6_144);
     expect(nvidiaRequest.response_format).toEqual({ type: "json_object" });
     expect(result.title).toBe(validPlan.title);
     expect(mocks.saveAiPlan).toHaveBeenCalledOnce();
   });
 
-  it("switches to NVIDIA when the primary returns HTTP 200 but exhausts its output budget", async () => {
+  it("switches to OpenRouter when the primary returns HTTP 200 but exhausts its output budget", async () => {
     mocks.invokeLLM.mockResolvedValue({
       model: "deepseek/deepseek-v4.1-flash-1017",
       choices: [{
@@ -353,7 +353,7 @@ describe("smart planner NVIDIA fallback", () => {
       }],
       usage: { prompt_tokens: 2_100, completion_tokens: 1_400, total_tokens: 3_500 },
     });
-    mocks.invokeNvidiaLLM.mockResolvedValue(validResponse);
+    mocks.invokeOpenRouterLLM.mockResolvedValue(validResponse);
 
     await expect(generatePersonalPlan(
       7,
@@ -363,11 +363,11 @@ describe("smart planner NVIDIA fallback", () => {
     )).resolves.toMatchObject({ title: validPlan.title });
 
     expect(mocks.invokeLLM).toHaveBeenCalledOnce();
-    expect(mocks.invokeNvidiaLLM).toHaveBeenCalledOnce();
+    expect(mocks.invokeOpenRouterLLM).toHaveBeenCalledOnce();
     expect(mocks.saveAiPlan).toHaveBeenCalledOnce();
   });
 
-  it("switches to NVIDIA when primary HTTP 200 content is invalid JSON", async () => {
+  it("switches to OpenRouter when primary HTTP 200 content is invalid JSON", async () => {
     mocks.invokeLLM.mockResolvedValue({
       model: "deepseek/test-model",
       choices: [{
@@ -377,7 +377,7 @@ describe("smart planner NVIDIA fallback", () => {
       }],
       usage: { prompt_tokens: 500, completion_tokens: 1_400, total_tokens: 1_900 },
     });
-    mocks.invokeNvidiaLLM.mockResolvedValue(validResponse);
+    mocks.invokeOpenRouterLLM.mockResolvedValue(validResponse);
 
     await expect(generatePersonalPlan(
       7,
@@ -385,7 +385,7 @@ describe("smart planner NVIDIA fallback", () => {
       false
     )).resolves.toMatchObject({ title: validPlan.title });
 
-    expect(mocks.invokeNvidiaLLM).toHaveBeenCalledOnce();
+    expect(mocks.invokeOpenRouterLLM).toHaveBeenCalledOnce();
     expect(mocks.saveAiPlan).toHaveBeenCalledOnce();
   });
 
@@ -398,16 +398,16 @@ describe("smart planner NVIDIA fallback", () => {
       false
     )).resolves.toMatchObject({ title: validPlan.title });
 
-    expect(mocks.invokeNvidiaLLM).not.toHaveBeenCalled();
+    expect(mocks.invokeOpenRouterLLM).not.toHaveBeenCalled();
     expect(mocks.saveAiPlan).toHaveBeenCalledOnce();
   });
 
-  it("does not save a plan when NVIDIA returns empty content", async () => {
+  it("does not save a plan when OpenRouter returns empty content", async () => {
     mocks.invokeLLM.mockResolvedValue({
       model: "deepseek/test-model",
       choices: [{ index: 0, message: { role: "assistant", content: "" }, finish_reason: "length" }],
     });
-    mocks.invokeNvidiaLLM.mockResolvedValue({
+    mocks.invokeOpenRouterLLM.mockResolvedValue({
       model: "nvidia/nemotron-3-ultra-550b-a55b",
       choices: [{ index: 0, message: { role: "assistant", content: "" }, finish_reason: "length" }],
     });
@@ -418,15 +418,15 @@ describe("smart planner NVIDIA fallback", () => {
       false
     )).rejects.toThrow("لم يصل محتوى نهائي من المزوّد");
 
-    expect(mocks.invokeNvidiaLLM).toHaveBeenCalledOnce();
+    expect(mocks.invokeOpenRouterLLM).toHaveBeenCalledOnce();
     expect(mocks.saveAiPlan).not.toHaveBeenCalled();
   });
 
-  it("switches to NVIDIA for an explicit insufficient-quota 429 response", async () => {
+  it("switches to OpenRouter for an explicit insufficient-quota 429 response", async () => {
     mocks.invokeLLM.mockRejectedValue(new Error(
       'LLM invoke failed: 429 Too Many Requests – {"error":{"code":"insufficient_quota"}}'
     ));
-    mocks.invokeNvidiaLLM.mockResolvedValue(validResponse);
+    mocks.invokeOpenRouterLLM.mockResolvedValue(validResponse);
 
     await expect(generatePersonalPlan(
       7,
@@ -434,13 +434,13 @@ describe("smart planner NVIDIA fallback", () => {
       false
     )).resolves.toMatchObject({ title: validPlan.title });
 
-    expect(mocks.invokeNvidiaLLM).toHaveBeenCalledOnce();
+    expect(mocks.invokeOpenRouterLLM).toHaveBeenCalledOnce();
     expect(mocks.saveAiPlan).toHaveBeenCalledOnce();
   });
 
-  it("uses NVIDIA when the primary key is not configured", async () => {
+  it("uses OpenRouter when the primary key is not configured", async () => {
     mocks.invokeLLM.mockRejectedValue(new Error("AI_API_KEY is not configured"));
-    mocks.invokeNvidiaLLM.mockResolvedValue(validResponse);
+    mocks.invokeOpenRouterLLM.mockResolvedValue(validResponse);
 
     await expect(generatePersonalPlan(
       7,
@@ -448,11 +448,11 @@ describe("smart planner NVIDIA fallback", () => {
       false
     )).resolves.toMatchObject({ title: validPlan.title });
 
-    expect(mocks.invokeNvidiaLLM).toHaveBeenCalledOnce();
+    expect(mocks.invokeOpenRouterLLM).toHaveBeenCalledOnce();
     expect(mocks.saveAiPlan).toHaveBeenCalledOnce();
   });
 
-  it("does not use NVIDIA for an unrelated primary-provider server error", async () => {
+  it("does not use OpenRouter for an unrelated primary-provider server error", async () => {
     mocks.invokeLLM.mockRejectedValue(new Error("LLM invoke failed: 500 Internal Server Error"));
 
     await expect(generatePersonalPlan(
@@ -461,7 +461,7 @@ describe("smart planner NVIDIA fallback", () => {
       false
     )).rejects.toThrow("خدمة المزوّد الأساسي تواجه عطلًا مؤقتًا");
 
-    expect(mocks.invokeNvidiaLLM).not.toHaveBeenCalled();
+    expect(mocks.invokeOpenRouterLLM).not.toHaveBeenCalled();
     expect(mocks.saveAiPlan).not.toHaveBeenCalled();
   });
 });

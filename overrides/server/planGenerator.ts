@@ -4,8 +4,7 @@ import { calculateLearningGap } from "@shared/sie-learning-progress";
 import { getDateKeyInTimeZone } from "@shared/date-time";
 import { getCairoSecondYearBaccalaureateExams } from "@shared/cairo-baccalaureate-exam-calendar";
 import { getMonthlyExamScopeRecord } from "@shared/monthly-exam-scope";
-import { invokeLLM, invokeNvidiaLLM } from "./_core/llm";
-import { isPrimaryProviderFallbackEligible } from "./_core/llmFallback";
+import { invokeLLM, invokeOpenRouterLLM } from "./_core/llm";
 import { updateAIActivity } from "./aiActivity";
 import {
   evaluatePlanQuality,
@@ -2328,19 +2327,14 @@ export async function generatePersonalPlan(
     ],
   });
 
-  const invokeNvidiaFallback = async () => {
-    console.info("[StudyFlow planner] Primary provider response was unusable; switching to the validated NVIDIA fallback.");
-    return invokeCompact(invokeNvidiaLLM, 6_144, false, true);
-  };
-
-  const isUnsupportedJsonMode = (error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error);
-    return /response_format|json_object|structured output|unsupported|not support/i.test(message);
+  const invokeOpenRouterFallback = async () => {
+    console.info("[StudyFlow planner] Gemini output was unusable; retrying with OpenRouter free-model router.");
+    return invokeCompact(invokeOpenRouterLLM, 6_144, false, true);
   };
 
   const parseProviderResponse = (
     providerResponse: Awaited<ReturnType<typeof invokeLLM>>,
-    providerLabel: "primary" | "NVIDIA"
+    providerLabel: "Gemini / automatic fallback" | "OpenRouter"
   ): GeneratedPlan => {
     const firstChoice = providerResponse.choices?.[0];
     const text = contentAsText(firstChoice?.message?.content ?? "");
@@ -2351,12 +2345,10 @@ export async function generatePersonalPlan(
       completionTokens: providerResponse.usage?.completion_tokens ?? null,
       contentLength: text.length,
     };
-
     if (!text.trim()) {
       console.error("[StudyFlow planner] Provider returned no final content:", diagnostics);
       throw new Error("لم يصل محتوى نهائي من المزوّد (" + (diagnostics.finishReason || "unknown finish reason") + ").");
     }
-
     try {
       return parseGeneratedPlan(text);
     } catch (error) {
@@ -2365,60 +2357,35 @@ export async function generatePersonalPlan(
     }
   };
 
-  let providerUsed: "primary" | "NVIDIA" = "primary";
+  let providerUsed: "Gemini / automatic fallback" | "OpenRouter" = "Gemini / automatic fallback";
   try {
-    try {
-      response = await invokeCompact(invokeLLM, 4_096, false, true);
-    } catch (primaryError) {
-      if (isPrimaryProviderFallbackEligible(primaryError)) {
-        response = await invokeNvidiaFallback();
-        providerUsed = "NVIDIA";
-      } else if (isUnsupportedJsonMode(primaryError)) {
-        try {
-          response = await invokeCompact(invokeLLM, 4_096, false, false);
-        } catch (retryError) {
-          if (isPrimaryProviderFallbackEligible(retryError)) {
-            response = await invokeNvidiaFallback();
-            providerUsed = "NVIDIA";
-          } else {
-            throw retryError;
-          }
-        }
-      } else {
-        throw primaryError;
-      }
-    }
-  } catch (error) {
-    console.error("[StudyFlow planner] Provider request failed:", error instanceof Error ? error.message.slice(0, 700) : "Unknown provider error");
-    throw plannerProviderError(error);
+    // Gemini is the first attempt. OpenRouter is called inside invokeLLM only
+    // when Gemini is unavailable; omit structured output mode for compatibility.
+    response = await invokeCompact(invokeLLM, 4_096, false, false);
+  } catch (primaryError) {
+    console.error("[StudyFlow planner] Gemini/OpenRouter request failed:", primaryError instanceof Error ? primaryError.message.slice(0, 700) : "Unknown provider error");
+    throw plannerProviderError(primaryError);
   }
 
   let plan: GeneratedPlan | undefined;
-  if (providerUsed === "primary") {
+  try {
+    plan = parseProviderResponse(response, providerUsed);
+  } catch (primaryOutputError) {
+    console.warn("[StudyFlow planner] Gemini-first output failed plan validation; trying OpenRouter free-model router.", {
+      model: response.model || null,
+      finishReason: response.choices?.[0]?.finish_reason ?? null,
+      reason: primaryOutputError instanceof Error ? primaryOutputError.message.slice(0, 180) : "invalid primary output",
+    });
     try {
-      plan = parseProviderResponse(response, "primary");
-    } catch (primaryOutputError) {
-      // HTTP 200 is not sufficient: some reasoning models consume the whole
-      // token budget and finish with length but provide no final content.
-      console.warn("[StudyFlow planner] Primary provider response is unusable; invoking NVIDIA fallback.", {
-        model: response.model || null,
-        finishReason: response.choices?.[0]?.finish_reason ?? null,
-        completionTokens: response.usage?.completion_tokens ?? null,
-        reason: primaryOutputError instanceof Error ? primaryOutputError.message.slice(0, 180) : "invalid primary output",
-      });
-      try {
-        response = await invokeNvidiaFallback();
-        providerUsed = "NVIDIA";
-      } catch (fallbackError) {
-        console.error("[StudyFlow planner] NVIDIA fallback request failed:", fallbackError instanceof Error ? fallbackError.message.slice(0, 700) : "Unknown NVIDIA error");
-        throw plannerProviderError(fallbackError);
-      }
+      response = await invokeOpenRouterFallback();
+      providerUsed = "OpenRouter";
+      plan = parseProviderResponse(response, providerUsed);
+    } catch (fallbackError) {
+      console.error("[StudyFlow planner] OpenRouter fallback failed:", fallbackError instanceof Error ? fallbackError.message.slice(0, 700) : "Unknown OpenRouter error");
+      throw plannerProviderError(fallbackError);
     }
   }
 
-  if (providerUsed === "NVIDIA") {
-    plan = parseProviderResponse(response, "NVIDIA");
-  }
   updatePlanGenerationProgress(userId, "validation", undefined, undefined, constraints.activityId);
   if (!plan) {
     throw new Error("تعذّر إنشاء خطة دراسية صالحة. لم يتم حفظ أي بيانات ناقصة.");
