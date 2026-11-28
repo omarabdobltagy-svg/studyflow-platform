@@ -10,7 +10,7 @@ import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
 import { getNextOpenPlanStep } from "@/lib/plan-actions";
 import { getPlannerStepCurriculum } from "@/lib/planner-curriculum";
-import { getPlannerTeacherSessions } from "@/lib/teacher-sessions";
+import { getPlannerTeacherSessions, getTeacherSessionConflictKeys } from "@/lib/teacher-sessions";
 import { displayCurriculumTitle } from "@/lib/curriculum-display";
 import { CAIRO_BAC_EXAM_CALENDAR_NOTICE, getUpcomingCairoSecondYearBaccalaureateExams } from "@shared/cairo-baccalaureate-exam-calendar";
 import { getSIEStudentVisibleBranches, getSIECheckpointProgressBranches, getSIESubject, matchSIECheckpointTask, normalizeSIECheckpointFrontier } from "@shared/sie-catalog";
@@ -357,14 +357,10 @@ export default function Home() {
       : [],
     [profile.data, serverNow],
   );
-  const teacherSessionConflicts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const session of upcomingTeacherSessions) {
-      const key = session.sortDate + "::" + session.time;
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
-    return new Set([...counts.entries()].filter(([, count]) => count > 1).map(([key]) => key));
-  }, [upcomingTeacherSessions]);
+  const teacherSessionConflicts = useMemo(
+    () => getTeacherSessionConflictKeys(upcomingTeacherSessions),
+    [upcomingTeacherSessions],
+  );
   const homeStudySteps = plan?.steps ?? [];
   const homeDoneSteps = homeStudySteps.filter((step: any) =>
     step.plannerTaskStatus === "done" || step.existingTask?.status === "done"
