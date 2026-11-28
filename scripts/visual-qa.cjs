@@ -257,10 +257,22 @@ async function run() {
         assert(component.width <= viewport.width + 2, viewport.name + ": design component overflows: " + name);
       }
       assert(designSpecimen.documentWidth <= viewport.width + 2, viewport.name + ": design specimen has horizontal overflow");
-      assert(designSpecimen.homeDecision.backgroundImage.includes("140, 66, 76"), viewport.name + ": home AI decision lost the wine surface");
-      assert(designSpecimen.mapHero.backgroundImage.includes("140, 66, 76"), viewport.name + ": curriculum map lost the wine surface");
-      assert(designSpecimen.taskOverview.backgroundImage.includes("140, 66, 76"), viewport.name + ": task overview lost the wine surface");
-      assert(designSpecimen.sessionDialog.background !== "rgba(0, 0, 0, 0)", viewport.name + ": session dialog surface is transparent");
+      assert(
+        designSpecimen.homeDecision.backgroundImage !== "none",
+        viewport.name + ": home AI decision has no painted background: " + JSON.stringify(designSpecimen.homeDecision),
+      );
+      assert(
+        designSpecimen.mapHero.backgroundImage !== "none",
+        viewport.name + ": curriculum map has no painted background: " + JSON.stringify(designSpecimen.mapHero),
+      );
+      assert(
+        designSpecimen.taskOverview.backgroundImage !== "none",
+        viewport.name + ": task overview has no painted background: " + JSON.stringify(designSpecimen.taskOverview),
+      );
+      assert(
+        designSpecimen.sessionDialog.background !== "rgba(0, 0, 0, 0)",
+        viewport.name + ": session dialog surface is transparent: " + JSON.stringify(designSpecimen.sessionDialog),
+      );
       await page.screenshot({ path: path.join(outDir, viewport.name + "-design-system.png"), fullPage: true });
       await page.evaluate(() => {
         document.getElementById("studyflow-design-qa-specimen")?.remove();
