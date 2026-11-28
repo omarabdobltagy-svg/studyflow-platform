@@ -139,9 +139,9 @@ export default function TeacherClassFollowup() {
                   <Sparkles className="size-5" />
                 </div>
                 <p className="text-[10px] font-semibold tracking-[.16em] text-primary">متابعة بعد المحاضرة</p>
-                <SheetTitle className="text-xl font-bold">المستر شرح لك إيه النهارده؟</SheetTitle>
+                <SheetTitle className="text-xl font-bold">إيه اللي شرحه المدرس في الحصة؟</SheetTitle>
                 <SheetDescription className="text-sm leading-7 text-muted-foreground">
-                  مرّ ساعتان على موعد حصتك مع {active.teacherName} في مادة {active.subjectName}. سجّل الفروع التي تناولها الشرح حتى تتحدث خطة المذاكرة.
+                  انتهى موعد {active.teacherName} في {active.subjectName}. حدّد الفروع التي شرحها وآخر درس وصل إليه؛ هنحدّث مرجع المدرس ونرتّب الدروس القادمة على أساسه.
                 </SheetDescription>
               </SheetHeader>
               <div className="mt-4 grid gap-2 rounded-2xl border border-border/70 bg-background/70 p-3 text-xs">
@@ -152,8 +152,8 @@ export default function TeacherClassFollowup() {
 
             <div className="flex-1 space-y-4 p-5 sm:p-7">
               <div>
-                <h3 className="text-sm font-bold">اختار الفروع اللي اتشرحت</h3>
-                <p className="mt-1 text-xs leading-6 text-muted-foreground">علّم على كل فرع اتشرح فعلًا. بعد كده اختار آخر درس وصل له المدرس داخل الفرع لو تعرفه. لو مش متأكد من الدرس، سيب الاختيار فاضي.</p>
+                <h3 className="text-sm font-bold">حدّد فروع الحصة</h3>
+                <p className="mt-1 text-xs leading-6 text-muted-foreground">علّم على كل فرع اتشرح فعلًا، ثم اختار آخر درس وصل له المدرس. لو مش متأكد، سجّل الفرع فقط وسيب رقم الدرس فاضي.</p>
               </div>
 
               <div className="space-y-3">
@@ -192,14 +192,14 @@ export default function TeacherClassFollowup() {
               </div>
 
               <p className="rounded-xl border border-border/70 bg-muted/25 p-3 text-xs leading-6 text-muted-foreground">
-                التحديث ده بيسجل موضع شرح المدرس فقط. مش هنعتبر إنك أنهيت الدرس أو أتقنته تلقائيًا، ومش هنضيف واجب أو امتحان إلا لو كان مسجلًا فعلًا من المدرس.
+                ده يحدّث موضع المدرس فقط، ولا يسجّل الدرس كمكتمل عندك. تقدمك الشخصي بيتحدث لما تؤكد إنك ذاكرته بنفسك.
               </p>
             </div>
 
             <div className="sticky bottom-0 space-y-2 border-t border-border/70 bg-card p-5 sm:p-6">
               <Button type="button" className="h-11 w-full rounded-xl" disabled={Boolean(busyKey) || selectedBranches.length === 0} onClick={() => submit("covered")}>
                 {busyKey ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
-                سجّل الفروع والموضوعات
+                حدّث موضع المدرس
               </Button>
               <div className="grid grid-cols-2 gap-2">
                 <Button type="button" variant="outline" className="h-10 rounded-xl" disabled={Boolean(busyKey)} onClick={() => submit("no_new_topics")}>ما شرحش موضوعًا جديدًا</Button>

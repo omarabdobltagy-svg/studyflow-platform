@@ -396,29 +396,29 @@ export default function Home() {
 
   const welcomeGuide = [
     {
-      title: "خلّي StudyFlow يعرف نظامك الدراسي",
-      body: "من الملف الدراسي اختار الصف والمسار والمواد والمدرس لكل مادة، وسجّل مواعيد المحاضرات الأسبوعية أو حدّد إن المواعيد غير ثابتة. تقدر تعدّل البيانات دي في أي وقت.",
+      title: "سجّل بياناتك الدراسية",
+      body: "اختار الصف والمسار والمواد، ثم حدّد مدرس كل مادة ومواعيد حصصه. تقدر تعدّل البيانات دي لاحقًا.",
       action: "فتح الملف الدراسي",
       path: "/settings",
       icon: GraduationCap,
     },
     {
-      title: "سجّل آخر نقطة وصلت لها",
-      body: "في صفحة المذاكرة اختار المادة والوحدة، وبعدها حدّد آخر موضوع أنهيته وموضع المدرس. المنصة تحسب المتراكم داخل كل فرع وتبدأ من الموضوع التالي، وتقدر تفتح تفاصيل الدروس وقت ما تحتاج.",
+      title: "حدّد موضعك وموضع المدرس",
+      body: "اختار آخر درس ذاكرته، وسجّل آخر درس شرحه المدرس لو تعرفه. هنفصل بين تقدمك الشخصي وبين مرجع المدرس.",
       action: "فتح المذاكرة والتقدم",
       path: "/study",
       icon: BookOpenText,
     },
     {
-      title: "خلّي الخطة ترتّب القديم والجديد",
-      body: "الخطة الذكية توازن بين المهام المتراكمة والاستعداد للمحاضرة القادمة حسب جدول المدرس. تقدر تختار التركيز على المتراكم أو مواكبة المدرس، وتراجع التوزيع قبل اعتماد المهام.",
+      title: "راجع أولويات خطتك",
+      body: "الخطة ترتّب المتراكم والدروس الجديدة حسب الأولوية والاختبارات ومواعيد المدرسين. راجع التوزيع قبل اعتماده.",
       action: "فتح خطة المذاكرة",
       path: "/planner",
       icon: Sparkles,
     },
     {
-      title: "ابدأ من خطوة واحدة",
-      body: "لو فيه مهمة جاهزة ابدأ بها من مساحة اليوم. سجّل جلسة المذاكرة، وحدّث تقدم الدرس بعد ما تخلص. لو المدرس أعلن تغييرًا واضحًا في الموعد، المنصة تستخدم الإعلان في إعادة ترتيب الخطة.",
+      title: "ابدأ من خريطة اليوم",
+      body: "افتح أول خطوة مفتوحة، ذاكر من مصدرها، ثم سجّل تقدمك بعد ما تخلص. بعد الحصة هنطلب منك تأكيد ما شرحه المدرس عند الحاجة.",
       action: "ابدأ من مساحة اليوم",
       path: "/",
       icon: Play,
@@ -662,7 +662,7 @@ export default function Home() {
         <section className="sf-daily-plan-card sf-home-study-map">
           <header className="sf-home-study-map-header">
             <div className="sf-home-study-map-title">
-              <span>مساحة اليوم · مسار التنفيذ</span>
+              <span>أولوياتك اليوم</span>
               <h3>خريطة مذاكرة اليوم</h3>
               </div>
             <Button variant="outline" size="sm" className="sf-home-study-map-open" onClick={() => setLocation("/planner")}>
@@ -761,10 +761,10 @@ export default function Home() {
               <footer className="sf-home-study-map-footer">
                 <div>
                   <strong>{homeNextStep ? "الخطوة التالية: " + homeNextStep.title : "أنهيت كل خطوات الخطة الحالية"}</strong>
-                  <span>{homeNextStep ? "ابدأ بالخطوة المحددة، وسيظل باقي المسار مرتبًا أمامك." : "تقدر تراجع المسارات وتحدّث تقدمك من الخريطة الكاملة."}</span>
+                  <span>{homeNextStep ? "افتح الخطوة، نفّذها من مصدرها، وبعدها سجّل ما أنجزته." : "انتهت خطوات اليوم؛ افتح الخطة الكاملة لمراجعة الأيام القادمة."}</span>
                 </div>
                 <Button onClick={() => setLocation("/planner")} className="rounded-xl">
-                  افتح خريطة التنفيذ <ArrowLeft className="size-4" />
+                  كل خطوات الخطة <ArrowLeft className="size-4" />
                 </Button>
               </footer>
               {dailyPlan.data?.needsRefresh && (
@@ -815,9 +815,9 @@ export default function Home() {
           <section className="sf-home-exam-calendar" aria-labelledby="sf-home-exam-calendar-title">
             <header className="sf-home-exam-calendar-header">
               <div>
-                <span className="sf-sp-eyebrow">المتابعة الامتحانية · القاهرة</span>
-                <h3 id="sf-home-exam-calendar-title">اختبارات الشهر القادمة</h3>
-                <p>مواعيد مقترحة على مستوى مديرية القاهرة، وليست جدول مدرستك المؤكد.</p>
+                <span className="sf-sp-eyebrow">مواعيد الاختبارات</span>
+                <h3 id="sf-home-exam-calendar-title">اختباراتك القادمة</h3>
+                <p>المواعيد المنشورة للمواد الموجودة في ملفك. راجع إعلان المدرسة للتأكيد النهائي.</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="sf-home-exam-calendar-status">مواعيد مقترحة</span>

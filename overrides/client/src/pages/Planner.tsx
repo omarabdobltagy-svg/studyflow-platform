@@ -829,8 +829,8 @@ export default function Planner() {
                 {approved ? "خطة معتمدة" : plan ? "مسودة للمراجعة" : "لم تُنشأ خطة بعد"}
               </span>
             </div>
-            <h1>خطة واضحة. خطوة وراء خطوة.</h1>
-            <p>StudyFlow يربط المنهج وتقدمك الفعلي والمهام المسجلة وجدول المدرس، ثم يرتب لك الخطوة التالية. لا نعتبر الدرس مكتملًا لمجرد ظهوره في الخطة.</p>
+            <h1>أولوياتك مرتبة، وخطوتك التالية واضحة.</h1>
+            <p>الخطة تجمع المتراكم والدروس الجديدة والاختبارات ومواعيد المدرسين، ثم تعرض ترتيب التنفيذ وسبب أولوية كل خطوة.</p>
             <div className="sf-sp-context">
               {profile.data?.track && <span>{profile.data.track}</span>}
               <span>{(profile.data?.subjectIds?.length ?? 0).toLocaleString("ar-EG")} مواد دراسية</span>
@@ -1022,18 +1022,18 @@ export default function Planner() {
                 <div className="sf-sp-generation-context">
                   <span className="sf-plan-generation-inline-mark"><Loader2 className="size-4 animate-spin" /></span>
                   <div>
-                    <strong>StudyFlow يعيد ترتيب خريطتك تلقائيًا</strong>
-                    <p>اكتشفنا تحديثًا في بياناتك، وبدأ محرك التخطيط مزامنة التقدم والمهام ومواعيد المدرسين دون أي إجراء منك.</p>
+                    <strong>وصل تحديث يؤثر على أولويات مذاكرتك</strong>
+                    <p>نراجع موضع المدرس وتقدمك والاختبارات، ثم نعيد توزيع المهام قبل عرض الترتيب الجديد.</p>
                   </div>
                 </div>
                 {generationProgress.data?.status === "running" ? (
                   <PlanLoading progress={generationProgress.data} gradeLabel={SIE_CATALOG_META.gradeYear} />
                 ) : (
                   <div className="sf-auto-replan-stages" aria-label="مراحل إعادة الترتيب">
-                    <span className="is-done"><CheckCircle2 className="size-4" />رصد التغيير</span>
-                    <span className="is-active"><Loader2 className="size-4 animate-spin" />إرسال التحديث لمحرك التخطيط</span>
-                    <span>مطابقة المنهج والمهام</span>
-                    <span>تحديث الخريطة تلقائيًا</span>
+                    <span className="is-done"><CheckCircle2 className="size-4" />تأكيد مصدر التحديث</span>
+                    <span className="is-active"><Loader2 className="size-4 animate-spin" />مطابقة الدروس والمهام</span>
+                    <span>إعادة ترتيب الأولويات</span>
+                    <span>حفظ الخريطة الجديدة</span>
                   </div>
                 )}
               </section>
