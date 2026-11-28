@@ -367,6 +367,7 @@ export default function Home() {
   ).length;
   const homeStudyProgress = homeStudySteps.length ? Math.round(homeDoneSteps / homeStudySteps.length * 100) : 0;
   const homeNextStep = getNextOpenPlanStep(homeStudySteps as any[] | undefined);
+  const [examToComplete, setExamToComplete] = useState<{ subjectId: string; date: string; subjectName: string } | null>(null);
   const completedMonthlyExamKeys = useMemo(() => {
     const values = ((profile.data?.selection as Record<string, any> | undefined)?.monthlyExamCompletions ?? {}) as Record<string, unknown>;
     return Object.entries(values).filter(([, completedAt]) => Boolean(completedAt)).map(([key]) => key);
@@ -374,6 +375,7 @@ export default function Home() {
   const markMonthlyExamCompleted = trpc.studentProfile.markMonthlyExamCompleted.useMutation({
     onSuccess: async () => {
       await utils.studentProfile.get.invalidate();
+      setExamToComplete(null);
       toast.success("اتسجل انتهاء الامتحان، وشلنا بطاقته من الاختبارات القادمة.");
     },
     onError: error => toast.error(error.message || "تعذّر تسجيل انتهاء الامتحان."),
@@ -788,49 +790,6 @@ export default function Home() {
           )}
         </section>
 
-        {upcomingTeacherSessions.length > 0 && (
-          <section className="sf-home-teacher-timeline" aria-labelledby="sf-home-teacher-timeline-title">
-            <header>
-              <div>
-                <span>مزامنة الحصص</span>
-                <h3 id="sf-home-teacher-timeline-title">مواعيد المدرسين القادمة</h3>
-                <p>الأوقات محفوظة بتوقيت القاهرة. أي تعارض ظاهر يعني تساوي وقت بداية حصتين مسجلتين.</p>
-              </div>
-              <Badge variant="outline">{upcomingTeacherSessions.length.toLocaleString("ar-EG")} مواعيد</Badge>
-            </header>
-            <ol>
-              {upcomingTeacherSessions.map(session => {
-                const conflict = teacherSessionConflicts.has(session.sortDate + "::" + session.time);
-                return (
-                  <li key={session.key} className={conflict ? "is-conflict" : ""}>
-                    <span className="sf-home-teacher-time" dir="ltr">{formatTime12Hour(session.time)}</span>
-                    <span className="sf-home-teacher-line" aria-hidden="true"><i /></span>
-                    <span className="sf-home-teacher-copy">
-                      <strong>{session.subjectName}</strong>
-                      <small>{session.teacherName} · {session.dateLabel}</small>
-                      {conflict && <em>تعارض مؤكد في وقت البداية مع حصة أخرى</em>}
-                    </span>
-                  </li>
-                );
-              })}
-            </ol>
-          </section>
-        )}
-
-        {!serverNow && (
-          <section className="app-card flex flex-wrap items-center justify-between gap-3 p-4" role="status" aria-live="polite">
-            <p className="text-sm text-muted-foreground">
-              {serverClockStatus === "unavailable"
-                ? "تعذرت مزامنة التاريخ والوقت من الخادم؛ لم نستخدم ساعة جهازك."
-                : "جارٍ مزامنة التاريخ والوقت من خادم StudyFlow."}
-            </p>
-            {serverClockStatus === "unavailable" && (
-              <Button type="button" size="sm" variant="outline" onClick={() => void refreshServerClock()}>
-                إعادة المحاولة
-              </Button>
-            )}
-          </section>
-        )}
         {upcomingExams.length > 0 && (
           <ExamMissionScene
             exam={upcomingExams[0]}
@@ -879,7 +838,7 @@ export default function Home() {
                         variant="outline"
                         className="sf-home-exam-complete"
                         disabled={markMonthlyExamCompleted.isPending}
-                        onClick={() => markMonthlyExamCompleted.mutate({ subjectId: exam.subjectId, date: exam.date })}
+                        onClick={() => setExamToComplete({ subjectId: exam.subjectId, date: exam.date, subjectName: exam.subjectName })}
                       >
                         {markMonthlyExamCompleted.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <CheckCircle2 className="size-3.5" />}
                         خلصت الامتحان
@@ -887,22 +846,115 @@ export default function Home() {
                     )}
                     <div className="sf-home-exam-scope sf-home-exam-scope-evidence" data-testid={"home-exam-scope-" + exam.subjectId}>
                       <div className="sf-home-exam-scope-heading">
-                        <span>نطاق الامتحان</span>
-                        <b>لا يوجد توثيق كافٍ</b>
+                        <span>محتوى المراجعة</span>
+                        <b>تركيز مقترح · الوحدة الثانية</b>
                       </div>
-                      <p className="sf-home-exam-scope-empty">لم نعثر حتى الآن على تصريح رسمي أو إعلان واضح من المدرس يحدد الدروس الداخلة في هذا الامتحان. لن نعرض موضوعات تخمينية أو نعتمد على آخر درس شرحه المدرس باعتباره نطاقًا للامتحان.</p>
+                      <div className="sf-home-exam-unit-focus">
+                        <strong>{exam.unitFocus.unitTitle}</strong>
+                        {exam.unitFocus.lessons.length ? (
+                          <ol>
+                            {exam.unitFocus.lessons.map(lesson => (
+                              <li key={lesson.nodeId}>
+                                <span>{lesson.branchTitle}</span>
+                                <strong>{lesson.title}</strong>
+                                {lesson.lessonNumber && <small>{lesson.lessonNumber}</small>}
+                              </li>
+                            ))}
+                          </ol>
+                        ) : (
+                          <p className="sf-home-exam-scope-empty">
+                            المادة المختارة للاختبار هي {exam.subjectName}، لكن فهرس الوحدة الثانية غير متاح لهذه المادة داخل مكتبة المنهج الحالية. لم نضف دروسًا من مادة أو وحدة أخرى بدلًا منها.
+                          </p>
+                        )}
+                      </div>
+                      <p className="sf-home-exam-unit-note">هذا المحتوى مبني على توجيهك بأن أغلب الامتحان من الوحدة الثانية. هو تركيز مذاكرة مقترح، وليس إعلانًا رسميًا مؤكدًا من المدرسة.</p>
                     </div>
                   </article>
                 );
               })}
             </div>
             <footer className="sf-home-exam-calendar-footer">
-              <p>جدول مديرية القاهرة المقترح وليس تأكيدًا من مدرستك. نطاق الامتحان لن يظهر إلا عند توفر تصريح واضح من مصدر رسمي أو من المدرس مع رابط وتاريخ للمصدر.</p>
+              <p>المواعيد من جدول مديرية القاهرة المقترح، ومحتوى الوحدة الثانية هنا تركيز مراجعة بناءً على توجيهك، وليس تأكيدًا رسميًا من المدرسة.</p>
             </footer>
           </section>
         )}
+
+        {upcomingTeacherSessions.length > 0 && (
+          <section className="sf-home-teacher-timeline" aria-labelledby="sf-home-teacher-timeline-title">
+            <header>
+              <div>
+                <span>مزامنة الحصص</span>
+                <h3 id="sf-home-teacher-timeline-title">مواعيد المدرسين القادمة</h3>
+                <p>الأوقات محفوظة بتوقيت القاهرة. أي تعارض ظاهر يعني تساوي وقت بداية حصتين مسجلتين.</p>
+              </div>
+              <Badge variant="outline">{upcomingTeacherSessions.length.toLocaleString("ar-EG")} مواعيد</Badge>
+            </header>
+            <ol>
+              {upcomingTeacherSessions.map(session => {
+                const conflict = teacherSessionConflicts.has(session.sortDate + "::" + session.time);
+                return (
+                  <li key={session.key} className={conflict ? "is-conflict" : ""}>
+                    <span className="sf-home-teacher-time" dir="ltr">{formatTime12Hour(session.time)}</span>
+                    <span className="sf-home-teacher-line" aria-hidden="true"><i /></span>
+                    <span className="sf-home-teacher-copy">
+                      <strong>{session.subjectName}</strong>
+                      <small>{session.teacherName} · {session.dateLabel}</small>
+                      {conflict && <em>تعارض مؤكد في وقت البداية مع حصة أخرى</em>}
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+          </section>
+        )}
+
+        {!serverNow && (
+          <section className="app-card flex flex-wrap items-center justify-between gap-3 p-4" role="status" aria-live="polite">
+            <p className="text-sm text-muted-foreground">
+              {serverClockStatus === "unavailable"
+                ? "تعذرت مزامنة التاريخ والوقت من الخادم؛ لم نستخدم ساعة جهازك."
+                : "جارٍ مزامنة التاريخ والوقت من خادم StudyFlow."}
+            </p>
+            {serverClockStatus === "unavailable" && (
+              <Button type="button" size="sm" variant="outline" onClick={() => void refreshServerClock()}>
+                إعادة المحاولة
+              </Button>
+            )}
+          </section>
+        )}
+
 </div>
         <AnimatePresence>
+          {examToComplete && (
+            <motion.div
+              className="fixed inset-0 z-[95] flex items-center justify-center bg-black/75 p-4 backdrop-blur-md"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              role="dialog" aria-modal="true" aria-labelledby="exam-complete-title"
+              onClick={event => { if (event.target === event.currentTarget) setExamToComplete(null); }}
+            >
+              <motion.section
+                className="sf-exam-complete-confirm app-card w-full max-w-md p-6"
+                initial={{ opacity: 0, y: 16, scale: .97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 10, scale: .98 }}
+              >
+                <span className="sf-sp-eyebrow">تحديث سجل الامتحانات</span>
+                <h2 id="exam-complete-title">تأكيد انتهاء امتحان {examToComplete.subjectName}</h2>
+                <p>سيتم تسجيل أن الامتحان انتهى وإخفاؤه من قائمة الاختبارات القادمة. لن يتغير موعده أو محتوى المراجعة المحفوظ.</p>
+                <div className="mt-5 flex flex-wrap justify-end gap-2">
+                  <Button type="button" variant="outline" onClick={() => setExamToComplete(null)}>إلغاء</Button>
+                  <Button
+                    type="button"
+                    disabled={markMonthlyExamCompleted.isPending}
+                    onClick={() => markMonthlyExamCompleted.mutate({ subjectId: examToComplete.subjectId, date: examToComplete.date })}
+                  >
+                    {markMonthlyExamCompleted.isPending ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
+                    تأكيد انتهاء الامتحان
+                  </Button>
+                </div>
+              </motion.section>
+            </motion.div>
+          )}
           {showWelcomeGuide && (
             <motion.div
               className="fixed inset-0 z-[90] flex items-center justify-center bg-black/75 p-4 backdrop-blur-md"
