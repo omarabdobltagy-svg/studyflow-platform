@@ -1,5 +1,5 @@
 import { getDateKeyInTimeZone } from "./date-time";
-import { getSIECheckpointProgressBranches, getSIEElectiveGroups, getSIETrack, SIE_CATALOG_META } from "./sie-catalog";
+import { getSIECheckpointBranches, getSIEElectiveGroups, getSIETrack, SIE_CATALOG_META } from "./sie-catalog";
 
 export type CairoSecondYearBaccalaureateExamProfile = {
   educationSystem?: string | null;
@@ -37,7 +37,7 @@ export type CairoSecondYearBaccalaureateExam = {
 
 /** Extracts the actual Unit 2 checkpoints from the selected subject catalogue. */
 export function getCairoExamUnitTwoFocus(subjectId: string): CairoExamUnitFocus {
-  const lessons = getSIECheckpointProgressBranches(subjectId).flatMap(branch =>
+  const lessons = getSIECheckpointBranches(subjectId).flatMap(branch =>
     branch.choices
       .filter(choice => choice.unitNumber === 2 && !/_U1_/.test(choice.nodeId))
       .map(choice => ({
@@ -49,7 +49,7 @@ export function getCairoExamUnitTwoFocus(subjectId: string): CairoExamUnitFocus 
         ...(choice.sourceLabel ? { sourceLabel: choice.sourceLabel } : {}),
       }))
   );
-  const unitTitle = getSIECheckpointProgressBranches(subjectId)
+  const unitTitle = getSIECheckpointBranches(subjectId)
     .flatMap(branch => branch.choices)
     .find(choice => choice.unitNumber === 2 && choice.unitTitle?.trim())?.unitTitle?.trim();
   return {
