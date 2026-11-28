@@ -43,6 +43,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import gsap from "gsap";
 
 type PlanningMode = "smart" | "backlog" | "teacher_sync";
 type StudyPace = "relaxed" | "balanced" | "intensive";
@@ -1331,6 +1332,7 @@ function PlanCard({ plan, subjectIds, teacherSessions, teacherChoices, title, st
   });
   const teacherSessionGroups = useMemo(() => groupPlannerTeacherSessions(teacherSessions), [teacherSessions]);
   const [teacherScheduleExpanded, setTeacherScheduleExpanded] = useState(true);
+  const executionBoardRef = useRef<HTMLElement | null>(null);
   const completedCount = plan.steps.filter(step => step.plannerTaskStatus === "done" || step.existingTask?.status === "done").length;
     const subjectCount = new Set(plan.steps.map(step => getPlanStepCurriculum(step, subjectIds)?.subjectId).filter(Boolean)).size;
   const confirmedTaskCount = plan.steps.filter(step => Boolean(step.existingTask)).length;
@@ -1363,6 +1365,40 @@ function PlanCard({ plan, subjectIds, teacherSessions, teacherChoices, title, st
   const mapLanes = buildPlannerCurriculumLanes(mapEntries, subjectIds);
   const firstOpenMapStep = getNextOpenPlanStep(plan.steps);
   const currentStepIndex = firstOpenMapStep ? plan.steps.indexOf(firstOpenMapStep) : -1;
+  const focusStepIndex = selectedMapStepIndex !== null && selectedMapStepIndex >= 0 && selectedMapStepIndex < plan.steps.length
+    ? selectedMapStepIndex : currentStepIndex >= 0 ? currentStepIndex : plan.steps.length ? 0 : -1;
+  const focusStep = focusStepIndex >= 0 ? plan.steps[focusStepIndex] : null;
+  const focusCurriculum = focusStep ? getPlanStepCurriculum(focusStep, subjectIds) : null;
+  const completionPercent = plan.steps.length ? Math.round(completedCount / plan.steps.length * 100) : 0;
+  const jumpToFocusStep = () => {
+    if (focusStepIndex < 0) return;
+    setSelectedMapStepIndex(focusStepIndex);
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+      executionBoardRef.current?.querySelector<HTMLElement>(`[data-step-index="${focusStepIndex}"]`)?.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+        block: "center",
+      });
+    }));
+  };
+  useEffect(() => {
+    const root = executionBoardRef.current;
+    if (!root || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const targets = Array.from(root.querySelectorAll<HTMLElement>("[data-motion-reveal]"));
+    if (!targets.length) return;
+    const observer = new IntersectionObserver(entries => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        const target = entry.target as HTMLElement;
+        observer.unobserve(target);
+        gsap.fromTo(target,
+          { autoAlpha: 0, y: 22, rotateX: 2, transformPerspective: 900 },
+          { autoAlpha: 1, y: 0, rotateX: 0, duration: .66, ease: "power3.out", clearProps: "transform,opacity,visibility" },
+        );
+      }
+    }, { threshold: .12, rootMargin: "0px 0px -5% 0px" });
+    targets.forEach(target => observer.observe(target));
+    return () => { observer.disconnect(); gsap.killTweensOf(targets); };
+  }, [mapLanes.length, mapEntries.length]);
   const saveEdit = () => {
     if (!editing) return;
     onChange({
@@ -1496,7 +1532,7 @@ function PlanCard({ plan, subjectIds, teacherSessions, teacherChoices, title, st
         </section>
       )}
 
-      <section className="sf-execution-board" data-testid="planner-execution-board">
+      <section ref={executionBoardRef} className="sf-execution-board" data-testid="planner-execution-board">
         <header className="sf-execution-board-header">
           <div><span className="sf-sp-eyebrow">تنفيذ الخطة</span><h3>ابدأ بالخطوة التالية، والباقي مرتب حسب مادتك</h3><p>كل مادة لها مسار واضح. افتح الخطوة لمعرفة المطلوب وسبب ترتيبها، وسجّل تقدمك بعد التنفيذ.</p></div>
           <div className="sf-execution-filters" role="group" aria-label="تصفية خطوات الخطة">
@@ -1508,6 +1544,35 @@ function PlanCard({ plan, subjectIds, teacherSessions, teacherChoices, title, st
           <div><small>المواد والمسارات</small><strong>{mapLanes.length.toLocaleString("ar-EG")}</strong></div>
           <div><small>الخطوات المتبقية</small><strong>{(plan.steps.length-completedCount).toLocaleString("ar-EG")}</strong></div>
         </div>
+        {focusStep && (
+          <section className={"sf-execution-focus-scene" + (focusStep.examFocus ? " is-exam-focus" : "")} data-testid="planner-focus-scene" data-motion-reveal>
+            <div className="sf-execution-focus-orbit" aria-hidden="true">
+              <span className="sf-execution-focus-orbit-ring" /><span className="sf-execution-focus-orbit-dot" />
+              <div className="sf-execution-focus-core"><small>PLAN PROGRESS</small><strong>{completionPercent.toLocaleString("en-US")}%</strong><span>من الخطة</span></div>
+            </div>
+            <div className="sf-execution-focus-copy">
+              <div className="sf-execution-focus-kicker"><span><Sparkles className="size-3.5" /> التركيز الحالي</span><small>{focusStep.examFocus ? "EXAM PRIORITY" : "NEXT ACTION"}</small></div>
+              <div className="sf-execution-focus-context">
+                <span>{focusCurriculum?.subject ?? displayPlanStepCategory(focusStep, subjectIds)}</span>
+                <span>{focusStep.phaseId ? (phaseLabels[focusStep.phaseId] ?? "ضمن الخطة") : "خطوة دراسية"}</span>
+                {focusStep.priority && <span>{priorityLabel[focusStep.priority] ?? "أولوية عادية"}</span>}
+              </div>
+              <h4>{displayPlanStepTitle(focusStep, subjectIds)}</h4>
+              <p>{displayPlanStepDetail(focusStep, subjectIds)}</p>
+              <div className="sf-execution-focus-meta">
+                {focusStep.day && <span><CalendarClock className="size-3.5" />{focusStep.day}</span>}
+                {focusStep.minutes > 0 && <span>{focusStep.minutes.toLocaleString("ar-EG")} دقيقة</span>}
+                {focusStep.examFocus && <span>مرتبطة بالامتحان الأقرب</span>}
+              </div>
+              <Button type="button" size="sm" onClick={jumpToFocusStep}>اعرض مكان الخطوة في المسار <ArrowUpRight className="size-3.5" /></Button>
+            </div>
+            <div className="sf-execution-focus-completion">
+              <span>معدل الإنجاز</span><strong>{completedCount.toLocaleString("ar-EG")}<small> / {plan.steps.length.toLocaleString("ar-EG")}</small></strong>
+              <i><b style={{ width: completionPercent + "%" }} /></i>
+              <small>{completionPercent === 100 ? "اكتملت كل خطوات الخطة" : "يتبقى " + (plan.steps.length - completedCount).toLocaleString("ar-EG") + " خطوة"}</small>
+            </div>
+          </section>
+        )}
         {mapLanes.length?(
           <div className="sf-execution-subjects" data-testid="planner-subject-lanes">
             {mapLanes.map((lane,laneIndex)=>{
@@ -1520,6 +1585,7 @@ function PlanCard({ plan, subjectIds, teacherSessions, teacherChoices, title, st
                     <span className="sf-execution-subject-icon"><BrainCircuit className="size-5"/></span>
                     <span className="sf-execution-subject-copy"><small>{lane.isOfficialUnit?"وحدة دراسية":lane.subjectId?"المادة":"مهام عامة"}</small><strong>{lane.title}</strong><i><b style={{width:lanePercent+"%"}}/></i></span>
                     <span className="sf-execution-subject-count">{laneDone.toLocaleString("ar-EG")} / {laneTotal.toLocaleString("ar-EG")}</span>
+                    <span className="sf-execution-subject-ring" style={{ background: "conic-gradient(var(--sf-lavender-bright, #C5B2DE) " + lanePercent + "%, rgba(255,255,255,.08) 0)" }} aria-label={"إنجاز " + lanePercent + " بالمئة"}><b>{lanePercent.toLocaleString("ar-EG")}%</b></span>
                     <ArrowDown className="sf-execution-chevron size-4"/>
                   </summary>
                   <div className="sf-execution-steps">
@@ -1531,7 +1597,7 @@ function PlanCard({ plan, subjectIds, teacherSessions, teacherChoices, title, st
                       const nodeId=step.curriculumNodeIds?.[0];
                       const branchId=curriculum&&nodeId?getSIECheckpointProgressBranches(curriculum.subjectId).find(branch=>branch.choices.some(choice=>choice.nodeId===nodeId))?.branchId:undefined;
                       return (
-                        <article key={step.plannerTaskId??step.existingTask?.id??step.sourceStepIndex??index} className={"sf-execution-step"+(step.examFocus?" is-exam-focus":"")+(isDone?" is-done":isNext?" is-next":isReview?" is-review":"")} data-testid={"planner-step-"+(nodeId??step.existingTask?.id??index)}>
+                        <article key={step.plannerTaskId??step.existingTask?.id??step.sourceStepIndex??index} className={"sf-execution-step"+(step.examFocus?" is-exam-focus":"")+(isDone?" is-done":isNext?" is-next":isReview?" is-review":"")} data-step-index={index} data-motion-reveal data-testid={"planner-step-"+(nodeId??step.existingTask?.id??index)}>
                           <span className="sf-execution-step-index">{isDone?<CheckCircle2 className="size-4"/>:(laneStepIndex+1).toLocaleString("ar-EG")}</span>
                           <details className="sf-execution-step-details" open={selectedMapStepIndex===index} onToggle={event=>{if(event.currentTarget.open)setSelectedMapStepIndex(index);else if(selectedMapStepIndex===index)setSelectedMapStepIndex(null);}}>
                             <summary>

@@ -37,7 +37,8 @@ async function readPageState(page) {
       themeClass: document.documentElement.className,
       primary: getComputedStyle(document.documentElement).getPropertyValue("--primary").trim(),
       ember: getComputedStyle(document.documentElement).getPropertyValue("--sf-ember").trim(),
-      brass: getComputedStyle(document.documentElement).getPropertyValue("--sf-brass-bright").trim(),
+      brass: getComputedStyle(document.documentElement).getPropertyValue("--sf-brass").trim(),
+      brassBright: getComputedStyle(document.documentElement).getPropertyValue("--sf-brass-bright").trim(),
       bodyBackground: getComputedStyle(document.body).backgroundColor,
       loginCardSurface: (() => {
         const card = document.querySelector(".sf-login-form-card");
@@ -148,6 +149,7 @@ async function run() {
       assert(initialState.primary.toUpperCase() === "#C5B2DE", viewport.name + ": lavender primary token is missing");
       assert(initialState.ember.toUpperCase() === "#4C3A4F", viewport.name + ": restrained plum identity token is missing");
       assert(initialState.brass.toUpperCase() === "#8F79AD", viewport.name + ": muted lavender brand token is missing");
+      assert(initialState.brassBright.toUpperCase() === "#C5B2DE", viewport.name + ": bright lavender accent token is missing");
       assert(
         initialState.loginCardSurface
           && (initialState.loginCardSurface.image !== "none" || initialState.loginCardSurface.color !== "rgba(0, 0, 0, 0)"),
