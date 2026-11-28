@@ -1,7 +1,8 @@
 import { isIP } from "node:net";
+import type { IncomingHttpHeaders } from "node:http";
 
 type ClientIpRequest = {
-  headers: { "x-real-ip"?: string | string[] | undefined };
+  headers: IncomingHttpHeaders;
   ip?: string;
   socket?: { remoteAddress?: string };
 };
