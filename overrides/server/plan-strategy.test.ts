@@ -40,4 +40,4 @@ describe("plan strategy snapshots", () => {
     expect(result.revision.diff.rescheduled).toHaveLength(0);
     expect(result.revision.diff.preservedCount).toBe(1);
   });
-}
+});
