@@ -36,8 +36,8 @@ async function readPageState(page) {
       bodyText: (document.body?.innerText ?? "").trim().slice(0, 1600),
       themeClass: document.documentElement.className,
       primary: getComputedStyle(document.documentElement).getPropertyValue("--primary").trim(),
-      wine: getComputedStyle(document.documentElement).getPropertyValue("--sf-wine").trim(),
-      gold: getComputedStyle(document.documentElement).getPropertyValue("--sf-gold-bright").trim(),
+      ember: getComputedStyle(document.documentElement).getPropertyValue("--sf-ember").trim(),
+      brass: getComputedStyle(document.documentElement).getPropertyValue("--sf-brass-bright").trim(),
       bodyBackground: getComputedStyle(document.body).backgroundColor,
       loginCardSurface: (() => {
         const card = document.querySelector(".sf-login-form-card");
@@ -145,32 +145,32 @@ async function run() {
       }
 
       assert(initialState.themeClass.split(/\\s+/).includes("dark"), viewport.name + ": expected dark premium theme");
-      assert(initialState.primary.toUpperCase() === "#D1B77B", viewport.name + ": gold primary token is missing");
-      assert(initialState.wine.toUpperCase() === "#A95861", viewport.name + ": wine brand token is missing");
-      assert(initialState.gold.toUpperCase() === "#D1B77B", viewport.name + ": gold brand token is missing");
+      assert(initialState.primary.toUpperCase() === "#F28B65", viewport.name + ": ember primary token is missing");
+      assert(initialState.ember.toUpperCase() === "#EB7B57", viewport.name + ": ember brand token is missing");
+      assert(initialState.brass.toUpperCase() === "#E6BD86", viewport.name + ": brass brand token is missing");
       assert(
         initialState.loginCardSurface
           && (initialState.loginCardSurface.image !== "none" || initialState.loginCardSurface.color !== "rgba(0, 0, 0, 0)"),
         viewport.name + ": login card surface is not rendered",
       );
       assert(
-        initialState.loginCardSurface.image.includes("41, 34, 32")
-          && !initialState.loginCardSurface.image.includes("27, 35, 23"),
+        initialState.loginCardSurface.image.includes("37, 43, 40")
+          && !initialState.loginCardSurface.image.includes("26, 33, 31"),
         viewport.name + ": legacy green login card palette is still active: " + JSON.stringify(initialState.loginCardSurface),
       );
       assert(
-        initialState.loginSubmitSurface?.image.includes("140, 66, 76")
+        initialState.loginSubmitSurface?.image.includes("242, 139, 101")
           && !initialState.loginSubmitSurface.image.includes("86, 111, 230")
           && !initialState.loginSubmitSurface.image.includes("216, 241, 124"),
-        viewport.name + ": login button is not using the wine brand palette: " + JSON.stringify(initialState.loginSubmitSurface),
+        viewport.name + ": login button is not using the ember palette: " + JSON.stringify(initialState.loginSubmitSurface),
       );
       assert(
-        initialState.loginActiveTabSurface?.background.includes("140, 66, 76"),
-        viewport.name + ": active auth tab is not using the wine brand palette: " + JSON.stringify(initialState.loginActiveTabSurface),
+        initialState.loginActiveTabSurface?.background.includes("199, 91, 59"),
+        viewport.name + ": active auth tab is not using the ember palette: " + JSON.stringify(initialState.loginActiveTabSurface),
       );
       assert(
-        initialState.loginBrandSurface?.image.includes("228, 212, 184"),
-        viewport.name + ": login brand mark is not using the muted gold palette: " + JSON.stringify(initialState.loginBrandSurface),
+        initialState.loginBrandSurface?.image.includes("229, 193, 139"),
+        viewport.name + ": login brand mark is not using the brass palette: " + JSON.stringify(initialState.loginBrandSurface),
       );
       assert(initialState.inputCount >= 2, viewport.name + ": login fields are missing");
       assert(
