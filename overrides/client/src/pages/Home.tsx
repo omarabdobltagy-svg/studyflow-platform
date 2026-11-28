@@ -383,7 +383,7 @@ export default function Home() {
   const cairoExamDate = serverNow ? getDateKeyInTimeZone(serverNow, "Africa/Cairo") : null;
   const upcomingExams = useMemo(
     () => serverNow ? getUpcomingCairoSecondYearBaccalaureateExams(profile.data, serverNow, completedMonthlyExamKeys) : [],
-    [profile.data?.educationSystem, profile.data?.gradeYear, profile.data?.subjectIds, cairoExamDate, serverNow, completedMonthlyExamKeys],
+    [profile.data?.educationSystem, profile.data?.gradeYear, profile.data?.subjectIds, profile.data?.selection, cairoExamDate, serverNow, completedMonthlyExamKeys],
   );
   const daysUntilExam = (date: string) => cairoExamDate ? Math.max(0, getCalendarDaysBetween(cairoExamDate, date)) : 0;
   const homeNextStepIndex = homeNextStep ? homeStudySteps.indexOf(homeNextStep) : -1;
