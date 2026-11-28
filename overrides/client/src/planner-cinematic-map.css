@@ -1,4 +1,9 @@
 /* StudyFlow cinematic graphite / gold glass system. Loaded last to supersede legacy UI layers. */
+html,html.dark {
+ --primary:#E2C47D;--primary-foreground:#17130A;
+ --sf-ember:#2B2923;--sf-brass:#A88445;--sf-brass-bright:#E2C47D;
+ --sf-lavender:#A88445;--sf-lavender-bright:#E2C47D;
+}
 html body .sf-app-shell.sf-shell-v3{
  --background:#050608;--foreground:#F4F0E6;--card:rgba(15,17,20,.72);--card-foreground:#F4F0E6;
  --popover:rgba(10,12,15,.97);--popover-foreground:#F4F0E6;--primary:#E2C47D;--primary-foreground:#17130A;
@@ -8,6 +13,7 @@ html body .sf-app-shell.sf-shell-v3{
  --sidebar:#080A0D;--sidebar-foreground:#F4F0E6;
  --sf-glass-panel:rgba(12,15,18,.54);--sf-glass-panel-strong:rgba(15,18,21,.84);
  --sf-glass-panel-soft:rgba(255,255,255,.035);--sf-glass-edge:rgba(226,196,125,.22);
+ --sf-ember:#2B2923;--sf-brass:#A88445;--sf-brass-bright:#E2C47D;--sf-lavender-bright:#E2C47D;
  --sf-glass-shine:rgba(255,255,255,.17);--sf-glass-shadow:0 28px 80px rgba(0,0,0,.52),0 5px 20px rgba(0,0,0,.32);
  --sf-glass-inset:inset 0 1px 0 rgba(255,255,255,.10);
  background:#030405!important;color:#F4F0E6!important;
@@ -370,3 +376,40 @@ html body .sf-shell-v3 .sf-exam-mission-scope>p{color:#C2B9A9!important;font-siz
  html body .sf-shell-v3 .sf-plan-loading-heading-actions{grid-column:1/-1;justify-self:end}
 }
 @media(prefers-reduced-motion:reduce){html body .sf-app-shell.sf-shell-v3::after{animation:none!important}}
+
+
+/* Authentication surfaces share the graphite and gold identity. */
+html body .sf-login-screen,html body .sf-auth-screen{
+ color:#F4F0E6!important;
+ background:radial-gradient(ellipse 55rem 35rem at 5% 0%,rgba(226,196,125,.12),transparent 65%),
+ radial-gradient(ellipse 45rem 35rem at 100% 100%,rgba(119,123,126,.12),transparent 68%),
+ linear-gradient(180deg,#030405,#090B0E 55%,#030405)!important;
+}
+html body .sf-login-screen .sf-login-frame,html body .sf-login-screen .sf-login-frame-v4,html body .sf-auth-screen .sf-auth-frame{
+ border:1px solid rgba(226,196,125,.22)!important;
+ background:linear-gradient(145deg,rgba(255,255,255,.055),transparent 52%),rgba(7,9,12,.82)!important;
+ box-shadow:inset 0 1px rgba(255,255,255,.11),0 34px 100px rgba(0,0,0,.56),0 0 44px rgba(226,196,125,.04)!important;
+ -webkit-backdrop-filter:blur(34px) saturate(160%)!important;backdrop-filter:blur(34px) saturate(160%)!important;
+}
+html body .sf-login-screen .sf-login-form-card,html body .sf-auth-screen .sf-login-form-card{
+ color:#F4F0E6!important;border:1px solid rgba(226,196,125,.20)!important;
+ background:linear-gradient(138deg,rgba(255,255,255,.085),transparent 42%),
+ radial-gradient(ellipse at 100% 0%,rgba(226,196,125,.09),transparent 65%),rgba(12,15,18,.88)!important;
+ box-shadow:inset 0 1px rgba(255,255,255,.12),0 25px 70px rgba(0,0,0,.42)!important;
+ -webkit-backdrop-filter:blur(30px) saturate(165%)!important;backdrop-filter:blur(30px) saturate(165%)!important;
+}
+html body .sf-login-screen .sf-auth-submit,html body .sf-auth-screen .sf-auth-submit{
+ min-height:47px!important;border:1px solid rgba(255,239,196,.42)!important;border-radius:14px!important;
+ color:#17130A!important;background:linear-gradient(135deg,#F2E1B1,#D4B66C 68%,#A98543)!important;
+ box-shadow:0 12px 28px rgba(0,0,0,.34),inset 0 1px rgba(255,255,255,.5)!important;font-weight:900!important;
+}
+html body .sf-login-screen .sf-auth-mode-tabs button[aria-selected="true"],html body .sf-auth-screen .sf-auth-mode-tabs button[aria-selected="true"]{
+ color:#FFF3D3!important;border-color:rgba(226,196,125,.38)!important;
+ background:linear-gradient(135deg,rgba(226,196,125,.17),rgba(255,255,255,.04))!important;
+ box-shadow:inset 0 1px rgba(255,255,255,.1),0 0 22px rgba(226,196,125,.06)!important;
+}
+html body .sf-login-screen .sf-login-brand-mark-v4,html body .sf-auth-screen .sf-login-brand-mark-v4{
+ color:#17130A!important;border:1px solid rgba(255,239,196,.42)!important;
+ background:linear-gradient(145deg,#F2E1B1,#D4B66C 68%,#A98543)!important;
+ box-shadow:0 0 30px rgba(226,196,125,.19),inset 0 1px rgba(255,255,255,.45)!important;
+}
