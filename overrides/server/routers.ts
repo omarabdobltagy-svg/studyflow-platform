@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { hashLocalPassword, verifyLocalPassword } from "./_core/localPassword";
 import { buildPhoneLoginUsername, resolveLocalLoginIdentifier } from "./_core/localAuthIdentifier";
 import { FixedWindowRateLimiter } from "./_core/authRateLimit";
+import { getRateLimitClientIp } from "./_core/clientIp";
 import { SignJWT } from "jose";
 import { TRPCError } from "@trpc/server";
 import { COOKIE_NAME } from "@shared/const";
@@ -2297,7 +2298,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const sessionSecret = process.env.APP_SESSION_SECRET;
         if (!sessionSecret) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "تسجيل الدخول غير مُهيأ على الخادم." });
-        const ip = ctx.req.ip || ctx.req.socket.remoteAddress || "unknown";
+        const ip = getRateLimitClientIp(ctx.req);
         const now = Date.now();
         if (loginRateLimiter.isLimited(ip, now)) throw new TRPCError({ code: "FORBIDDEN", message: "محاولات كثيرة. انتظر 15 دقيقة ثم حاول مرة أخرى." });
         const loginIdentifier = resolveLocalLoginIdentifier(input.identifier ?? input.username ?? "");
@@ -2333,7 +2334,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const sessionSecret = process.env.APP_SESSION_SECRET;
         if (!sessionSecret) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "إنشاء الحساب غير مُهيأ على الخادم." });
-        const ip = ctx.req.ip || ctx.req.socket.remoteAddress || "unknown";
+        const ip = getRateLimitClientIp(ctx.req);
         if (!registrationRateLimiter.consume(ip, Date.now())) throw new TRPCError({ code: "FORBIDDEN", message: "وصلت إلى عدد محاولات التسجيل المسموح. حاول بعد 15 دقيقة." });
         if (await getUserByPhone(input.phone)) {
           throw new TRPCError({ code: "CONFLICT", message: "رقم الهاتف مسجل بالفعل. سجّل الدخول باستخدام رقم هاتفك." });
