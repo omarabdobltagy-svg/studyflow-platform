@@ -1485,6 +1485,7 @@ export function applyDailyPlanDepth(
   const selection = (profile.selection ?? {}) as Record<string, any>;
   const todayCairo = getDateKeyInTimeZone(new Date(), "Africa/Cairo");
   const urgentExams = getCairoSecondYearBaccalaureateExams(profile)
+    .filter(exam => exam.date >= todayCairo)
     .map(exam => {
       const daysUntil = Math.max(0, getCalendarDaysBetween(todayCairo, exam.date));
       const savedScope = getMonthlyExamScopeRecord(
@@ -1511,7 +1512,6 @@ export function applyDailyPlanDepth(
     })
     .filter(item => item.daysUntil <= 14)
     .sort((left, right) => left.exam.date.localeCompare(right.exam.date));
-  const urgentExam = urgentExams[0] ?? null;
   const teacherChoices = (selection.teacherChoices ?? profile.teacherSelections ?? {}) as Record<string, string>;
   const teacherSchedules = (selection.teacherSchedules ?? {}) as Record<string, Array<{ dayOfWeek: number; startTime: string }>>;
   const subjectForStep = (step: GeneratedPlan["steps"][number]) => {
