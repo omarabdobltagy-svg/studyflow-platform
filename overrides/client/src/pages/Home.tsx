@@ -627,11 +627,11 @@ export default function Home() {
               <div className="flex items-center gap-2 text-sm font-semibold"><ListChecks className="size-4 text-primary" />إنجازك</div>
               <span className="text-xs text-muted-foreground">{completion}%</span>
             </div>
-            <div className="mt-5 flex items-end gap-2"><strong className="text-4xl font-bold tabular-nums">{completed}</strong><span className="pb-1 text-sm text-muted-foreground">من {taskCount} مهمة مكتملة</span></div>
+            <div className="mt-5 flex items-end gap-2"><strong className="text-4xl font-bold tabular-nums" data-count-up={completed} aria-label={String(completed)}>{completed}</strong><span className="pb-1 text-sm text-muted-foreground">من {taskCount} مهمة مكتملة</span></div>
             <Progress value={completion} className="mt-4 h-2" />
             <div className="mt-4 grid grid-cols-2 gap-3">
-              <div className="rounded-2xl bg-muted/45 p-3"><p className="text-xs text-muted-foreground">متبقي</p><strong className="mt-1 block text-xl font-bold tabular-nums">{remaining}</strong></div>
-              <div className="rounded-2xl bg-muted/45 p-3"><p className="text-xs text-muted-foreground">أهداف نشطة</p><strong className="mt-1 block text-xl font-bold tabular-nums">{summary.data?.goalStats.active ?? "—"}</strong></div>
+              <div className="rounded-2xl bg-muted/45 p-3"><p className="text-xs text-muted-foreground">متبقي</p><strong className="mt-1 block text-xl font-bold tabular-nums" data-count-up={remaining} aria-label={String(remaining)}>{remaining}</strong></div>
+              <div className="rounded-2xl bg-muted/45 p-3"><p className="text-xs text-muted-foreground">أهداف نشطة</p><strong className="mt-1 block text-xl font-bold tabular-nums" data-count-up={summary.data?.goalStats.active ?? undefined}>{summary.data?.goalStats.active ?? "—"}</strong></div>
             </div>
             <Button variant="ghost" className="mt-4 w-full justify-between rounded-xl" onClick={() => setLocation("/tasks")}>عرض كل المهام <ArrowLeft className="size-4" /></Button>
           </section>
@@ -657,9 +657,9 @@ export default function Home() {
                 <div className="sf-home-study-map-progress">
                   <div className="sf-home-study-map-progress-copy">
                     <span>تقدم تنفيذ الخطة</span>
-                    <strong>{homeDoneSteps.toLocaleString("ar-EG")} <small>من {homeStudySteps.length.toLocaleString("ar-EG")}</small></strong>
+                    <strong><span data-count-up={homeDoneSteps}>{homeDoneSteps.toLocaleString("ar-EG")}</span> <small>من {homeStudySteps.length.toLocaleString("ar-EG")}</small></strong>
                   </div>
-                  <b>{homeStudyProgress.toLocaleString("ar-EG")}%</b>
+                  <b><span data-count-up={homeStudyProgress}>{homeStudyProgress.toLocaleString("ar-EG")}</span>%</b>
                 </div>
                 <Progress value={homeStudyProgress} className="sf-home-study-map-progress-rail" />
               </div>
