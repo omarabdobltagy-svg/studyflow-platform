@@ -385,3 +385,80 @@ html.dark body .sf-page-planner .sf-sp-panel { min-width:0; }
     transition:none !important;
   }
 }
+
+
+/* Exam center: compact information architecture, no decorative orbital overload. */
+html body .sf-shell-v3 .sf-main .sf-exam-mission-scene {
+  display:grid;
+  grid-template-columns:minmax(0,1.1fr) minmax(220px,.9fr);
+  gap:22px;
+  padding:clamp(18px,2.6vw,30px);
+  border-radius:28px;
+  overflow:hidden;
+  position:relative;
+  isolation:isolate;
+}
+.sf-exam-mission-scene::before {
+  content:"";
+  position:absolute;
+  inset:0;
+  z-index:-1;
+  pointer-events:none;
+  background:
+    radial-gradient(ellipse at 6% 8%,rgba(202,170,108,.12),transparent 36%),
+    linear-gradient(125deg,rgba(255,255,255,.055),transparent 45%);
+}
+.sf-exam-mission-main { min-width:0; display:grid; gap:18px; }
+.sf-exam-mission-header { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; }
+.sf-exam-mission-kicker,.sf-exam-mission-state { display:inline-flex; align-items:center; gap:8px; font-size:12px; font-weight:800; }
+.sf-exam-mission-kicker { color:#e5cf9e; letter-spacing:.01em; }
+.sf-exam-mission-state { padding:7px 11px; border:1px solid var(--sf-glass-edge); border-radius:999px; background:rgba(255,255,255,.035); }
+.sf-exam-mission-state.is-confirmed { color:#c8e0c5; }
+.sf-exam-mission-state.is-proposed { color:#e4d0a2; }
+.sf-exam-mission-overview { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:18px; }
+.sf-exam-mission-copy { display:grid; gap:5px; min-width:0; }
+.sf-exam-mission-subject-label { color:var(--muted-foreground); font-size:11px; font-weight:700; }
+.sf-exam-mission-copy h2 { margin:0; color:var(--foreground); font-size:clamp(23px,3vw,34px); line-height:1.25; font-weight:850; }
+.sf-exam-mission-date { color:var(--muted-foreground); font-size:13px; font-weight:650; }
+.sf-exam-mission-countdown {
+  display:grid; min-width:112px; min-height:112px; place-content:center; justify-items:center; gap:0;
+  padding:12px; border:1px solid rgba(216,185,122,.28); border-radius:25px;
+  background:linear-gradient(145deg,rgba(211,176,108,.12),rgba(255,255,255,.025)),rgba(8,10,12,.28);
+  box-shadow:inset 0 1px rgba(255,255,255,.13),0 18px 40px rgba(0,0,0,.2);
+}
+.sf-exam-mission-countdown strong { color:#f1dba9; font-size:clamp(30px,4vw,44px); line-height:1.1; font-variant-numeric:tabular-nums; }
+.sf-exam-mission-countdown span { margin-top:5px; color:var(--muted-foreground); font-size:11px; font-weight:700; }
+.sf-exam-mission-guidance { display:grid; gap:5px; padding:13px 15px; border-inline-start:2px solid rgba(211,176,108,.56); border-radius:0 14px 14px 0; background:rgba(255,255,255,.025); }
+.sf-exam-mission-guidance>span { color:#e4cd9a; font-size:11px; font-weight:800; }
+.sf-exam-mission-guidance p { margin:0; color:var(--muted-foreground); font-size:12px; line-height:1.8; }
+.sf-exam-mission-timeline { display:grid; align-content:start; gap:10px; padding:15px; border:1px solid var(--sf-glass-edge); border-radius:20px; background:rgba(2,4,6,.24); }
+.sf-exam-mission-timeline-title { color:#e5cf9e; font-size:11px; font-weight:850; }
+.sf-exam-mission-timeline>div { display:grid; grid-template-columns:8px minmax(0,1fr) auto; align-items:center; gap:9px; min-width:0; padding:8px 0; border-bottom:1px solid rgba(255,255,255,.055); }
+.sf-exam-mission-timeline>div:last-child { border-bottom:0; }
+.sf-exam-mission-timeline i { width:7px; height:7px; border-radius:50%; background:#d9bd7c; box-shadow:0 0 12px rgba(217,189,124,.48); }
+.sf-exam-mission-timeline span { min-width:0; overflow:hidden; color:var(--foreground); font-size:12px; font-weight:700; text-overflow:ellipsis; white-space:nowrap; }
+.sf-exam-mission-timeline small { color:var(--muted-foreground); font-size:10px; white-space:nowrap; }
+.sf-exam-mission-scope { grid-column:1/-1; display:flex; align-items:flex-start; gap:9px; margin:0; padding-top:13px; border-top:1px solid rgba(255,255,255,.08); color:var(--muted-foreground); }
+.sf-exam-mission-scope svg { flex:0 0 auto; margin-top:2px; color:#d9bd7c; }
+.sf-exam-mission-scope p { margin:0; font-size:11px; line-height:1.75; }
+html body .sf-shell-v3 .sf-main .sf-sp-replan-pending {
+  display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:16px;
+  padding:18px; border:1px solid rgba(211,176,108,.25); border-radius:20px;
+  background:linear-gradient(120deg,rgba(211,176,108,.085),transparent 65%),rgba(10,12,15,.34);
+  box-shadow:inset 0 1px rgba(255,255,255,.09),0 18px 48px rgba(0,0,0,.24);
+  -webkit-backdrop-filter:blur(24px); backdrop-filter:blur(24px);
+}
+.sf-sp-replan-pending>div { min-width:0; flex:1 1 260px; }
+.sf-sp-replan-pending strong { color:var(--foreground); font-size:14px; }
+.sf-sp-replan-pending p { margin:5px 0 0; color:var(--muted-foreground); font-size:12px; line-height:1.7; }
+.sf-sp-replan-pending button { flex:0 0 auto; }
+.sf-sp-teacher-session-slot.is-conflict { border-color:rgba(225,142,119,.55) !important; background:rgba(133,53,39,.13) !important; }
+.sf-sp-teacher-session-slot.is-conflict em { display:block; margin-top:4px; color:#f0b3a4; font-size:10px; font-style:normal; font-weight:800; }
+@media (max-width:760px) {
+  html body .sf-shell-v3 .sf-main .sf-exam-mission-scene { grid-template-columns:1fr; }
+  .sf-exam-mission-timeline { grid-template-columns:1fr; }
+  .sf-exam-mission-countdown { min-width:94px; min-height:94px; border-radius:21px; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .sf-exam-mission-scene * { animation:none !important; transition:none !important; }
+}
