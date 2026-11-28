@@ -366,6 +366,7 @@ export default function Planner() {
   const [loadedSavedDraft, setLoadedSavedDraft] = useState(false);
   const [showGenerationDetails, setShowGenerationDetails] = useState(false);
   const [generationDetailsHiddenForRun, setGenerationDetailsHiddenForRun] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
   const historyInitialized = useRef(false);
   const initialDailyGenerationStarted = useRef(false);
   const plannerPreferencesInitialized = useRef(false);
@@ -603,6 +604,7 @@ export default function Planner() {
 
   const ensureDaily = trpc.plans.ensureDaily.useMutation({
     onSuccess: async result => {
+      setGenerationError(null);
       setPlan({
         ...result.plan,
         habits: Array.isArray(result.plan.habits) ? result.plan.habits : [],
@@ -626,7 +628,11 @@ export default function Planner() {
         ? "تم تحديث خطة واحدة ومزامنة المهام مع مواعيدها."
         : "الخطة الحالية متوافقة مع بياناتك؛ لم يتم إنشاء نسخة جديدة.");
     },
-    onError: error => toast.error("تعذّر تحديث الخطة: " + error.message),
+    onError: error => {
+      const message = error.message || "تعذّر الوصول إلى نتيجة صالحة من محرك التخطيط.";
+      setGenerationError(message);
+      toast.error("تعذّر تحديث الخطة: " + message);
+    },
   });
 
   const aiActivity = trpc.ai.activity.useQuery(undefined, {
@@ -725,6 +731,7 @@ export default function Planner() {
   });
 
   const runGeneration = () => {
+    setGenerationError(null);
     setGenerationDetailsHiddenForRun(false);
     setShowGenerationDetails(true);
     ensureDaily.mutate({ dailyMinutes, forceRebuild: true });
@@ -890,6 +897,19 @@ export default function Planner() {
       <div className="sf-study-plan-v2">
         {history.isError && <QueryErrorNotice onRetry={() => void history.refetch()} label="تعذّر تحميل خططك المحفوظة." />}
         {profile.isError && <QueryErrorNotice onRetry={() => void profile.refetch()} label="تعذّر تحميل ملفك الدراسي. أعد المحاولة قبل إنشاء الخطة." />}
+        {generationError && (
+          <section className="sf-planner-ai-error" role="alert" aria-live="assertive" data-testid="planner-generation-error">
+            <div>
+              <strong>الذكاء الاصطناعي لم يُكمل بناء الخطة</strong>
+              <p>{generationError}</p>
+              <small>الخطة المحفوظة لم تُستبدل بنتيجة ناقصة. راجع اتصال مزوّد الذكاء الاصطناعي أو أعد المحاولة.</small>
+            </div>
+            <Button type="button" onClick={runGeneration} disabled={ensureDaily.isPending}>
+              {ensureDaily.isPending ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+              إعادة المحاولة
+            </Button>
+          </section>
+        )}
 
         <header className="sf-sp-hero" data-scroll-reveal>
           <div className="sf-sp-hero-copy">
