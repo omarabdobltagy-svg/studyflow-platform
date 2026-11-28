@@ -2011,7 +2011,6 @@ export const appRouter = router({
         password: z.string().min(1).max(160),
       }).refine(input => Boolean(input.identifier || input.username), {
         message: "أدخل رقم الهاتف أو اسم المستخدم.",
-      }),
       }))
       .mutation(async ({ ctx, input }) => {
         const sessionSecret = process.env.APP_SESSION_SECRET;
