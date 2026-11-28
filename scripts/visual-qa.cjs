@@ -215,8 +215,8 @@ async function run() {
       );
       await page.screenshot({ path: path.join(outDir, viewport.name + "-register.png"), fullPage: true });
 
-      // Render production component classes in a data-free specimen shell.
-      // This checks the actual loaded design CSS without creating or mutating a student account.
+      // Render active dashboard surfaces in a data-free specimen shell.
+      // The retired AI-decision hero and 3D operations scene are intentionally excluded.
       await page.evaluate(() => {
         const root = document.getElementById("root");
         if (root) root.style.display = "none";
@@ -224,7 +224,7 @@ async function run() {
         shell.id = "studyflow-design-qa-specimen";
         shell.className = "sf-app-shell sf-shell-v3";
         shell.style.cssText = "position:relative;z-index:1;min-height:100vh;overflow:visible;";
-        shell.innerHTML = '<div class="sf-app-frame"><aside class="sf-sidebar"><div class="sf-brand"><span class="sf-brand-mark">S</span><span class="sf-brand-copy"><b>StudyFlow</b><small>DESIGN SYSTEM QA</small></span></div></aside><div class="sf-app-main"><header class="sf-topbar"><div class="sf-heading-copy"><h1>نظام التصميم الموحد</h1><p class="sf-page-description">فحص مكونات أساسية من المساحة الدراسية</p></div></header><main class="sf-main"><div class="sf-page"><section class="sf-home-ai-decision"><div class="sf-home-ai-decision-orbit" aria-hidden="true"><span></span><i></i><b></b></div><div class="sf-home-ai-decision-copy"><div class="sf-home-ai-decision-kicker"><span class="sf-home-ai-pulse"></span> قرار محرك التخطيط <span>STUDYFLOW INTELLIGENCE</span></div><h3>الأولوية القادمة مبنية على تقدمك الدراسي</h3><p>يربط المحرك موضعك في المنهج والمهام المفتوحة وجدول المدرس في ترتيب واحد قابل للتنفيذ.</p><div class="sf-home-ai-triggers"><span>المتراكم أولًا</span><span>موعد المدرس</span><span>أهمية الامتحان</span></div></div><div class="sf-home-ai-decision-compare"><div><small>الخطة الأصلية</small><strong>18</strong><span>خطوة</span></div><i></i><div><small>التوزيع الحالي</small><strong>14</strong><span>خطوة</span></div><button type="button">تفاصيل التعديل</button></div></section><section class="sf-map-hero"><div class="sf-map-hero-copy"><p class="sf-map-eyebrow">متابعة المنهج والتقدم</p><h2>خريطة المنهج</h2><p>عرض بصري للفروع والدروس والتقدم المسجل.</p></div><div class="sf-map-hero-meta"><span>5 مواد</span><span>18 فرعًا</span></div></section><section class="sf-task-overview"><div class="sf-task-overview-heading"><p>مساحة التنفيذ</p><h2>حوّل التزاماتك إلى تقدم واضح</h2><span>الأولوية والموعد وحالة الإنجاز في لوحة واحدة.</span></div><div class="sf-task-overview-progress"><div class="sf-task-progress-copy"><span>نسبة الإنجاز المسجلة</span><strong>68%</strong><div class="sf-task-progress-rail"><i style="width:68%"></i></div><small>أُنجز 12 من 18 مهمة</small></div><div class="sf-task-overview-stats"><article><span>قيد التنفيذ</span><b>6</b></article><article><span>مستحقة اليوم</span><b>2</b></article><article><span>متأخرة</span><b>1</b></article><article><span>أولوية عالية</span><b>3</b></article></div></div></section><section class="sf-session-finish-dialog"><header class="sf-session-finish-header"><div class="sf-session-finish-heading"><span class="sf-session-finish-mark">✓</span><div><span>مراجعة الجلسة</span><h2>خلصت مذاكرتك؟</h2><p>اللغة العربية · النحو</p></div></div><button class="sf-session-finish-close" type="button">×</button></header><div class="sf-session-finish-stats"><div><span>الوقت المسجل</span><strong>01:35:20</strong></div><div><span>وقت الإنهاء</span><strong>07:35 م</strong></div></div><div class="sf-session-finish-question"><strong>حدّد حالة الدرس قبل الحفظ</strong><p>اختَر ما حدث فعلًا. لن نضع علامة اكتمال على الدرس من دون اختيارك.</p></div><div class="sf-session-finish-options"><button class="is-selected" type="button"><span class="sf-session-finish-option-icon">✓</span><span><b>أنهيت الدرس</b><small>احفظ الوقت وسجّل الدرس كمكتمل في تقدمك.</small></span><i>✓</i></button><button type="button"><span class="sf-session-finish-option-icon">◷</span><span><b>احفظ الوقت فقط</b><small>احتفظ بمدة الجلسة، واترك حالة الدرس كما هي.</small></span><i></i></button></div><footer class="sf-session-finish-footer"><button type="button" data-variant="outline">العودة للجلسة</button><button type="button" data-variant="default">حفظ وإنهاء الجلسة</button></footer></section><section class="sf-ops-workspace"><header class="sf-ops-heading"><div><h2>مساحة التشغيل التفاعلية</h2><p>المهام والأهداف والجدول والتقدم في مكان واحد.</p></div><span class="sf-ops-live"><span></span>متصل بالبيانات</span></header><div class="sf-ops-grid"><section class="sf-ops-scene-card"><div class="sf-ops-card-heading"><div><p>WORKSPACE MAP</p><h3>طبقات مساحة العمل</h3></div></div><div class="sf-ops-scene-viewport"></div><div class="sf-ops-node-list"><button class="is-selected" type="button"><span></span><b>اليوم</b></button><button type="button"><span></span><b>المهام</b></button><button type="button"><span></span><b>الأهداف</b></button></div></section><section class="sf-ops-detail-card"><div class="sf-ops-detail-heading"><div><p>نظرة اليوم</p><h3>مركز القيادة</h3><span>صورة واحدة لما يحتاج انتباهك الآن.</span></div></div><div class="sf-ops-layer-body"><div class="sf-ops-stat-grid"><article class="sf-ops-metric"><small>قيد التنفيذ</small><b>6</b><span>مهمة</span></article><article class="sf-ops-metric is-warm"><small>نسبة الإنجاز</small><b>68%</b><span>تقدم مسجل</span></article></div><div class="sf-ops-next"><span class="sf-ops-next-icon">✦</span><div><b>الخطوة التالية</b><p>ابدأ بمراجعة النحو</p><small>حسب أولويات الخطة الحالية</small></div></div><div class="sf-ops-quick-actions"><button type="button">إضافة مهمة</button><button type="button">هدف جديد</button><button type="button">موعد</button></div></div></section></div></section></div></main></div></div>';
+        shell.innerHTML = '<div class="sf-app-frame"><aside class="sf-sidebar"><div class="sf-brand"><span class="sf-brand-mark">S</span><span class="sf-brand-copy"><b>StudyFlow</b><small>DESIGN SYSTEM QA</small></span></div></aside><div class="sf-app-main"><header class="sf-topbar"><div class="sf-heading-copy"><h1>مساحة اليوم</h1><p class="sf-page-description">فحص واجهة الطالب ومقاساتها</p></div></header><main class="sf-main"><div class="sf-page"><section class="sf-home-study-map sf-daily-plan-card"><header class="sf-home-study-map-header"><div class="sf-home-study-map-title"><span>أولوياتك اليوم</span><h3>خريطة مذاكرة اليوم</h3></div><button class="sf-home-study-map-open" type="button">الخريطة الكاملة</button></header><div class="sf-home-study-map-body"><div class="sf-home-study-map-progress"><div class="sf-home-study-map-progress-copy"><span>تقدم تنفيذ الخطة</span><strong>2 من 5</strong></div><b>40%</b></div><div class="sf-home-study-path"><article class="sf-home-study-step is-next"><span class="sf-home-study-step-marker">1</span><div class="sf-home-study-step-content"><div class="sf-home-study-step-meta"><span>ابدأ من هنا</span><span>45 دقيقة</span></div><div class="sf-home-study-step-curriculum"><span>Unit 3 — Echoes of the Past</span><span>Lesson 1 — Vocabulary</span></div><h4>Sites of Memory</h4><p>ابدأ من الدرس الظاهر في الخطة.</p></div></article></div><footer class="sf-home-study-map-footer"><div><strong>الخطوة التالية: Sites of Memory</strong><span>افتح الدرس وسجّل ما أنجزته.</span></div><button type="button">افتح الدرس</button></footer></div></section><section class="sf-home-exam-calendar"><header class="sf-home-exam-calendar-header"><div><span>مواعيد الاختبارات</span><h3>اختباراتك القادمة</h3><p>مواعيد مقترحة حسب بيانات الجدول.</p></div></header><div class="sf-home-exam-calendar-track"><article class="sf-home-exam-item"><div class="sf-home-exam-item-date"><span>الأحد</span><strong>29 نوفمبر</strong></div><div class="sf-home-exam-item-subject"><b>اللغة العربية</b></div><span class="sf-home-exam-countdown">اليوم</span><button class="sf-home-exam-complete" type="button">خلصت الامتحان</button><div class="sf-home-exam-scope"><div class="sf-home-exam-scope-heading"><span>نطاق المراجعة المسجل</span><b>3 دروس</b></div><ul class="sf-home-exam-scope-preview"><li>النحو</li><li>النصوص</li></ul></div></article></div></section><section class="sf-map-hero"><div class="sf-map-hero-copy"><p class="sf-map-eyebrow">متابعة المنهج والتقدم</p><h2>خريطة المنهج</h2><p>عرض بصري للفروع والدروس والتقدم المسجل.</p></div><div class="sf-map-hero-meta"><span>5 مواد</span><span>18 فرعًا</span></div></section><section class="sf-task-overview"><div class="sf-task-overview-heading"><p>مساحة المهام</p><h2>مهامك حسب الأولوية</h2><span>الموعد وحالة الإنجاز في لوحة واحدة.</span></div><div class="sf-task-overview-progress"><div class="sf-task-progress-copy"><span>نسبة الإنجاز المسجلة</span><strong>68%</strong><div class="sf-task-progress-rail"><i style="width:68%"></i></div><small>أُنجز 12 من 18 مهمة</small></div><div class="sf-task-overview-stats"><article><span>قيد التنفيذ</span><b>6</b></article><article><span>مستحقة اليوم</span><b>2</b></article></div></div></section><section class="sf-session-finish-dialog"><header class="sf-session-finish-header"><div class="sf-session-finish-heading"><span class="sf-session-finish-mark">✓</span><div><span>مراجعة الجلسة</span><h2>خلصت مذاكرتك؟</h2><p>اللغة العربية · النحو</p></div></div><button class="sf-session-finish-close" type="button">×</button></header><div class="sf-session-finish-stats"><div><span>الوقت المسجل</span><strong>01:35:20</strong></div><div><span>وقت الإنهاء</span><strong>07:35 م</strong></div></div><div class="sf-session-finish-question"><strong>حدّد حالة الدرس قبل الحفظ</strong><p>اختَر ما حدث فعلًا. لن نضع علامة اكتمال على الدرس من دون اختيارك.</p></div><div class="sf-session-finish-options"><button class="is-selected" type="button"><span class="sf-session-finish-option-icon">✓</span><span><b>أنهيت الدرس</b><small>احفظ الوقت وسجّل الدرس كمكتمل في تقدمك.</small></span><i>✓</i></button><button type="button"><span class="sf-session-finish-option-icon">◷</span><span><b>احفظ الوقت فقط</b><small>احتفظ بمدة الجلسة، واترك حالة الدرس كما هي.</small></span><i></i></button></div><footer class="sf-session-finish-footer"><button type="button" data-variant="outline">العودة للجلسة</button><button type="button" data-variant="default">حفظ وإنهاء الجلسة</button></footer></section></div></main></div></div>';
         document.body.appendChild(shell);
       });
       const designSpecimen = await page.evaluate(() => {
@@ -245,50 +245,47 @@ async function run() {
         return {
           viewportWidth: window.innerWidth,
           documentWidth: document.documentElement.scrollWidth,
-          homeDecision: read(".sf-home-ai-decision"),
+          dailyMap: read(".sf-home-study-map"),
+          dailyStep: read(".sf-home-study-step"),
+          examCard: read(".sf-home-exam-item"),
+          examCompleteAction: read(".sf-home-exam-complete"),
           mapHero: read(".sf-map-hero"),
           taskOverview: read(".sf-task-overview"),
           sessionDialog: read(".sf-session-finish-dialog"),
-          opsScene: read(".sf-ops-scene-card"),
-          opsDetail: read(".sf-ops-detail-card"),
-          opsViewport: read(".sf-ops-scene-viewport"),
-          opsSelectedNode: read(".sf-ops-node-list button.is-selected"),
-          opsNext: read(".sf-ops-next"),
         };
       });
       for (const [name, component] of Object.entries(designSpecimen)) {
         if (name === "viewportWidth" || name === "documentWidth") continue;
-        assert(component?.visible, viewport.name + ": design component is missing or hidden: " + name);
-        assert(component.width <= viewport.width + 2, viewport.name + ": design component overflows: " + name);
+        assert(component?.visible, viewport.name + ": current design component is missing or hidden: " + name);
+        assert(component.width <= viewport.width + 2, viewport.name + ": current design component overflows: " + name);
       }
-      assert(designSpecimen.documentWidth <= viewport.width + 2, viewport.name + ": design specimen has horizontal overflow");
+      assert(designSpecimen.documentWidth <= viewport.width + 2, viewport.name + ": current design specimen has horizontal overflow");
       assert(
-        designSpecimen.homeDecision.backgroundImage !== "none",
-        viewport.name + ": home AI decision has no painted background: " + JSON.stringify(designSpecimen.homeDecision),
+        designSpecimen.dailyMap.backgroundImage !== "none",
+        viewport.name + ": daily map has no designed surface: " + JSON.stringify(designSpecimen.dailyMap),
       );
       assert(
-        designSpecimen.mapHero.backgroundImage !== "none",
-        viewport.name + ": curriculum map has no painted background: " + JSON.stringify(designSpecimen.mapHero),
+        designSpecimen.dailyStep.background !== "rgba(0, 0, 0, 0)",
+        viewport.name + ": daily step surface is transparent: " + JSON.stringify(designSpecimen.dailyStep),
       );
       assert(
-        designSpecimen.taskOverview.backgroundImage !== "none",
-        viewport.name + ": task overview has no painted background: " + JSON.stringify(designSpecimen.taskOverview),
+        designSpecimen.examCard.background !== "rgba(0, 0, 0, 0)",
+        viewport.name + ": same-day exam card surface is transparent: " + JSON.stringify(designSpecimen.examCard),
+      );
+      assert(
+        designSpecimen.mapHero.backgroundImage !== "none"
+          && !designSpecimen.mapHero.backgroundImage.includes("201, 237, 98"),
+        viewport.name + ": curriculum map still contains the retired lime palette: " + JSON.stringify(designSpecimen.mapHero),
+      );
+      assert(
+        designSpecimen.taskOverview.backgroundImage !== "none"
+          && !designSpecimen.taskOverview.backgroundImage.includes("41, 47, 58"),
+        viewport.name + ": task overview still contains the retired blue palette: " + JSON.stringify(designSpecimen.taskOverview),
       );
       assert(
         designSpecimen.sessionDialog.background !== "rgba(0, 0, 0, 0)",
         viewport.name + ": session dialog surface is transparent: " + JSON.stringify(designSpecimen.sessionDialog),
       );
-      for (const [name, component] of Object.entries({
-        opsScene: designSpecimen.opsScene,
-        opsDetail: designSpecimen.opsDetail,
-        opsViewport: designSpecimen.opsViewport,
-        opsSelectedNode: designSpecimen.opsSelectedNode,
-        opsNext: designSpecimen.opsNext,
-      })) {
-        assert(component?.visible, viewport.name + ": operations workspace component is missing: " + name);
-        assert(component.width <= viewport.width + 2, viewport.name + ": operations component overflows: " + name);
-      }
-      assert(designSpecimen.opsViewport.backgroundImage !== "none", viewport.name + ": operations 3D scene has no designed surface");
       await page.screenshot({ path: path.join(outDir, viewport.name + "-design-system.png"), fullPage: true });
       await page.evaluate(() => {
         document.getElementById("studyflow-design-qa-specimen")?.remove();
@@ -317,8 +314,8 @@ async function run() {
     );
     if (errors.length) throw new Error("Browser errors or failed same-origin requests were detected: " + JSON.stringify(errors));
     console.log(JSON.stringify({
-      passed: results.length * 7,
-      checks: ["login", "registration", "home AI decision", "curriculum map", "task overview", "session finish", "operations workspace"],
+      passed: results.length * 8,
+      checks: ["login", "registration", "daily study map", "daily study step", "same-day exam card", "curriculum map", "task overview", "session finish"],
       viewports: results.map(result => result.viewport),
       screenshots: fs.readdirSync(outDir),
     }, null, 2));
