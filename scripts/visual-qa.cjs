@@ -156,7 +156,8 @@ async function run() {
         viewport.name + ": login card surface is not rendered",
       );
       assert(
-        initialState.loginCardSurface.image.includes("36, 33, 32")
+        initialState.loginCardSurface.image.includes("36, 34, 43")
+          && initialState.loginCardSurface.image.includes("27, 25, 34")
           && !initialState.loginCardSurface.image.includes("27, 35, 23"),
         viewport.name + ": legacy green login card palette is still active: " + JSON.stringify(initialState.loginCardSurface),
       );
