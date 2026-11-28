@@ -10,6 +10,7 @@ import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
 import { getNextOpenPlanStep } from "@/lib/plan-actions";
 import { getPlannerStepCurriculum } from "@/lib/planner-curriculum";
+import { getPlannerTeacherSessions } from "@/lib/teacher-sessions";
 import { displayCurriculumTitle } from "@/lib/curriculum-display";
 import { CAIRO_BAC_EXAM_CALENDAR_NOTICE, getUpcomingCairoSecondYearBaccalaureateExams } from "@shared/cairo-baccalaureate-exam-calendar";
 import { getSIEStudentVisibleBranches, getSIECheckpointProgressBranches, getSIESubject, matchSIECheckpointTask, normalizeSIECheckpointFrontier } from "@shared/sie-catalog";
@@ -350,6 +351,20 @@ export default function Home() {
       ? dailyPlanPriority
       : taskPriority ?? nextTopicInTaskBranch ?? priority;
   const plan = dailyPlan.data?.plan;
+  const upcomingTeacherSessions = useMemo(
+    () => serverNow && profile.data
+      ? getPlannerTeacherSessions(profile.data, serverNow).slice(0, 6)
+      : [],
+    [profile.data, serverNow],
+  );
+  const teacherSessionConflicts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const session of upcomingTeacherSessions) {
+      const key = session.sortDate + "::" + session.time;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return new Set([...counts.entries()].filter(([, count]) => count > 1).map(([key]) => key));
+  }, [upcomingTeacherSessions]);
   const homeStudySteps = plan?.steps ?? [];
   const homeDoneSteps = homeStudySteps.filter((step: any) =>
     step.plannerTaskStatus === "done" || step.existingTask?.status === "done"
@@ -776,6 +791,35 @@ export default function Home() {
             </div>
           )}
         </section>
+
+        {upcomingTeacherSessions.length > 0 && (
+          <section className="sf-home-teacher-timeline" aria-labelledby="sf-home-teacher-timeline-title">
+            <header>
+              <div>
+                <span>مزامنة الحصص</span>
+                <h3 id="sf-home-teacher-timeline-title">مواعيد المدرسين القادمة</h3>
+                <p>الأوقات محفوظة بتوقيت القاهرة. أي تعارض ظاهر يعني تساوي وقت بداية حصتين مسجلتين.</p>
+              </div>
+              <Badge variant="outline">{upcomingTeacherSessions.length.toLocaleString("ar-EG")} مواعيد</Badge>
+            </header>
+            <ol>
+              {upcomingTeacherSessions.map(session => {
+                const conflict = teacherSessionConflicts.has(session.sortDate + "::" + session.time);
+                return (
+                  <li key={session.key} className={conflict ? "is-conflict" : ""}>
+                    <span className="sf-home-teacher-time" dir="ltr">{formatTime12Hour(session.time)}</span>
+                    <span className="sf-home-teacher-line" aria-hidden="true"><i /></span>
+                    <span className="sf-home-teacher-copy">
+                      <strong>{session.subjectName}</strong>
+                      <small>{session.teacherName} · {session.dateLabel}</small>
+                      {conflict && <em>تعارض مؤكد في وقت البداية مع حصة أخرى</em>}
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+          </section>
+        )}
 
         {!serverNow && (
           <section className="app-card flex flex-wrap items-center justify-between gap-3 p-4" role="status" aria-live="polite">
