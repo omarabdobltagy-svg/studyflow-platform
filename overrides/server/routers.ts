@@ -10,6 +10,7 @@ import { COOKIE_NAME } from "@shared/const";
 import { SIE_CATALOG_META, SIE_SYSTEMS, SIE_TEACHERS, SIE_SUBJECTS, getSIEEducationSystem, getSIESubject, getSIETeacher, getSIETeachersForSubject, getSIETrack, getSIECheckpointChoices, getSIECheckpointBranches, normalizeSIECheckpointFrontier, getSIECheckpointProgressBranches, matchSIECheckpointTask, validateSIESubjectSelection } from "@shared/sie-catalog";
 import { getCairoMonthlyExamCompletionKey, getCairoSecondYearBaccalaureateExams } from "@shared/cairo-baccalaureate-exam-calendar";
 import { matchTeacherReviewDescription } from "./teacher-review-description";
+import { rankTeacherReviewCandidates } from "./teacher-review-ranking";
 import { calculateLearningGap, selectLegacyLinearFrontier } from "@shared/sie-learning-progress";
 import { buildMonthlyExamCoveredScope } from "@shared/monthly-exam-scope";
 import { getDateKeyInTimeZone } from "@shared/date-time";
@@ -3617,14 +3618,7 @@ export const appRouter = router({
             candidateById.set(String(item.externalId), item);
           }
         }
-        const items = [...candidateById.values()]
-          .sort((a, b) =>
-            Number(b.verificationState === "content_verified") - Number(a.verificationState === "content_verified")
-            || Number(b.matchedSignals ?? 0) - Number(a.matchedSignals ?? 0)
-            || Number(b.isSelectedTeacher) - Number(a.isSelectedTeacher)
-            || Date.parse(b.publishedAt || "") - Date.parse(a.publishedAt || "")
-          )
-          .slice(0, 12);
+        const items = rankTeacherReviewCandidates([...candidateById.values()]).slice(0, 12);
 
         // The student has already selected and linked this teacher. Save
         // revision videos discovered on the teacher's identity-verified channel
