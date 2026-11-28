@@ -284,6 +284,39 @@ export const aiPlans = mysqlTable(
   table => [index("ai_plans_user_created_idx").on(table.userId, table.createdAt)]
 );
 
+/** Durable per-account assistant conversations; clientId keeps migrated local thread IDs stable. */
+export const assistantConversations = mysqlTable(
+  "assistantConversations",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+    clientId: varchar("clientId", { length: 80 }).notNull(),
+    title: varchar("title", { length: 80 }).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [
+    uniqueIndex("assistant_conversation_user_client_unique").on(table.userId, table.clientId),
+    index("assistant_conversations_user_updated_idx").on(table.userId, table.updatedAt),
+  ],
+);
+
+/** Messages belong to one conversation; ownership is always checked through its parent. */
+export const assistantMessages = mysqlTable(
+  "assistantMessages",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    conversationId: int("conversationId").notNull().references(() => assistantConversations.id, { onDelete: "cascade" }),
+    role: mysqlEnum("role", ["user", "assistant"]).notNull(),
+    content: text("content").notNull(),
+    sortOrder: int("sortOrder").default(0).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => [
+    index("assistant_messages_conversation_order_idx").on(table.conversationId, table.sortOrder),
+  ],
+);
+
 /** صفحة ملاحظة مستقلة مستوحاة من المساحات المنظمة وقوالب الدراسة. */
 export const studyNotes = mysqlTable(
   "studyNotes",
@@ -449,3 +482,5 @@ export type RoutineItem = typeof routineItems.$inferSelect;
 export type CalendarEvent = typeof calendarEvents.$inferSelect;
 export type LibraryAttachment = typeof libraryAttachments.$inferSelect;
 export type ReminderSetting = typeof reminderSettings.$inferSelect;
+export type AssistantConversation = typeof assistantConversations.$inferSelect;
+export type AssistantMessage = typeof assistantMessages.$inferSelect;
