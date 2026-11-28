@@ -9,7 +9,7 @@ import { getPlannerTeacherSessions, groupPlannerTeacherSessions, type PlannerTea
 import { formatTime12Hour, getDateKeyInTimeZone, getCalendarDaysBetween } from "@shared/date-time";
 import { useServerClock } from "@/lib/server-clock";
 import { buildPlannerCurriculumLanes, getPlannerStepCurriculum as getPlanStepCurriculum, getTeacherSessionPreparationSteps } from "@/lib/planner-curriculum";
-import { ENGLISH_CURRICULUM_LABELS, displayCurriculumTitle } from "@/lib/curriculum-display";
+import { ENGLISH_CURRICULUM_LABELS, displayBranchTitle, displayCurriculumTitle } from "@/lib/curriculum-display";
 import {
   SIE_CATALOG_META,
   getSIECheckpointProgressBranches,
