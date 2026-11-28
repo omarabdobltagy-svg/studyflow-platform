@@ -1,14 +1,12 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import PlanExportActions from "@/components/PlanExportActions";
 import TaskReviewResourcePanel from "@/components/TaskReviewResourcePanel";
-import ExamMissionScene from "@/components/ExamMissionScene";
 import QueryErrorNotice from "@/components/QueryErrorNotice";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { getNextOpenPlanStep } from "@/lib/plan-actions";
 import { getPlannerTeacherSessions, groupPlannerTeacherSessions, type PlannerTeacherSession } from "@/lib/teacher-sessions";
 import { formatTime12Hour, getDateKeyInTimeZone, getCalendarDaysBetween } from "@shared/date-time";
-import { getCairoSecondYearBaccalaureateExams } from "@shared/cairo-baccalaureate-exam-calendar";
 import { useServerClock } from "@/lib/server-clock";
 import { buildPlannerCurriculumLanes, getPlannerStepCurriculum as getPlanStepCurriculum, getTeacherSessionPreparationSteps } from "@/lib/planner-curriculum";
 import { ENGLISH_CURRICULUM_LABELS, displayCurriculumTitle } from "@/lib/curriculum-display";
@@ -166,7 +164,7 @@ const DAILY_PLAN_DRAFT_PREFIX = "SIE_DAILY_PLAN_DRAFT_V1:";
 const ANNUAL_PLAN_PREFIX = "SIE_ANNUAL_PLAN_V1:";
 const STUDY_PLAN_PREFIX = "SIE_STUDY_PLAN_V2:";
 const todayCairo = getDateKeyInTimeZone(new Date(), "Africa/Cairo");
-const initialPrompt = "كوّن لي خطة مذاكرة عملية موزعة على جميع المواد المحددة في ملفي الدراسي، وليس مادة واحدة فقط. استخدم المهام الحالية وآخر موضع مكتمل وجدول حصص المدرسين، ووازن بين إنهاء المتراكم والاستعداد للمحاضرات الجديدة. اجعل عناوين المهام وشرحها بالعربية الواضحة. لا تنشئ اختبارات أو أسئلة أو واجبات من عندك.";
+const initialPrompt = "كوّن خطة مذاكرة منظمة لبياناتي الفعلية، بهيكل واضح: خطة رئيسية، مراحل تنفيذ، مواد، وحدات وفروع منهج، ثم دروس ومهام مرتبطة بكل فرع. لا تخلط بين المادة والفرع والدرس، ولا تحول الخطة إلى قائمة محاضرات منفصلة. رتّب الخطوات وفق المتراكم المؤكد، موضع شرح المدرس، الأولوية، المواعيد المسجلة، وصعوبة/حجم الدرس عندما تتوفر بياناتها. لكل خطوة اربط المادة والفرع والوحدة والدرس وحالة الإنجاز واليوم والأولوية وسبب الترتيب متى توفرت هذه البيانات. اكتب عناوين وتفاصيل مهام English باللغة الإنجليزية، وعناوين المواد الأخرى بالعربية الواضحة. لا تترجم عناوين English إلى العربية، ولا تنشئ اختبارات أو أسئلة أو واجبات من عندك، ولا تخترع مواعيد أو بيانات غير موجودة.";
 const planningModeOptions: Array<{ value: PlanningMode; title: string; description: string; marker: string }> = [
   { value: "smart", title: "الخطة الذكية", description: "تخلّص المتراكم، وفي نفس الوقت تجهّزك لشرح المدرس القادم.", marker: "الموصى بها" },
   { value: "backlog", title: "المتراكم أولًا", description: "ركّز على المهام المفتوحة والفجوات المؤكدة قبل إضافة الجديد.", marker: "تركيز" },
@@ -384,16 +382,6 @@ export default function Planner() {
     [profile.data?.selection, profile.data?.subjectIds, profile.data?.teacherSelections, (profile.data?.selection as Record<string, any> | undefined)?.teacherSchedules],
   );
   const todayCairo = getDateKeyInTimeZone(serverNow ?? new Date(), "Africa/Cairo");
-  const upcomingCairoExams = useMemo(
-    () => getCairoSecondYearBaccalaureateExams(profile.data)
-      .filter(exam => exam.date >= todayCairo)
-      .sort((left, right) => left.date.localeCompare(right.date)),
-    [profile.data, todayCairo],
-  );
-  const nearestCairoExam = upcomingCairoExams[0] ?? null;
-  const nearestExamDays = nearestCairoExam
-    ? Math.max(0, getCalendarDaysBetween(todayCairo, nearestCairoExam.date))
-    : Number.POSITIVE_INFINITY;
   const learning = trpc.learning.get.useQuery(undefined, { staleTime: 15_000 });
   const tasksQuery = trpc.tasks.list.useQuery(undefined, { staleTime: 15_000 });
   const activeDailyPlan = trpc.plans.currentDaily.useQuery(undefined, {
@@ -888,19 +876,6 @@ export default function Planner() {
           </div>
         </header>
 
-        {nearestCairoExam && (
-          <ExamMissionScene
-            exam={nearestCairoExam}
-            daysUntil={nearestExamDays}
-            upcomingExams={upcomingCairoExams}
-          />
-        )}
-
-
-        {plan&&<PlanDecisionPanel plan={plan}/>}
-        {plan&&<PlanAssistantChat plan={plan} subjectIds={profile.data?.subjectIds??[]} editable={true}
-          onChange={updatePlan} onProposalApplied={()=>setPlannerTab("schedule")}/>}
-
         <section className="sf-sp-metrics" data-scroll-reveal aria-label="ملخص بيانات المذاكرة">
           <article className="sf-sp-metric"><span>المهام المفتوحة</span><strong>{tasksQuery.isLoading ? "…" : openTaskRows.length.toLocaleString("ar-EG")}</strong><small>من قائمة مهامك الفعلية</small></article>
           <article className="sf-sp-metric"><span>مهام مستحقة اليوم</span><strong>{tasksQuery.isLoading ? "…" : todayTaskRows.length.toLocaleString("ar-EG")}</strong><small>وفق المواعيد المسجلة</small></article>
@@ -924,6 +899,14 @@ export default function Planner() {
 
         {plannerTab === "overview" && (
           <div className="sf-sp-panel sf-sp-overview-panel">
+            {plan && <PlanDecisionPanel plan={plan} />}
+            {plan && <PlanAssistantChat
+              plan={plan}
+              subjectIds={profile.data?.subjectIds ?? []}
+              editable={true}
+              onChange={updatePlan}
+              onProposalApplied={() => setPlannerTab("schedule")}
+            />}
             <section className="sf-sp-overview-grid" data-scroll-reveal>
               <article className="sf-sp-focus-card">
                 <div className="sf-sp-section-heading">
@@ -1087,11 +1070,17 @@ export default function Planner() {
                 {generationProgress.data?.status === "running" ? (
                   <PlanLoading progress={generationProgress.data} gradeLabel={SIE_CATALOG_META.gradeYear} />
                 ) : (
-                  <div className="sf-auto-replan-stages" aria-label="مراحل إعادة الترتيب">
-                    <span className="is-done"><CheckCircle2 className="size-4" />تأكيد مصدر التحديث</span>
-                    <span className="is-active"><Loader2 className="size-4 animate-spin" />مطابقة الدروس والمهام</span>
-                    <span>إعادة ترتيب الأولويات</span>
-                    <span>حفظ الخريطة الجديدة</span>
+                  <div className="sf-sp-replan-pending" role="status" aria-live="polite">
+                    <div>
+                      <strong>{generationProgress.data?.status === "failed" ? "تعذّر إكمال إعادة الترتيب" : "الخطة تحتاج إلى مواءمة"}</strong>
+                      <p>{generationProgress.data?.status === "failed"
+                        ? generationProgress.data.detail || generationProgress.data.error || "لم تكتمل آخر محاولة. الخطة المحفوظة ما زالت متاحة."
+                        : "تم رصد تغيّر في بياناتك، لكن لا توجد عملية إعادة ترتيب نشطة الآن. لن نعرض مراحل تحميل غير حقيقية."}</p>
+                    </div>
+                    <Button type="button" onClick={runGeneration} disabled={ensureDaily.isPending}>
+                      {ensureDaily.isPending ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+                      إعادة مواءمة الخطة
+                    </Button>
                   </div>
                 )}
               </section>
