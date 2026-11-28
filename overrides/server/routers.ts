@@ -907,8 +907,41 @@ async function buildDailyPlanOperationalContext(userId: number) {
     recentSetbacks: nonCompletionReports.length,
     obstacle: String(profile?.obstacle ?? ""),
   };
+  const nearestExam = decisionSignals.exams?.[0];
+  const adaptiveDirectives = [
+    "قواعد التكيّف التنفيذي: الخطة الأساسية للتراكم تظل محفوظة، وأي استعداد لامتحان شهري هو طبقة مؤقتة فوقها وليس بديلًا عنها. لا تحذف مهام التراكم ولا تعِد ضبط الهدف السنوي بسبب امتحان شهري قريب.",
+    nearestExam && nearestExam.daysUntil <= 1
+      ? "أولوية عاجلة: " + (nearestExam.daysUntil === 0 ? "امتحان اليوم" : "امتحان غدًا") + " في " + nearestExam.subjectName + " بتاريخ " + nearestExam.date + ". قدّم الاستعداد لهذا الامتحان في المهام الحالية فقط، واستخدم النطاق الموثق للمادة أعلاه. انقل المهام غير الحرجة إلى ما بعد الامتحان بدل حذفها. إذا لم يكن نطاق الامتحان موثقًا، لا تخترع دروسًا أو موضوعات."
+      : nearestExam && nearestExam.daysUntil <= 7
+        ? "امتحان قريب خلال " + nearestExam.daysUntil + " يومًا في " + nearestExam.subjectName + ". خصص أولوية متدرجة لمراجعة النطاق الموثق، مع استمرار التراكم في المواد الأخرى دون تكديس."
+        : nearestExam && nearestExam.daysUntil <= 14
+          ? "هناك امتحان خلال أسبوعين في " + nearestExam.subjectName + ". وزّع المراجعة تدريجيًا ولا تنتظر آخر يوم، مع الحفاظ على الخطة السنوية."
+          : "",
+    decisionSignals.energyLevel === "low"
+      ? "الطاقة البدنية منخفضة: قلّل الحمل اليومي إلى أقل مجموعة مهام ذات أثر واضح، واجعل أول خطوة قصيرة ومحددة. لا تعاقب التعثر بتكديس ساعات تعويضية."
+      : "",
+    decisionSignals.moraleLevel === "low"
+      ? "الضغط المعنوي مرتفع: لا تعرض قائمة ضخمة دفعة واحدة. حافظ على المسار، وابدأ بمهمة واحدة قابلة للتنفيذ ثم أعد التقييم."
+      : "",
+    typeof decisionSignals.dailyMinutes === "number" && decisionSignals.dailyMinutes <= 60
+      ? "القدرة اليومية محدودة إلى " + decisionSignals.dailyMinutes + " دقيقة تقريبًا. لا تتجاوز السعة الواقعية ولا تخفِ المهام الزائدة؛ اذكر ما تم تأجيله وسبب التأجيل."
+      : "",
+    decisionSignals.openTasksCount >= 10
+      ? "التراكم مرتفع (" + decisionSignals.openTasksCount + " مهمة مفتوحة): لا تحاول إنهاء كل شيء في يوم واحد. حافظ على المهام، أزل التكرار، ووزّعها حسب الأولوية والأهلية."
+      : "",
+    decisionSignals.recentSetbacks >= 2
+      ? "هناك تعثرات حديثة متكررة: أعد ضبط حجم الخطوات وواقعيتها بدل إضافة مهام تعويضية فوق القدرة."
+      : "",
+    decisionSignals.obstacle ? "العائق المسجل لدى الطالب: " + decisionSignals.obstacle + ". لا تتجاهله؛ عدّل التوزيع بما يمكن تنفيذه." : "",
+  ].filter(Boolean).join("\n");
   return {
-    text: readableContext + "\n\nذاكرة الطالب المنظمة مع المصدر ودرجة الثقة لكل معلومة:\n" + formatPlannerMemorySnapshot(memorySnapshot),
+    text: [
+      readableContext,
+      "قرارات المساعد التنفيذي وتكييف الخطة:",
+      adaptiveDirectives,
+      "ذاكرة الطالب المنظمة مع المصدر ودرجة الثقة لكل معلومة:",
+      formatPlannerMemorySnapshot(memorySnapshot),
+    ].filter(Boolean).join("\n\n"),
     memorySnapshot,
     decisionSignals,
   };
