@@ -641,17 +641,21 @@ export default function Planner() {
   const backgroundPlanRunning = (aiActivity.data?.active ?? []).some(item => item.kind === "daily_plan");
   const generationProgress = trpc.plans.generationProgress.useQuery(undefined, {
     enabled: ensureDaily.isPending || backgroundPlanRunning || Boolean(activeDailyPlan.data?.needsRefresh),
-    refetchInterval: query => (
-      ensureDaily.isPending
-      || backgroundPlanRunning
-      || Boolean(activeDailyPlan.data?.needsRefresh)
-      || query.state.data?.status === "running"
-    ) ? 2_500 : false,
+    refetchInterval: query => {
+      const progress = query.state.data;
+      const progressIsFresh = progress?.status === "running"
+        && Number.isFinite(progress.updatedAt)
+        && Date.now() - progress.updatedAt < 90_000;
+      return ensureDaily.isPending || backgroundPlanRunning || progressIsFresh ? 2_500 : false;
+    },
     refetchOnWindowFocus: false,
   });
+  const generationProgressIsFresh = generationProgress.data?.status === "running"
+    && Number.isFinite(generationProgress.data.updatedAt)
+    && Date.now() - generationProgress.data.updatedAt < 90_000;
   const isPlanGenerationRunning = ensureDaily.isPending
     || backgroundPlanRunning
-    || generationProgress.data?.status === "running";
+    || generationProgressIsFresh;
 
   useEffect(() => {
     if (!isPlanGenerationRunning) {
