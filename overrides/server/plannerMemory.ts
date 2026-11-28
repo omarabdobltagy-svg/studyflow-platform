@@ -32,7 +32,7 @@ export type PlannerEvidence<T = unknown> = {
 };
 
 export type PlannerMemorySnapshot = {
-  version: 1;
+  version: 2;
   capturedAt: string;
   student: {
     educationSystem: string;
