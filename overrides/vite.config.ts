@@ -172,7 +172,7 @@ export default defineConfig({
         manualChunks(id) {
           if (!id.includes("node_modules")) return undefined;
           if (id.includes("/three/") || id.includes("/gsap/")) return "vendor-3d";
-          if (id.includes("/recharts/") || /\\/d3-[^/]+\\//.test(id)) return "vendor-charts";
+          if (id.includes("/recharts/") || /\/d3-[^/]+\//.test(id)) return "vendor-charts";
           if (id.includes("/framer-motion/") || id.includes("/motion-dom/")) return "vendor-motion";
           if (id.includes("/react-dom/") || id.includes("/react/") || id.includes("/scheduler/") || id.includes("/@tanstack/react-query/")) return "vendor-react";
           if (id.includes("/lucide-react/")) return "vendor-icons";
