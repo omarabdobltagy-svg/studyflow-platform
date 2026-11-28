@@ -628,7 +628,7 @@ function plannerProviderError(error: unknown): Error {
     return new Error("مفتاح OpenRouter الاحتياطي غير مهيأ أو غير صالح. راجع OPENROUTER_API_KEY أو مفتاح AI_API_KEY الحالي في إعدادات الخدمة.");
   }
 
-  const status = Number(message.match(/(?:Gemini|OpenRouter|NVIDIA )?LLM invoke failed:\\s*(\\d{3})/i)?.[1] ?? 0);
+  const status = Number(message.match(/(?:Gemini|OpenRouter|NVIDIA )?LLM invoke failed:\s*(\d{3})/i)?.[1] ?? 0);
   if (status === 401 || status === 403) {
     return new Error("رفض " + providerLabel + " بيانات الاعتماد أو الصلاحيات. راجع المفتاح ونطاق صلاحياته.");
   }
