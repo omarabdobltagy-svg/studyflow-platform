@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { acceptedAlternativeReviewVideoIds, classifyTeacherAnnouncement, getAcceptedAlternativeReviewContext, getSelectedTeacherRevisionUpdates, isHighConfidenceScheduleAnnouncement, isSecondYearBaccalaureateProfile, isSecondYearBaccalaureateUpdate, isTeacherVideoUpdateAllowed, parseYoutubeAtomFeed, parseYoutubeDurationMinutes, selectedSubjectIdsForTeacher, selectedTeacherIds, shouldScanTeacherSource } from "./teacher-content-monitor";
+import { acceptedAlternativeReviewVideoIds, classifyTeacherAnnouncement, getAcceptedAlternativeReviewContext, getSelectedTeacherRevisionUpdates, isHighConfidenceScheduleAnnouncement, isSecondYearBaccalaureateProfile, isSecondYearBaccalaureateUpdate, isTeacherVideoUpdateAllowed, parseYoutubeAtomFeed, parseYoutubeDurationMinutes, resolveTeacherYoutubeChannelId, selectedSubjectIdsForTeacher, selectedTeacherIds, shouldScanTeacherSource } from "./teacher-content-monitor";
 
 describe("teacher public channel monitor", () => {
+  it("uses the verified official YouTube channels for Gomaa El Sayed and Barmagthalk", async () => {
+    await expect(resolveTeacherYoutubeChannelId("T_HIS_GOMAA_EL_SAYED"))
+      .resolves.toBe("UCjViyKSzgSyETEOCbYaW0Dg");
+    await expect(resolveTeacherYoutubeChannelId("T_PROG_MAZEN_ALI_BARMAGTHALK"))
+      .resolves.toBe("UCJDddU8iWywpy75lqzA1-7Q");
+  });
+
   it("parses public YouTube upload entries and decodes Arabic metadata", () => {
     const xml = `<?xml version="1.0"?>
       <feed>

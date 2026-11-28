@@ -160,7 +160,9 @@ const YOUTUBE_CHANNEL_IDS: Record<string, string> = {
   T_EN_MAHMOUD_RADWAN: "UCndPJfSCMRiJTI2QuCqjn_Q",
   T_HIS_AHMED_GHONIEM: "UCDNYAiloNfFoMCvKmrsaA4g",
   T_HIS_ABDELHADY: "UCThV5LrCMIWs9tyDvZ9IC2w",
+  T_HIS_GOMAA_EL_SAYED: "UCjViyKSzgSyETEOCbYaW0Dg",
   T_PROG_KHALED_ASHRAF: "UClvKiBCF_fSF_CU_jZ8tZcA",
+  T_PROG_MAZEN_ALI_BARMAGTHALK: "UCJDddU8iWywpy75lqzA1-7Q",
 };
 
 function normalizeYoutubeChannelText(value: string): string {
