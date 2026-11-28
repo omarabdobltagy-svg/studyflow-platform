@@ -1635,8 +1635,7 @@ export function applyDailyPlanDepth(
       const endLabel = formatTopicTime(endSeconds);
       const topicDetail = [
         String(topic.descriptionAr || "جزء موضوعي من مراجعة المدرس.").slice(0, 500),
-        "هذا الجزء من " + startLabel + " إلى " + endLabel + ".",
-        "ابدأ الفيديو من هذا الموضع، وراجع الموضوع المحدد فقط.",
+        "راجع النقاط المرتبطة بهذا الموضوع، وركّز على ما يحتاج إلى تثبيت.",
       ].join(" ");
       subtasks.push({
         id: (match.nodeId + ":" + String(video.externalId || "youtube").slice(0, 40)).slice(0, 180),
@@ -1652,9 +1651,9 @@ export function applyDailyPlanDepth(
     if (subtasks.length === 0) continue;
     const parentStep = planSchema.shape.steps.element.parse({
       day: "",
-      title: ("مراجعة موجهة من مدرسك: " + videoTitle).slice(0, 180),
-      detail: "اختار المساعد هذا المصدر بعد تحليل محتواه ومطابقة " + subtasks.length
-        + " موضوعات مع دروس تحتاج مراجعة لديك. افتح كل موضوع من توقيته المحدد ونفّذ المراجعة داخل هذه المهمة.",
+      title: ("مراجعة موجهة من " + teacherName).slice(0, 180),
+      detail: "حلّل StudyFlow محتوى المراجعة، واستخرج " + subtasks.length
+        + " موضوعات مرتبطة بدروس تحتاج مراجعة لديك. راجع الملخصات والنقاط المحددة داخل هذه المهمة.",
       minutes: 0,
       category: "مراجعة موجهة",
       curriculumNodeIds: [...new Set(subtasks.flatMap(item => item.curriculumNodeIds))].slice(0, 8),

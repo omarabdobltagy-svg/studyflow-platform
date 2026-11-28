@@ -223,6 +223,40 @@ function displayPlanStepDetail(step: PlanStep, subjectIds: string[]): string {
   return displayArabicText(step.detail, fallback);
 }
 
+function PlanDecisionPanel({plan}:{plan:PlanView}) {
+  const strategy=plan.strategy;
+  if(!strategy)return null;
+  const revision=strategy.revision, baseline=strategy.baseline, diff=revision.diff;
+  const changes=[
+    ...diff.added.slice(0,3).map(x=>({label:"أُضيفت",title:x.title,key:"a"+x.key})),
+    ...diff.removed.slice(0,3).map(x=>({label:"خرجت من التوزيع",title:x.title,key:"r"+x.key})),
+    ...diff.rescheduled.slice(0,3).map(x=>({label:"تغيّر موعدها",title:x.title,key:"s"+x.key})),
+    ...diff.reprioritized.slice(0,3).map(x=>({label:"تغيّرت أولويتها",title:x.title,key:"p"+x.key})),
+    ...diff.deferred.slice(0,3).map(x=>({label:"تأجلت",title:x.title,key:"d"+x.key})),
+  ];
+  return (
+    <section className="sf-plan-decision" data-testid="planner-decision-panel">
+      <header><div><span>قرار محرك التخطيط</span><strong>{revision.headline}</strong></div>
+        <span className={"sf-plan-decision-status "+(revision.status==="adapted"?"is-adapted":"")}>{revision.status==="baseline"?"النسخة الأساسية":revision.status==="adapted"?"خطة معدّلة":"لا تغيير جوهري"}</span>
+      </header>
+      <p className="sf-plan-decision-rationale">{revision.rationale}</p>
+      <div className="sf-plan-decision-compare">
+        <article><small>الخطة الأصلية</small><strong>{baseline.title}</strong><b>{baseline.steps.length.toLocaleString("ar-EG")} خطوة</b><p>{displayArabicText(baseline.summary,"النسخة الأولى المحفوظة من خطة المذاكرة.")}</p></article>
+        <article><small>التوزيع الحالي</small><strong>{displayArabicText(plan.title,"خطة المذاكرة")}</strong><b>{plan.steps.length.toLocaleString("ar-EG")} خطوة</b><p>{displayArabicText(plan.summary,"التوزيع الحالي وفق آخر بياناتك.")}</p></article>
+      </div>
+      {revision.triggers.length>0&&<div className="sf-plan-decision-triggers">{revision.triggers.map((x,i)=><article key={x.code+i}><b>{x.label}</b><p>{x.detail}</p></article>)}</div>}
+      {revision.hasPreviousVersion&&<div className="sf-plan-decision-changes">
+        <div><span>أُضيفت</span><b>{diff.added.length.toLocaleString("ar-EG")}</b></div>
+        <div><span>أُزيلت</span><b>{diff.removed.length.toLocaleString("ar-EG")}</b></div>
+        <div><span>تغيّر توقيتها</span><b>{diff.rescheduled.length.toLocaleString("ar-EG")}</b></div>
+        <div><span>تأجلت</span><b>{diff.deferred.length.toLocaleString("ar-EG")}</b></div>
+      </div>}
+      {changes.length>0&&<ul className="sf-plan-decision-change-list">{changes.map(x=><li key={x.key}><span>{x.label}</span><strong>{x.title}</strong></li>)}</ul>}
+      {!revision.hasPreviousVersion&&<small className="sf-plan-decision-baseline-note">دي نقطة القياس الأولى. هتظهر المقارنة التفصيلية عند أول تعديل لاحق.</small>}
+    </section>
+  );
+}
+
 function PlanReviewSubtasks({ step }: { step: PlanStep }) {
   if (!step.subtasks?.length && !step.aiReviewBrief) return null;
   return (
@@ -781,7 +815,7 @@ export default function Planner() {
   const planNeedsRefresh = Boolean(activeDailyPlan.data?.needsRefresh);
 
   return (
-    <DashboardLayout title="خطة المذاكرة" description="مساحة واحدة لفهم أولوياتك، وتنظيم جلساتك، ومتابعة ما أنجزته.">
+    <DashboardLayout title="خطة المذاكرة" description="قرار واضح، وتسلسل تنفيذ يربط المواد والالتزامات والمراجعات بتقدمك الفعلي.">
       <div className="sf-study-plan-v2">
         {history.isError && <QueryErrorNotice onRetry={() => void history.refetch()} label="تعذّر تحميل خططك المحفوظة." />}
         {profile.isError && <QueryErrorNotice onRetry={() => void profile.refetch()} label="تعذّر تحميل ملفك الدراسي. أعد المحاولة قبل إنشاء الخطة." />}
@@ -813,6 +847,10 @@ export default function Planner() {
           </div>
         </header>
 
+        {plan&&<PlanDecisionPanel plan={plan}/>}
+        {plan&&<PlanAssistantChat plan={plan} subjectIds={profile.data?.subjectIds??[]} editable={true}
+          onChange={updatePlan} onProposalApplied={()=>setPlannerTab("schedule")}/>}
+
         <section className="sf-sp-metrics" data-scroll-reveal aria-label="ملخص بيانات المذاكرة">
           <article className="sf-sp-metric"><span>المهام المفتوحة</span><strong>{tasksQuery.isLoading ? "…" : openTaskRows.length.toLocaleString("ar-EG")}</strong><small>من قائمة مهامك الفعلية</small></article>
           <article className="sf-sp-metric"><span>مهام مستحقة اليوم</span><strong>{tasksQuery.isLoading ? "…" : todayTaskRows.length.toLocaleString("ar-EG")}</strong><small>وفق المواعيد المسجلة</small></article>
@@ -823,8 +861,8 @@ export default function Planner() {
         <nav className="sf-sp-tabs" role="tablist" aria-label="أقسام خطة المذاكرة">
           {([
             ["overview", "الملخص", Sparkles],
-            ["schedule", "التوزيع", CalendarClock],
-            ["curriculum", "المسار", BrainCircuit],
+            ["schedule", "التنفيذ", CalendarClock],
+            ["curriculum", "المواد", BrainCircuit],
             ["tasks", "المهام", CheckCircle2],
             ["history", "السجل", RefreshCw],
           ] as const).map(([key, label, Icon]) => (
@@ -899,24 +937,6 @@ export default function Planner() {
                 setGenerationDetailsHiddenForRun(false);
                 setShowGenerationDetails(true);
               }} />
-            )}
-
-            {profile.data?.subjectIds?.length && aiCapabilities.data && (
-              <section className="app-card flex flex-wrap items-start gap-3 rounded-2xl p-4" aria-live="polite">
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Sparkles className="size-4" /></span>
-                <div className="min-w-0 flex-1">
-                  <strong className="text-sm">الرصد التلقائي للمدرسين</strong>
-                  <p className="mt-1 text-xs leading-6 text-muted-foreground">
-                    {aiCapabilities.data.youtubeMonitoring
-                      ? "البحث عن قنوات المدرسين المختارين وفحص الفيديوهات العامة مفعّل."
-                      : "الرصد التلقائي لقنوات المدرسين غير متاح حاليًا. ستظل خطتك وتقدمك محفوظين وتعمل بقية أدوات الدراسة."}
-                    {" "}
-                    {aiCapabilities.data.teacherVideoAnalysis
-                      ? "تحليل الفيديو إلى موضوعات فعلية مفعّل."
-                      : "تحليل محتوى الفيديو غير متاح حاليًا؛ ستظهر المطابقات المؤكدة فقط عند توافر التحليل."}
-                  </p>
-                </div>
-              </section>
             )}
 
             {visibleAIActivities.length > 0 && (
@@ -1244,7 +1264,6 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
 }) {
   const [editing, setEditing] = useState<{ index: number; title: string; detail: string } | null>(null);
   const [filter, setFilter] = useState<"all" | "open" | "done">("all");
-  const [viewMode, setViewMode] = useState<"map" | "list">("map");
   const [selectedMapStepIndex, setSelectedMapStepIndex] = useState<number | null>(() => {
     const firstOpen = plan.steps.findIndex(step =>
       step.plannerTaskStatus !== "done" && step.existingTask?.status !== "done"
@@ -1263,12 +1282,7 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
   const backlogCoverageLabel = backlogExpectedCount === null || backlogIncludedCount === null
     ? "غير متاح"
     : backlogIncludedCount.toLocaleString("ar-EG") + " / " + backlogExpectedCount.toLocaleString("ar-EG");
-  const plannedReviewCount = new Set(plan.steps.flatMap(step => {
-    const resource = step.resourceRecommendation;
-    return resource && /مراجعة|review|revision/i.test(resource.reason || "") && resource.url
-      ? [resource.url.split("#")[0]]
-      : [];
-  })).size;
+  const plannedReviewCount = new Set(plan.steps.filter(step=>step.aiReviewBrief||step.subtasks?.length).map(step=>step.existingTask?.id??step.curriculumNodeIds?.[0]??step.title)).size;
   const phaseLabels: Record<string,string> = {
     backlog: "التزامات مفتوحة",
     teacher_sync: "شرح قبل الحصة",
@@ -1276,26 +1290,6 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
     review_later: "بعد الدروس الجديدة",
     deferred: "مؤجل",
   };
-  const phaseOrder = ["teacher_sync", "steady", "backlog", "review_later", "deferred"];
-  const grouped = new Map<string, Array<{step: PlanStep; index: number}>>();
-  plan.steps.forEach((step,index) => {
-    const key = step.scheduleState === "deferred"
-      ? "deferred"
-      : step.phaseId ?? (step.existingTask ? "backlog" : "steady");
-    if (!grouped.has(key)) grouped.set(key, []);
-    grouped.get(key)!.push({step,index});
-  });
-  const orderedGroups = phaseOrder
-    .filter(key => grouped.has(key))
-    .map(key => [key, grouped.get(key)!] as const);
-  const visibleGroups = orderedGroups.map(([key,items]) => ({
-    key,
-    title: phaseLabels[key] ?? "مهام دراسية",
-    items: items.filter(({step}) => filter === "all" || (filter === "done"
-      ? step.plannerTaskStatus === "done" || step.existingTask?.status === "done"
-      : step.plannerTaskStatus !== "done" && step.existingTask?.status !== "done")),
-  })).filter(group => group.items.length > 0);
-
   const mapEntries = plan.steps
     .map((step, index) => ({ step, index }))
     .filter(({ step }) => {
@@ -1307,19 +1301,8 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
   // Group by actual syllabus unit first. Branch badges remain visible within a
   // unit so Arabic multi-branch units and English Vocabulary/Grammar stay linked.
   const mapLanes = buildPlannerCurriculumLanes(mapEntries, subjectIds);
-  const selectedMapStep = selectedMapStepIndex === null
-    ? null
-    : plan.steps[selectedMapStepIndex] ?? null;
   const firstOpenMapStep = getNextOpenPlanStep(plan.steps);
   const currentStepIndex = firstOpenMapStep ? plan.steps.indexOf(firstOpenMapStep) : -1;
-  const selectedMapCurriculum = selectedMapStep
-    ? getPlanStepCurriculum(selectedMapStep, subjectIds)
-    : null;
-  const selectedMapNodeId = selectedMapStep?.curriculumNodeIds?.[0];
-  const selectedMapBranchId = selectedMapCurriculum && selectedMapNodeId
-    ? getSIECheckpointProgressBranches(selectedMapCurriculum.subjectId)
-        .find(branch => branch.choices.some(choice => choice.nodeId === selectedMapNodeId))?.branchId
-    : undefined;
   const saveEdit = () => {
     if (!editing) return;
     onChange({
@@ -1354,52 +1337,12 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
         <PlanExportActions plan={plan} studentName={studentName} />
       </header>
 
-      {plan.strategy && <section className="sf-sp-plan-rationale" data-testid="planner-strategy-delta">
-        <span className="sf-sp-eyebrow">{plan.strategy.revision.hasPreviousVersion ? "لماذا تغيّرت خطتك؟" : "أساس بناء الخطة"}</span>
-        <h3>{plan.strategy.revision.headline}</h3>
-        <p>{plan.strategy.revision.rationale}</p>
-        <div className="sf-sp-comparison-grid" data-testid="planner-before-after">
-          <article className="sf-sp-comparison-original">
-            <span>قبل التعديل</span>
-            <strong>{plan.strategy.baseline.title}</strong>
-            <p>{displayArabicText(plan.strategy.baseline.summary, "نسخة البداية المحفوظة قبل أي إعادة تخطيط.")}</p>
-            <b>{plan.strategy.baseline.steps.length.toLocaleString("ar-EG")} <small>خطوة</small></b>
-          </article>
-          <article className="sf-sp-comparison-current">
-            <span>التوزيع الحالي</span>
-            <strong>{displayArabicText(plan.title, "خطة المذاكرة")}</strong>
-            <p>{displayArabicText(summary, "التوزيع الحالي المبني على آخر بياناتك الدراسية.")}</p>
-            <b>{plan.steps.length.toLocaleString("ar-EG")} <small>خطوة</small></b>
-          </article>
-        </div>
-        <div className="sf-sp-board-metrics">
-          <article><span>مهام الخطة الأساسية</span><strong>{plan.strategy.baseline.steps.length.toLocaleString("ar-EG")}</strong></article>
-          <article><span>المهام الحالية</span><strong>{plan.steps.length.toLocaleString("ar-EG")}</strong></article>
-          {plan.strategy.revision.hasPreviousVersion && <>
-            <article><span>أُضيفت</span><strong>{plan.strategy.revision.diff.added.length.toLocaleString("ar-EG")}</strong></article>
-            <article><span>أُعيد ترتيبها</span><strong>{plan.strategy.revision.diff.rescheduled.length.toLocaleString("ar-EG")}</strong></article>
-            <article><span>تغيّرت أولويتها</span><strong>{plan.strategy.revision.diff.reprioritized.length.toLocaleString("ar-EG")}</strong></article>
-            <article><span>أُجّلت</span><strong>{plan.strategy.revision.diff.deferred.length.toLocaleString("ar-EG")}</strong></article>
-          </>}
-        </div>
-        {plan.strategy.revision.triggers.length > 0 && <div className="sf-sp-phase-summary">
-          {plan.strategy.revision.triggers.map((trigger, index) => <article key={trigger.code + index}><strong>{trigger.label}</strong><p>{trigger.detail}</p></article>)}
-        </div>}
-        {plan.strategy.revision.hasPreviousVersion && <div className="sf-sp-task-list">
-          {plan.strategy.revision.diff.added.slice(0, 3).map(step => <article className="sf-sp-task-row" key={"add-" + step.key}><strong>أُضيفت: {step.title}</strong></article>)}
-          {plan.strategy.revision.diff.removed.slice(0, 3).map(step => <article className="sf-sp-task-row" key={"remove-" + step.key}><strong>لم تعد ضمن التنفيذ الحالي: {step.title}</strong></article>)}
-          {plan.strategy.revision.diff.rescheduled.slice(0, 3).map(step => <article className="sf-sp-task-row" key={"move-" + step.key}><strong>أُعيد توقيتها: {step.title}</strong></article>)}
-          {plan.strategy.revision.diff.reprioritized.slice(0, 3).map(step => <article className="sf-sp-task-row" key={"priority-" + step.key}><strong>تغيّرت أولويتها: {step.title}</strong></article>)}
-          {plan.strategy.revision.diff.deferred.slice(0, 3).map(step => <article className="sf-sp-task-row" key={"defer-" + step.key}><strong>أُجّلت: {step.title}</strong></article>)}
-        </div>}
-      </section>}
-
       <div className="sf-sp-board-metrics">
         <article><span>إجمالي الخطوات</span><strong>{plan.steps.length.toLocaleString("ar-EG")}</strong></article>
         <article><span>المهام المنفذة</span><strong>{completedCount.toLocaleString("ar-EG")}</strong></article>
         <article><span>المتراكم المؤكد المدرج / الإجمالي</span><strong>{backlogCoverageLabel}</strong></article>
         <article><span>نقاط المنهج المرتبطة</span><strong>{coveredCurriculumCount.toLocaleString("ar-EG")}</strong></article>
-        <article><span>مصادر مراجعة اختارها المحرك</span><strong>{plannedReviewCount.toLocaleString("ar-EG")}</strong></article>
+        <article><span>مراجعات موجهة</span><strong>{plannedReviewCount.toLocaleString("ar-EG")}</strong></article>
         <article><span>التزامات مسجلة</span><strong>{confirmedTaskCount.toLocaleString("ar-EG")}</strong></article>
       </div>
 
@@ -1495,329 +1438,100 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
         </section>
       )}
 
-      <div className="sf-sp-board-toolbar sf-sp-map-toolbar">
-        <div>
-          <h3>خريطة تنفيذ الخطة</h3>
-          <p>الخريطة تجمع دروس كل مادة في تسلسل واحد واضح. افتح أي خطوة لعرض المطلوب وسبب ترتيبها.</p>
+      <section className="sf-execution-board" data-testid="planner-execution-board">
+        <header className="sf-execution-board-header">
+          <div><span className="sf-sp-eyebrow">تنفيذ الخطة</span><h3>ابدأ بالخطوة التالية، والباقي مرتب حسب مادتك</h3><p>كل مادة لها مسار واضح. افتح الخطوة لمعرفة المطلوب وسبب ترتيبها، وسجّل تقدمك بعد التنفيذ.</p></div>
+          <div className="sf-execution-filters" role="group" aria-label="تصفية خطوات الخطة">
+            {([["all","كل الخطوات"],["open","المتبقي"],["done","المكتمل"]] as const).map(([key,label])=><button type="button" key={key} aria-pressed={filter===key} data-testid={"planner-filter-"+key} onClick={()=>{setFilter(key);setSelectedMapStepIndex(null);}}>{label}</button>)}
+          </div>
+        </header>
+        <div className="sf-execution-summary">
+          <div><small>الخطوة التالية</small><strong>{firstOpenMapStep?displayPlanStepTitle(firstOpenMapStep,subjectIds):"اكتملت خطوات الخطة"}</strong></div>
+          <div><small>المواد والمسارات</small><strong>{mapLanes.length.toLocaleString("ar-EG")}</strong></div>
+          <div><small>الخطوات المتبقية</small><strong>{(plan.steps.length-completedCount).toLocaleString("ar-EG")}</strong></div>
         </div>
-        <div className="sf-sp-map-controls">
-          <div className="sf-sp-filter-group" role="group" aria-label="تصفية مهام الخطة">
-            {([["all","الكل"],["open","المتبقي"],["done","المكتمل"]] as const).map(([key,label]) => (
-              <button type="button" key={key} aria-pressed={filter===key} data-testid={"planner-filter-" + key} onClick={()=>{setFilter(key);setSelectedMapStepIndex(null);}}>{label}</button>
-            ))}
-          </div>
-          <div className="sf-sp-view-group" role="group" aria-label="طريقة عرض الخطة">
-            <button type="button" data-testid="planner-view-map" aria-pressed={viewMode==="map"} onClick={()=>setViewMode("map")}>الخريطة</button>
-            <button type="button" data-testid="planner-view-list" aria-pressed={viewMode==="list"} onClick={()=>setViewMode("list")}>القائمة</button>
-          </div>
-        </div>
-      </div>
-
-      {viewMode === "map" ? (
-        <div className="sf-sp-flow-map" dir="rtl">
-          <div className="sf-sp-flow-origin">
-            <span className="sf-sp-flow-origin-kicker">نقطة البداية</span>
-            <strong>موضعك الدراسي الحالي</strong>
-            <small>{mapLanes.length.toLocaleString("ar-EG")} مسارات تنفيذ · {plan.steps.length.toLocaleString("ar-EG")} خطوة في الخطة{backlogCoverageLabel !== "غير متاح" ? " · المتراكم المؤكد " + backlogCoverageLabel : ""}</small>
-          </div>
-          <div className="sf-sp-flow-legend" aria-label="دليل ألوان الخريطة">
-            <span><i className="is-learning" /> مذاكرة وشرح</span>
-            <span><i className="is-review" /> مراجعة مؤجلة</span>
-            <span><i className="is-obligation" /> التزام مسجل</span>
-            <span><i className="is-done" /> مهمة منتهية</span>
-          </div>
-          {mapLanes.length ? (
-            <div className="sf-sp-flow-lanes" data-testid="planner-subject-lanes" aria-label="مسارات الخطة حسب المادة والوحدة الدراسية">
-              {mapLanes.map(lane => {
-                const laneDoneCount = lane.items.filter(({ step }) =>
-                  step.plannerTaskStatus === "done" || step.existingTask?.status === "done"
-                ).length;
-                const laneProgress = lane.items.length ? Math.round(laneDoneCount / lane.items.length * 100) : 0;
-                const laneNext = lane.items.find(({ step }) =>
-                  step.plannerTaskStatus !== "done" && step.existingTask?.status !== "done"
-                );
-                return (
-                <section className="sf-sp-flow-lane" key={lane.key}>
-                  <header className="sf-sp-flow-lane-header">
-                    <span className="sf-sp-flow-lane-port" />
-                    <div className="sf-sp-flow-lane-heading">
-                      <small>{lane.subjectId ? lane.isOfficialUnit ? "وحدة من الكتاب" : lane.unitNumber ? "مجموعة دروس" : "مسار إضافي" : "التزامات ومهام"}</small>
-                      <h4>{lane.title}</h4>
-                    </div>
-                    <strong>{lane.items.length.toLocaleString("ar-EG")} خطوة</strong>
-                  </header>
-                  <div className="sf-sp-flow-lane-progress">
-                    <div className="sf-sp-flow-lane-progress-top">
-                      <span>تقدم هذه الوحدة</span>
-                      <strong>{laneDoneCount.toLocaleString("ar-EG")} من {lane.items.length.toLocaleString("ar-EG")} · {laneProgress.toLocaleString("ar-EG")}%</strong>
-                    </div>
-                    <div className="sf-sp-flow-lane-progress-rail" aria-label={"تقدم الوحدة " + lane.title}>
-                      <i style={{ width: laneProgress + "%" }} />
-                    </div>
-                    <small>{laneNext ? "الخطوة التالية: " + displayPlanStepTitle(laneNext.step, subjectIds) : "اكتملت كل خطوات هذه الوحدة"}</small>
-                  </div>
-                  <div className="sf-sp-flow-track">
-                    {lane.items.map(({step,index,curriculum}, laneIndex) => {
-                      const isDone = step.plannerTaskStatus === "done" || step.existingTask?.status === "done";
-                      const isReview = Boolean(step.resourceRecommendation && /مراجعة|review|revision/i.test(step.resourceRecommendation.reason || ""));
-                      const isDeferred = step.phaseId === "review_later" || step.scheduleState === "deferred";
-                      const isCurrentStep = index === currentStepIndex;
-                      const nodeState = (isDone ? "is-done" : isReview || isDeferred ? "is-review" : step.existingTask ? "is-obligation" : "is-learning")
-                        + (isCurrentStep ? " is-next" : "");
-                      const titleText = displayPlanStepTitle(step, subjectIds);
-                      const detailText = displayPlanStepDetail(step, subjectIds);
-                      const stageTitles = ["معاينة الدرس", "تحديد المطلوب", "القراءة والفهم", "الاسترجاع من الذاكرة", "المراجعة والتثبيت"];
+        {mapLanes.length?(
+          <div className="sf-execution-subjects" data-testid="planner-subject-lanes">
+            {mapLanes.map((lane,laneIndex)=>{
+              const laneDone=lane.items.filter(({step})=>step.plannerTaskStatus==="done"||step.existingTask?.status==="done").length;
+              const laneTotal=lane.items.length, lanePercent=laneTotal?Math.round(laneDone/laneTotal*100):0;
+              const laneHasSelection=lane.items.some(({index})=>index===selectedMapStepIndex);
+              return (
+                <details key={lane.key} className="sf-execution-subject" open={laneIndex===0||laneHasSelection}>
+                  <summary className="sf-execution-subject-summary">
+                    <span className="sf-execution-subject-icon"><BrainCircuit className="size-5"/></span>
+                    <span className="sf-execution-subject-copy"><small>{lane.isOfficialUnit?"وحدة دراسية":lane.subjectId?"المادة":"مهام عامة"}</small><strong>{lane.title}</strong><i><b style={{width:lanePercent+"%"}}/></i></span>
+                    <span className="sf-execution-subject-count">{laneDone.toLocaleString("ar-EG")} / {laneTotal.toLocaleString("ar-EG")}</span>
+                    <ArrowDown className="sf-execution-chevron size-4"/>
+                  </summary>
+                  <div className="sf-execution-steps">
+                    {lane.items.map(({step,index,curriculum},laneStepIndex)=>{
+                      const isDone=step.plannerTaskStatus==="done"||step.existingTask?.status==="done";
+                      const isNext=index===currentStepIndex&&!isDone;
+                      const isReview=Boolean(step.aiReviewBrief||step.subtasks?.length||(step.resourceRecommendation&&/مراجعة|review|revision/i.test(step.resourceRecommendation.reason||"")));
+                      const statusLabel=isDone?"مكتملة":isNext?"ابدأ من هنا":isReview?"مراجعة موجهة":step.existingTask?"التزام مسجل":"ضمن الخطة";
+                      const nodeId=step.curriculumNodeIds?.[0];
+                      const branchId=curriculum&&nodeId?getSIECheckpointProgressBranches(curriculum.subjectId).find(branch=>branch.choices.some(choice=>choice.nodeId===nodeId))?.branchId:undefined;
                       return (
-                        <article key={step.plannerTaskId ?? step.existingTask?.id ?? step.sourceStepIndex ?? index} data-testid={"planner-node-" + (step.curriculumNodeIds?.[0] ?? step.existingTask?.id ?? index)} className={"sf-sp-flow-node " + nodeState}>
-                          <span className="sf-sp-flow-node-index">{(index + 1).toLocaleString("ar-EG")}</span>
-                          <div className="sf-sp-flow-node-card">
-                            <div className="sf-sp-flow-node-topline">
-                              {step.day && <span>{step.day}</span>}
-                              {curriculum?.unitNumber && <span>الوحدة {curriculum.unitNumber.toLocaleString("ar-EG")}</span>}
-                              {curriculum?.lessonNumber && <span>{curriculum.lessonType === "story" ? "الفصل" : "الدرس"} {curriculum.lessonNumber}</span>}
-                              {!curriculum?.lessonNumber && curriculum?.courseSequenceNumber && <span>الدرس {curriculum.courseSequenceNumber.toLocaleString("ar-EG")}</span>}
-                              {isCurrentStep && <span className="is-current-step">الخطوة التالية</span>}
-                              {isDone && <span>مكتملة</span>}
-                              {!isDone && (isReview || isDeferred) && <span>مراجعة</span>}
-                              {!isDone && !isReview && !isDeferred && step.existingTask && <span>التزام</span>}
-                              {!isDone && !isReview && !isDeferred && !step.existingTask && <span>مذاكرة</span>}
-                              {step.minutes > 0 && <span>{step.minutes.toLocaleString("ar-EG")} دقيقة</span>}
+                        <article key={step.plannerTaskId??step.existingTask?.id??step.sourceStepIndex??index} className={"sf-execution-step"+(isDone?" is-done":isNext?" is-next":isReview?" is-review":"")} data-testid={"planner-step-"+(nodeId??step.existingTask?.id??index)}>
+                          <span className="sf-execution-step-index">{isDone?<CheckCircle2 className="size-4"/>:(laneStepIndex+1).toLocaleString("ar-EG")}</span>
+                          <details className="sf-execution-step-details" open={selectedMapStepIndex===index} onToggle={event=>{if(event.currentTarget.open)setSelectedMapStepIndex(index);else if(selectedMapStepIndex===index)setSelectedMapStepIndex(null);}}>
+                            <summary>
+                              <span className="sf-execution-step-meta"><span>{statusLabel}</span>{step.day&&<span>{step.day}</span>}{curriculum?.unitNumber&&<span>الوحدة {curriculum.unitNumber.toLocaleString("ar-EG")}</span>}{curriculum?.lessonNumber&&<span>الدرس {curriculum.lessonNumber}</span>}{step.priority&&<span>{priorityLabel[step.priority]??"أولوية عادية"}</span>}</span>
+                              <strong>{displayPlanStepTitle(step,subjectIds)}</strong>
+                              <p>{displayPlanStepDetail(step,subjectIds)}</p>
+                              <ArrowDown className="sf-execution-step-chevron size-4"/>
+                            </summary>
+                            <div className="sf-execution-step-body">
+                              {step.priorityReason&&<div className="sf-execution-reason"><small>لماذا اختيرت هذه الخطوة؟</small><p>{displayArabicText(step.priorityReason,"تم اختيارها حسب موضعك الدراسي والتزاماتك.")}</p></div>}
+                              {step.studyMethod&&<div className="sf-execution-method"><strong>طريقة التنفيذ</strong><ol>{step.studyMethod.stages.map((stage,stageIndex)=><li key={stageIndex}><b>{(stageIndex+1).toLocaleString("ar-EG")}. {displayArabicText(stage.title,"مرحلة المذاكرة")}</b><p>{displayArabicText(stage.instruction,"نفّذ هذه المرحلة من مصدر المادة ثم حدّث تقدمك.")}</p></li>)}</ol><small>تكتمل الخطوة عند: {displayArabicText(step.studyMethod.completionCriteria,"تنفيذ المراحل وتسجيل تقدمك الفعلي.")}</small></div>}
+                              {step.scheduleNote&&<p className="sf-execution-note">{displayArabicText(step.scheduleNote,"تم تعديل موعد هذه الخطوة مع الحفاظ عليها في الخطة.")}</p>}
+                              {step.existingTask&&<p className="sf-execution-note">هذه الخطوة مرتبطة بالتزام مسجل بالفعل؛ لن تُنشأ نسخة مكررة منها.</p>}
+                              <PlanReviewSubtasks step={step}/>
+                              <div className="sf-execution-step-actions">
+                                {curriculum&&branchId&&nodeId&&<a href={"/study?subject="+encodeURIComponent(curriculum.subjectId)+"&branch="+encodeURIComponent(branchId)+"&lesson="+encodeURIComponent(nodeId)}>افتح الدرس في مساحة المذاكرة <ArrowUpRight className="size-3.5"/></a>}
+                                {step.existingTask&&<a href="/tasks">افتح المهمة المسجلة <ArrowUpRight className="size-3.5"/></a>}
+                                {editable&&<div><Button type="button" size="sm" variant="ghost" onClick={()=>setEditing({index,title:step.title,detail:step.detail})}>تعديل</Button><Button type="button" size="sm" variant="ghost" disabled={index===0} onClick={()=>onMoveStep(index,-1)}><ArrowUp className="size-3.5"/>أعلى</Button><Button type="button" size="sm" variant="ghost" disabled={index===plan.steps.length-1} onClick={()=>onMoveStep(index,1)}><ArrowDown className="size-3.5"/>أسفل</Button><Button type="button" size="sm" variant="ghost" className="text-destructive" disabled={plan.steps.length<=1} onClick={()=>onRemoveStep(index)}><X className="size-3.5"/>حذف</Button></div>}
+                              </div>
+                              {editing?.index===index&&<div className="sf-sp-step-editor"><label><span>عنوان المهمة</span><input value={editing.title} onChange={event=>setEditing(current=>current?{...current,title:event.target.value}:current)}/></label><label><span>تفاصيل التنفيذ</span><textarea rows={3} value={editing.detail} onChange={event=>setEditing(current=>current?{...current,detail:event.target.value}:current)}/></label><div><Button type="button" variant="ghost" size="sm" onClick={()=>setEditing(null)}>إلغاء</Button><Button type="button" size="sm" onClick={saveEdit}>حفظ</Button></div></div>}
                             </div>
-                            <button
-                              type="button"
-                              className="sf-sp-flow-node-select"
-                              data-testid={"planner-node-select-" + (step.curriculumNodeIds?.[0] ?? step.existingTask?.id ?? index)}
-                              aria-pressed={selectedMapStepIndex === index}
-                              onClick={() => setSelectedMapStepIndex(current => current === index ? null : index)}
-                            >
-                              <h5>{titleText}</h5>
-                              <span>{selectedMapStepIndex === index ? "محددة الآن" : "عرض تفاصيل الخطوة"}</span>
-                            </button>
-                            <details className="sf-sp-flow-node-details">
-                              <summary>تفاصيل هذه الخطوة</summary>
-                              <p>{detailText}</p>
-                              {step.sourceTitle && <small>عنوان المنهج: {displayCurriculumTitle(step.sourceTitle)}</small>}
-                              {step.scheduleNote && <small>{displayArabicText(step.scheduleNote,"تم تأجيل هذه الخطوة للدورة التالية.")}</small>}
-                              {step.studyMethod && (
-                                <div className="sf-sp-flow-study-method">
-                                  <strong>طريقة المذاكرة — {step.studyMethod.stages.length} مراحل</strong>
-                                  <ol>
-                                    {step.studyMethod.stages.map((stage,stageIndex) => (
-                                      <li key={stageIndex}>
-                                        <b>{(stageIndex + 1).toLocaleString("ar-EG")}. {displayArabicText(stage.title,stageTitles[stageIndex] ?? "مرحلة المذاكرة")}</b>
-                                        <p>{displayArabicText(stage.instruction,"نفّذ هذه المرحلة من مصدر المادة، ثم حدّث تقدمك.")}</p>
-                                      </li>
-                                    ))}
-                                  </ol>
-                                  <small>متى تكتمل؟ {displayArabicText(step.studyMethod.completionCriteria,"بعد تنفيذ المراحل وتسجيل تقدمك.")}</small>
-                                </div>
-                              )}
-                              {step.priorityReason && <p>{displayArabicText(step.priorityReason,"تم اختيارها حسب موضعك الدراسي.")}</p>}
-                              {step.resourceRecommendation && <a className="sf-sp-resource-link" href={step.resourceRecommendation.url} target="_blank" rel="noreferrer">{isReview ? "افتح المراجعة المطابقة للدرس" : "افتح شرح المدرس المقترح"} <ArrowUpRight className="size-3.5" /></a>}
-                              <PlanReviewSubtasks step={step} />
-                            </details>
-                            {editing?.index === index ? (
-                              <div className="sf-sp-step-editor">
-                                <label><span>عنوان المهمة</span><input value={editing.title} onChange={event => setEditing(current => current ? {...current,title:event.target.value} : current)} /></label>
-                                <label><span>تفاصيل التنفيذ</span><textarea rows={3} value={editing.detail} onChange={event => setEditing(current => current ? {...current,detail:event.target.value} : current)} /></label>
-                                <div>
-                                  <Button type="button" variant="ghost" size="sm" onClick={()=>setEditing(null)}>إلغاء</Button>
-                                  <Button type="button" size="sm" onClick={saveEdit}>حفظ التعديل</Button>
-                                </div>
-                              </div>
-                            ) : editable && (
-                              <div className="sf-sp-step-actions">
-                                <Button type="button" size="sm" variant="ghost" onClick={()=>setEditing({index,title:step.title,detail:step.detail})}>تعديل</Button>
-                                <Button type="button" size="sm" variant="ghost" disabled={index===0} onClick={()=>onMoveStep(index,-1)}><ArrowUp className="size-3.5" />لأعلى</Button>
-                                <Button type="button" size="sm" variant="ghost" disabled={index===plan.steps.length-1} onClick={()=>onMoveStep(index,1)}><ArrowDown className="size-3.5" />لأسفل</Button>
-                                <Button type="button" size="sm" variant="ghost" className="text-destructive" disabled={plan.steps.length<=1} onClick={()=>onRemoveStep(index)}><X className="size-3.5" />حذف</Button>
-                              </div>
-                            )}
-                          </div>
+                          </details>
                         </article>
                       );
                     })}
                   </div>
-                </section>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="sf-sp-empty-inline">{filter === "done" ? "لا توجد خطوات مكتملة." : filter === "open" ? "لا توجد خطوات متبقية." : "لا توجد خطوات في الخطة بعد."}</div>
-          )}
-          {selectedMapStep && (
-            <aside id="sf-sp-flow-selection-panel" className="sf-sp-flow-selection" aria-live="polite">
-              <header>
-                <div>
-                  <span>العقدة المحددة</span>
-                  <strong>{selectedMapCurriculum?.subject ?? "التزام مسجل"}</strong>
-                </div>
-                <button type="button" data-testid="planner-node-details-close" onClick={() => setSelectedMapStepIndex(null)} aria-label="إغلاق تفاصيل العقدة">إغلاق</button>
-              </header>
-              <h4>{displayPlanStepTitle(selectedMapStep, subjectIds)}</h4>
-              <div className="sf-sp-flow-selection-meta">
-                {selectedMapStep.day && <span>{selectedMapStep.day}</span>}
-                {selectedMapStep.priority && <span>{priorityLabel[selectedMapStep.priority] ?? "أولوية عادية"}</span>}
-                {selectedMapStep.existingTask && <span>مهمة مسجلة</span>}
-                {selectedMapStep.minutes > 0 && <span>{selectedMapStep.minutes.toLocaleString("ar-EG")} دقيقة</span>}
-              </div>
-              <p>{displayPlanStepDetail(selectedMapStep, subjectIds)}</p>
-              {selectedMapStep.studyMethod && (
-                <details className="sf-sp-flow-selection-method" open>
-                  <summary>طريقة التنفيذ — {selectedMapStep.studyMethod.stages.length} مراحل</summary>
-                  <ol>
-                    {selectedMapStep.studyMethod.stages.map((stage, index) => (
-                      <li key={index}>
-                        <strong>{(index + 1).toLocaleString("ar-EG")}. {displayArabicText(stage.title, "مرحلة المذاكرة")}</strong>
-                        <p>{displayArabicText(stage.instruction, "نفّذ هذه المرحلة من مصدر المادة ثم حدّث تقدمك.")}</p>
-                      </li>
-                    ))}
-                  </ol>
-                  <small>معيار الاكتمال: {displayArabicText(selectedMapStep.studyMethod.completionCriteria, "بعد تنفيذ المراحل وتسجيل تقدمك الفعلي.")}</small>
                 </details>
-              )}
-              {selectedMapStep.resourceRecommendation && (
-                <a className="sf-sp-resource-link" href={selectedMapStep.resourceRecommendation.url} target="_blank" rel="noreferrer">
-                  افتح المصدر المرتبط بهذه الخطوة <ArrowUpRight className="size-3.5" />
-                </a>
-              )}
-              <PlanReviewSubtasks step={selectedMapStep} />
-              <div className="sf-sp-flow-selection-actions">
-                {editable && (
-                  <Button type="button" size="sm" variant="outline" onClick={() => setEditing({
-                    index: selectedMapStepIndex!,
-                    title: selectedMapStep.title,
-                    detail: selectedMapStep.detail,
-                  })}>تعديل الخطوة</Button>
-                )}
-                {selectedMapCurriculum && selectedMapBranchId && selectedMapNodeId && (
-                  <a href={"/study?subject=" + encodeURIComponent(selectedMapCurriculum.subjectId)
-                    + "&branch=" + encodeURIComponent(selectedMapBranchId)
-                    + "&lesson=" + encodeURIComponent(selectedMapNodeId)}>
-                    افتح الدرس في صفحة المذاكرة <ArrowUpRight className="size-3.5" />
-                  </a>
-                )}
-                {selectedMapStep.existingTask && <a href="/tasks">افتح المهمة المسجلة <ArrowUpRight className="size-3.5" /></a>}
-              </div>
-            </aside>
-          )}
-          {mapLanes.length > 0 && (
-            <div className="sf-sp-flow-finish">
-              <span>نقطة النهاية</span>
-              <strong>تحديث موضعك وإعادة ترتيب المسارات</strong>
-              <small>بعد إنجاز العقدة، يتقدم المسار وتُعاد أولوية الخطوات المتبقية.</small>
-            </div>
-          )}
-        </div>
-      ) : (
-      <div className="sf-sp-day-groups sf-sp-phase-groups">
-        {visibleGroups.length ? visibleGroups.map(group => (
-          <section className="sf-sp-day-group sf-sp-phase-group" key={group.key}>
-            <header><div><span className="sf-sp-day-dot" /><h4>{group.title}</h4></div><small>{group.items.length.toLocaleString("ar-EG")} خطوة</small></header>
-            <div className="sf-sp-day-items">
-              {group.items.map(({step,index}) => {
-                const isDone = step.plannerTaskStatus === "done" || step.existingTask?.status === "done";
-                const curriculum = getPlanStepCurriculum(step, subjectIds);
-                const titleText = displayPlanStepTitle(step, subjectIds);
-                const detailText = displayPlanStepDetail(step, subjectIds);
-                const stageTitles = ["معاينة الدرس", "تحديد المطلوب", "القراءة والفهم", "الاسترجاع من الذاكرة", "المراجعة والتثبيت"];
-                return (
-                  <article key={step.plannerTaskId ?? step.existingTask?.id ?? step.sourceStepIndex ?? index} className={"sf-sp-plan-step " + (isDone ? "is-done" : "")}>
-                    {editing?.index === index ? (
-                      <div className="sf-sp-step-editor">
-                        <label><span>عنوان المهمة</span><input value={editing.title} onChange={event => setEditing(current => current ? {...current,title:event.target.value} : current)} /></label>
-                        <label><span>تفاصيل التنفيذ</span><textarea rows={3} value={editing.detail} onChange={event => setEditing(current => current ? {...current,detail:event.target.value} : current)} /></label>
-                        <div><Button type="button" variant="ghost" size="sm" onClick={()=>setEditing(null)}>إلغاء</Button><Button type="button" size="sm" onClick={saveEdit}>حفظ التعديل</Button></div>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="sf-sp-step-index">{isDone ? <CheckCircle2 className="size-4" /> : (index+1).toLocaleString("ar-EG")}</div>
-                        <div className="sf-sp-step-content">
-                          <div className="sf-sp-step-tags">
-                            {curriculum && <span>{curriculum.subject}</span>}
-                            {step.phaseId && <span>{phaseLabel[step.phaseId] || "مرحلة الخطة"}</span>}
-                            {step.priority && <span>{priorityLabel[step.priority] || "أولوية عادية"}</span>}
-                            {step.difficulty && <span>{difficultyLabel[step.difficulty] || "غير محدد"}</span>}
-                            {step.existingTask && <span>التزام مسجل</span>}
-                            {step.scheduleState === "deferred" && <span>مؤجلة للدورة القادمة</span>}
-                            {isDone && <span>المهمة منتهية</span>}
-                            {(formatDate(step.existingTask?.dueAt) || step.day) && <span>يوم التنفيذ: {formatDate(step.existingTask?.dueAt) || step.day}</span>}
-                            {step.minutes > 0 && <span>المدة: {step.minutes.toLocaleString("ar-EG")} دقيقة</span>}
-                          </div>
-                          <h4>{titleText}</h4>
-                          {!curriculum && <small className="sf-sp-source-title">{displayPlanStepCategory(step, subjectIds)}</small>}
-                          {step.sourceTitle && <small className="sf-sp-source-title">عنوان المنهج: {displayCurriculumTitle(step.sourceTitle)}</small>}
-                          <details className="sf-sp-step-details">
-                            <summary>تفاصيل التنفيذ</summary>
-                            <p>{detailText}</p>
-                            {step.scheduleNote && <small className="sf-sp-source-title">{displayArabicText(step.scheduleNote,"تم تأجيل هذه الخطوة إلى دورة التخطيط التالية.")}</small>}
-                          </details>
-                          {step.studyMethod && (
-                            <details className="sf-sp-study-method">
-                              <summary>طريقة مذاكرة الدرس — {step.studyMethod.stages.length} مراحل</summary>
-                              <ol>
-                                {step.studyMethod.stages.map((stage,stageIndex) => (
-                                  <li key={stageIndex}>
-                                    <strong>{(stageIndex+1).toLocaleString("ar-EG")}. {displayArabicText(stage.title,stageTitles[stageIndex] ?? "مرحلة المذاكرة")}</strong>
-                                    {stage.optional && <span>اختياري حسب تكليف المدرس</span>}
-                                    <p>{displayArabicText(stage.instruction,"نفّذ هذه المرحلة من مصدر المادة، ثم حدّث تقدم الدرس.")}</p>
-                                    <small>الهدف: {displayArabicText(stage.reason,"تثبيت فهمك للجزء الذي تدرسه.")}</small>
-                                  </li>
-                                ))}
-                              </ol>
-                              <p className="sf-sp-completion-rule">متى تعتبر المهمة مكتملة؟ {displayArabicText(step.studyMethod.completionCriteria,"بعد تنفيذ الخطوات وتسجيل تقدمك الفعلي في الدرس.")}</p>
-                              {step.studyMethod.teacherPolicyNote && <small>{displayArabicText(step.studyMethod.teacherPolicyNote,"راجع متطلبات المدرس المسجلة قبل الانتقال للدرس التالي.")}</small>}
-                            </details>
-                          )}
-                          {step.priorityReason && <details className="sf-sp-step-extra"><summary>لماذا ظهرت هذه الخطوة في الخطة؟</summary><p>{displayArabicText(step.priorityReason,"تم اختيارها حسب ترتيب تقدمك والالتزامات المسجلة.")}</p></details>}
-                          {step.resourceRecommendation && <a className="sf-sp-resource-link" href={step.resourceRecommendation.url} target="_blank" rel="noreferrer">{/مراجعة|review|revision/i.test(step.resourceRecommendation.reason || "") ? "شاهد فيديو المراجعة" : "افتح شرح المدرس المقترح"} <ArrowUpRight className="size-3.5" /></a>}
-                          <PlanReviewSubtasks step={step} />
-                          {editable && (
-                            <div className="sf-sp-step-actions">
-                              <Button type="button" size="sm" variant="ghost" onClick={()=>setEditing({index,title:step.title,detail:step.detail})}>تعديل</Button>
-                              <Button type="button" size="sm" variant="ghost" disabled={index===0} onClick={()=>onMoveStep(index,-1)}><ArrowUp className="size-3.5" />لأعلى</Button>
-                              <Button type="button" size="sm" variant="ghost" disabled={index===plan.steps.length-1} onClick={()=>onMoveStep(index,1)}><ArrowDown className="size-3.5" />لأسفل</Button>
-                              <Button type="button" size="sm" variant="ghost" className="text-destructive" disabled={plan.steps.length<=1} onClick={()=>onRemoveStep(index)}><X className="size-3.5" />حذف</Button>
-                            </div>
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </article>
-                );
-              })}
-            </div>
-          </section>
-        )) : <div className="sf-sp-empty-inline">{filter === "done" ? "لا توجد خطوات مكتملة في هذا العرض." : filter === "open" ? "لا توجد خطوات متبقية." : "لا توجد خطوات ضمن الفلتر الحالي."}</div>}
-      </div>
-      )}
+              );
+            })}
+          </div>
+        ):<div className="sf-sp-empty-inline">{filter==="done"?"لا توجد خطوات مكتملة.":filter==="open"?"لا توجد خطوات متبقية.":"لا توجد خطوات في الخطة بعد."}</div>}
+      </section>
 
       {editable ? (
         <footer className="sf-sp-board-footer">
           <Button type="button" variant="outline" onClick={onAddStep}><Plus className="size-4" />أضف خطوة</Button>
-          <div><small>سيعاد فحص ترتيب الخطة عند اعتمادها. لن تُنشأ مواعيد أو واجبات غير مسجلة.</small><Button type="button" onClick={() => onApprove(plan)} disabled={approving || !plan.steps.length || !plan.title.trim()}>{approving ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}اعتماد الخطة وإضافة المهام</Button></div>
+          <div><small>سيعاد فحص ترتيب الخطة عند اعتمادها. لن تُنشأ مواعيد أو واجبات غير مسجلة.</small><Button type="button" onClick={() => onApprove(plan)} disabled={approving || !plan.steps.length || !plan.title.trim()}>{approving ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}اعتماد التوزيع وإنشاء المهام</Button></div>
         </footer>
       ) : (
         <footer className="sf-sp-approved-footer"><CheckCircle2 className="size-4" /><span>هذه الخطة معتمدة، والمهام مرتبطة بقائمة عملك. تعديل المصدر يتم من المهام أو من تقدم المنهج.</span>{plan.taskSync && <strong>{plan.taskSync.taskCount.toLocaleString("ar-EG")} مهمة مرتبطة</strong>}</footer>
       )}
 
-      <details className="sf-sp-plan-extra"><summary>ملخص إضافي ومساعد الخطة</summary><p>{displayArabicText(plan.summary,"خطة مذاكرة مرتبة حسب بيانات ملفك الدراسي.")}</p>{plan.habits.length > 0 && <div className="sf-sp-habits">{plan.habits.map((habit,index)=><article key={habit.title+index}><strong>{displayArabicText(habit.title,"عادة دراسية")}</strong><small>{displayArabicText(habit.cue,"استخدمها لدعم الاستمرارية في المذاكرة.")}</small></article>)}</div>}<PlanAssistantChat plan={plan} subjectIds={subjectIds} editable={true} onChange={onChange} onApprove={onApprove} approving={approving} /></details>
+      {plan.habits.length>0&&<details className="sf-sp-plan-extra"><summary>عادات داعمة للخطة</summary><div className="sf-sp-habits">{plan.habits.map((habit,index)=><article key={habit.title+index}><strong>{displayArabicText(habit.title,"عادة دراسية")}</strong><small>{displayArabicText(habit.cue,"استخدمها لدعم الاستمرارية في المذاكرة.")}</small></article>)}</div></details>}
     </section>
   );
 }
 
 
-function PlanAssistantChat({ plan, subjectIds, editable, onChange, onApprove, approving }: {
+function PlanAssistantChat({ plan, subjectIds, editable, onChange, onProposalApplied }: {
   plan: PlanView;
   subjectIds: string[];
   editable: boolean;
   onChange: (next: PlanView) => void;
-  onApprove: (nextPlan?: PlanView) => void;
-  approving: boolean;
+  onProposalApplied?: () => void;
 }) {
   const [messages, setMessages] = useState<Array<{ role: "user" | "assistant"; content: string }>>([]);
   const [draft, setDraft] = useState("");
-  const [webSearchAvailable, setWebSearchAvailable] = useState<boolean | null>(null);
+  const [pendingPatch, setPendingPatch] = useState<PlannerAssistantPatch | null>(null);
   const context = useMemo(() => [
     "السياق: المستخدم يتحدث من صفحة خطة المذاكرة في StudyFlow.",
     "أجب دائمًا بالعربية المصرية الواضحة، ولا تستخدم عناوين إنجليزية في الشرح.",
@@ -1832,18 +1546,21 @@ function PlanAssistantChat({ plan, subjectIds, editable, onChange, onApprove, ap
   const chat = trpc.ai.chat.useMutation({
     onSuccess: result => {
       setMessages(current => [...current, { role: "assistant" as const, content: result.content }].slice(-20));
-      const webSearchAvailable = "webSearchAvailable" in result ? result.webSearchAvailable : false;
-      setWebSearchAvailable(webSearchAvailable);
       const planPatch = "planPatch" in result ? result.planPatch : undefined;
-      if (planPatch && editable) {
-        const updatedPlan = applyPlannerAssistantPatch(plan, planPatch);
-        onChange(updatedPlan);
-        onApprove(updatedPlan);
-        toast("المساعد طبّق التغيير على الخطة ويزامن المهام الآن.");
-      }
+      if (planPatch && editable) setPendingPatch(planPatch as PlannerAssistantPatch);
     },
     onError: error => toast.error(error.message || "تعذّر الوصول إلى مساعد الخطة."),
   });
+
+  const acceptProposal = () => {
+    if(!pendingPatch||!editable)return;
+    const next=applyPlannerAssistantPatch(plan,pendingPatch);
+    setPendingPatch(null);
+    onChange(next);
+    toast.success("تم تطبيق الاقتراح على مسودة الخطة. راجع التوزيع ثم اعتمده لإنشاء المهام.");
+    onProposalApplied?.();
+  };
+  const rejectProposal = () => setPendingPatch(null);
 
   const sendMessage = () => {
     const content = draft.trim();
@@ -1891,9 +1608,7 @@ function PlanAssistantChat({ plan, subjectIds, editable, onChange, onApprove, ap
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="rounded-full border border-border bg-background px-3 py-1.5 text-[10px] text-muted-foreground">{editable ? "تحرير المسودة متاح" : "الخطة المعتمدة — وضع القراءة"}</span>
-          <span className="rounded-full border border-border bg-background px-3 py-1.5 text-[10px] text-muted-foreground">
-            {webSearchAvailable === null ? "البحث المباشر غير مفعّل" : webSearchAvailable ? "بحث مباشر متاح" : "البحث المباشر غير مفعّل"}
-          </span>
+          <span className="rounded-full border border-border bg-background px-3 py-1.5 text-[10px] text-muted-foreground">سياق خطتك متصل</span>
         </div>
       </header>
       <div className="grid gap-3 p-3 sm:p-4">
@@ -1917,6 +1632,10 @@ function PlanAssistantChat({ plan, subjectIds, editable, onChange, onApprove, ap
           ))}
           {chat.isPending && <div className="flex justify-end"><span className="rounded-xl border border-border bg-card px-3 py-2 text-xs text-muted-foreground">المساعد بيحلل الخطة...</span></div>}
         </div>
+        {pendingPatch&&<section className="sf-plan-proposal" data-testid="planner-assistant-proposal">
+          <div><span>اقتراح جاهز للمراجعة</span><strong>{pendingPatch.updates.length.toLocaleString("ar-EG")} تعديل على الخطوات{pendingPatch.title?" وتحديث عنوان الخطة":""}{pendingPatch.summary?" وملخصها":""}{pendingPatch.order?" مع إعادة ترتيبها":""}</strong><p>لم تتغير خطة التنفيذ بعد. طبّق الاقتراح على المسودة ثم راجعها قبل الاعتماد.</p></div>
+          <div><Button type="button" variant="outline" onClick={rejectProposal}>رفض الاقتراح</Button><Button type="button" onClick={acceptProposal} disabled={!editable}>تطبيق الاقتراح</Button></div>
+        </section>}
         <div className="flex items-end gap-2">
           <textarea
             value={draft}
