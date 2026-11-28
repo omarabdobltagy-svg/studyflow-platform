@@ -59,6 +59,11 @@ jobs:
         run: pnpm build
       - name: Apply all MySQL migrations on an isolated database
         run: pnpm db:push
+      - name: Verify additive deployment migrations are idempotent
+        run: |
+          node scripts/migrate-local-auth.mjs
+          node scripts/migrate-local-auth.mjs
+          node -e "const mysql=require('mysql2/promise'); (async()=>{const c=await mysql.createConnection(process.env.DATABASE_URL); for (const table of ['assistantConversations','assistantMessages']) { const [rows]=await c.query('SHOW TABLES LIKE ?', [table]); if (!rows.length) throw new Error(table + ' migration did not create its table'); } const [markers]=await c.query('SELECT id FROM studyflow_migrations WHERE id = ?', ['2026-11-assistant-conversations']); if (markers.length !== 1) throw new Error('assistant migration marker missing or duplicated'); await c.end(); })().catch(e=>{console.error(e);process.exit(1)});"
       - name: Unit tests
         run: pnpm test
       - name: Install Playwright for live responsive visual QA
