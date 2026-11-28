@@ -5,7 +5,7 @@ import QueryErrorNotice from "@/components/QueryErrorNotice";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { getNextOpenPlanStep } from "@/lib/plan-actions";
-import { getPlannerTeacherSessions, groupPlannerTeacherSessions, type PlannerTeacherSession } from "@/lib/teacher-sessions";
+import { getPlannerTeacherSessions, getTeacherSessionConflictKeys, groupPlannerTeacherSessions, type PlannerTeacherSession } from "@/lib/teacher-sessions";
 import { formatTime12Hour, getDateKeyInTimeZone, getCalendarDaysBetween } from "@shared/date-time";
 import { useServerClock } from "@/lib/server-clock";
 import { buildPlannerCurriculumLanes, getPlannerStepCurriculum as getPlanStepCurriculum, getTeacherSessionPreparationSteps } from "@/lib/planner-curriculum";
@@ -1372,14 +1372,10 @@ function PlanCard({ plan, subjectIds, teacherSessions, teacherChoices, title, st
     return firstOpen >= 0 ? firstOpen : plan.steps.length > 0 ? 0 : null;
   });
   const teacherSessionGroups = useMemo(() => groupPlannerTeacherSessions(teacherSessions), [teacherSessions]);
-  const teacherSessionConflictKeys = useMemo(() => {
-    const starts = new Map<string, number>();
-    for (const session of teacherSessions) {
-      const key = session.sortDate + "::" + session.time;
-      starts.set(key, (starts.get(key) ?? 0) + 1);
-    }
-    return new Set([...starts.entries()].filter(([, count]) => count > 1).map(([key]) => key));
-  }, [teacherSessions]);
+  const teacherSessionConflictKeys = useMemo(
+    () => getTeacherSessionConflictKeys(teacherSessions),
+    [teacherSessions],
+  );
   const [teacherScheduleExpanded, setTeacherScheduleExpanded] = useState(true);
   const executionBoardRef = useRef<HTMLElement | null>(null);
   const completedCount = plan.steps.filter(step => step.plannerTaskStatus === "done" || step.existingTask?.status === "done").length;
