@@ -1205,3 +1205,209 @@ html body .sf-login-screen.sf-shell-v3 .sf-security-mark span {
   .sf-home-ai-decision-compare { padding: 12px; gap: 8px; }
   .sf-shell-v3 .sf-main .sf-task-overview { padding: 18px; gap: 16px; }
 }
+
+
+/* Interactive operational workspace: remove its legacy purple/lilac skin. */
+.sf-shell-v3 .sf-main .sf-ops-heading h2 { color: var(--foreground) !important; }
+.sf-shell-v3 .sf-main .sf-ops-heading p:last-child,
+.sf-shell-v3 .sf-main .sf-ops-scene-footnote,
+.sf-shell-v3 .sf-main .sf-ops-detail-heading > div > span,
+.sf-shell-v3 .sf-main .sf-ops-metric small,
+.sf-shell-v3 .sf-main .sf-ops-metric span,
+.sf-shell-v3 .sf-main .sf-ops-next small,
+.sf-shell-v3 .sf-main .sf-ops-capture-title span,
+.sf-shell-v3 .sf-main .sf-ops-task-copy span,
+.sf-shell-v3 .sf-main .sf-ops-goal-list span,
+.sf-shell-v3 .sf-main .sf-ops-event-row span,
+.sf-shell-v3 .sf-main .sf-ops-subject-list small { color: var(--muted-foreground) !important; }
+.sf-shell-v3 .sf-main .sf-ops-live {
+  border-color: color-mix(in srgb,var(--sf-success) 30%,var(--border)) !important;
+  background: color-mix(in srgb,var(--sf-success) 9%,var(--card)) !important;
+  color: var(--sf-success) !important;
+}
+.sf-shell-v3 .sf-main .sf-ops-live > span,
+.sf-shell-v3 .sf-main .sf-ops-scene-hint > span {
+  background: var(--sf-success) !important;
+  box-shadow: 0 0 0 4px color-mix(in srgb,var(--sf-success) 13%,transparent) !important;
+}
+.sf-shell-v3 .sf-main .sf-ops-warning {
+  border-color: color-mix(in srgb,var(--sf-warning) 30%,var(--border)) !important;
+  background: color-mix(in srgb,var(--sf-warning) 9%,var(--card)) !important;
+  color: var(--foreground) !important;
+}
+.sf-shell-v3 .sf-main .sf-ops-warning button { color: var(--sf-wine) !important; }
+.sf-shell-v3 .sf-main .sf-ops-scene-card,
+.sf-shell-v3 .sf-main .sf-ops-detail-card {
+  border-color: var(--border) !important;
+  border-radius: 22px !important;
+  background: var(--card) !important;
+  color: var(--foreground) !important;
+  box-shadow: var(--sf-shadow) !important;
+}
+.sf-shell-v3 .sf-main .sf-ops-scene-card {
+  background:
+    radial-gradient(ellipse at 50% 0%,color-mix(in srgb,var(--sf-wine) 13%,transparent),transparent 58%),
+    linear-gradient(145deg,var(--sf-surface-soft),var(--card) 76%) !important;
+}
+.sf-shell-v3 .sf-main .sf-ops-card-heading p,
+.sf-shell-v3 .sf-main .sf-ops-detail-heading > div > p { color: var(--sf-gold) !important; }
+.sf-shell-v3 .sf-main .sf-ops-card-heading h3,
+.sf-shell-v3 .sf-main .sf-ops-detail-heading h3,
+.sf-shell-v3 .sf-main .sf-ops-next b,
+.sf-shell-v3 .sf-main .sf-ops-next p,
+.sf-shell-v3 .sf-main .sf-ops-capture-title,
+.sf-shell-v3 .sf-main .sf-ops-task-copy b,
+.sf-shell-v3 .sf-main .sf-ops-goal-list b,
+.sf-shell-v3 .sf-main .sf-ops-agenda b,
+.sf-shell-v3 .sf-main .sf-ops-subject-list b,
+.sf-shell-v3 .sf-main .sf-ops-metric b { color: var(--foreground) !important; }
+.sf-shell-v3 .sf-main .sf-ops-scene-viewport {
+  border-color: color-mix(in srgb,var(--sf-gold) 24%,var(--border)) !important;
+  border-radius: 19px !important;
+  background:
+    radial-gradient(ellipse at 50% 48%,rgba(140,66,76,.28),transparent 48%),
+    radial-gradient(ellipse at 50% 100%,rgba(209,183,123,.10),transparent 52%),
+    linear-gradient(145deg,#181413,#2B1E1E 56%,#181413) !important;
+}
+.sf-shell-v3 .sf-main .sf-ops-scene-hint {
+  border-color: rgba(209,183,123,.20) !important;
+  background: rgba(28,22,21,.88) !important;
+  color: #E9DED3 !important;
+}
+.sf-shell-v3 .sf-main .sf-ops-node-list button {
+  border-color: var(--border) !important;
+  border-radius: 12px !important;
+  background: var(--sf-surface-raised) !important;
+  color: var(--foreground) !important;
+}
+.sf-shell-v3 .sf-main .sf-ops-node-list button:hover {
+  border-color: color-mix(in srgb,var(--sf-wine) 45%,var(--border)) !important;
+  background: color-mix(in srgb,var(--sf-wine) 7%,var(--card)) !important;
+}
+.sf-shell-v3 .sf-main .sf-ops-node-list button.is-selected {
+  border-color: var(--sf-wine) !important;
+  background: color-mix(in srgb,var(--sf-wine) 12%,var(--card)) !important;
+  color: var(--sf-wine) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb,var(--sf-wine) 9%,transparent) !important;
+}
+.sf-shell-v3 .sf-main .sf-ops-node-list button > span {
+  box-shadow: 0 0 0 3px color-mix(in srgb,var(--sf-gold) 14%,transparent) !important;
+}
+.sf-shell-v3 .sf-main .sf-ops-detail-heading {
+  border-color: var(--border) !important;
+  background: linear-gradient(110deg,color-mix(in srgb,var(--sf-wine) 7%,var(--card)),var(--card) 72%) !important;
+}
+.sf-shell-v3 .sf-main .sf-ops-detail-heading button {
+  border-color: var(--border) !important;
+  color: var(--foreground) !important;
+}
+.sf-shell-v3 .sf-main .sf-ops-stat-grid article,
+.sf-shell-v3 .sf-main .sf-ops-metric,
+.sf-shell-v3 .sf-main .sf-ops-capture,
+.sf-shell-v3 .sf-main .sf-ops-learning-editor {
+  border-color: var(--border) !important;
+  border-radius: 15px !important;
+  background: color-mix(in srgb,var(--card) 84%,var(--muted)) !important;
+}
+.sf-shell-v3 .sf-main .sf-ops-metric.is-warm {
+  border-color: color-mix(in srgb,var(--sf-gold) 38%,var(--border)) !important;
+  background: color-mix(in srgb,var(--sf-gold) 10%,var(--card)) !important;
+}
+.sf-shell-v3 .sf-main .sf-ops-metric.is-warm b { color: var(--sf-gold) !important; }
+.sf-shell-v3 .sf-main .sf-ops-next {
+  border-color: color-mix(in srgb,var(--sf-wine) 25%,var(--border)) !important;
+  border-radius: 16px !important;
+  background: color-mix(in srgb,var(--sf-wine) 7%,var(--card)) !important;
+}
+.sf-shell-v3 .sf-main .sf-ops-next-icon,
+.sf-shell-v3 .sf-main .sf-ops-subject-icon {
+  border: 1px solid color-mix(in srgb,var(--sf-gold) 24%,var(--border));
+  background: color-mix(in srgb,var(--sf-gold) 12%,var(--card)) !important;
+  color: var(--sf-gold) !important;
+}
+.sf-shell-v3 .sf-main .sf-ops-quick-actions button,
+.sf-shell-v3 .sf-main .sf-ops-filter-row button,
+.sf-shell-v3 .sf-main .sf-ops-task-list article,
+.sf-shell-v3 .sf-main .sf-ops-goal-list article,
+.sf-shell-v3 .sf-main .sf-ops-subject-list article {
+  border-color: var(--border) !important;
+  border-radius: 12px !important;
+  background: var(--card) !important;
+  color: var(--foreground) !important;
+}
+.sf-shell-v3 .sf-main .sf-ops-quick-actions button:hover,
+.sf-shell-v3 .sf-main .sf-ops-filter-row button.is-active {
+  border-color: color-mix(in srgb,var(--sf-wine) 42%,var(--border)) !important;
+  background: color-mix(in srgb,var(--sf-wine) 8%,var(--card)) !important;
+  color: var(--sf-wine) !important;
+}
+.sf-shell-v3 .sf-main .sf-ops-filter-row button { color: var(--muted-foreground) !important; }
+.sf-shell-v3 .sf-main .sf-ops-capture > input,
+.sf-shell-v3 .sf-main .sf-ops-capture-fields select,
+.sf-shell-v3 .sf-main .sf-ops-capture-fields input,
+.sf-shell-v3 .sf-main .sf-ops-learning-selects select {
+  border-color: var(--input) !important;
+  border-radius: 10px !important;
+  background: var(--sf-surface-raised) !important;
+  color: var(--foreground) !important;
+}
+.sf-shell-v3 .sf-main .sf-ops-capture :is(input,select):focus,
+.sf-shell-v3 .sf-main .sf-ops-learning-selects select:focus {
+  border-color: var(--sf-gold) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb,var(--sf-gold) 16%,transparent) !important;
+}
+.sf-shell-v3 .sf-main .sf-ops-task-check {
+  border-color: var(--border) !important;
+  color: #FFF8F2 !important;
+}
+.sf-shell-v3 .sf-main .sf-ops-task-list article.is-done .sf-ops-task-check {
+  border-color: var(--sf-success) !important;
+  background: var(--sf-success) !important;
+}
+.sf-shell-v3 .sf-main .sf-ops-priority-high {
+  background: color-mix(in srgb,var(--sf-danger) 12%,var(--card)) !important;
+  color: var(--sf-danger) !important;
+}
+.sf-shell-v3 .sf-main .sf-ops-priority-medium {
+  background: color-mix(in srgb,var(--sf-warning) 13%,var(--card)) !important;
+  color: var(--sf-warning) !important;
+}
+.sf-shell-v3 .sf-main .sf-ops-priority-low {
+  background: color-mix(in srgb,var(--sf-success) 11%,var(--card)) !important;
+  color: var(--sf-success) !important;
+}
+.sf-shell-v3 .sf-main .sf-ops-panel-message {
+  border-color: var(--border) !important;
+  background: var(--sf-surface-soft) !important;
+  color: var(--muted-foreground) !important;
+}
+.sf-shell-v3 .sf-main .sf-ops-goal-list b,
+.sf-shell-v3 .sf-main .sf-ops-agenda b { color: var(--foreground) !important; }
+.sf-shell-v3 .sf-main .sf-ops-progress { background: var(--muted) !important; }
+.sf-shell-v3 .sf-main .sf-ops-progress span { background: linear-gradient(90deg,var(--sf-wine),var(--sf-gold)) !important; }
+.sf-shell-v3 .sf-main .sf-ops-agenda article { border-color: var(--border) !important; }
+.sf-shell-v3 .sf-main .sf-ops-event-mark { background: var(--sf-gold) !important; }
+.sf-shell-v3 .sf-main .sf-ops-event-task { background: var(--sf-wine) !important; }
+.sf-shell-v3 .sf-main .sf-ops-hint {
+  border-inline-start: 3px solid var(--sf-gold) !important;
+  border-inline-end: 0 !important;
+  background: color-mix(in srgb,var(--sf-gold) 7%,var(--card)) !important;
+  color: var(--muted-foreground) !important;
+}
+.sf-shell-v3 .sf-main .sf-ops-insight-note {
+  border-color: var(--border) !important;
+  border-radius: 14px !important;
+  background: color-mix(in srgb,var(--sf-wine) 5%,var(--card)) !important;
+  color: var(--muted-foreground) !important;
+}
+.sf-shell-v3 .sf-main .sf-ops-insight-note b { color: var(--foreground) !important; }
+.sf-shell-v3 .sf-main .sf-ops-insight-note p { color: var(--muted-foreground) !important; }
+.sf-shell-v3 .sf-main .sf-ops-full-link {
+  border-color: var(--border) !important;
+  background: var(--card) !important;
+  color: var(--sf-wine) !important;
+}
+.sf-shell-v3 .sf-main .sf-ops-full-link:hover {
+  border-color: color-mix(in srgb,var(--sf-wine) 40%,var(--border)) !important;
+  background: color-mix(in srgb,var(--sf-wine) 7%,var(--card)) !important;
+}
