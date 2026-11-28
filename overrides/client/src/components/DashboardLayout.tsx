@@ -98,7 +98,7 @@ export default function DashboardLayout({ title, description, children, action }
   const { user, loading, logout, error: authError, refresh: refreshAuth } = useAuth();
   const trpcUtils = trpc.useUtils();
   const [location, setLocation] = useLocation();
-  const [loginUsername, setLoginUsername] = useState("");
+  const [loginIdentifier, setLoginIdentifier] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [registerName, setRegisterName] = useState("");
@@ -385,9 +385,13 @@ export default function DashboardLayout({ title, description, children, action }
                 if (!isValidAccountPhone(registerPhone)) { setAuthFormError("أدخل رقم هاتف صحيحًا مع كود الدولة."); return; }
                 if (loginPassword.length < 10) { setAuthFormError("كلمة المرور يجب ألا تقل عن 10 أحرف."); return; }
                 if (loginPassword !== confirmPassword) { setAuthFormError("كلمتا المرور غير متطابقتين."); return; }
-                registerMutation.mutate({ name: registerName.trim(), phone: normalizeAccountPhone(registerPhone), username: loginUsername, password: loginPassword }); return;
+                registerMutation.mutate({ name: registerName.trim(), phone: normalizeAccountPhone(registerPhone), password: loginPassword }); return;
               }
-              loginMutation.mutate({ username: loginUsername, password: loginPassword });
+              if (!loginIdentifier.trim()) { setAuthFormError("اكتب رقم الهاتف أو اسم المستخدم."); return; }
+              const identifier = isValidAccountPhone(loginIdentifier)
+                ? normalizeAccountPhone(loginIdentifier)
+                : loginIdentifier.trim();
+              loginMutation.mutate({ identifier, password: loginPassword });
             }} className="sf-login-form">
               {authMode === "register" && <>
                 <div className="space-y-2">
@@ -400,10 +404,16 @@ export default function DashboardLayout({ title, description, children, action }
                   <p className="text-xs leading-6 text-muted-foreground">سيُحفظ رقمك مع الحساب ويُستخدم تلقائيًا في ملفك الدراسي؛ لن نطلب إدخاله مرة أخرى بعد التسجيل.</p>
                 </div>
               </>}
-              <div className="space-y-2">
-                <Label htmlFor="studyflow-username">اسم المستخدم</Label>
-                <Input id="studyflow-username" name="username" type="text" inputMode="text" value={loginUsername} onChange={event => setLoginUsername(event.target.value)} autoComplete="username" autoCapitalize="none" spellCheck={false} placeholder="مثال: omar_2026" required minLength={3} maxLength={32} pattern="[A-Za-z0-9._-]{3,32}" title="استخدم أحرفًا إنجليزية أو أرقامًا أو نقطة أو شرطة سفلية." dir="ltr" className="sf-auth-input text-left" />
-              </div>
+              {authMode === "login" && (
+                <div className="space-y-2">
+                  <Label htmlFor="studyflow-login-identifier">رقم الهاتف أو اسم المستخدم</Label>
+                  <Input id="studyflow-login-identifier" name="username" type="text" inputMode="text"
+                    value={loginIdentifier} onChange={event => setLoginIdentifier(event.target.value)}
+                    autoComplete="username" autoCapitalize="none" spellCheck={false}
+                    placeholder="01xxxxxxxxx أو اسم المستخدم" dir="ltr"
+                    required className="sf-auth-input text-left" />
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="studyflow-password">كلمة المرور</Label>
                 <Input id="studyflow-password" name="password" type="password" value={loginPassword} onChange={event => setLoginPassword(event.target.value)} autoComplete={authMode === "register" ? "new-password" : "current-password"} enterKeyHint={authMode === "register" ? "next" : "go"} placeholder={authMode === "register" ? "10 أحرف على الأقل" : "اكتب كلمة المرور"} required minLength={authMode === "register" ? 10 : 1} className="sf-auth-input" />

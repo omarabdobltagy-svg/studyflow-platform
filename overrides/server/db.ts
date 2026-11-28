@@ -231,6 +231,12 @@ export async function getUserByUsername(username: string) {
   return result[0];
 }
 
+export async function getUserByPhone(phone: string) {
+  const db = await requireDb();
+  const result = await db.select().from(users).where(eq(users.phone, phone.trim())).limit(1);
+  return result[0];
+}
+
 export async function createLocalAuthUser(input: { username: string; name: string; phone?: string; passwordHash: string }) {
   const db = await requireDb();
   const openId = "studyflow-user-" + randomUUID();

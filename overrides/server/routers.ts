@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { hashLocalPassword, verifyLocalPassword } from "./_core/localPassword";
+import { buildPhoneLoginUsername, resolveLocalLoginIdentifier } from "./_core/localAuthIdentifier";
 import { FixedWindowRateLimiter } from "./_core/authRateLimit";
 import { SignJWT } from "jose";
 import { TRPCError } from "@trpc/server";
@@ -2005,8 +2006,12 @@ export const appRouter = router({
   auth: router({
     login: publicProcedure
       .input(z.object({
-        username: z.string().trim().min(3).max(32).regex(/^[A-Za-z0-9._-]+$/),
+        identifier: z.string().trim().min(3).max(80).optional(),
+        username: z.string().trim().min(3).max(32).regex(/^[A-Za-z0-9._-]+$/).optional(),
         password: z.string().min(1).max(160),
+      }).refine(input => Boolean(input.identifier || input.username), {
+        message: "أدخل رقم الهاتف أو اسم المستخدم.",
+      }),
       }))
       .mutation(async ({ ctx, input }) => {
         const sessionSecret = process.env.APP_SESSION_SECRET;
@@ -2014,10 +2019,15 @@ export const appRouter = router({
         const ip = ctx.req.ip || ctx.req.socket.remoteAddress || "unknown";
         const now = Date.now();
         if (loginRateLimiter.isLimited(ip, now)) throw new TRPCError({ code: "FORBIDDEN", message: "محاولات كثيرة. انتظر 15 دقيقة ثم حاول مرة أخرى." });
-        const user = await getUserByUsername(input.username.toLowerCase());
+        const loginIdentifier = resolveLocalLoginIdentifier(input.identifier ?? input.username ?? "");
+        const user = loginIdentifier
+          ? loginIdentifier.kind === "phone"
+            ? await getUserByPhone(loginIdentifier.value)
+            : await getUserByUsername(loginIdentifier.value)
+          : undefined;
         if (!user || !verifyLocalPassword(input.password, user.passwordHash)) {
           loginRateLimiter.record(ip, now);
-          throw new TRPCError({ code: "UNAUTHORIZED", message: "اسم المستخدم أو كلمة المرور غير صحيحة." });
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "رقم الهاتف أو بيانات الدخول غير صحيحة." });
         }
         loginRateLimiter.reset(ip);
         await touchUserLastSignedIn(user.id);
@@ -2037,7 +2047,6 @@ export const appRouter = router({
       .input(z.object({
         name: z.string().trim().min(2).max(80),
         phone: z.string().trim().regex(/^\+[1-9]\d{7,14}$/, "رقم الهاتف يجب أن يكون بالصيغة الدولية."),
-        username: z.string().trim().min(3).max(32).regex(/^[A-Za-z0-9._-]+$/, "اسم المستخدم يقبل الحروف الإنجليزية والأرقام والنقطة والشرطة فقط."),
         password: z.string().min(10).max(160),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -2045,16 +2054,18 @@ export const appRouter = router({
         if (!sessionSecret) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "إنشاء الحساب غير مُهيأ على الخادم." });
         const ip = ctx.req.ip || ctx.req.socket.remoteAddress || "unknown";
         if (!registrationRateLimiter.consume(ip, Date.now())) throw new TRPCError({ code: "FORBIDDEN", message: "وصلت إلى عدد محاولات التسجيل المسموح. حاول بعد 15 دقيقة." });
-        const username = input.username.trim().toLowerCase();
-        if (await getUserByUsername(username)) {
-          throw new TRPCError({ code: "CONFLICT", message: "اسم المستخدم مستخدم بالفعل. اختر اسمًا آخر." });
+        if (await getUserByPhone(input.phone)) {
+          throw new TRPCError({ code: "CONFLICT", message: "رقم الهاتف مسجل بالفعل. سجّل الدخول باستخدام رقم هاتفك." });
         }
+        const username = buildPhoneLoginUsername(input.phone);
         let user;
         try {
           user = await createLocalAuthUser({ username, name: input.name, phone: input.phone, passwordHash: hashLocalPassword(input.password) });
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          if (/ER_DUP_ENTRY|duplicate/i.test(message)) throw new TRPCError({ code: "CONFLICT", message: "اسم المستخدم مستخدم بالفعل. اختر اسمًا آخر." });
+          if (/ER_DUP_ENTRY|duplicate/i.test(message)) {
+            throw new TRPCError({ code: "CONFLICT", message: "رقم الهاتف مسجل بالفعل. سجّل الدخول باستخدام رقم هاتفك." });
+          }
           throw error;
         }
         const token = await new SignJWT({ ver: user.sessionVersion ?? 0 })
