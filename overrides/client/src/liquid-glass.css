@@ -879,7 +879,25 @@ html body .sf-shell-v3 .sf-page-planner .sf-sp-tabs {
     display:flex !important; flex:0 0 auto !important; align-items:center !important;
     justify-content:flex-end !important; gap:3px !important; min-width:0 !important; margin:0 !important;
   }
-  html body .sf-shell-v3 .sf-topbar-actions .dashboard-header-actions,
+  html body .sf-shell-v3 .sf-topbar-actions .dashboard-header-actions {
+    display:flex !important;
+    flex:0 1 auto !important;
+    max-width:28vw !important;
+    min-width:0 !important;
+    overflow:hidden !important;
+    gap:3px !important;
+  }
+  html body .sf-shell-v3 .sf-topbar-actions .dashboard-header-actions button {
+    min-width:0 !important;
+    max-width:100% !important;
+    min-height:31px !important;
+    height:31px !important;
+    padding-inline:7px !important;
+    overflow:hidden !important;
+    font-size:9px !important;
+    text-overflow:ellipsis !important;
+    white-space:nowrap !important;
+  }
   html body .sf-shell-v3 .sf-topbar-actions .sf-sections-trigger,
   html body .sf-shell-v3 .sf-topbar-actions .sf-ai-inbox-trigger-label,
   html body .sf-shell-v3 .sf-topbar-avatar { display:none !important; }
