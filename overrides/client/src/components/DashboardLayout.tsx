@@ -328,7 +328,7 @@ export default function DashboardLayout({ title, description, children, action }
 
     const scan = (node: Node) => {
       if (node instanceof HTMLElement && node.matches("[data-count-up]")) animateCounter(node);
-      if (node instanceof ParentNode) node.querySelectorAll<HTMLElement>("[data-count-up]").forEach(animateCounter);
+      if (node instanceof Element) node.querySelectorAll<HTMLElement>("[data-count-up]").forEach(animateCounter);
     };
 
     scan(scope);
