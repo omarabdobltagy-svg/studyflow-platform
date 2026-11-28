@@ -54,7 +54,7 @@
   --sidebar-border:rgba(220, 228, 247, .12); --sidebar-ring:#D6BC83;
   --chart-1:#4C3A4F; --chart-2:#B99A64; --chart-3:#86758B; --chart-4:#9C8B9E; --chart-5:#B99A64;
   --sf-shell:#151419; --sf-shell-light:#29252E; --sf-purple:#9A7C50; --sf-lilac:#E9E1EB;
-  --sf-mint:#E2DED6; --sf-cyan:#F2E9D6; --sf-coral:#8C6C82; --sf-gold:#D8B36C;
+  --sf-mint:#E2DED6; --sf-cyan:#F2E9D6; --sf-coral:#8C6C82; --sf-gold:#B99A64;
 }
 
 .dark {
@@ -67,7 +67,7 @@
   --sidebar:#0C0D10; --sidebar-foreground:#F3EFE6; --sidebar-primary:#D6BC83;
   --sidebar-primary-foreground:#171612; --sidebar-accent:#201E24; --sidebar-accent-foreground:#F3EFE6;
   --sidebar-border:rgba(220, 228, 247, .12); --sidebar-ring:#D6BC83;
-  --chart-1:#D6BC83; --chart-2:#B99A64; --chart-3:#86758B; --chart-4:#9C8B9E; --chart-5:#D8B36C;
+  --chart-1:#D6BC83; --chart-2:#B99A64; --chart-3:#86758B; --chart-4:#9C8B9E; --chart-5:#B99A64;
 }
 @layer base {
   * { @apply border-border outline-ring/50; }
@@ -199,7 +199,7 @@
   box-shadow: 0 8px 20px -17px rgba(112, 145, 235, 55%), 0 1px 0 rgba(255, 255, 255, 7%) inset;
 }
 .sf-nav-icon { width: 17px; height: 17px; flex: 0 0 auto; color: rgba(195, 210, 245, 64%); }
-.sf-nav-item.is-active .sf-nav-icon { color: #DDE7FF; }
+.sf-nav-item.is-active .sf-nav-icon { color: #E9E1EB; }
 .sf-nav-indicator { width: 5px; height: 5px; margin-right: auto; border-radius: 99px; background: #D6BC83; box-shadow: 0 0 0 4px rgba(150, 175, 245, 14%); }
 .sf-sidebar-bottom { margin-top: auto; padding-top: 17px; border-top: 1px solid rgba(255, 255, 255, 9%); }
 .sf-sidebar-note {
@@ -432,7 +432,7 @@
   background:
     radial-gradient(ellipse at 8% 0%, rgba(115, 150, 235, 23%), transparent 33rem),
     radial-gradient(ellipse at 95% 95%, rgba(75, 115, 215, 14%), transparent 31rem),
-    linear-gradient(135deg, #0D1930 0%, #172C4C 56%, #0A1325 100%);
+    linear-gradient(135deg, #101114 0%, #191A1F 56%, #101114 100%);
 }
 .sf-login-frame {
   direction: ltr;
@@ -462,7 +462,7 @@
   background:
     radial-gradient(ellipse at 4% 0%, rgba(218, 197, 179, 22%), transparent 32%),
     radial-gradient(ellipse at 92% 100%, rgba(179, 138, 102, 12%), transparent 34%),
-    linear-gradient(135deg, #29262D 0%, #3457A9 52%, #201E24 100%);
+    linear-gradient(135deg, #29262D 0%, #4C3A4F 52%, #201E24 100%);
 }
 .sf-login-story::before {
   content: "";
@@ -1079,11 +1079,11 @@ html body .sf-login-screen.sf-shell-v3:has(.sf-login-3d canvas) .sf-login-graphi
 
 /* Cohesive authentication and onboarding */
 .sf-onboarding-shell{max-width:1040px;padding-bottom:28px}
-.sf-onboarding-hero{border:1px solid rgba(255,255,255,.12);background:radial-gradient(circle at 90% 0%,rgba(145,169,255,.24),transparent 35%),linear-gradient(135deg,#111a31 0%,#202e50 58%,#3b4f86 100%)!important;box-shadow:0 26px 70px -42px rgba(15,26,54,.62)!important}
+.sf-onboarding-hero{border:1px solid rgba(255,255,255,.12);background:radial-gradient(circle at 90% 0%,rgba(76, 58, 79,.24),transparent 35%),linear-gradient(135deg,#101114 0%,#29262D 58%,#4C3A4F 100%)!important;box-shadow:0 26px 70px -42px rgba(16, 17, 20,.62)!important}
 .sf-onboarding-hero .eyebrow{color:rgba(240,245,255,.64)!important}
-.sf-onboarding-panel{border:1px solid color-mix(in srgb,var(--border) 78%,#8798bd 22%)!important;border-radius:26px!important;background:var(--card)!important;box-shadow:0 20px 54px -42px rgba(17,30,57,.4)!important}
+.sf-onboarding-panel{border:1px solid color-mix(in srgb,var(--border) 78%,#B6AEB6 22%)!important;border-radius:26px!important;background:var(--card)!important;box-shadow:0 20px 54px -42px rgba(16, 17, 20,.4)!important}
 .sf-onboarding-panel>header{background:color-mix(in srgb,var(--muted) 54%,transparent)!important}
-.sf-teacher-selection-panel{padding:clamp(16px,3vw,24px);border:1px solid var(--border);border-radius:22px;background:color-mix(in srgb,var(--card) 96%,#edf2ff 4%)}
+.sf-teacher-selection-panel{padding:clamp(16px,3vw,24px);border:1px solid var(--border);border-radius:22px;background:color-mix(in srgb,var(--card) 96%,#EDE9E1 4%)}
 .sf-teacher-choice{position:relative;min-height:88px!important;border-width:1.5px!important;background:var(--card)!important}
 .sf-teacher-choice:hover{border-color:var(--primary)!important;transform:translateY(-1px);box-shadow:0 8px 24px -20px rgba(48,76,151,.65)}
 .sf-teacher-choice.is-selected{border-color:var(--primary)!important;background:color-mix(in srgb,var(--primary) 8%,var(--card))!important;box-shadow:inset 0 0 0 1px var(--primary),0 12px 28px -24px rgba(48,76,151,.8)}
