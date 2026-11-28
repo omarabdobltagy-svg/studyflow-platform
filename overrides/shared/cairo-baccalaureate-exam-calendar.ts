@@ -60,7 +60,7 @@ export function getCairoExamUnitTwoFocus(subjectId: string): CairoExamUnitFocus 
   };
 }
 
-const CORE_EXAMS: Array<Omit<CairoSecondYearBaccalaureateExam, "scope" | "schoolConfirmed">> = [
+const CORE_EXAMS: Array<Omit<CairoSecondYearBaccalaureateExam, "scope" | "schoolConfirmed" | "unitFocus">> = [
   { date: "2026-11-29", dayName: "الأحد", subjectId: "ARB_G2_BAC", subjectName: "اللغة العربية", category: "core" },
   { date: "2026-11-30", dayName: "الاثنين", subjectId: "ENG1_G2_BAC", subjectName: "اللغة الإنجليزية", category: "core" },
   { date: "2026-12-01", dayName: "الثلاثاء", subjectId: "HIS_G2_BAC", subjectName: "التاريخ المصري", category: "core" },
