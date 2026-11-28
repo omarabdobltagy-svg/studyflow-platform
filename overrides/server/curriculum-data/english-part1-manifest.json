@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "subjectId": "ENG1_G2_BAC",
+  "title": "English - Egyptian Baccalaureate - Second Year - Part 1",
+  "part": 1,
+  "term": 1,
+  "sourceType": "official_textbook",
+  "tocVerified": true,
+  "pageBodyIndexed": false,
+  "unitCount": 5,
+  "topicCount": 20,
+  "units": [
+    {
+      "id": "ENG_U1",
+      "title": "Living Well in a Complex World",
+      "topics": [
+        "Social Media and Self-Image",
+        "Exploring Modern Lifestyles",
+        "Whose Responsibility Is It?",
+        "Understanding Mental Health"
+      ]
+    },
+    {
+      "id": "ENG_U2",
+      "title": "Leisure Time",
+      "topics": [
+        "Screen Time and Young People",
+        "Creative Arts as Leisure Activities",
+        "Sport and Physical Activity as Leisure",
+        "Not Exactly a Relaxing Day"
+      ]
+    },
+    {
+      "id": "ENG_U3",
+      "title": "Echoes of the Past",
+      "topics": [
+        "Sites of Memory",
+        "The Museum as a Storyteller",
+        "The Viral Past",
+        "Social Media and Historical Events"
+      ]
+    },
+    {
+      "id": "ENG_U4",
+      "title": "The Power of Choice",
+      "topics": [
+        "Food Waste",
+        "Beyond the Brand",
+        "Digital Consumption",
+        "Black Friday and Sales Culture"
+      ]
+    },
+    {
+      "id": "ENG_U5",
+      "title": "The Greenhouse Effect",
+      "topics": [
+        "The Climate Crisis",
+        "Renewable Energy – Powering a Sustainable Future",
+        "Greening Projects in Egypt",
+        "Individual and Collective Actions"
+      ]
+    }
+  ],
+  "limitation": "This is a verified first-part topic catalog only. Full lesson page text is not indexed in StudyFlow; do not attribute explanations, quotations, or page numbers to the book."
+}

@@ -30,6 +30,7 @@ export type Message = {
   content: MessageContent | MessageContent[];
   name?: string;
   tool_call_id?: string;
+  tool_calls?: ToolCall[];
 };
 
 export type Tool = {
@@ -140,7 +141,7 @@ const normalizeContentPart = (
 };
 
 const normalizeMessage = (message: Message) => {
-  const { role, name, tool_call_id } = message;
+  const { role, name, tool_call_id, tool_calls } = message;
 
   if (role === "tool" || role === "function") {
     const content = ensureArray(message.content)
@@ -155,14 +156,16 @@ const normalizeMessage = (message: Message) => {
     };
   }
 
+  const normalizedToolCalls = tool_calls?.length ? { tool_calls } : {};
   const contentParts = ensureArray(message.content).map(normalizeContentPart);
 
-  // If there's only text content, collapse to a single string for compatibility
+  // Preserve assistant tool calls even when the model returns no visible text.
   if (contentParts.length === 1 && contentParts[0].type === "text") {
     return {
       role,
       name,
       content: contentParts[0].text,
+      ...normalizedToolCalls,
     };
   }
 
@@ -170,6 +173,7 @@ const normalizeMessage = (message: Message) => {
     role,
     name,
     content: contentParts,
+    ...normalizedToolCalls,
   };
 };
 
@@ -212,14 +216,14 @@ const normalizeToolChoice = (
   return toolChoice;
 };
 
-const resolveApiUrl = () => {
-  const configured = ENV.aiApiBaseUrl.trim() || "https://openrouter.ai/api/v1";
+const resolveApiUrl = (configuredBaseUrl: string, fallbackBaseUrl: string) => {
+  const configured = configuredBaseUrl.trim() || fallbackBaseUrl;
   if (/\/chat\/completions\/?$/.test(configured)) return configured;
-  return `${configured.replace(/\/+$/, "")}/chat/completions`;
+  return configured.replace(/\/+$/, "") + "/chat/completions";
 };
 
-const assertApiKey = () => {
-  if (!ENV.aiApiKey) throw new Error("AI_API_KEY is not configured");
+const assertApiKey = (apiKey: string, variableName: string) => {
+  if (!apiKey) throw new Error(variableName + " is not configured");
 };
 
 const normalizeResponseFormat = ({
@@ -296,8 +300,11 @@ const computeBackoffDelay = (
   return Math.min(Math.max(jittered, retryAfterMs ?? 0), RETRY_MAX_DELAY_MS);
 };
 
-// Retries non-2xx responses and network errors with exponential backoff, then
-// returns the final Response so callers keep their existing error handling.
+// Retries transient provider responses and network errors with exponential backoff.
+// Deterministic 4xx responses return immediately for caller-side fallback/error handling.
+const isRetryableStatus = (status: number) =>
+  status === 408 || status === 425 || status === 429 || status >= 500;
+
 const fetchWithBackoff = async (
   url: string,
   init: FetchInit
@@ -307,20 +314,28 @@ const fetchWithBackoff = async (
   for (let attempt = 0; attempt <= RETRY_MAX_RETRIES; attempt++) {
     try {
       const response = await fetch(url, init);
-      if (response.ok || attempt === RETRY_MAX_RETRIES) {
+      // A 429 caused by exhausted billing/quota is deterministic. Do not retry
+      // it repeatedly; return it so the planner can switch providers.
+      if (response.status === 429) {
+        const errorPreview = await response.clone().text().catch(() => "");
+        if (/insufficient[_\s-]?(?:credits?|quota|balance)|out of credits|credit balance|quota.{0,30}(?:exceeded|exhausted)|payment required/i.test(errorPreview)) {
+          return response;
+        }
+      }
+      // Authentication, billing, validation and unsupported-feature 4xx errors
+      // are deterministic. Return them immediately so callers can react/fallback.
+      if (response.ok || !isRetryableStatus(response.status) || attempt === RETRY_MAX_RETRIES) {
         return response;
       }
 
-      const retryAfterMs = parseRetryAfter(
-        response.headers.get("retry-after")
-      );
+      const retryAfterMs = parseRetryAfter(response.headers.get("retry-after"));
       try {
         await response.body?.cancel();
       } catch {
         // Body already settled; nothing to clean up.
       }
       console.warn(
-        `LLM request retry ${attempt + 1}/${RETRY_MAX_RETRIES} after status ${response.status}`
+        `LLM request retry ${attempt + 1}/${RETRY_MAX_RETRIES} after transient status ${response.status}`
       );
       await sleep(computeBackoffDelay(attempt, retryAfterMs));
     } catch (error) {
@@ -338,84 +353,344 @@ const fetchWithBackoff = async (
     : new Error("LLM request failed after exhausting retries");
 };
 
-export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
-  assertApiKey();
+type ProviderRequestConfig = {
+  apiBaseUrl: string;
+  fallbackBaseUrl: string;
+  apiKey: string;
+  apiKeyVariable: string;
+  defaultModel: string;
+  errorPrefix: string;
+  omitResponseFormat?: boolean;
+  pollPending?: boolean;
+  additionalBody?: Record<string, unknown>;
+};
 
+const NVIDIA_POLL_INTERVAL_MS = 1_000;
+const NVIDIA_POLL_TIMEOUT_MS = 90_000;
+
+async function pollNvidiaPendingResponse(
+  initialResponse: Response,
+  provider: ProviderRequestConfig
+): Promise<InvokeResult> {
+  const initialPayload = await initialResponse.json().catch(() => ({})) as Record<string, unknown>;
+  const requestId = [
+    initialPayload.requestId,
+    initialPayload.request_id,
+    initialResponse.headers.get("NVCF-REQID"),
+    initialResponse.headers.get("NVCF-REQUEST-ID"),
+  ].find(value => typeof value === "string" && value.length > 0) as string | undefined;
+
+  if (!requestId) {
+    throw new Error(provider.errorPrefix + ": HTTP 202 returned without a requestId");
+  }
+
+  const statusBaseUrl = resolveApiUrl(provider.apiBaseUrl, provider.fallbackBaseUrl)
+    .replace(/\/chat\/completions\/?$/i, "");
+  const statusUrl = statusBaseUrl + "/status/" + encodeURIComponent(requestId);
+  const deadline = Date.now() + NVIDIA_POLL_TIMEOUT_MS;
+
+  while (Date.now() < deadline) {
+    await sleep(NVIDIA_POLL_INTERVAL_MS);
+    const pollResponse = await fetchWithBackoff(statusUrl, {
+      method: "GET",
+      headers: {
+        accept: "application/json",
+        authorization: "Bearer " + provider.apiKey,
+      },
+    });
+
+    if (pollResponse.status === 202) {
+      try {
+        await pollResponse.body?.cancel();
+      } catch {
+        // The response body may already be consumed or closed.
+      }
+      continue;
+    }
+
+    if (!pollResponse.ok) {
+      const errorText = (await pollResponse.text()).slice(0, 1_600);
+      throw new Error(
+        provider.errorPrefix + " status polling failed: " +
+        pollResponse.status + " " + pollResponse.statusText + " – " + errorText
+      );
+    }
+
+    const result = await pollResponse.json() as InvokeResult;
+    if (!result || !Array.isArray(result.choices)) {
+      throw new Error(provider.errorPrefix + ": status polling returned an invalid completion payload");
+    }
+    return result;
+  }
+
+  throw new Error(provider.errorPrefix + ": timed out while waiting for the pending request");
+}
+
+async function invokeWithProvider(
+  params: InvokeParams,
+  provider: ProviderRequestConfig
+): Promise<InvokeResult> {
+  assertApiKey(provider.apiKey, provider.apiKeyVariable);
   const {
-    messages,
-    tools,
-    toolChoice,
-    tool_choice,
-    outputSchema,
-    output_schema,
-    responseFormat,
-    response_format,
-    model,
-    thinking,
-    reasoning,
-    maxTokens,
-    max_tokens,
+    messages, tools, toolChoice, tool_choice, outputSchema, output_schema,
+    responseFormat, response_format, model, thinking, reasoning, maxTokens, max_tokens,
   } = params;
 
   const payload: Record<string, unknown> = {
     messages: messages.map(normalizeMessage),
   };
-
-  const resolvedModel = model || ENV.aiModel;
+  const resolvedModel = model || provider.defaultModel;
   if (resolvedModel) payload.model = resolvedModel;
+  if (tools && tools.length > 0) payload.tools = tools;
 
-  if (tools && tools.length > 0) {
-    payload.tools = tools;
-  }
-
-  const normalizedToolChoice = normalizeToolChoice(
-    toolChoice || tool_choice,
-    tools
-  );
-  if (normalizedToolChoice) {
-    payload.tool_choice = normalizedToolChoice;
-  }
+  const normalizedToolChoice = normalizeToolChoice(toolChoice || tool_choice, tools);
+  if (normalizedToolChoice) payload.tool_choice = normalizedToolChoice;
 
   const resolvedMaxTokens = max_tokens ?? maxTokens;
-  if (typeof resolvedMaxTokens === "number") {
-    payload.max_tokens = resolvedMaxTokens;
+  if (typeof resolvedMaxTokens === "number") payload.max_tokens = resolvedMaxTokens;
+  if (thinking) payload.thinking = thinking;
+  if (reasoning) payload.reasoning = reasoning;
+
+  // Nemotron supports JSON-object response mode. The planner additionally
+  // validates the returned object against its Zod schema before saving.
+  const normalizedResponseFormat = provider.omitResponseFormat
+    ? undefined
+    : normalizeResponseFormat({ responseFormat, response_format, outputSchema, output_schema });
+  if (normalizedResponseFormat) payload.response_format = normalizedResponseFormat;
+  if (provider.additionalBody) Object.assign(payload, provider.additionalBody);
+
+  const response = await fetchWithBackoff(
+    resolveApiUrl(provider.apiBaseUrl, provider.fallbackBaseUrl),
+    {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+        authorization: "Bearer " + provider.apiKey,
+      },
+      body: JSON.stringify(payload),
+    }
+  );
+
+  if (response.status === 202 && provider.pollPending) {
+    return pollNvidiaPendingResponse(response, provider);
   }
-
-  if (thinking) {
-    payload.thinking = thinking;
-  }
-  if (reasoning) {
-    payload.reasoning = reasoning;
-  }
-
-  const normalizedResponseFormat = normalizeResponseFormat({
-    responseFormat,
-    response_format,
-    outputSchema,
-    output_schema,
-  });
-
-  if (normalizedResponseFormat) {
-    payload.response_format = normalizedResponseFormat;
-  }
-
-  const response = await fetchWithBackoff(resolveApiUrl(), {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${ENV.aiApiKey}`,
-    },
-    body: JSON.stringify(payload),
-  });
-
   if (!response.ok) {
-    const errorText = await response.text();
+    const errorText = (await response.text()).slice(0, 1_600);
     throw new Error(
-      `LLM invoke failed: ${response.status} ${response.statusText} – ${errorText}`
+      provider.errorPrefix + ": " + response.status + " " + response.statusText + " – " + errorText
     );
   }
-
   return (await response.json()) as InvokeResult;
+}
+
+function extractTextContent(content: InvokeResult["choices"][number]["message"]["content"]): string {
+  if (typeof content === "string") return content;
+  return content.map(part => ("text" in part && typeof part.text === "string") ? part.text : "").join("");
+}
+
+function extractStreamDelta(payload: Record<string, any>): string {
+  const choice = Array.isArray(payload.choices) ? payload.choices[0] : undefined;
+  const value = choice?.delta?.content ?? choice?.message?.content ?? choice?.text ?? "";
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) {
+    return value.map(part => typeof part === "string" ? part : typeof part?.text === "string" ? part.text : "").join("");
+  }
+  return "";
+}
+
+async function streamWithProvider(
+  params: InvokeParams,
+  provider: ProviderRequestConfig,
+  onToken: (token: string) => void,
+): Promise<InvokeResult> {
+  assertApiKey(provider.apiKey, provider.apiKeyVariable);
+  const {
+    messages, tools, toolChoice, tool_choice, outputSchema, output_schema,
+    responseFormat, response_format, model, thinking, reasoning, maxTokens, max_tokens,
+  } = params;
+  const payload: Record<string, unknown> = { messages: messages.map(normalizeMessage) };
+  const resolvedModel = model || provider.defaultModel;
+  if (resolvedModel) payload.model = resolvedModel;
+  if (tools && tools.length > 0) payload.tools = tools;
+  const normalizedToolChoice = normalizeToolChoice(toolChoice || tool_choice, tools);
+  if (normalizedToolChoice) payload.tool_choice = normalizedToolChoice;
+  const resolvedMaxTokens = max_tokens ?? maxTokens;
+  if (typeof resolvedMaxTokens === "number") payload.max_tokens = resolvedMaxTokens;
+  if (thinking) payload.thinking = thinking;
+  if (reasoning) payload.reasoning = reasoning;
+  const normalizedResponseFormat = provider.omitResponseFormat
+    ? undefined
+    : normalizeResponseFormat({ responseFormat, response_format, outputSchema, output_schema });
+  if (normalizedResponseFormat) payload.response_format = normalizedResponseFormat;
+  if (provider.additionalBody) Object.assign(payload, provider.additionalBody);
+  // Set after provider defaults so this endpoint always requests a streamed response.
+  payload.stream = true;
+
+  const response = await fetchWithBackoff(
+    resolveApiUrl(provider.apiBaseUrl, provider.fallbackBaseUrl),
+    {
+      method: "POST",
+      headers: {
+        accept: "text/event-stream, application/json",
+        "content-type": "application/json",
+        authorization: "Bearer " + provider.apiKey,
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+
+  if (response.status === 202 && provider.pollPending) {
+    const completed = await pollNvidiaPendingResponse(response, provider);
+    const content = extractTextContent(completed.choices?.[0]?.message?.content ?? "");
+    if (content) onToken(content);
+    return completed;
+  }
+  if (!response.ok) {
+    const errorText = (await response.text()).slice(0, 1_600);
+    throw new Error(provider.errorPrefix + ": " + response.status + " " + response.statusText + " – " + errorText);
+  }
+
+  const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+  if (contentType.includes("application/json") || !response.body) {
+    const completed = await response.json() as InvokeResult;
+    const content = extractTextContent(completed.choices?.[0]?.message?.content ?? "");
+    if (content) onToken(content);
+    return completed;
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let fullText = "";
+  let finishReason: string | null = null;
+  let responseId = "";
+  let responseCreated = Math.floor(Date.now() / 1_000);
+  let responseModel = resolvedModel ?? "";
+
+  const consumeEvent = (eventBlock: string) => {
+    const data = eventBlock
+      .split(/\r?\n/)
+      .filter(line => line.startsWith("data:"))
+      .map(line => line.slice(5).trim())
+      .join("\n");
+    if (!data || data === "[DONE]") return;
+    let event: Record<string, any>;
+    try {
+      event = JSON.parse(data) as Record<string, any>;
+    } catch {
+      // Some proxies emit non-JSON heartbeat lines. They are not model tokens.
+      return;
+    }
+    if (typeof event.id === "string") responseId = event.id;
+    if (typeof event.created === "number") responseCreated = event.created;
+    if (typeof event.model === "string") responseModel = event.model;
+    const choice = Array.isArray(event.choices) ? event.choices[0] : undefined;
+    if (typeof choice?.finish_reason === "string") finishReason = choice.finish_reason;
+    const token = extractStreamDelta(event);
+    if (token) {
+      fullText += token;
+      onToken(token);
+    }
+  };
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const events = buffer.split(/\r?\n\r?\n/);
+      buffer = events.pop() ?? "";
+      for (const eventBlock of events) consumeEvent(eventBlock);
+    }
+    buffer += decoder.decode();
+    if (buffer.trim()) consumeEvent(buffer);
+  } finally {
+    reader.releaseLock();
+  }
+
+  if (!fullText.trim()) {
+    throw new Error(provider.errorPrefix + ": streaming response completed without any text content");
+  }
+  return {
+    id: responseId || "stream-" + responseCreated,
+    created: responseCreated,
+    model: responseModel,
+    choices: [{
+      index: 0,
+      message: { role: "assistant", content: fullText },
+      finish_reason: finishReason ?? "stop",
+    }],
+  };
+}
+
+/** Stream text deltas from the configured primary OpenAI-compatible provider. */
+export async function invokeLLMStream(
+  params: InvokeParams,
+  onToken: (token: string) => void,
+): Promise<InvokeResult> {
+  return streamWithProvider(params, {
+    apiBaseUrl: ENV.aiApiBaseUrl,
+    fallbackBaseUrl: "https://openrouter.ai/api/v1",
+    apiKey: ENV.aiApiKey,
+    apiKeyVariable: "AI_API_KEY",
+    defaultModel: ENV.aiModel,
+    errorPrefix: "LLM streaming invoke failed",
+  }, onToken);
+}
+
+/** Stream from NVIDIA NIM; 202/poll responses are delivered as a single final chunk. */
+export async function invokeNvidiaLLMStream(
+  params: InvokeParams,
+  onToken: (token: string) => void,
+): Promise<InvokeResult> {
+  return streamWithProvider(params, {
+    apiBaseUrl: ENV.nvidiaApiBaseUrl,
+    fallbackBaseUrl: "https://integrate.api.nvidia.com/v1",
+    apiKey: ENV.nvidiaApiKey,
+    apiKeyVariable: "NVIDIA_API_KEY",
+    defaultModel: ENV.nvidiaModel,
+    errorPrefix: "NVIDIA LLM streaming invoke failed",
+    pollPending: true,
+    additionalBody: {
+      reasoning_effort: "none",
+      chat_template_kwargs: { force_nonempty_content: true },
+      temperature: 0.2,
+    },
+  }, onToken);
+}
+
+export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
+  return invokeWithProvider(params, {
+    apiBaseUrl: ENV.aiApiBaseUrl,
+    fallbackBaseUrl: "https://openrouter.ai/api/v1",
+    apiKey: ENV.aiApiKey,
+    apiKeyVariable: "AI_API_KEY",
+    defaultModel: ENV.aiModel,
+    errorPrefix: "LLM invoke failed",
+  });
+}
+
+/** Dedicated NVIDIA NIM client with credentials isolated from the primary provider. */
+export async function invokeNvidiaLLM(params: InvokeParams): Promise<InvokeResult> {
+  return invokeWithProvider(params, {
+    apiBaseUrl: ENV.nvidiaApiBaseUrl,
+    fallbackBaseUrl: "https://integrate.api.nvidia.com/v1",
+    apiKey: ENV.nvidiaApiKey,
+    apiKeyVariable: "NVIDIA_API_KEY",
+    defaultModel: ENV.nvidiaModel,
+    errorPrefix: "NVIDIA LLM invoke failed",
+    pollPending: true,
+    // Disable hidden reasoning for this constrained JSON task so generation
+    // budget is spent on the actual plan content, not an internal reasoning trace.
+    // force_nonempty_content must be nested in chat_template_kwargs.
+    additionalBody: {
+      reasoning_effort: "none",
+      chat_template_kwargs: { force_nonempty_content: true },
+      temperature: 0.2,
+      stream: false,
+    },
+  });
 }
 
 export type ModelInfo = {
@@ -431,7 +706,7 @@ export type ModelsResponse = {
 };
 
 export async function listLLMModels(): Promise<ModelsResponse> {
-  assertApiKey();
+  assertApiKey(ENV.aiApiKey, "AI_API_KEY");
 
   // Model discovery must use the same OpenAI-compatible provider and API key
   // as chat completions; the old Forge endpoint belongs to the retired auth stack.

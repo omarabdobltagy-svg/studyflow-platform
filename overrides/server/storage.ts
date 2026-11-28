@@ -30,7 +30,7 @@ function getS3Config(): S3Config | null {
   const configured = [endpoint, bucket, region, accessKeyId, secretAccessKey].filter(Boolean).length;
   if (configured === 0) return null;
   if (configured !== 5) {
-    throw new Error("Incomplete StudyFlow storage configuration. Connect all five Railway bucket reference variables.");
+    throw new Error("إعداد تخزين الملفات غير مكتمل. اربط متغيرات Railway Bucket الخمسة STUDYFLOW_STORAGE_* قبل رفع الكتب.");
   }
   if (cachedS3) return cachedS3;
   const parsed = new URL(endpoint!);
@@ -57,7 +57,7 @@ function getForgeConfig() {
   const forgeUrl = ENV.forgeApiUrl;
   const forgeKey = ENV.forgeApiKey;
   if (!forgeUrl || !forgeKey) {
-    throw new Error("Storage is not configured. Connect a Railway S3 bucket using STUDYFLOW_STORAGE_* variables, or configure BUILT_IN_FORGE_API_URL and BUILT_IN_FORGE_API_KEY.");
+    throw new Error("رفع الملفات غير متاح في هذه البيئة: لم يتم توصيل مخزن ملفات. اربط Railway Bucket عبر متغيرات STUDYFLOW_STORAGE_* أو أعد تهيئة Forge storage.");
   }
   const normalizedUrl = forgeUrl.replace(/\/+$/, "");
   const parsed = new URL(normalizedUrl);

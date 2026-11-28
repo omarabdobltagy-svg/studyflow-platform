@@ -19,6 +19,91 @@ export type LearningGapResult = {
   status: "calculated" | "student_position_missing" | "reference_missing";
 };
 
+export type LegacyLinearFrontierField =
+  | "lastCompletedLessonId"
+  | "teacherTeachingFrontierId"
+  | "schoolClassFrontierId";
+
+export type LegacyTeacherIdentity = {
+  teacherOnly?: boolean;
+  teacherId?: string | null;
+  teacherName?: string | null;
+};
+
+/**
+ * Resolve one legacy linear-course frontier against the current flattened
+ * curriculum. Invalid/cross-branch IDs are ignored, and teacher-owned values
+ * are never borrowed from a different selected teacher.
+ */
+export function selectLegacyLinearFrontier(
+  choices: Array<{ nodeId: string }>,
+  records: Array<Record<string, any>>,
+  field: LegacyLinearFrontierField,
+  identity: LegacyTeacherIdentity = {},
+): string | undefined {
+  const selectedTeacherId = String(identity.teacherId ?? "").trim();
+  const selectedTeacherName = String(identity.teacherName ?? "").trim().toLocaleLowerCase("en");
+  const belongsToSelectedTeacher = (record: Record<string, any>) => {
+    if (!identity.teacherOnly) return true;
+    const recordTeacherId = String(record.teacherId ?? "").trim();
+    const recordTeacherName = String(record.teacherName ?? "").trim().toLocaleLowerCase("en");
+    if (selectedTeacherId) {
+      if (recordTeacherId && recordTeacherId !== selectedTeacherId) return false;
+      if (!recordTeacherId && selectedTeacherName && recordTeacherName && recordTeacherName !== selectedTeacherName) return false;
+      return true;
+    }
+    if (selectedTeacherName) {
+      if (recordTeacherId) return false;
+      return !recordTeacherName || recordTeacherName === selectedTeacherName;
+    }
+    // With no teacher selected, only truly unassigned legacy rows are safe.
+    return !recordTeacherId && !recordTeacherName;
+  };
+  const candidates = records
+    .filter(belongsToSelectedTeacher)
+    .map(record => record[field])
+    .filter((value): value is string =>
+      value === "__NOT_STARTED__"
+      || (typeof value === "string" && choices.some(choice => choice.nodeId === value))
+    );
+  const rank = (value: string) => value === "__NOT_STARTED__"
+    ? -1
+    : choices.findIndex(choice => choice.nodeId === value);
+  return candidates.sort((left, right) => rank(left) - rank(right)).at(-1);
+}
+
+/**
+ * Merge a consolidated History/Programming progress row with legacy unit rows
+ * field by field. A partial new row must not erase legacy student/teacher
+ * positions; a deliberately confirmed unknown remains authoritative.
+ */
+export function mergeLegacyLinearBranchProgress(
+  choices: Array<{ nodeId: string }>,
+  current: Record<string, any> = {},
+  legacy: Record<string, any> = {},
+): Record<string, any> {
+  const resolve = (
+    field: LegacyLinearFrontierField,
+    confirmationField: "studentFrontierConfirmedAt" | "teacherFrontierConfirmedAt" | "schoolFrontierConfirmedAt",
+  ) => {
+    const currentValue = current[field];
+    if (currentValue === "__UNKNOWN__" && current[confirmationField]) return "__UNKNOWN__";
+    if (currentValue === "__NOT_STARTED__" || choices.some(choice => choice.nodeId === currentValue)) return currentValue;
+    const legacyValue = legacy[field];
+    if (legacyValue === "__UNKNOWN__" && legacy[confirmationField]) return "__UNKNOWN__";
+    if (legacyValue === "__NOT_STARTED__" || choices.some(choice => choice.nodeId === legacyValue)) return legacyValue;
+    return "__UNKNOWN__";
+  };
+
+  return {
+    ...legacy,
+    ...current,
+    lastCompletedLessonId: resolve("lastCompletedLessonId", "studentFrontierConfirmedAt"),
+    teacherTeachingFrontierId: resolve("teacherTeachingFrontierId", "teacherFrontierConfirmedAt"),
+    schoolClassFrontierId: resolve("schoolClassFrontierId", "schoolFrontierConfirmedAt"),
+  };
+}
+
 const NOT_STARTED = "__NOT_STARTED__";
 const UNKNOWN_VALUES = new Set(["", "__UNKNOWN__", "__DEFERRED__", "__NONE__"]);
 
@@ -110,4 +195,54 @@ export function calculateLearningGapsByBranch(
     branch.branchId,
     calculateLearningGap(branch.choices, inputs[branch.branchId] ?? {}),
   ]));
+}
+
+export type LearningFrontierDirection = "previous" | "next";
+export type LearningNavigationTarget = { subjectId: string; branchId: string | null };
+
+/**
+ * Moves a saved position one checkpoint at a time within the current branch.
+ * Unknown stays unknown when moving backward; moving forward from unknown starts
+ * at the first checkpoint. Moving backward from the first checkpoint returns
+ * the explicit "not started" sentinel.
+ */
+export function moveLearningFrontier(
+  choices: Array<{ nodeId: string }>,
+  frontierId: string | null | undefined,
+  direction: LearningFrontierDirection,
+): string {
+  const unknown = !frontierId || UNKNOWN_VALUES.has(frontierId);
+  if (choices.length === 0) return frontierId || "__UNKNOWN__";
+  if (unknown) return direction === "next" ? choices[0].nodeId : "__UNKNOWN__";
+  if (frontierId === NOT_STARTED) return direction === "next" ? choices[0].nodeId : NOT_STARTED;
+
+  const index = choices.findIndex(choice => choice.nodeId === frontierId);
+  if (index < 0) return direction === "next" ? choices[0].nodeId : NOT_STARTED;
+
+  if (direction === "previous") {
+    return index === 0 ? NOT_STARTED : choices[index - 1].nodeId;
+  }
+  return choices[Math.min(index + 1, choices.length - 1)].nodeId;
+}
+
+/**
+ * Resolves the next explicit curriculum location after a branch is completed.
+ * It advances to the next branch in the same subject, then to the first branch
+ * of the next selected subject. It never invents a branch for an empty subject.
+ */
+export function getNextLearningTarget(
+  subjectIds: string[],
+  currentSubjectId: string,
+  branches: Array<{ branchId: string }>,
+  currentBranchId: string,
+): LearningNavigationTarget | null {
+  const branchIndex = branches.findIndex(branch => branch.branchId === currentBranchId);
+  if (branchIndex < 0) return null;
+  const nextBranch = branches[branchIndex + 1];
+  if (nextBranch) return { subjectId: currentSubjectId, branchId: nextBranch.branchId };
+
+  const subjectIndex = subjectIds.indexOf(currentSubjectId);
+  const nextSubjectId = subjectIds[subjectIndex + 1];
+  if (subjectIndex < 0 || !nextSubjectId) return null;
+  return { subjectId: nextSubjectId, branchId: null };
 }

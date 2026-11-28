@@ -1,0 +1,309 @@
+/* Cohesive StudyFlow motion layer: page changes, content entrance and control feedback. */
+:root {
+  --sf-motion-ease: cubic-bezier(.22, 1, .36, 1);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .sf-page > * {
+    animation: sf-content-enter 460ms var(--sf-motion-ease) both;
+  }
+  .sf-page > *:nth-child(2) { animation-delay: 35ms; }
+  .sf-page > *:nth-child(3) { animation-delay: 70ms; }
+  .sf-page > *:nth-child(4) { animation-delay: 105ms; }
+  .sf-page > *:nth-child(5) { animation-delay: 140ms; }
+
+  .sf-page :is(button:not(:disabled), a, [role="button"], [role="tab"], [role="menuitem"]) {
+    transition:
+      color 180ms ease,
+      background-color 200ms ease,
+      border-color 200ms ease,
+      box-shadow 220ms ease,
+      opacity 180ms ease;
+  }
+  .sf-page :is(button:not(:disabled), [role="button"]):active {
+    translate: 0 1px;
+  }
+  .sf-page :is(input, textarea, select, [role="combobox"]) {
+    transition:
+      border-color 180ms ease,
+      box-shadow 200ms ease,
+      background-color 180ms ease;
+  }
+  .sf-page :is(.app-card, [data-slot="card"], .sf-stat-card, .sf-home-panel) {
+    transition:
+      transform 260ms var(--sf-motion-ease),
+      translate 260ms var(--sf-motion-ease),
+      border-color 220ms ease,
+      background-color 220ms ease,
+      box-shadow 260ms ease;
+  }
+  .sf-dock-item,
+  .sf-mobile-dock-item,
+  .sf-nav-item,
+  .sf-theme-button {
+    transition:
+      color 180ms ease,
+      background-color 200ms ease,
+      border-color 200ms ease,
+      box-shadow 220ms ease;
+  }
+  .sf-mobile-dock-item:active,
+  .sf-nav-item:active {
+    translate: 0 1px;
+  }
+}
+
+@keyframes sf-content-enter {
+  from { opacity: 0; translate: 0 11px; }
+  to { opacity: 1; translate: 0 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sf-page > * {
+    animation: none !important;
+  }
+  .sf-page :is(button, a, [role="button"], [role="tab"], [role="menuitem"], input, textarea, select, [role="combobox"]),
+  .sf-page :is(.app-card, [data-slot="card"], .sf-stat-card, .sf-home-panel),
+  .sf-dock-item,
+  .sf-mobile-dock-item,
+  .sf-nav-item,
+  .sf-theme-button {
+    transition: none !important;
+  }
+  .sf-page :is(button, [role="button"]):active,
+  .sf-mobile-dock-item:active,
+  .sf-nav-item:active {
+    translate: none !important;
+  }
+}
+
+
+/* Final component palette: keep the intelligence cards and folder layers in the
+   same graphite / cocoa / muted-taupe language as the rest of the workspace. */
+.sf-shell-v3 .sf-main .sf-home-intelligence-grid .sf-home-backlog-card,
+.sf-shell-v3 .sf-main .sf-home-intelligence-grid .sf-home-daily-plan-card{
+  color:#EEE9E3!important;
+  border:1px solid rgba(218,199,178,.14)!important;
+  background:linear-gradient(145deg,#2C2D2E 0%,#222528 76%,#202326 100%)!important;
+  box-shadow:0 18px 40px -33px rgba(0,0,0,.72),inset 0 1px rgba(255,255,255,.055)!important;
+}
+.sf-shell-v3 .sf-main .sf-home-intelligence-grid .sf-home-daily-plan-card{
+  background:linear-gradient(145deg,#302D29 0%,#252628 74%,#212326 100%)!important;
+}
+.sf-shell-v3 .sf-main .sf-home-intelligence-grid .sf-home-intelligence-heading h3{color:#F3EEE8!important}
+.sf-shell-v3 .sf-main .sf-home-intelligence-grid .sf-home-intelligence-heading p{color:#AAA29A!important}
+.sf-shell-v3 .sf-main .sf-home-intelligence-grid .sf-home-backlog-total{
+  border:1px solid rgba(201,172,142,.16)!important;
+  background:linear-gradient(120deg,#39332D,#2E2C2A)!important;color:#F5EEE7!important;
+}
+.sf-shell-v3 .sf-main .sf-home-intelligence-grid .sf-home-backlog-total strong{color:#E4C5A5!important}
+.sf-shell-v3 .sf-main .sf-home-intelligence-grid .sf-home-backlog-list>div,
+.sf-shell-v3 .sf-main .sf-home-intelligence-grid .sf-home-plan-steps>div{
+  border:1px solid rgba(230,220,208,.09)!important;background:rgba(255,255,255,.035)!important;
+}
+.sf-shell-v3 .sf-main .sf-home-intelligence-grid .sf-home-backlog-list span,
+.sf-shell-v3 .sf-main .sf-home-intelligence-grid .sf-home-plan-steps strong{color:#E7E0D8!important}
+.sf-shell-v3 .sf-main .sf-home-intelligence-grid .sf-home-backlog-list b{color:#D7B895!important}
+.sf-shell-v3 .sf-main .sf-home-intelligence-grid .sf-home-backlog-list small,
+.sf-shell-v3 .sf-main .sf-home-intelligence-grid .sf-home-plan-summary,
+.sf-shell-v3 .sf-main .sf-home-intelligence-grid .sf-home-plan-steps small,
+.sf-shell-v3 .sf-main .sf-home-intelligence-grid .sf-home-intelligence-note{color:#AAA095!important}
+.sf-shell-v3 .sf-main .sf-home-intelligence-grid .sf-home-backlog-action{
+  border:1px solid rgba(204,174,145,.27)!important;background:linear-gradient(145deg,#504131,#3C332A)!important;color:#F0E7DC!important;
+}
+.sf-shell-v3 .sf-main .sf-planner-subject-card{
+  border-color:rgba(219,204,188,.14)!important;
+  background:linear-gradient(145deg,#2C2D2E 0%,#222528 76%,#202326 100%)!important;
+  color:#EEE9E3!important;
+}
+.sf-shell-v3 .sf-main .sf-planner-subject-card :is(h3,b){color:#F0EBE5!important}
+.sf-shell-v3 .sf-main .sf-planner-subject-card p{color:#B3AAA0!important}
+.sf-shell-v3 .sf-main .sf-planner-subject-card .bg-background{
+  border:1px solid rgba(219,204,188,.13)!important;
+  background:rgba(255,255,255,.055)!important;color:#D9C4AD!important;
+}
+
+/* The folder uses stacked paper and a dark front cover, never stark white faces. */
+.sf-shell-v3 .sf-main .sf-folder-paper,
+.sf-shell-v3 .sf-main .sf-folder-paper-front,
+.sf-shell-v3 .sf-main .sf-folder-paper-back{
+  border-color:rgba(222,204,184,.24)!important;
+  background:linear-gradient(140deg,#8C7A67,#766653)!important;
+}
+.sf-shell-v3 .sf-main .sf-folder-paper-back{background:linear-gradient(140deg,#766653,#625445)!important}
+.sf-shell-v3 .sf-main .sf-folder-paper-front{background:linear-gradient(140deg,#95816D,#7D6B59)!important}
+.sf-shell-v3 .sf-main .sf-folder-back{background:linear-gradient(145deg,#584A3C,#3B322B)!important}
+.sf-shell-v3 .sf-main .sf-folder-front{
+  background:linear-gradient(145deg,#665543 0%,#44372C 64%,#332A23 100%)!important;
+  color:#F4EEE8!important;
+}
+.sf-shell-v3 .sf-main .sf-folder-emblem{background:rgba(206,173,139,.10)!important;color:#E6D1BA!important}
+.sf-shell-v3 .sf-main .sf-folder-copy strong{color:#F0EBE5!important}
+.sf-shell-v3 .sf-main .sf-folder-subtitle{color:#B3AAA0!important}
+.sf-shell-v3 .sf-main .sf-folder-reveal{background:rgba(12,13,14,.22)!important}
+@media(max-width:760px){
+  .sf-shell-v3 .sf-main .sf-folder-art{width:66px!important;height:76px!important}
+  .sf-shell-v3 .sf-main .sf-folder-front{inset:27px 0 0!important;width:auto!important;height:auto!important;padding:8px!important}
+}
+
+
+/* Planner surfaces use the same graphite / cocoa system as the home intelligence cards. */
+.sf-shell-v3 .sf-main .sf-feature-hero{
+  border:1px solid rgba(219,199,178,.16)!important;
+  background:
+    radial-gradient(ellipse at 8% 8%,rgba(182,145,111,.18),transparent 35%),
+    radial-gradient(ellipse at 92% 100%,rgba(208,190,171,.08),transparent 30%),
+    linear-gradient(140deg,#1D1D1F 0%,#2B211C 58%,#242628 100%)!important;
+  color:#F4EEE8!important;
+  box-shadow:0 22px 50px -36px rgba(0,0,0,.78),inset 0 1px rgba(255,255,255,.07)!important;
+}
+.sf-shell-v3 .sf-main .sf-feature-hero h2{color:#F5EEE7!important}
+.sf-shell-v3 .sf-main .sf-feature-hero p{color:#BCB1A5!important}
+.sf-shell-v3 .sf-main .sf-feature-hero .eyebrow{color:#C4A382!important}
+.sf-shell-v3 .sf-main .sf-feature-hero .text-violet-200{color:#D7B895!important}
+.sf-shell-v3 .sf-main .sf-feature-hero .backdrop-blur-sm{
+  border-color:rgba(219,199,178,.15)!important;
+  background:linear-gradient(145deg,rgba(255,255,255,.075),rgba(255,255,255,.035))!important;
+}
+.sf-shell-v3 .sf-main .sf-feature-hero .rounded-full.border{
+  border-color:rgba(219,199,178,.18)!important;
+  background:rgba(255,255,255,.045)!important;
+  color:#D2C4B6!important;
+}
+.sf-shell-v3 .sf-main .sf-planner-surface{
+  border-color:rgba(219,199,178,.15)!important;
+  background:linear-gradient(145deg,#2C2D2E 0%,#252729 68%,#222528 100%)!important;
+  color:#EEE9E3!important;
+  box-shadow:0 18px 40px -34px rgba(0,0,0,.72),inset 0 1px rgba(255,255,255,.045)!important;
+}
+.sf-shell-v3 .sf-main .sf-planner-surface :is(h2,h3,h4,label,strong){color:#EEE9E3}
+.sf-shell-v3 .sf-main .sf-planner-surface :is(p,small,.text-muted-foreground){color:#B4AAA0}
+.sf-shell-v3 .sf-main .sf-planner-surface :is(textarea,select,input:not([type="checkbox"]):not([type="radio"])){
+  border-color:rgba(219,199,178,.20)!important;
+  background:#202326!important;
+  color:#F3ECE4!important;
+  box-shadow:none!important;
+}
+.sf-shell-v3 .sf-main .sf-planner-surface :is(textarea,select,input)::placeholder{color:#978C81!important}
+.sf-shell-v3 .sf-main .sf-planner-surface :is(textarea,select,input):focus-visible{
+  border-color:#A98A6D!important;
+  box-shadow:0 0 0 3px rgba(169,138,109,.16)!important;
+}
+.sf-shell-v3 .sf-main .sf-planner-surface .bg-secondary{
+  border-color:rgba(219,199,178,.13)!important;
+  background:rgba(255,255,255,.055)!important;
+  color:#D6C4B1!important;
+}
+.sf-shell-v3 .sf-main .sf-planner-surface .border-border{
+  border-color:rgba(219,199,178,.15)!important;
+}
+.sf-shell-v3 .sf-main .sf-planner-result>div:first-child{
+  border-color:rgba(219,199,178,.14)!important;
+  background:linear-gradient(145deg,#332D27,#252729)!important;
+}
+.sf-shell-v3 .sf-main .sf-planner-result .loading-shimmer{
+  background:linear-gradient(90deg,rgba(255,255,255,.035),rgba(255,255,255,.10),rgba(255,255,255,.035))!important;
+}
+
+/* Mobile folder proportion correction: keep the folder silhouette, not a tiny icon tile. */
+@media(max-width:760px){
+  .sf-shell-v3 .sf-main .sf-folder-trigger{
+    grid-template-columns:90px minmax(0,1fr) auto!important;
+    min-height:126px!important;
+    gap:10px!important;
+    padding:14px 12px 24px!important;
+  }
+  .sf-shell-v3 .sf-main .sf-folder-art{
+    width:84px!important;
+    height:94px!important;
+    margin-inline:auto!important;
+  }
+  .sf-shell-v3 .sf-main .sf-folder-paper{
+    top:13px!important;
+    right:8px!important;
+    left:8px!important;
+    height:59px!important;
+    border-radius:8px!important;
+  }
+  .sf-shell-v3 .sf-main .sf-folder-paper-front{top:17px!important}
+  .sf-shell-v3 .sf-main .sf-folder-back{
+    inset:11px 0 0!important;
+    border-radius:12px 15px 10px 10px!important;
+  }
+  .sf-shell-v3 .sf-main .sf-folder-back::before{
+    top:-9px!important;
+    right:8px!important;
+    width:48px!important;
+    height:13px!important;
+  }
+  .sf-shell-v3 .sf-main .sf-folder-front{
+    inset:34px 0 0!important;
+    width:auto!important;
+    height:auto!important;
+    padding:8px!important;
+    border-radius:11px!important;
+  }
+  .sf-shell-v3 .sf-main .sf-folder-emblem{width:31px!important;height:31px!important}
+  .sf-shell-v3 .sf-main .sf-folder-index{font-size:6px!important}
+}
+
+
+/* Home learning intelligence — warm stone surfaces aligned with the app shell. */
+.sf-shell-v3 .sf-main .sf-home-backlog-card,
+.sf-shell-v3 .sf-main .sf-home-daily-plan-card{
+  border:1px solid #DED6CF!important;
+  border-radius:21px!important;
+  color:#28231F!important;
+  background:linear-gradient(145deg,#F1ECE6 0%,#E8E0D8 100%)!important;
+  box-shadow:0 16px 36px -31px rgba(59,45,32,.28),inset 0 1px rgba(255,255,255,.48)!important;
+}
+.sf-shell-v3 .sf-main .sf-home-daily-plan-card{
+  background:linear-gradient(145deg,#EEE8E1 0%,#E4DBD2 100%)!important;
+}
+.sf-shell-v3 .sf-main .sf-home-intelligence-heading>svg{color:#75523A!important}
+.sf-shell-v3 .sf-main .sf-home-intelligence-heading span{color:#84684F!important}
+.sf-shell-v3 .sf-main .sf-home-intelligence-heading h3{color:#28231F!important}
+.sf-shell-v3 .sf-main .sf-home-intelligence-heading p{color:#766C63!important}
+.sf-shell-v3 .sf-main .sf-home-backlog-total{
+  border:1px solid rgba(117,82,58,.18)!important;
+  background:linear-gradient(120deg,#2E2823,#3C3026)!important;
+  color:#F6F1EB!important;
+}
+.sf-shell-v3 .sf-main .sf-home-backlog-total strong{color:#E1C4A7!important}
+.sf-shell-v3 .sf-main .sf-home-backlog-total span{color:#D1C2B3!important}
+.sf-shell-v3 .sf-main .sf-home-backlog-list>div,
+.sf-shell-v3 .sf-main .sf-home-plan-steps>div{
+  border-color:#D9D0C7!important;
+  background:rgba(255,252,248,.58)!important;
+}
+.sf-shell-v3 .sf-main .sf-home-backlog-list span{color:#342A23!important}
+.sf-shell-v3 .sf-main .sf-home-backlog-list b{color:#75523A!important}
+.sf-shell-v3 .sf-main .sf-home-backlog-list small{color:#766C63!important}
+.sf-shell-v3 .sf-main .sf-home-intelligence-note{color:#766C63!important}
+.sf-shell-v3 .sf-main .sf-home-intelligence-loading,
+.sf-shell-v3 .sf-main .sf-home-intelligence-empty{
+  border-color:#D5C9BC!important;
+  background:rgba(246,243,239,.72)!important;
+  color:#766C63!important;
+}
+.sf-shell-v3 .sf-main .sf-home-plan-status{color:#8E7E94!important}
+.sf-shell-v3 .sf-main .sf-home-daily-plan-card h4{color:#28231F!important}
+.sf-shell-v3 .sf-main .sf-home-plan-summary{color:#766C63!important}
+.sf-shell-v3 .sf-main .sf-home-plan-steps span{color:#84684F!important}
+.sf-shell-v3 .sf-main .sf-home-plan-steps strong{color:#342A23!important}
+.sf-shell-v3 .sf-main .sf-home-plan-steps small{color:#766C63!important}
+.sf-shell-v3 .sf-main .sf-home-plan-footer>span{color:#766C63!important}
+.sf-shell-v3 .sf-main .sf-home-plan-button{
+  border-color:#75523A!important;
+  background:#75523A!important;
+  color:#FFFAF5!important;
+}
+.sf-shell-v3 .sf-main .sf-home-plan-button:hover{background:#62432F!important}
+.sf-shell-v3 .sf-main .sf-home-backlog-action{
+  border-color:#CDBBA9!important;
+  background:#E8DED4!important;
+  color:#493728!important;
+}
+.sf-shell-v3 .sf-main .sf-home-backlog-action:hover{
+  background:#DED0C2!important;color:#342A23!important;
+}
