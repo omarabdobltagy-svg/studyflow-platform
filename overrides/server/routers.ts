@@ -98,7 +98,7 @@ import { isDailyPlanStale } from "./planLifecycle";
 import { buildPlanStrategySnapshot, type PlanDecisionSignals } from "./plan-strategy";
 import { buildPlannerMemorySnapshot, formatPlannerMemorySnapshot } from "./plannerMemory";
 import { classifyPlannerEventImpact, evaluatePlanQuality, schedulePlanSteps } from "./plannerEngine";
-import { createDailyPlanSourceFingerprint } from "./dailyPlanFingerprint";
+import { createDailyPlanSourceFingerprint, createPlannerRelevantSelection } from "./dailyPlanFingerprint";
 import { storageDelete, storagePut } from "./storage";
 import { decodeAndValidateAttachment } from "./attachments";
 import { parse as parseCookie } from "cookie";
@@ -410,8 +410,7 @@ async function getDailyPlanSourceFingerprint(userId: number, dailyMinutes: numbe
     listBooks(userId),
     listRecentStudentActivityEvents(userId, 40),
   ]);
-  const fingerprintSelection = { ...((profile.selection ?? {}) as Record<string, unknown>) };
-  delete fingerprintSelection.teacherPublicScanState;
+  const fingerprintSelection = createPlannerRelevantSelection(profile.selection);
   const byId = <T extends { id: string | number }>(items: T[]) =>
     [...items].sort((left, right) => String(left.id).localeCompare(String(right.id)));
   return createDailyPlanSourceFingerprint({
