@@ -35,9 +35,9 @@ body {
     radial-gradient(70rem 36rem at 5% -12%, rgba(179, 145, 83, .10), transparent 58%),
     radial-gradient(54rem 32rem at 100% 22%, rgba(120, 112, 101, .08), transparent 62%);
 }
-:where(.app-card, .sf-sp-hero, .sf-sp-metric, .sf-sp-focus-card, .sf-sp-builder-card,
+:is(.app-card, .sf-sp-hero, .sf-sp-metric, .sf-sp-focus-card, .sf-sp-builder-card,
 .sf-sp-section-card, .sf-sp-plan-board, .sf-sp-branch-card, .sf-sp-teacher-session-card,
-.sf-home-exam-item, .sf-exam-mission-scene, .sf-onboarding-hero, .sf-login-frame,
+.sf-home-exam-item, .sf-home-exam-item, .sf-login-frame,
 .sf-login-frame-v4, .sf-login-form-card, .sf-auth-frame, .sf-mobile-sheet,
 .sf-ai-inbox-sheet, .sf-session-finish-dialog) {
   background: linear-gradient(145deg, rgba(255,255,255,.16), transparent 48%), var(--sf-glass-panel);
@@ -46,19 +46,19 @@ body {
   -webkit-backdrop-filter: blur(var(--sf-glass-blur)) saturate(150%);
   backdrop-filter: blur(var(--sf-glass-blur)) saturate(150%);
 }
-.dark :where(.app-card, .sf-sp-hero, .sf-sp-metric, .sf-sp-focus-card, .sf-sp-builder-card,
+.dark :is(.app-card, .sf-sp-hero, .sf-sp-metric, .sf-sp-focus-card, .sf-sp-builder-card,
 .sf-sp-section-card, .sf-sp-plan-board, .sf-sp-branch-card, .sf-sp-teacher-session-card,
-.sf-home-exam-item, .sf-exam-mission-scene, .sf-onboarding-hero, .sf-login-frame,
+.sf-home-exam-item, .sf-home-exam-item, .sf-login-frame,
 .sf-login-frame-v4, .sf-login-form-card, .sf-auth-frame, .sf-mobile-sheet,
 .sf-ai-inbox-sheet, .sf-session-finish-dialog) {
   background: linear-gradient(145deg, rgba(255,255,255,.07), transparent 52%), var(--sf-glass-panel);
 }
-.sf-sp-hero, .sf-exam-mission-scene, .sf-onboarding-hero,
+.sf-sp-hero, .sf-home-exam-item,
 .sf-login-frame, .sf-login-frame-v4, .sf-auth-frame {
   position: relative;
   overflow: hidden;
 }
-.sf-sp-hero::after, .sf-exam-mission-scene::after, .sf-onboarding-hero::after,
+.sf-sp-hero::after,
 .sf-login-frame::after, .sf-login-frame-v4::after, .sf-auth-frame::after {
   content: "";
   position: absolute;
@@ -68,8 +68,7 @@ body {
   background: linear-gradient(132deg, rgba(255,255,255,.20), transparent 26%, transparent 74%, rgba(190,160,110,.06));
   opacity: .65;
 }
-.dark .sf-sp-hero::after, .dark .sf-exam-mission-scene::after,
-.dark .sf-onboarding-hero::after, .dark .sf-login-frame::after,
+.dark .sf-sp-hero::after, .dark .sf-login-frame::after,
 .dark .sf-login-frame-v4::after, .dark .sf-auth-frame::after {
   background: linear-gradient(132deg, rgba(255,255,255,.10), transparent 28%, transparent 72%, rgba(214,188,131,.05));
 }
@@ -132,14 +131,50 @@ body {
   background: linear-gradient(135deg, rgba(176,87,79,.08), transparent 65%), var(--sf-glass-panel);
 }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  :where(.app-card, .sf-sp-hero, .sf-sp-metric, .sf-sp-focus-card, .sf-sp-builder-card,
+  :is(.app-card, .sf-sp-hero, .sf-sp-metric, .sf-sp-focus-card, .sf-sp-builder-card,
   .sf-sp-section-card, .sf-sp-plan-board, .sf-sp-branch-card, .sf-sp-teacher-session-card,
-  .sf-home-exam-item, .sf-exam-mission-scene, .sf-onboarding-hero, .sf-login-frame,
+  .sf-home-exam-item, .sf-home-exam-item, .sf-login-frame,
   .sf-login-frame-v4, .sf-login-form-card, .sf-auth-frame, .sf-mobile-sheet,
   .sf-ai-inbox-sheet, .sf-session-finish-dialog) {
     background: var(--sf-glass-panel-strong);
   }
 }
+/* Preserve the high-contrast exam scene and onboarding callout while giving their inner surfaces glass depth. */
+.sf-exam-mission-scene {
+  border-color: rgba(214, 188, 131, .28);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.10), 0 20px 52px rgba(0,0,0,.28);
+}
+.sf-exam-mission-scene::after {
+  background: linear-gradient(132deg, rgba(255,255,255,.12), transparent 28%, transparent 72%, rgba(214,188,131,.07));
+  opacity: .7;
+}
+.sf-onboarding-hero {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 90%, #171612), color-mix(in srgb, var(--primary) 68%, #6f5b3e)) !important;
+  border: 1px solid rgba(255,255,255,.22);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.2), 0 18px 44px rgba(42,35,26,.16);
+  -webkit-backdrop-filter: blur(22px) saturate(145%);
+  backdrop-filter: blur(22px) saturate(145%);
+  color: var(--primary-foreground);
+}
+.sf-onboarding-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(132deg, rgba(255,255,255,.16), transparent 36%, transparent 72%, rgba(214,188,131,.10));
+}
+.sf-onboarding-panel, .sf-onboarding-shell .app-card,
+.sf-main [role="dialog"], .sf-main [data-radix-popper-content-wrapper] > * {
+  border-color: var(--sf-glass-border);
+  box-shadow: var(--sf-glass-inset), var(--sf-glass-shadow);
+  -webkit-backdrop-filter: blur(18px) saturate(145%);
+  backdrop-filter: blur(18px) saturate(145%);
+}
+@media (max-width: 767px) {
+  .sf-page { padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
+}
+
 @media (max-width: 767px) {
   body { background-attachment: scroll; }
   .sf-mobile-sheet { max-height: 92dvh; }
