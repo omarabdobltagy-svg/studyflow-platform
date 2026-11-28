@@ -3520,6 +3520,64 @@ body[data-studyflow-sections-open="true"] .sf-hub-root {
   color: #5d7356 !important;
 }
 
+/* Student-facing review synthesis: the AI explains the source before asking the student to open a segment. */
+.sf-sp-ai-review-brief {
+  display: grid;
+  gap: 9px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--primary) 24%, var(--border));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--primary) 5%, var(--background));
+}
+.sf-sp-ai-review-brief > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.sf-sp-ai-review-brief > header strong {
+  color: var(--foreground);
+  font-size: 11px;
+  font-weight: 900;
+}
+.sf-sp-ai-review-brief > header span {
+  color: var(--muted-foreground);
+  font-size: 10px;
+}
+.sf-sp-ai-review-brief > p {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 11px;
+  line-height: 1.9;
+}
+.sf-sp-review-scope-note {
+  display: grid;
+  gap: 6px;
+  padding: 10px 11px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--muted) 42%, transparent);
+}
+.sf-sp-review-scope-note > strong {
+  color: var(--foreground);
+  font-size: 10px;
+  font-weight: 850;
+}
+.sf-sp-review-scope-note > p,
+.sf-sp-review-scope-note li {
+  color: var(--muted-foreground);
+  font-size: 10px;
+  line-height: 1.8;
+}
+.sf-sp-review-scope-note > p { margin: 0; }
+.sf-sp-review-scope-note ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-inline-start: 18px;
+  list-style: disc;
+}
+
 /* A parent review task contains the timestamped topics from its verified video. */
 .sf-sp-composite-subtasks {
   display: grid;

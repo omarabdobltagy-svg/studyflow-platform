@@ -860,7 +860,7 @@ export default function Planner() {
                 ) : plan ? (
                   <p className="sf-sp-focus-detail">تم تسجيل اكتمال جميع مهام الخطة الحالية. راجع تقدمك في المنهج أو أنشئ خطة محدثة عند تغيّر بياناتك.</p>
                 ) : (
-                  <p className="sf-sp-focus-detail">سيبدأ المحرك من ملفك الدراسي والمواد المختارة وآخر موضع مؤكد في كل فرع، ثم يوازن بين المتراكم وشرح المدرس والمراجعة.</p>
+                  <p className="sf-sp-focus-detail">سيبدأ المحرك من ملفك الدراسي والمواد المختارة وآخر موضع مؤكد في كل مادة، ثم يوازن بين المتراكم وشرح المدرس والمراجعة.</p>
                 )}
               </article>
 
@@ -1182,7 +1182,7 @@ function PlanGenerationInlineStatus({ progress, onShow }: { progress: Generation
 
 function PlanLoading({ progress, gradeLabel, onHide }: { progress: GenerationProgress | null; gradeLabel?: string; onHide?: () => void }) {
   const stages: Array<{ id: GenerationProgress["currentStage"]; title: string; detail: string }> = [
-    { id: "profile", title: "مراجعة ملفك وتقدمك", detail: "قراءة المواد المختارة وآخر موضع مؤكد لكل فرع وما أنجزته بالفعل." },
+    { id: "profile", title: "مراجعة ملفك وتقدمك", detail: "قراءة المواد المختارة وآخر موضع مؤكد لكل مادة وما أنجزته بالفعل." },
     { id: "curriculum", title: "مطابقة خريطة المنهج", detail: "ربط المهام بالدروس والوحدات، واستبعاد الخطوات التي لم تعد مؤهلة." },
     { id: "model", title: "اتخاذ قرارات التوزيع", detail: "موازنة المتراكم مع الدروس القادمة ومواعيد المدرسين وأولوياتك." },
     { id: "validation", title: "فحص الخطة وقواعدها", detail: "مراجعة عدم تكرار المهام، وعدم إعادة درس مكتمل أو اختراع واجب ومحتوى." },

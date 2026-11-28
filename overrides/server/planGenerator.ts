@@ -1671,7 +1671,7 @@ export function applyDailyPlanDepth(
       sourcePages: [],
       phaseId: "teacher_sync",
       aiReviewBrief: {
-        summaryAr: String(analysis.summaryAr || "حلّل المساعد محتوى المراجعة وربط الأجزاء المطابقة بالدروس التي تحتاج إلى مراجعة.").trim().slice(0, 1_800),
+        summaryAr: (String(analysis.summaryAr ?? "").trim().length >= 10 ? String(analysis.summaryAr).trim() : "حلّل المساعد محتوى المراجعة وربط الأجزاء المطابقة بالدروس التي تحتاج إلى مراجعة.").slice(0, 1_800),
         topicsNotCovered: Array.isArray(analysis.topicsNotCovered)
           ? analysis.topicsNotCovered.filter((item: unknown): item is string => typeof item === "string").slice(0, 12).map((item: string) => item.slice(0, 180))
           : [],
