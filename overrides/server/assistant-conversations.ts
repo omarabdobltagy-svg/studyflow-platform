@@ -6,7 +6,6 @@ export type AssistantConversationDraft = {
   messages: Array<{ role: AssistantConversationRole; content: string }>;
 };
 
-const MAX_CONVERSATIONS = 30;
 const MAX_MESSAGES_PER_CONVERSATION = 40;
 const MAX_MESSAGE_LENGTH = 6_000;
 const MAX_TITLE_LENGTH = 80;
@@ -36,20 +35,3 @@ export function normalizeAssistantConversationDraft(input: unknown): AssistantCo
   return { clientId, title, messages };
 }
 
-export function mergeAssistantConversationLists(
-  server: AssistantConversationDraft[],
-  local: AssistantConversationDraft[],
-): AssistantConversationDraft[] {
-  const merged = new Map<string, AssistantConversationDraft>();
-  for (const thread of server) merged.set(thread.clientId, thread);
-  for (const thread of local) {
-    if (!merged.has(thread.clientId)) merged.set(thread.clientId, thread);
-  }
-  return [...merged.values()]
-    .sort((a, b) => {
-      const aDate = Date.parse((a as any).updatedAt ?? "") || 0;
-      const bDate = Date.parse((b as any).updatedAt ?? "") || 0;
-      return bDate - aDate;
-    })
-    .slice(0, MAX_CONVERSATIONS);
-}
