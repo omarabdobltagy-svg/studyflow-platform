@@ -235,15 +235,13 @@ export default function Assistant() {
     const next = remaining.length ? remaining : [newThread()];
     setThreads(next);
     setSelectedId(next[0].id);
-    if (historyMode === "remote") {
-      try {
-        await deleteAssistantThread.mutateAsync({ clientId: deletedThread.id });
-      } catch {
-        setThreads(current => [deletedThread, ...current.filter(thread => thread.id !== deletedThread.id)].slice(0, 30));
-        setSelectedId(deletedThread.id);
-        toast.error("تعذّر حذف المحادثة من الحساب؛ أُعيدت إلى السجل.");
-        return;
-      }
+    try {
+      await deleteAssistantThread.mutateAsync({ clientId: deletedThread.id });
+    } catch {
+      setThreads(current => [deletedThread, ...current.filter(thread => thread.id !== deletedThread.id)].slice(0, 30));
+      setSelectedId(deletedThread.id);
+      toast.error("تعذّر حذف المحادثة من الحساب؛ أُعيدت إلى السجل.");
+      return;
     }
     toast.success("تم حذف المحادثة من سجل الحساب.");
   };
@@ -276,6 +274,12 @@ export default function Assistant() {
     ));
 
     if (attachments.length) setPendingAttachments([]);
+    await persistThread({
+      ...activeThread,
+      title: activeThread.messages.length ? activeThread.title : trimmed.slice(0, 42),
+      messages: [...activeThread.messages, userMessage].slice(-40),
+      updatedAt: Date.now(),
+    });
     const controller = new AbortController();
     abortControllerRef.current = controller;
     streamingThreadRef.current = threadId;
