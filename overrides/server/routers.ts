@@ -36,6 +36,7 @@ import {
   changeLocalAuthPassword,
   getUserByOpenId,
   getUserByUsername,
+  getUserByPhone,
   touchUserLastSignedIn,
   getBookDetail,
   getDashboard,
