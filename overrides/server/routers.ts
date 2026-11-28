@@ -3780,7 +3780,7 @@ export const appRouter = router({
           title: z.string().trim().min(1).max(80),
           messages: z.array(z.object({
             role: z.enum(["user", "assistant"]),
-            content: z.string().trim().min(1).max(6_000),
+            content: z.string().trim().min(1).max(12_000),
           })).max(40),
         }))
         .mutation(({ ctx, input }) => saveAssistantConversation(ctx.user.id, input)),
