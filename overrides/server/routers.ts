@@ -1797,20 +1797,23 @@ export async function runAssistantChat(
           detail: "يجمع ملفك ومواضع التقدم والمهام والمواعيد المسجلة.",
         });
         try {
-        const [profile, taskRows, goalRows, bookRows, routineRows, calendarRows, recentActivity] = await Promise.all([
-          getStudentProfile(userId),
+        const profile = await getStudentProfile(userId);
+        // Operational records are queried only for the planner's scoped draft-editing path.
+        const plannerRows = input.planner ? await Promise.all([
           listTasks(userId),
           listGoals(userId),
           listBooks(userId),
           listRoutines(userId, "Africa/Cairo"),
           listCalendarEvents(userId, "Africa/Cairo"),
           listRecentStudentActivityEvents(userId, 30),
-        ]);
-        // Only the planner's explicit draft-editing path receives planner decision context.
-        // The curriculum assistant stays independent and never calls the planning engine.
-        const sharedPlanningContext = input.planner
-          ? await buildDailyPlanOperationalContext(userId)
-          : null;
+        ]) : null;
+        const taskRows = plannerRows?.[0] ?? [];
+        const goalRows = plannerRows?.[1] ?? [];
+        const bookRows = plannerRows?.[2] ?? [];
+        const routineRows = plannerRows?.[3] ?? [];
+        const calendarRows = plannerRows?.[4] ?? [];
+        const recentActivity = plannerRows?.[5] ?? [];
+        const sharedPlanningContext = input.planner ? await buildDailyPlanOperationalContext(userId) : null;
         updateAIActivity(userId, activityId, "ربط السؤال بسياقه الدراسي", "يراجع المنهج والكتاب ومواضع الشرح المسجلة دون تغيير خطة المذاكرة.");
         const selection = (profile?.selection ?? {}) as Record<string, unknown>;
         const personalMemory = buildStudentMemory(String(selection.assistantMemory ?? ""), input.memory, input.messages);
@@ -1884,7 +1887,7 @@ export async function runAssistantChat(
           teacherFactsTargets.set(`${teacher.teacherId}::${subjectId}`, { teacherId: teacher.teacherId, subjectId });
         }
         const unresolvedTeacherQuestionContext = unresolvedTeacherQuestions.join("\n");
-        const teacherCourseFactsContext = await Promise.all([...teacherFactsTargets.values()]
+        const teacherCourseFactsContext = input.planner ? await Promise.all([...teacherFactsTargets.values()]
           .map(async ({ subjectId, teacherId }) => {
             const systemId = selection.systemId === "EG_GENERAL_SECONDARY" ? "EG_GENERAL_SECONDARY" : "EG_BACCALAUREATE";
             try {
@@ -1910,7 +1913,7 @@ export async function runAssistantChat(
             } catch {
               return `المدرس ${getSIETeacher(teacherId)?.nameAr ?? teacherId}: لا تتوفر بيانات موثقة حاليًا عن طريقة الدراسة ومتطلبات الواجب أو الامتحان.`;
             }
-          })).then(lines => lines.join("\n")) || "لا توجد بيانات مدرسين مختارة.";
+          })).then(lines => lines.join("\n")) || "لا توجد بيانات مدرسين مختارة." : "";
         const dateLabel = (value: Date | string | null | undefined) => {
           if (!value) return "بلا موعد";
           const date = value instanceof Date ? value : new Date(value);
@@ -1934,6 +1937,13 @@ export async function runAssistantChat(
           }).join("\\n");
           return subjectName + ":\\n" + (branchSummary || "فهرس الفروع غير محمّل");
         }).join("\\n");
+        const curriculumCatalogContext = (profile?.subjectIds || []).map(subjectId => {
+          const branches = firstPartBranches(subjectId);
+          const catalog = branches.map(branch =>
+            branch.branchTitle + ": " + branch.choices.map(choice => choice.title).join("؛ ")
+          ).join("\n");
+          return (getSIESubject(subjectId)?.nameAr ?? subjectId) + "\n" + (catalog || "فهرس المادة غير متاح");
+        }).join("\n\n");
         const learningCourseProgress = (selection.learningCourseProgress ?? {}) as Record<string, Record<string, any>>;
         const learningEvidenceContext = (profile?.subjectIds || []).map(subjectId => {
           const record = learningCourseProgress[subjectId] ?? {};
@@ -2000,7 +2010,7 @@ export async function runAssistantChat(
             ? "استرجع " + textbookRetrieval.passages.length + " مقطعًا من المصادر المتاحة، ويجهزها مع سياقك الدراسي."
             : "لم يجد مقطعًا مطابقًا في النصوص المفهرسة؛ سيعتمد على البيانات المتاحة دون ادعاء قراءة نص غير مسترجع.",
         );
-        const appContext = [
+        const appContext = input.planner ? [
           `المهام غير المكتملة: ${taskRows.filter(task => task.status !== "done").slice(0, 12).map(task => `- ${task.title} (${task.category}, ${task.priority}, ${dateLabel(task.dueAt)})`).join("\n") || "لا توجد مهام غير مكتملة مسجلة."}`,
           `الأهداف النشطة: ${goalRows.filter(goal => goal.status === "active").slice(0, 8).map(goal => `- ${goal.title} (${goal.progress}%، ${goal.completedTaskCount}/${goal.taskCount})`).join("\n") || "لا توجد أهداف نشطة."}`,
           `المكتبة: ${bookRows.slice(0, 8).map(book => `- ${book.title} — ${book.subject} (${book.progress}%)`).join("\n") || "لا توجد كتب مسجلة."}`,
@@ -2013,19 +2023,28 @@ export async function runAssistantChat(
           `بيانات المنهج المشتقة من فهارس كتب الجزء الأول (أسماء الدروس ونطاق الصفحات المطبوعة وتقدير حجم/صعوبة أولي؛ ليست نصوصًا منقولة من صفحات الكتب):\n${textbookEvidenceContext || "بيانات المنهج التفصيلية غير متاحة الآن."}`,
           `التقدم المبلغ عنه ونتائج التقييمات:\n${learningEvidenceContext || "لا توجد تحديثات تقدم محفوظة حتى الآن."}`,
           ...(sharedPlanningContext ? [
-            `إشارات قرار التخطيط الخاصة بمسودة الخطة الحالية:\n${JSON.stringify(sharedPlanningContext.decisionSignals)}`,
-            `تعليمات تعديل مسودة الخطة:\n${sharedPlanningContext.decisionDirectives}`,
+            `إشارات قرار التخطيط الخاصة بمسودة الخطة الحالية:\n${JSON.stringify(sharedPlanningContext?.decisionSignals)}`,
+            `تعليمات تعديل مسودة الخطة:\n${sharedPlanningContext?.decisionDirectives}`,
           ] : [
             "المساعد الأكاديمي مستقل عن محرك التخطيط؛ لا يعيد ترتيب المهام ولا يغيّر موضع المدرس أو حالة إنجاز الدروس.",
           ]),
-        ].join("\n\n");
-        const activityContext = recentActivity.map(event =>
+        ].join("\n\n") : "";
+        const activityContext = input.planner ? recentActivity.map(event =>
           "- " + event.summary + " [" + event.eventType + ", " + new Date(event.createdAt).toLocaleString("ar-EG", { timeZone: "Africa/Cairo" }) + "]"
-        ).join("\\n");
+        ).join("\\n") : "";
         const plannerDataContext = input.planner
           ? "\\n\\nمسودة الخطة الحالية بصيغة منظمة؛ هذه بيانات للشرح والتعديل المقيد فقط:\\n" + JSON.stringify(input.planner)
           : "";
-        const context = `${profileContext}\\n\\nحالة التطبيق الحالية (قد تتغير بعد تحديث الصفحة):\\n${appContext}\\n\\nسجل أنشطة الطالب الحديث: ${activityContext || "لا توجد أحداث مسجلة بعد."}${input.context ? "\\n\\nسياق إضافي من الصفحة الحالية (معلومات للمناقشة وليست تغييرات منفذة):\\n" + input.context : ""}${plannerDataContext}`;
+        const context = input.planner
+          ? [profileContext, appContext, activityContext, plannerDataContext,
+              input.context ? "سياق إضافي من صفحة الخطة (للمناقشة فقط):\\n" + input.context : ""]
+              .filter(Boolean).join("\\n\\n")
+          : buildStandaloneAssistantContext({
+              subjects: profile?.subjects ?? [],
+              curriculum: curriculumCatalogContext,
+              textbookEvidence: textbookEvidenceContext,
+              attachmentContext: input.context,
+            });
         updateAIActivity(userId, activityId, "توليد الرد", "يرسل السؤال والسياق إلى مزود الذكاء الاصطناعي وينتظر الاستجابة.");
         let webSearchAvailable = false;
         let response;
@@ -2040,13 +2059,13 @@ export async function runAssistantChat(
   ? "أنت مساعد تحرير خطة المذاكرة داخل StudyFlow. تعامل مع مسودة الخطة المرفقة ومع سياق التخطيط الخاص بها فقط، ولا تدّع تنفيذ تغييرات قبل اعتمادها."
   : "أنت المساعد الأكاديمي للمنهج داخل StudyFlow. أنت مستقل تمامًا عن محرك التخطيط؛ لا تنشئ خطة، ولا تعيد ترتيب المهام، ولا تغيّر تقدم الطالب أو موضع المدرس. ركّز على الإجابة عن سؤال المنهج والكتاب وشرح المدرس."} ${input.planner ? "حافظ على التراكم المسجل، ولا تحذف المهام المكتملة أو الالتزامات." : ""} ${webSearchInstruction} دورك مساعدة الطالب في تحديد موضع الدرس، وفهم المصطلحات والتعليمات، والرجوع إلى شرح المدرس والصفحات المرتبطة به. لا تحل محل المدرس في تدريس مهارات المنهج أو التدريب عليها أو تقييمها. لا تنشئ واجبات أو أسئلة أو تدريبات من تلقاء نفسك، ولا تختبر الطالب. إذا طلب الطالب توضيح مفهوم، قدّم شرحًا مساعدًا محدودًا يخدم فهم شرح المدرس ولا يتحول إلى درس بديل أو نشاط تقييم. استخدم الكتاب المدرسي بوصفه المصدر الأساسي لتحديد أهداف المنهج ومفاهيمه ومصطلحاته وأمثلته وتسلسله وحدود ما يُنسب رسميًا إلى الكتاب. عند توفير بيانات منهج مشتقة من فهرس كتاب رسمي، استخدم اسم الدرس ونطاق الصفحات المطبوعة الموثق، وميّزها عن رقم صفحة PDF. هذه البيانات لا تحتوي نص الصفحة ولا تسمح باختلاق اقتباس أو شرح تفصيلي ونسبته للكتاب. إذا لم يكن نص الصفحة متاحًا في السياق أو عبر استرجاع موثوق فلا تدّع أنك اطلعت عليه؛ اطلب من الطالب إرفاق الصفحة المطلوبة. عند وجود مقتطف نصي مرخص ومسترجع مستقبلًا، اذكر مصدره ورقم صفحة PDF الفعلي.
 
-عند سؤال الطالب عن طريقة دراسة مدرس معين (سنتر أم أونلاين) أو الواجب والامتحان قبل المحاضرة التالية، اعتمد فقط على سجل بيانات المدرس المركزي الظاهر في السياق ومصادره. لا تستنتج أن وجود فيديوهات على YouTube يعني وجود كورس أونلاين أو أن المدرس يشترط حل الواجب/الامتحان. إذا كانت الحالة unknown أو الأدلة جزئية، قل بوضوح إن المعلومة غير مؤكدة ولا تعرضها كحقيقة.
+لا يعالج هذا المساعد مواعيد المدرسين أو إعلاناتهم أو شروط الواجب والامتحان؛ هذه البيانات تخص محرك التخطيط، ولا يجوز تخمينها من هنا. إذا سأل الطالب عنها فوضّح أن موضعها صفحة الخطة أو التقويم.
 
 قاعدة توضيح المتطلبات السابقة: استخدم سجل الطالب ومواضع المنهج لمعرفة ما إذا كان هناك درس سابق مرتبط غير مكتمل، واشرح للطالب علاقة الاعتماد بين الموضوعين عند سؤاله. يمكن توضيح مصطلح أو خلفية معرفية لازمة بصورة مختصرة، مع تمييزها عن محتوى الكتاب. لا تحوّل هذا الدور إلى خريطة تدريس مستقلة أو تدريب مهاري أو اختبار، ولا تنشئ مثالًا مطلوبًا من الطالب حله.
 
 افصل دائمًا بين ثلاث طبقات عند الحاجة: (1) ما يقوله الكتاب أو يطلبه المنهج، (2) تمهيد معرفي أو مهارة سابقة أضفتها لسد فجوة الفهم، (3) توسع اختياري خارج المطلوب. صرّح بأن الطبقة الثانية معرفة مساندة وليست نصًا أو مطلبًا رسميًا من الكتاب، ولا تنسبها للوزارة. لا تعرض التوسع الاختياري كأنه شرط للنجاح. عند وجود فرق أو تعارض بين صياغة الكتاب والمعرفة العلمية الأحدث، اعرض صياغة الكتاب كما هي في سياقها، ثم وضّح التصحيح أو التحديث بدليل وبيّن ما يدخل في نطاق المنهج وما هو توضيح خارجي.
 
-قبل الشرح، قدّر المتطلبات السابقة التي يمتلكها الطالب من سياق تقدمه وأدائه المسجل فقط. إذا لم تتوفر أدلة كافية، صرّح بأن المستوى غير محدد بدل افتراض الضعف أو الإتقان؛ لا تنشئ سؤالًا تشخيصيًا أو اختبارًا قصيرًا أو سؤالًا تطبيقيًا لقياس فهم الطالب. لا تختبر الطالب في المنهج ولا تنشئ له أسئلة أو تدريبات أو واجبات من عندك، ولا تمنحه درجة أو حكم إتقان. شرح المفاهيم عند سؤال الطالب مسموح، أما تدريب المهارات وقياسها وتقييمها فمن اختصاص المدرس. إذا طلب الطالب اختبارًا أو أسئلة منهجية، وجّهه إلى تدريبات المدرس أو الواجب المسجل بدل إنشاء أسئلة جديدة. لا تكرر شرح أساس أثبت سجل الطالب إتقانه، ولا تترك فجوة معرفية غير موضحة؛ اشرح المتطلب السابق مباشرة دون اختبار الطالب عليه. استخدم المعرفة العامة لسد ما لم يغطه الكتاب، لا لتوسيع المنهج بلا هدف.
+لا تستنتج مستوى الطالب أو إتقانه أو تقدمه من سجلات المنصة؛ هذا المساعد لا يستقبل بيانات التقدم أو المدرسين. إذا احتاج السؤال إلى متطلب سابق، قدّم خلفية عامة محدودة ووضّح أنها ليست حالة تقدم مسجلة. لا تنشئ اختبارًا تشخيصيًا أو تدريبات أو واجبات أو درجات. شرح المفاهيم عند سؤال الطالب مسموح، أما التدريب والقياس والتقييم فمن اختصاص المدرس. استخدم المعرفة العامة لسد ما لم يغطه الكتاب، ولا توسّع المنهج بلا هدف.
 
 استخدم بيانات المنهج المشتقة من فهارس الجزء الأول: أسماء الدروس، نطاق الصفحات المطبوعة، ومؤشرات الحجم والصعوبة الاسترشادية. هذه المؤشرات ليست تصنيفًا رسميًا من الوزارة ولا بديلًا عن تقييم الطالب أو نتائج تعلمه؛ عند وجود تقييم طالب حديث فله الأولوية. نطاق هذا السياق هو الجزء الأول/الترم الأول فقط؛ لا تستخدم موضوعات البرمجة من الفصول 5–7 أو أي كتاب من الجزء الثاني. ميّز بين بيانات الفهرس، تقدير النظام، وتقرير الطالب، ولا تدّعِ امتلاك نص كامل لكتاب إذا كان المتاح فهرسًا وبيانات مشتقة فقط. إذا احتاج الشرح إلى نص صفحة غير متاح، اطلب من الطالب إرفاق الصفحة بدل اختلاق اقتباس أو محتوى. أجب مباشرة وبدقة. استخدم سياق التطبيق كبيانات حالية لا كحقائق دائمة؛ إذا كانت البيانات ناقصة فاسأل بدل التخمين. قواعد موضع المدرس: آخر محتوى عام لا يساوي آخر عنصر مدفوع، وآخر عنصر مدفوع لا يثبت أن الطالب شاهده. لا تنقل نقطة تقدم من مصدر إلى آخر. لحساب فجوة المنهج استخدم موضع المدرس إذا كان معروفًا، وإلا استخدم موضع المدرسة، وقارن المرجع بموضع الطالب المستقل. إذا غاب المرجع أو موضع الطالب فقل إن الفجوة غير محسوبة ولا تخترع رقمًا. اذكر أن الموضع غير مثبت عندما تكون البيانات غير متاحة، ولا تخترع رقم محاضرة أو إنجازًا. ${plannerAssistantInstruction} ${input.planner
   ? "عند تفعيل وضع مساعد الخطة، يمكنك إرجاع patch محدود على المسودة؛ ستطبّق الواجهة التغيير بعد التحقق من الخطوات المسموح بها."
