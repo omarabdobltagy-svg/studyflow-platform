@@ -34,6 +34,23 @@ describe("plan strategy snapshots", () => {
     expect(result.history).toHaveLength(1);
   });
 
+  it("surfaces verified official education notices as explicit planning triggers", () => {
+    const plan = { title: "الخطة", summary: "", steps: [{ title: "العربي", curriculumNodeIds: ["ARB_1"], dayIndex: 0 }] };
+    const result = buildPlanStrategySnapshot(null, plan, {
+      officialEducationUpdates: [{
+        title: "جدول امتحانات البكالوريا المصرية",
+        sourceLabel: "وزارة التربية والتعليم",
+        publishedAt: "2026-11-27T09:00:00.000Z",
+        impactType: "exam_schedule",
+        url: "https://moe.gov.eg/ar/news/bac-exams",
+      }],
+    }, new Date("2026-11-28T10:00:00.000Z"));
+    expect(result.revision.triggers).toContainEqual(expect.objectContaining({
+      code: "official_education_update",
+      label: "تحديث رسمي من التعليم",
+    }));
+  });
+
   it("starts revision numbers at zero for the baseline and increments only on later replans", () => {
     const plan = { title: "خطة", summary: "", steps: [{ title: "درس", curriculumNodeIds: ["ARB_1"], dayIndex: 0 }] };
     const baseline = buildPlanStrategySnapshot(null, plan, {}, new Date("2026-11-28T10:00:00.000Z"));

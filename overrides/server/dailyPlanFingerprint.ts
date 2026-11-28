@@ -135,6 +135,15 @@ export function createPlannerRelevantSelection(value: unknown): UnknownRecord {
   delete stableSelection.teacherPublicUpdates;
   delete stableSelection.assistantMemory;
   delete stableSelection.assistantMemoryUpdatedAt;
+  delete stableSelection.officialEducationUpdates;
+  delete stableSelection.officialEducationScanState;
+
+  const officialEducationPlanningSignals = buildOfficialEducationPlanningSignals(selection.officialEducationUpdates);
+  if (officialEducationPlanningSignals.length) {
+    stableSelection.officialEducationPlanningSignals = officialEducationPlanningSignals;
+  } else {
+    delete stableSelection.officialEducationPlanningSignals;
+  }
 
   const teacherPlanningSignals = buildTeacherPlanningSignals(selection.teacherPublicUpdates);
   if (teacherPlanningSignals.length) {
@@ -144,6 +153,40 @@ export function createPlannerRelevantSelection(value: unknown): UnknownRecord {
   }
 
   return stableSelection;
+}
+
+
+function buildOfficialEducationPlanningSignals(rawUpdates: unknown): UnknownRecord[] {
+  if (!Array.isArray(rawUpdates)) return [];
+  const signals: UnknownRecord[] = [];
+  for (const raw of rawUpdates) {
+    const update = asRecord(raw);
+    if (update.confidence !== "high") continue;
+    const externalId = text(update.externalId, 300);
+    const url = text(update.url, 700);
+    const sourceHost = text(update.sourceHost, 180);
+    const impactType = text(update.impactType, 40);
+    if (!externalId || !url.startsWith("https://") || !sourceHost) continue;
+    if (!["exam_schedule", "exam_scope", "curriculum_update", "official_policy"].includes(impactType)) continue;
+    const publishedAt = text(update.publishedAt, 50);
+    const observedAt = text(update.observedAt, 50);
+    if (!publishedAt || !Number.isFinite(Date.parse(publishedAt))) continue;
+    signals.push({
+      externalId,
+      sourceId: text(update.sourceId, 80),
+      sourceLabel: text(update.sourceLabel, 140),
+      sourceHost,
+      title: text(update.title, 220),
+      excerpt: text(update.excerpt, 500),
+      url,
+      publishedAt,
+      observedAt,
+      impactType,
+      confidence: "high",
+      affectedSubjects: stringList(update.affectedSubjects, 8),
+    });
+  }
+  return signals.sort((left, right) => String(left.externalId).localeCompare(String(right.externalId)));
 }
 
 /** Stable, non-reversible identifier for the current student planning inputs. */

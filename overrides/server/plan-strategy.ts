@@ -5,6 +5,13 @@ export type PlanStrategyTrigger = { code: string; label: string; detail: string 
 export type PlanDecisionSignals = {
   exams?: Array<{ subjectName: string; date: string; daysUntil: number; source: string }>;
   energyLevel?: string; moraleLevel?: string; dailyMinutes?: number; openTasksCount?: number; recentSetbacks?: number; obstacle?: string;
+  officialEducationUpdates?: Array<{
+    title: string;
+    sourceLabel: string;
+    publishedAt: string;
+    impactType: "exam_schedule" | "exam_scope" | "curriculum_update" | "official_policy";
+    url: string;
+  }>;
 };
 export type PlanStrategyRevision = {
   number: number; createdAt: string; status: "baseline" | "adapted" | "stable"; headline: string; rationale: string;
@@ -69,6 +76,25 @@ function buildTriggers(signals: PlanDecisionSignals): PlanStrategyTrigger[] {
     triggers.push({ code: "repeated_setbacks", label: "تعثر متكرر", detail: "رُصدت " + signals.recentSetbacks + " تقارير حديثة عن عدم إكمال مهام؛ راعى المحرك ذلك في واقعية التوزيع." });
   if (typeof signals.openTasksCount === "number" && signals.openTasksCount >= 10)
     triggers.push({ code: "heavy_backlog", label: "تراكم مهام مرتفع", detail: "هناك " + signals.openTasksCount + " مهمة مفتوحة؛ يحافظ المحرك على الالتزامات ويحدد ما يتسع له الأفق." });
+  for (const update of (signals.officialEducationUpdates ?? []).slice(0, 3)) {
+    const impactLabels = {
+      exam_schedule: "جدول امتحانات",
+      exam_scope: "نطاق امتحان",
+      curriculum_update: "تحديث منهج",
+      official_policy: "تعليمات رسمية",
+    } as const;
+    const impactLabel = impactLabels[update.impactType];
+    const title = cleanText(update.title, 180);
+    const source = cleanText(update.sourceLabel, 100);
+    const published = cleanText(update.publishedAt, 40);
+    const url = cleanText(update.url, 600);
+    if (!title || !source || !published || !url.startsWith("https://")) continue;
+    triggers.push({
+      code: "official_education_update",
+      label: "تحديث رسمي من التعليم",
+      detail: impactLabel + ": " + title + " — المصدر: " + source + " — تاريخ النشر: " + published + ". راجع المصدر قبل تحويله إلى موعد أو نطاق امتحان.",
+    });
+  }
   const obstacle = cleanText(signals.obstacle, 220);
   if (obstacle) triggers.push({ code: "student_obstacle", label: "عائق مسجل", detail: obstacle });
   return triggers;

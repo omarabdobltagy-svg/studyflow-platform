@@ -50,8 +50,8 @@ type OfficialSource = {
 
 const OFFICIAL_SOURCES: OfficialSource[] = [
   { sourceId: "moe_main", label: "وزارة التربية والتعليم", url: "https://moe.gov.eg/ar/" },
-  { sourceId: "moe_student_portal", label: "بوابة الوزارة التعليمية", url: "https://science3sec.moe.gov.eg/" },
-  { sourceId: "cairo_government", label: "بوابة محافظة القاهرة", url: "https://cairo.gov.eg/ar/news/" },
+  { sourceId: "moe_information_center", label: "مركز معلومات وزارة التربية والتعليم", url: "https://emis.gov.eg/" },
+  { sourceId: "cairo_government_rss", label: "بوابة محافظة القاهرة — الإشعارات", url: "https://cairo.gov.eg/ar/rss" },
 ];
 
 function decodeHtml(value: string): string {
@@ -102,6 +102,11 @@ function parsePublishedAt(section: string): string | null {
     section.match(/<meta\b[^>]*(?:property|name)\s*=\s*["'](?:article:published_time|datePublished|pubdate)["'][^>]*content\s*=\s*["']([^"']+)["']/i)?.[1],
     section.match(/<meta\b[^>]*content\s*=\s*["']([^"']+)["'][^>]*(?:property|name)\s*=\s*["'](?:article:published_time|datePublished|pubdate)["']/i)?.[1],
     section.match(/\b(20\d{2}[-/]\d{1,2}[-/]\d{1,2}(?:[T ][0-9:.+\-Z]+)?)\b/)?.[1],
+    (() => {
+      const match = section.match(/\b(\d{1,2})[/-](\d{1,2})[/-](20\d{2})\b/);
+      if (!match) return undefined;
+      return match[2] + "/" + match[1] + "/" + match[3];
+    })(),
   ];
   for (const candidate of candidates) {
     if (!candidate) continue;
@@ -141,7 +146,9 @@ export function classifyOfficialEducationUpdate(
     && Number.isFinite(observed)
     && parsedDate <= observed + 60 * 60 * 1_000
     && observed - parsedDate <= 120 * 24 * 60 * 60 * 1_000;
-  const isBaccalaureateStudent = scope.educationSystem === "baccalaureate";
+  const normalizedGrade = normalizeArabic(scope.gradeYear);
+  const isSecondYear = /الصف الثاني|السنه الثانيه|second year|grade 11|g11/.test(normalizedGrade);
+  const isBaccalaureateStudent = scope.educationSystem === "baccalaureate" && isSecondYear;
   const highConfidence = isBaccalaureateStudent && explicitBaccalaureate
     && impactType !== "general" && isRecentPublishedEvidence;
   const confidence: OfficialEducationConfidence = highConfidence
@@ -251,7 +258,9 @@ export async function scanOfficialEducationSources(
   now = new Date(),
   fetchImpl: typeof fetch = fetch,
 ): Promise<OfficialEducationScanResult> {
-  if (scope.educationSystem !== "baccalaureate") {
+  const normalizedGrade = normalizeArabic(scope.gradeYear);
+  const isSecondYear = /الصف الثاني|السنه الثانيه|second year|grade 11|g11/.test(normalizedGrade);
+  if (scope.educationSystem !== "baccalaureate" || !isSecondYear) {
     return {
       checkedAt: now.toISOString(),
       updates: [],

@@ -129,6 +129,53 @@ describe("daily plan source fingerprint", () => {
     expect(after).toBe(before);
   });
 
+
+  it("ignores official scan timestamps, low-confidence notices and generic headlines", () => {
+    const before = fingerprintForSelection({
+      officialEducationScanState: { lastAttemptAt: "2026-11-27T08:00:00.000Z" },
+      officialEducationUpdates: [],
+    });
+    const after = fingerprintForSelection({
+      officialEducationScanState: { lastAttemptAt: "2026-11-28T08:00:00.000Z" },
+      officialEducationUpdates: [{
+        externalId: "moe:general",
+        sourceId: "moe_main",
+        sourceLabel: "وزارة التربية والتعليم",
+        sourceHost: "moe.gov.eg",
+        title: "خبر عام",
+        excerpt: "تحديثات عامة",
+        url: "https://moe.gov.eg/ar/news/general",
+        publishedAt: "2026-11-28T07:00:00.000Z",
+        observedAt: "2026-11-28T08:00:00.000Z",
+        impactType: "general",
+        confidence: "low",
+        affectedSubjects: [],
+      }],
+    });
+    expect(after).toBe(before);
+  });
+
+  it("changes only when a recent high-confidence official Baccalaureate planning update is recorded", () => {
+    const before = fingerprintForSelection({ officialEducationUpdates: [] });
+    const after = fingerprintForSelection({
+      officialEducationUpdates: [{
+        externalId: "moe_main:https://moe.gov.eg/ar/news/bac-exams",
+        sourceId: "moe_main",
+        sourceLabel: "وزارة التربية والتعليم",
+        sourceHost: "moe.gov.eg",
+        title: "جدول امتحانات البكالوريا المصرية",
+        excerpt: "إعلان رسمي عن جدول امتحانات الصف الثاني بكالوريا",
+        url: "https://moe.gov.eg/ar/news/bac-exams",
+        publishedAt: "2026-11-27T09:00:00.000Z",
+        observedAt: "2026-11-28T09:00:00.000Z",
+        impactType: "exam_schedule",
+        confidence: "high",
+        affectedSubjects: ["اللغة العربية"],
+      }],
+    });
+    expect(after).not.toBe(before);
+  });
+
   it("still changes when teacher schedules change", () => {
     const before = fingerprintForSelection({ teacherSchedules: { ARB_G2_BAC: [{ dayOfWeek: 0, startTime: "10:00" }] } });
     const after = fingerprintForSelection({ teacherSchedules: { ARB_G2_BAC: [{ dayOfWeek: 0, startTime: "12:00" }] } });

@@ -64,6 +64,20 @@ describe("official education source monitor", () => {
     expect(general.confidence).toBe("low");
   });
 
+  it("does not fetch official portals for a different grade year", async () => {
+    let calls = 0;
+    const result = await scanOfficialEducationSources(
+      { educationSystem: "baccalaureate", gradeYear: "الصف الأول الثانوي", subjects: [] },
+      new Date("2026-11-28T00:00:00Z"),
+      async () => {
+        calls += 1;
+        throw new Error("must not fetch");
+      },
+    );
+    expect(calls).toBe(0);
+    expect(result.updates).toEqual([]);
+  });
+
   it("does not fetch Ministry portals for other education systems", async () => {
     let calls = 0;
     const result = await scanOfficialEducationSources(
