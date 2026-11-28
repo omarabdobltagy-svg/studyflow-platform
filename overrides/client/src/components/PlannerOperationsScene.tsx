@@ -197,7 +197,7 @@ export default function PlannerOperationsScene() {
   const activeMeta = layerMeta[layer];
 
   return (
-    <section className="sf-ops-workspace mb-7" aria-label="مساحة التشغيل التفاعلية">
+    <section className="sf-ops-workspace mb-7" aria-label="مساحة التشغيل التفاعلية" data-testid="studyflow-live-workspace" data-workspace-mode="interactive">
       <div className="sf-ops-heading">
         <div>
           <p className="eyebrow">مساحة العمل التفاعلية</p>
