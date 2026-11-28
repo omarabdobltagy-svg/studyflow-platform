@@ -1,6 +1,4 @@
-import { useEffect, useRef } from "react";
-import gsap from "gsap";
-import { CalendarDays, ShieldCheck } from "lucide-react";
+import { CalendarDays, ShieldCheck, AlertCircle } from "lucide-react";
 
 export type PlannerExam = {
   subjectId: string;
@@ -20,67 +18,62 @@ export default function ExamMissionScene({
   daysUntil: number;
   upcomingExams: PlannerExam[];
 }) {
-  const sceneRef = useRef<HTMLElement | null>(null);
   const dateLabel = new Intl.DateTimeFormat("ar-EG", {
     weekday: "long",
     day: "numeric",
     month: "long",
     timeZone: "Africa/Cairo",
   }).format(new Date(exam.date + "T12:00:00"));
-  const urgencyLabel = daysUntil === 0
-    ? "امتحان اليوم"
-    : daysUntil === 1
-      ? "امتحان غدًا"
-      : "بعد " + daysUntil.toLocaleString("ar-EG") + " يوم";
 
-  useEffect(() => {
-    const root = sceneRef.current;
-    if (!root || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const context = gsap.context(() => {
-      gsap.fromTo("[data-exam-reveal]",
-        { opacity: 0, y: 24, filter: "blur(8px)" },
-        { opacity: 1, y: 0, filter: "blur(0px)", duration: .75, stagger: .08, ease: "power3.out" },
-      );
-      gsap.to("[data-exam-orbit]", { rotate: 360, duration: 44, repeat: -1, ease: "none" });
-      gsap.to("[data-exam-orbit-inner]", { rotate: -360, duration: 31, repeat: -1, ease: "none" });
-      gsap.to("[data-exam-core]", { y: -5, duration: 2.8, repeat: -1, yoyo: true, ease: "sine.inOut" });
-    }, root);
-    return () => context.revert();
-  }, [exam.date]);
+  const countdownLabel = daysUntil === 0
+    ? "الامتحان اليوم"
+    : daysUntil === 1
+      ? "متبقي يوم واحد"
+      : "متبقي " + daysUntil.toLocaleString("ar-EG") + " يوم";
 
   return (
     <section
-      ref={sceneRef}
       className={"sf-exam-mission-scene" + (daysUntil === 0 ? " is-today" : daysUntil === 1 ? " is-tomorrow" : "")}
       data-testid="planner-exam-spotlight"
       data-exam-date={exam.date}
+      aria-labelledby="sf-exam-mission-title"
     >
-      <div className="sf-exam-mission-backdrop" aria-hidden="true" />
-      <div className="sf-exam-mission-visual" aria-hidden="true">
-        <div className="sf-exam-mission-orbit" data-exam-orbit><i /><i /><i /><i /></div>
-        <div className="sf-exam-mission-orbit is-inner" data-exam-orbit-inner><i /><i /><i /></div>
-        <div className="sf-exam-mission-core" data-exam-core>
-          <span>{daysUntil === 0 ? "TODAY" : daysUntil === 1 ? "NEXT" : "UPCOMING"}</span>
-          <strong>{daysUntil.toLocaleString("en-US")}</strong>
-          <small>{daysUntil === 0 ? "يوم الامتحان" : "يوم متبقٍ"}</small>
+      <div className="sf-exam-mission-main">
+        <header className="sf-exam-mission-header">
+          <span className="sf-exam-mission-kicker"><CalendarDays className="size-4" /> الامتحان الأقرب</span>
+          <span className={"sf-exam-mission-state" + (exam.schoolConfirmed ? " is-confirmed" : " is-proposed")}>
+            {exam.schoolConfirmed ? <><ShieldCheck className="size-3.5" /> مؤكد من المدرسة</> : <><AlertCircle className="size-3.5" /> موعد مقترح</>}
+          </span>
+        </header>
+
+        <div className="sf-exam-mission-overview">
+          <div className="sf-exam-mission-copy">
+            <span className="sf-exam-mission-subject-label">{exam.category === "specialization" ? "مادة تخصصية" : "مادة أساسية"}</span>
+            <h2 id="sf-exam-mission-title">{exam.subjectName}</h2>
+            <strong className="sf-exam-mission-date">{dateLabel}</strong>
+          </div>
+          <div className="sf-exam-mission-countdown" aria-label={countdownLabel}>
+            <strong>{daysUntil.toLocaleString("ar-EG")}</strong>
+            <span>{daysUntil === 0 ? "اليوم" : daysUntil === 1 ? "يوم" : "يوم متبقٍ"}</span>
+          </div>
+        </div>
+
+        <div className="sf-exam-mission-guidance">
+          <span>الخطوة التالية</span>
+          <p>
+            {exam.schoolConfirmed
+              ? "راجع إعلان المدرسة لمعرفة نطاق الدروس، ثم اربط المراجعة بالموضوعات المحددة."
+              : "تأكد من الموعد مع المدرسة أولاً. هذا التاريخ من جدول مديرية القاهرة المقترح وليس تأكيداً مدرسياً."}
+          </p>
         </div>
       </div>
-      <div className="sf-exam-mission-copy">
-        <div className="sf-exam-mission-meta" data-exam-reveal>
-          <span className="sf-exam-mission-kicker"><CalendarDays className="size-3.5" /> مركز متابعة الامتحانات</span>
-          <span className="sf-exam-mission-state">{urgencyLabel}</span>
-        </div>
-        <h2 data-exam-reveal>{exam.subjectName}</h2>
-        <strong className="sf-exam-mission-date" data-exam-reveal>{dateLabel}</strong>
-        <p data-exam-reveal>
-          {exam.schoolConfirmed
-            ? "تم تأكيد هذا الموعد من المدرسة."
-            : "الموعد الحالي من جدول مديرية القاهرة المقترح، وليس تأكيدًا من مدرستك. راجع إشعار المدرسة قبل الاعتماد النهائي."}
-        </p>
-        <div className="sf-exam-mission-timeline" data-exam-reveal>
-          {upcomingExams.slice(0, 4).map(item => (
-            <div key={item.subjectId + item.date} className={item.subjectId === exam.subjectId && item.date === exam.date ? "is-active" : ""}>
-              <i />
+
+      {upcomingExams.length > 1 && (
+        <div className="sf-exam-mission-timeline" aria-label="الاختبارات التالية">
+          <span className="sf-exam-mission-timeline-title">بعده</span>
+          {upcomingExams.slice(1, 4).map(item => (
+            <div key={item.subjectId + item.date}>
+              <i aria-hidden="true" />
               <span>{item.subjectName}</span>
               <small>{new Intl.DateTimeFormat("ar-EG", {
                 day: "numeric", month: "short", timeZone: "Africa/Cairo",
@@ -88,15 +81,12 @@ export default function ExamMissionScene({
             </div>
           ))}
         </div>
-        {!exam.schoolConfirmed && (
-          <small className="sf-exam-mission-provenance">
-            <ShieldCheck className="size-3.5" /> الجدول مقترح من مديرية القاهرة؛ لم يُؤكد من المدرسة.
-          </small>
-        )}
-      </div>
-      <div className="sf-exam-mission-scope" data-exam-reveal>
-        <p>لم يتوفر حتى الآن نطاق موثّق لهذا الامتحان. سنعرض الموضوعات فقط عند وجود تصريح واضح يمكن الرجوع إلى مصدره.</p>
-      </div>
+      )}
+
+      <footer className="sf-exam-mission-scope">
+        <ShieldCheck className="size-4" />
+        <p>نطاق الدروس لا يُعرض إلا عند توفر إعلان موثّق؛ لا توجد حالياً موضوعات مؤكدة لهذا الامتحان.</p>
+      </footer>
     </section>
   );
 }
