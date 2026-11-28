@@ -155,7 +155,7 @@ async function run() {
       );
       assert(
         initialState.loginCardSurface.image.includes("37, 43, 40")
-          && !initialState.loginCardSurface.image.includes("32, 37, 34"),
+          && !initialState.loginCardSurface.image.includes("27, 35, 23"),
         viewport.name + ": legacy green login card palette is still active: " + JSON.stringify(initialState.loginCardSurface),
       );
       assert(
