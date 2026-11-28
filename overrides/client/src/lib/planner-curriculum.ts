@@ -117,14 +117,22 @@ export function buildPlannerCurriculumLanes<TStep extends CurriculumStepLike>(
   const lanes = new Map<string, PlannerMapLane<TStep>>();
   for (const entry of entries) {
     const curriculum = getPlannerStepCurriculum(entry.step, subjectIds);
+    // Branches remain part of the internal curriculum match, but they are
+    // never exposed as standalone student-facing lanes. Official textbook units
+    // stay separate; non-official teacher/course branches roll up to the subject.
+    const officialUnitKey = curriculum?.isOfficialUnit
+      ? curriculum.unitId || (curriculum.unitNumber ? "UNIT::" + curriculum.unitNumber : "SUBJECT")
+      : "SUBJECT";
     const key = curriculum
-      ? curriculum.subjectId + "::" + (curriculum.unitId || "BRANCH::" + curriculum.branch)
+      ? curriculum.subjectId + "::" + officialUnitKey
       : "__GENERAL_TASKS__";
-    const curriculumUnitLabel = curriculum?.unitNumber
-      ? "الوحدة " + curriculum.unitNumber.toLocaleString("ar-EG") + (curriculum.unitTitle ? " — " + displayCurriculumTitle(curriculum.unitTitle) : "")
-      : curriculum?.unitTitle
-        ? (curriculum.lessonType === "story" ? "القصة المقررة · " : "") + displayCurriculumTitle(curriculum.unitTitle)
-        : curriculum?.branch;
+    const curriculumUnitLabel = curriculum?.isOfficialUnit
+      ? curriculum.unitNumber
+        ? "الوحدة " + curriculum.unitNumber.toLocaleString("ar-EG") + (curriculum.unitTitle ? " — " + displayCurriculumTitle(curriculum.unitTitle) : "")
+        : curriculum.unitTitle
+          ? (curriculum.lessonType === "story" ? "القصة المقررة · " : "") + displayCurriculumTitle(curriculum.unitTitle)
+          : undefined
+      : undefined;
     const title = curriculum
       ? curriculum.subject + (curriculumUnitLabel ? " · " + curriculumUnitLabel : "")
       : "التزامات ومهام أخرى";

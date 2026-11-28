@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getSIECheckpointUnits } from "@shared/sie-catalog";
+import { getSIECheckpointUnits, getSIESubject } from "@shared/sie-catalog";
 import { buildPlannerCurriculumLanes, getPlannerStepCurriculum, getTeacherSessionPreparationSteps } from "./planner-curriculum";
 
 describe("planner curriculum map hierarchy", () => {
@@ -69,7 +69,7 @@ describe("planner curriculum map hierarchy", () => {
     }
   });
 
-  it("keeps teacher-course streams outside official textbook units as separate lanes", () => {
+  it("keeps teacher-course streams under their subject without exposing internal branch names", () => {
     const units = getSIECheckpointUnits("ARB_G2_BAC");
     const course = units.find(unit => !unit.isOfficialUnit && unit.lessonCount > 0)!;
     const choice = course.branches[0].choices[0];
@@ -78,7 +78,9 @@ describe("planner curriculum map hierarchy", () => {
     ], ["ARB_G2_BAC"]);
     expect(lanes).toHaveLength(1);
     expect(lanes[0].isOfficialUnit).toBe(false);
-    expect(lanes[0].title).toContain(course.title);
+    expect(lanes[0].title).toBe(getSIESubject("ARB_G2_BAC")?.nameAr);
+    expect(lanes[0].title).not.toContain(course.title);
+    expect(lanes[0].branchLabels).toContain(lanes[0].items[0].curriculum?.branch);
   });
 
 
