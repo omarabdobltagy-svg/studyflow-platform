@@ -822,7 +822,7 @@ export default function Study() {
       </section>
 
       <section className="sf-study-progress-card app-card mb-5 overflow-hidden rounded-2xl">
-        <header className="border-b border-border/70 bg-gradient-to-l from-secondary/55 to-card p-5 sm:p-6>
+        <header className="border-b border-border/70 bg-gradient-to-l from-secondary/55 to-card p-5 sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-[10px] font-bold tracking-[0.12em] text-primary">تقدم المنهج</p>
