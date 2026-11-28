@@ -1484,23 +1484,34 @@ export function applyDailyPlanDepth(
   const snapshot = buildPlannerProgressSnapshot(profile);
   const selection = (profile.selection ?? {}) as Record<string, any>;
   const todayCairo = getDateKeyInTimeZone(new Date(), "Africa/Cairo");
-  const nearestExam = getCairoSecondYearBaccalaureateExams(profile)
-    .filter(exam => exam.date >= todayCairo)
-    .sort((left, right) => left.date.localeCompare(right.date))[0] ?? null;
-  const nearestExamDays = nearestExam
-    ? Math.max(0, getCalendarDaysBetween(todayCairo, nearestExam.date))
-    : Number.POSITIVE_INFINITY;
-  const urgentExam = nearestExam && nearestExamDays <= 1
-    ? {
-        exam: nearestExam,
-        daysUntil: nearestExamDays,
-        scope: getMonthlyExamScopeRecord(
-          (selection.monthlyExamScopes ?? {}) as Record<string, unknown>,
-          nearestExam.subjectId,
-          nearestExam.date,
-        ),
-      }
-    : null;
+  const urgentExams = getCairoSecondYearBaccalaureateExams(profile)
+    .map(exam => {
+      const daysUntil = Math.max(0, getCalendarDaysBetween(todayCairo, exam.date));
+      const savedScope = getMonthlyExamScopeRecord(
+        (selection.monthlyExamScopes ?? {}) as Record<string, unknown>,
+        exam.subjectId,
+        exam.date,
+      );
+      const unitTwoScope = exam.unitFocus.lessons.length
+        ? {
+            subjectId: exam.subjectId,
+            examDate: exam.date,
+            includedNodeIds: exam.unitFocus.lessons.map(lesson => lesson.nodeId),
+            excludedNodeIds: [],
+            source: "student_reported" as const,
+            savedAt: "",
+          }
+        : null;
+      return {
+        exam,
+        daysUntil,
+        scope: savedScope ?? unitTwoScope,
+        scopeOrigin: savedScope ? "saved" as const : unitTwoScope ? "unit2" as const : "unavailable" as const,
+      };
+    })
+    .filter(item => item.daysUntil <= 14)
+    .sort((left, right) => left.exam.date.localeCompare(right.exam.date));
+  const urgentExam = urgentExams[0] ?? null;
   const teacherChoices = (selection.teacherChoices ?? profile.teacherSelections ?? {}) as Record<string, string>;
   const teacherSchedules = (selection.teacherSchedules ?? {}) as Record<string, Array<{ dayOfWeek: number; startTime: string }>>;
   const subjectForStep = (step: GeneratedPlan["steps"][number]) => {
@@ -1585,38 +1596,45 @@ export function applyDailyPlanDepth(
   const usedTaskIds = new Set(steps.map(step => step.existingTask?.id).filter((id): id is number => typeof id === "number"));
   const urgentExamNodeIds = new Set<string>();
   const urgentExamLearningStateByNode = new Map<string, StudentLessonState>();
+  const urgentExamByNode = new Map<string, (typeof urgentExams)[number]>();
   const urgentExamScopeSteps: GeneratedPlan["steps"] = [];
-  if (urgentExam?.scope) {
-    const includedNodeIds = new Set(urgentExam.scope.includedNodeIds);
-    for (const branch of getPlanningBranches(urgentExam.exam.subjectId)) {
-      const progress = snapshot.branches.get(plannerBranchKey(urgentExam.exam.subjectId, branch.branchId));
+  for (const examFocus of urgentExams) {
+    if (!examFocus.scope) continue;
+    const includedNodeIds = new Set(examFocus.scope.includedNodeIds);
+    for (const branch of getPlanningBranches(examFocus.exam.subjectId)) {
+      const progress = snapshot.branches.get(plannerBranchKey(examFocus.exam.subjectId, branch.branchId));
       const eligibleById = new Map((progress?.eligibleChoices ?? []).map(choice => [choice.nodeId, choice]));
       for (const [index, choice] of branch.choices.entries()) {
         if (!includedNodeIds.has(choice.nodeId) || snapshot.completedNodeIds.has(choice.nodeId)) continue;
         const learningState = eligibleById.get(choice.nodeId)?.learningState ?? "not_recorded";
         urgentExamNodeIds.add(choice.nodeId);
+        urgentExamByNode.set(choice.nodeId, examFocus);
         urgentExamLearningStateByNode.set(choice.nodeId, learningState);
-        const sourceLabel = urgentExam.scope.source === "school_confirmed" ? "نطاق مؤكد من المدرسة" : "نطاق حدده الطالب بنفسه";
+        const sourceLabel = examFocus.scope.source === "school_confirmed"
+          ? "نطاق مؤكد من المدرسة"
+          : examFocus.scopeOrigin === "unit2"
+            ? "تركيز الوحدة الثانية بناءً على توجيهك"
+            : "نطاق الامتحان الذي سجلته";
         const detail = learningState === "not_watched"
-          ? "هذا الدرس ضمن " + sourceLabel + " لامتحان " + urgentExam.exam.subjectName + " بتاريخ " + urgentExam.exam.date + ". ابدأ من مصدر الشرح المعتمد، ثم ذاكر الدرس وسجّل تقدمك."
+          ? "هذا الدرس ضمن " + sourceLabel + " لامتحان " + examFocus.exam.subjectName + " بتاريخ " + examFocus.exam.date + ". ابدأ من مصدر الشرح المعتمد، ثم ذاكر الدرس وسجّل تقدمك."
           : learningState === "not_recorded"
-            ? "هذا الدرس ضمن " + sourceLabel + " لامتحان " + urgentExam.exam.subjectName + ". حالة مذاكرتك غير مسجلة؛ راجع المصدر وحدّث الحالة بعد الاستعداد."
-            : "هذا الدرس ضمن " + sourceLabel + " لامتحان " + urgentExam.exam.subjectName + " بتاريخ " + urgentExam.exam.date + ". قدّم مراجعته الآن بسبب قرب الامتحان، حتى لو كانت حالته watched_only أو needs_review.";
+            ? "هذا الدرس ضمن " + sourceLabel + " لامتحان " + examFocus.exam.subjectName + ". حالة مذاكرتك غير مسجلة؛ راجع المصدر وحدّث الحالة بعد الاستعداد."
+            : "هذا الدرس ضمن " + sourceLabel + " لامتحان " + examFocus.exam.subjectName + " بتاريخ " + examFocus.exam.date + ". قدّم مراجعته الآن بسبب قرب الامتحان، حتى لو كانت حالته watched_only أو needs_review.";
         urgentExamScopeSteps.push(planSchema.shape.steps.element.parse({
           day: "",
-          title: (getSIESubject(urgentExam.exam.subjectId)?.nameAr ?? urgentExam.exam.subjectName) + " — " + branch.branchTitle + " — " + choice.title,
+          title: (getSIESubject(examFocus.exam.subjectId)?.nameAr ?? examFocus.exam.subjectName) + " — " + branch.branchTitle + " — " + choice.title,
           detail,
           minutes: 0,
-          category: urgentExam.exam.subjectName + " · استعداد الامتحان",
+          category: examFocus.exam.subjectName + " · استعداد الامتحان",
           curriculumNodeIds: [choice.nodeId],
           phaseId: "exam_focus",
           examFocus: true,
-          examFocusDate: urgentExam.exam.date,
+          examFocusDate: examFocus.exam.date,
           priority: "critical",
-          priorityScore: 100 - index,
-          priorityReason: (urgentExam.daysUntil === 0 ? "امتحان اليوم" : "امتحان غدًا") + " في " + urgentExam.exam.subjectName
-            + "؛ هذه الخطوة ضمن " + sourceLabel
-            + (urgentExam.exam.schoolConfirmed ? "." : "، وجدول مديرية القاهرة ما زال مقترحًا وغير مؤكد من المدرسة."),
+          priorityScore: Math.max(80, 100 - index),
+          priorityReason: "امتحان " + (examFocus.daysUntil === 0 ? "اليوم" : examFocus.daysUntil === 1 ? "غدًا" : "خلال " + examFocus.daysUntil + " يوم")
+            + " في " + examFocus.exam.subjectName + "؛ هذه الخطوة ضمن " + sourceLabel
+            + (examFocus.exam.schoolConfirmed ? "." : "، وجدول المديرية مقترح وليس تأكيدًا من المدرسة."),
           difficulty: "unknown",
           lessonSize: "unknown",
           difficultyBasis: "unknown",
@@ -1624,13 +1642,6 @@ export function applyDailyPlanDepth(
           sourcePages: [],
         }));
       }
-    }
-  }
-  if (urgentExam && !urgentExam.scope) {
-    for (const item of dailyBacklogItems.filter(candidate => candidate.subjectId === urgentExam.exam.subjectId)) {
-      if (snapshot.completedNodeIds.has(item.choice.nodeId)) continue;
-      urgentExamNodeIds.add(item.choice.nodeId);
-      urgentExamLearningStateByNode.set(item.choice.nodeId, item.choice.learningState ?? "not_recorded");
     }
   }
   const representedNodeIds = new Set([
@@ -1951,18 +1962,18 @@ export function applyDailyPlanDepth(
   const normalizeStateAndPhase = (step: GeneratedPlan["steps"][number]): GeneratedPlan["steps"][number] => {
     const nodeIds = step.curriculumNodeIds ?? [];
     const urgentNodeId = nodeIds.find(nodeId => urgentExamNodeIds.has(nodeId));
+    const urgentExamForStep = nodeIds.map(nodeId => urgentExamByNode.get(nodeId)).find(Boolean);
     const lesson = nodeIds.map(nodeId => curriculumLearningByNode.get(nodeId)).find(Boolean);
-    if (urgentNodeId && urgentExam) {
+    if (urgentNodeId && urgentExamForStep) {
       return {
         ...step,
         phaseId: "exam_focus",
         examFocus: true,
-        examFocusDate: urgentExam.exam.date,
+        examFocusDate: urgentExamForStep.exam.date,
         priority: "critical",
         priorityScore: 100,
-        priorityReason: (urgentExam.daysUntil === 0 ? "امتحان اليوم" : "امتحان غدًا") + " في مادة " + urgentExam.exam.subjectName + (urgentExam.scope
-          ? "؛ هذا الدرس ضمن النطاق الذي حفظته لهذا الامتحان."
-          : "؛ هذه خطوة من المتراكم المعروف للمادة فقط، وليست تأكيدًا بأنها ضمن محتوى الامتحان."),
+        priorityReason: "امتحان " + (urgentExamForStep.daysUntil === 0 ? "اليوم" : urgentExamForStep.daysUntil === 1 ? "غدًا" : "خلال " + urgentExamForStep.daysUntil + " يوم")
+          + " في مادة " + urgentExamForStep.exam.subjectName + "؛ هذا الدرس من تركيز الوحدة الثانية أو النطاق المسجل لهذا الامتحان.",
       };
     }
     if (!lesson) return step;
@@ -2030,11 +2041,13 @@ export function applyDailyPlanDepth(
   const missingSummary = missingBacklogCount > 0
     ? "تعذّر إسناد " + missingBacklogCount + " نقطة متراكمة إلى مهمة؛ لم نعتبر التغطية كاملة."
     : "كل نقاط المتراكم المؤكد أُدرجت في الخطة.";
-  const examFocusSummary = urgentExam
-    ? "أولوية الامتحان الأقرب: " + urgentExam.exam.subjectName + " بتاريخ " + urgentExam.exam.date
-      + (urgentExam.scope
-        ? "؛ قُدّمت " + urgentExamNodeIds.size + " درسًا حدده الطالب صراحةً ضمن النطاق."
-        : "؛ لم يُحفظ نطاق مستقل، لذلك لا نخترع محتوى الامتحان.")
+  const examFocusSummary = urgentExams.length
+    ? "تركيز الامتحانات الشهرية القادمة: " + urgentExams.map(item =>
+        item.exam.subjectName + " بتاريخ " + item.exam.date
+        + (item.scope
+          ? " — " + item.scope.includedNodeIds.length + " درس من الوحدة الثانية/النطاق المسجل"
+          : " — فهرس الوحدة الثانية غير متاح في كتالوج هذه المادة؛ لم نختلق محتوى")
+      ).join("؛ ") + ". قُدّمت " + urgentExamNodeIds.size + " خطوة مرتبطة بهذه الامتحانات."
     : "";
   const coverageNote = "المتراكم الفعلي: " + expectedBacklogCount + " نقطة مؤكدة؛ أُدرج " + coveredNodeCount
     + " منها في الخطة. " + missingSummary
