@@ -2004,7 +2004,7 @@ export async function runAssistantChat(
           `بيانات المنهج المشتقة من فهارس كتب الجزء الأول (أسماء الدروس ونطاق الصفحات المطبوعة وتقدير حجم/صعوبة أولي؛ ليست نصوصًا منقولة من صفحات الكتب):\n${textbookEvidenceContext || "بيانات المنهج التفصيلية غير متاحة الآن."}`,
           `التقدم المبلغ عنه ونتائج التقييمات:\n${learningEvidenceContext || "لا توجد تحديثات تقدم محفوظة حتى الآن."}`,
           `إشارات القرار الموحدة لمحرك التخطيط (المصدر نفسه الذي يستخدمه مولّد الخطة):\n${JSON.stringify(sharedPlanningContext.decisionSignals)}`,
-          `تعليمات التكيّف التنفيذية الموحدة:\n${sharedPlanningContext.decisionDirectives.join("\n")}`,
+          `تعليمات التكيّف التنفيذية الموحدة:\n${sharedPlanningContext.decisionDirectives}`,
         ].join("\n\n");
         const activityContext = recentActivity.map(event =>
           "- " + event.summary + " [" + event.eventType + ", " + new Date(event.createdAt).toLocaleString("ar-EG", { timeZone: "Africa/Cairo" }) + "]"
