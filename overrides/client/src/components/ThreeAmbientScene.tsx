@@ -46,13 +46,13 @@ export default function ThreeAmbientScene() {
       const key = new THREE.DirectionalLight(0xffffff, 3.2);
       key.position.set(2.6, 3.1, 4);
       scene.add(key);
-      const violetLight = new THREE.PointLight(0x9b35ff, 24, 12);
+      const violetLight = new THREE.PointLight(0x8c424c, 24, 12);
       violetLight.position.set(-2.1, 0.8, 2.2);
       scene.add(violetLight);
-      const cyanLight = new THREE.PointLight(0x16d9e8, 13, 10);
+      const cyanLight = new THREE.PointLight(0xd1b77b, 13, 10);
       cyanLight.position.set(2.4, -1.5, 2);
       scene.add(cyanLight);
-      const pinkLight = new THREE.PointLight(0xf044b8, 16, 10);
+      const pinkLight = new THREE.PointLight(0xb18a5f, 16, 10);
       pinkLight.position.set(0.1, 2.1, -1);
       scene.add(pinkLight);
 
@@ -60,7 +60,7 @@ export default function ThreeAmbientScene() {
       scene.add(sculpture);
 
       const coreMaterial = new THREE.MeshPhysicalMaterial({
-        color: 0x8a32e8,
+        color: 0x8c424c,
         emissive: 0x351064,
         emissiveIntensity: 0.7,
         metalness: 0.38,
@@ -78,7 +78,7 @@ export default function ThreeAmbientScene() {
       const inner = new THREE.Mesh(
         new THREE.IcosahedronGeometry(0.42, 2),
         new THREE.MeshPhysicalMaterial({
-          color: 0x9eeaff,
+          color: 0xe0cdad,
           emissive: 0x155a9b,
           emissiveIntensity: 0.32,
           metalness: 0.25,
@@ -92,9 +92,9 @@ export default function ThreeAmbientScene() {
       sculpture.add(inner);
 
       const ringMaterials = [
-        new THREE.MeshBasicMaterial({ color: 0xe7c4ff, transparent: true, opacity: 0.72 }),
-        new THREE.MeshBasicMaterial({ color: 0x43e4f2, transparent: true, opacity: 0.64 }),
-        new THREE.MeshBasicMaterial({ color: 0xff70ce, transparent: true, opacity: 0.52 }),
+        new THREE.MeshBasicMaterial({ color: 0xd1b77b, transparent: true, opacity: 0.72 }),
+        new THREE.MeshBasicMaterial({ color: 0x8c424c, transparent: true, opacity: 0.64 }),
+        new THREE.MeshBasicMaterial({ color: 0xb18a5f, transparent: true, opacity: 0.52 }),
       ];
       const rings: THREE.Mesh[] = [];
       const ringConfigs = [
@@ -115,10 +115,10 @@ export default function ThreeAmbientScene() {
       const satellites: THREE.Mesh[] = [];
       const satelliteGeometry = new THREE.OctahedronGeometry(0.13, 1);
       const satelliteMaterials = [
-        new THREE.MeshPhysicalMaterial({ color: 0xc6a0ff, metalness: 0.52, roughness: 0.18, clearcoat: 1 }),
-        new THREE.MeshPhysicalMaterial({ color: 0x5fe8ed, metalness: 0.36, roughness: 0.15, clearcoat: 1 }),
-        new THREE.MeshPhysicalMaterial({ color: 0xff86d5, metalness: 0.34, roughness: 0.18, clearcoat: 1 }),
-        new THREE.MeshPhysicalMaterial({ color: 0xd3f27a, metalness: 0.22, roughness: 0.2, clearcoat: 1 }),
+        new THREE.MeshPhysicalMaterial({ color: 0x8c424c, metalness: 0.52, roughness: 0.18, clearcoat: 1 }),
+        new THREE.MeshPhysicalMaterial({ color: 0xd1b77b, metalness: 0.36, roughness: 0.15, clearcoat: 1 }),
+        new THREE.MeshPhysicalMaterial({ color: 0xb18a5f, metalness: 0.34, roughness: 0.18, clearcoat: 1 }),
+        new THREE.MeshPhysicalMaterial({ color: 0xd1b77b, metalness: 0.22, roughness: 0.2, clearcoat: 1 }),
       ];
       for (let index = 0; index < 4; index += 1) {
         const satellite = new THREE.Mesh(satelliteGeometry, satelliteMaterials[index]);
@@ -142,7 +142,7 @@ export default function ThreeAmbientScene() {
       particleGeometry.setAttribute("position", new THREE.BufferAttribute(particlePositions, 3));
       const particles = new THREE.Points(
         particleGeometry,
-        new THREE.PointsMaterial({ color: 0xd7b9ff, size: 0.018, transparent: true, opacity: 0.72, sizeAttenuation: true }),
+        new THREE.PointsMaterial({ color: 0xd1b77b, size: 0.018, transparent: true, opacity: 0.72, sizeAttenuation: true }),
       );
       sculpture.add(particles);
 
