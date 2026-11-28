@@ -246,7 +246,7 @@ async function run() {
           viewportWidth: window.innerWidth,
           documentWidth: document.documentElement.scrollWidth,
           dailyMap: read(".sf-home-study-map"),
-          dailyStep: read(".sf-home-study-step"),
+          dailyStep: read(".sf-home-study-step-content"),
           examCard: read(".sf-home-exam-item"),
           examCompleteAction: read(".sf-home-exam-complete"),
           mapHero: read(".sf-map-hero"),
