@@ -60,6 +60,10 @@ export default function YouTubeReviews() {
     ?? undefined;
   const currentSubjectName = getSIESubject(subjectId)?.nameAr ?? "";
   const currentBranch = branchOptions.find(branch => branch.branchId === branchId);
+  const exactRequestedLesson = requestedNodeId
+    ? getSIECheckpointProgressBranches(subjectId)
+        .find(branch => branch.branchId === branchId)?.choices.find(choice => choice.nodeId === requestedNodeId)
+    : undefined;
 
   useEffect(() => {
     if (!subjects.length) {
@@ -126,7 +130,7 @@ export default function YouTubeReviews() {
     if (profile.isLoading || !subjectId || !branchId || searchReviews.isPending) return;
     setHasSearched(false);
     setNote("");
-    searchReviews.mutate({ subjectId, branchId, ...(requestedNodeId ? { nodeId: requestedNodeId } : {}), teacherId: selectedTeacherId });
+    searchReviews.mutate({ subjectId, branchId, ...(exactRequestedLesson ? { nodeId: exactRequestedLesson.nodeId } : {}), teacherId: selectedTeacherId });
   };
 
   const canSearch = !profile.isLoading && !profile.isError
@@ -147,7 +151,7 @@ export default function YouTubeReviews() {
                 <Youtube className="size-5" />
               </span>
               <div className="min-w-0">
-                <h2 className="text-base font-bold">ابحث حسب المادة والفرع</h2>
+                <h2 className="text-base font-bold">{exactRequestedLesson ? "ابحث عن مراجعة لهذا الدرس" : "ابحث حسب المادة والفرع"}</h2>
                 <p className="mt-1 text-xs leading-6 text-muted-foreground">
                   نبدأ بمراجعات مدرسك المختار، ثم نعرض بدائل معروفة للمادة. لا يُربط فيديو بمنهجك اعتمادًا على العنوان وحده؛ يلزم تطابق وصفه أو تحليل محتواه.
                 </p>
@@ -192,7 +196,7 @@ export default function YouTubeReviews() {
               >
                 {searchReviews.isPending
                   ? <><Loader2 className="size-4 animate-spin" /> جارٍ البحث والتحقق</>
-                  : <><Search className="size-4" /> {requestedNodeId ? "ابحث عن مراجعة لهذا الدرس" : "ابحث عن مراجعات هذا الفرع"}</>}
+                  : <><Search className="size-4" /> {exactRequestedLesson ? "ابحث عن مراجعة لهذا الدرس" : "ابحث عن مراجعات هذا الفرع"}</>}
               </Button>
               {hasSearched && (
                 <Button
@@ -207,7 +211,7 @@ export default function YouTubeReviews() {
               )}
               <span className="text-[11px] text-muted-foreground">
                 {currentSubjectName}{currentBranch ? " · " + currentBranch.branchTitle : ""}
-                {requestedNodeId ? " · " + (getSIECheckpointProgressBranches(subjectId).flatMap(branch => branch.choices).find(choice => choice.nodeId === requestedNodeId)?.title ?? "درس محدد") : ""}
+                {exactRequestedLesson ? " · " + exactRequestedLesson.title : ""}
               </span>
             </div>
           </div>
