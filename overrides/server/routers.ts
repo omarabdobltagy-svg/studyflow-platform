@@ -109,6 +109,7 @@ import { invokeLLMWithNvidiaFallback, invokeLLMWithNvidiaFallbackStream } from "
 import type { InvokeParams } from "./_core/llm";
 import { formatTextbookEvidence, retrieveTextbookEvidence } from "./textbook-retrieval";
 import { buildStandaloneAssistantContext } from "./assistant-context";
+import { scanOfficialEducationSources, isHighConfidenceOfficialPlanningSignal, type OfficialEducationUpdate } from "./official-education-monitor";
 import { createReminderCron, getReminderPreferences, listReminderNotifications, markReminderRead, saveReminderPreferences, saveReminderSchedule } from "./reminders";
 import { discoverTeacherForSubject, getTeacherCourseFactsWithRefresh } from "./teacher-course-research";
 import { getEffectiveStudentLessonState, summarizeStudentLessonStates, STUDENT_LESSON_STATES, isStudentLessonState, type StudentLessonState } from "@shared/sie-lesson-state";
@@ -136,6 +137,9 @@ const STUDY_PLAN_PREFIX = "SIE_STUDY_PLAN_V2:";
 const dailyPlanLocks = new Map<number, Promise<DailyPlanResult>>();
 const dailyPlanDirtyUsers = new Map<number, "local" | "structural">();
 const teacherSourceScanLocks = new Map<number, Promise<boolean>>();
+const officialEducationScanLocks = new Map<number, Promise<boolean>>();
+const OFFICIAL_EDUCATION_SCAN_INTERVAL_MS = 12 * 60 * 60 * 1_000;
+const OFFICIAL_EDUCATION_FAILURE_RETRY_MS = 2 * 60 * 60 * 1_000;
 const TEACHER_SOURCE_SCAN_TRIGGER_COOLDOWN_MS = 60_000;
 const teacherSourceScanLastQueuedAt = new Map<number, number>();
 const teacherVideoAnalysisLocks = new Map<string, Promise<void>>();
@@ -569,6 +573,126 @@ async function scanTeacherSourcesForStudent(userId: number, activityId?: string)
   }
 }
 
+
+async function scanOfficialEducationForStudent(userId: number, activityId?: string): Promise<boolean> {
+  if (process.env.NODE_ENV === "test") return false;
+  const running = officialEducationScanLocks.get(userId);
+  if (running) return running;
+
+  const task = (async () => {
+    try {
+      const profile = await getStudentProfile(userId);
+      if (!profile || profile.educationSystem !== "baccalaureate") return false;
+      const gradeText = String(profile.gradeYear ?? "").normalize("NFKC").toLocaleLowerCase("ar");
+      if (!/الصف الثاني|السنه الثانيه|second year|grade 11|g11/.test(gradeText)) return false;
+
+      const selection = (profile.selection ?? {}) as Record<string, any>;
+      const previousState = (selection.officialEducationScanState ?? {}) as Record<string, any>;
+      const now = new Date();
+      const nowMs = now.getTime();
+      const lastAttemptAt = Date.parse(String(previousState.lastAttemptAt ?? ""));
+      const lastSuccessfulAt = Date.parse(String(previousState.lastSuccessfulAt ?? ""));
+      const hasRecentAttemptAfterLastSuccess = Number.isFinite(lastAttemptAt)
+        && lastAttemptAt > (Number.isFinite(lastSuccessfulAt) ? lastSuccessfulAt : 0)
+        && nowMs - lastAttemptAt < OFFICIAL_EDUCATION_FAILURE_RETRY_MS;
+      const hasRecentSuccessfulScan = Number.isFinite(lastSuccessfulAt)
+        && nowMs - lastSuccessfulAt < OFFICIAL_EDUCATION_SCAN_INTERVAL_MS;
+      if (hasRecentAttemptAfterLastSuccess || hasRecentSuccessfulScan) return false;
+
+      if (activityId) {
+        updateAIActivity(userId, activityId, "فحص المصادر التعليمية الرسمية",
+          "يراجع بوابة الوزارة ومركز المعلومات وبوابة القاهرة بحثًا عن تحديثات تخص البكالوريا المصرية.");
+      }
+
+      const result = await scanOfficialEducationSources({
+        educationSystem: profile.educationSystem,
+        gradeYear: profile.gradeYear,
+        subjects: Array.isArray(profile.subjects) ? profile.subjects : [],
+      }, now);
+
+      const latestProfile = await getStudentProfile(userId);
+      if (!latestProfile) return false;
+      const latestSelection = (latestProfile.selection ?? {}) as Record<string, any>;
+      const previousUpdates = Array.isArray(latestSelection.officialEducationUpdates)
+        ? latestSelection.officialEducationUpdates as OfficialEducationUpdate[]
+        : [];
+      const cutoff = nowMs - 120 * 24 * 60 * 60 * 1_000;
+      const merged = new Map<string, OfficialEducationUpdate>();
+      for (const update of previousUpdates) {
+        if (!update || typeof update.externalId !== "string") continue;
+        const seenAt = Date.parse(String(update.publishedAt ?? update.observedAt ?? ""));
+        if (Number.isFinite(seenAt) && seenAt >= cutoff) merged.set(update.externalId, update);
+      }
+      const newUpdates: OfficialEducationUpdate[] = [];
+      for (const update of result.updates) {
+        if (!merged.has(update.externalId)) newUpdates.push(update);
+        merged.set(update.externalId, update);
+      }
+      const sourceReachable = result.sources.some(source => source.status === "ok" || source.status === "empty");
+      const previousSuccessfulAt = Number.isFinite(lastSuccessfulAt) ? new Date(lastSuccessfulAt).toISOString() : null;
+      const nextState = {
+        lastAttemptAt: now.toISOString(),
+        lastSuccessfulAt: sourceReachable ? now.toISOString() : previousSuccessfulAt,
+        lastAttemptResult: sourceReachable ? "reachable" : "unavailable",
+        sources: result.sources.map(source => ({
+          sourceId: source.sourceId,
+          status: source.status,
+          httpStatus: source.httpStatus ?? null,
+          updateCount: source.updateCount,
+        })),
+      };
+      const officialEducationUpdates = [...merged.values()]
+        .sort((a, b) => Date.parse(String(b.publishedAt ?? b.observedAt)) - Date.parse(String(a.publishedAt ?? a.observedAt)))
+        .slice(0, 18);
+
+      await updateStudentProfileSelection(userId, {
+        ...latestSelection,
+        officialEducationUpdates,
+        officialEducationScanState: nextState,
+      });
+
+      const highConfidenceUpdates = newUpdates.filter(isHighConfidenceOfficialPlanningSignal);
+      if (newUpdates.length) {
+        await recordStudentActivityEvent({
+          userId,
+          eventType: "official_education.update_detected",
+          entityType: "official_education_source",
+          summary: "تم رصد تحديث جديد من مصدر تعليمي رسمي",
+          metadata: {
+            count: newUpdates.length,
+            highConfidenceCount: highConfidenceUpdates.length,
+            impactTypes: [...new Set(newUpdates.map(update => update.impactType))],
+            sources: [...new Set(newUpdates.map(update => update.sourceId))],
+          },
+        });
+      }
+      if (activityId) {
+        const message = !sourceReachable
+          ? "تعذّر الوصول إلى المصادر الرسمية الآن؛ لم نغيّر مواعيد الامتحانات أو نطاق المراجعة، وسيُعاد الفحص لاحقًا."
+          : highConfidenceUpdates.length
+            ? "تم حفظ " + newUpdates.length + " تحديث رسمي جديد، منها " + highConfidenceUpdates.length + " إشارة واضحة عالية الثقة ستظهر في قرارات الخطة مع المصدر وتاريخ النشر."
+            : "تم فحص المصادر الرسمية دون العثور على إعلان حديث عالي الثقة يغيّر أولويات الخطة.";
+        updateAIActivity(userId, activityId, "اكتمل فحص المصادر الرسمية", message);
+      }
+      return highConfidenceUpdates.length > 0;
+    } catch (error) {
+      console.warn("[StudyFlow official education monitor] Scan failed:", error instanceof Error ? error.message : String(error));
+      if (activityId) {
+        updateAIActivity(userId, activityId, "تعذّر فحص المصادر الرسمية", "لم نغيّر الخطة بسبب مصدر لم يتم التحقق منه. سيُعاد الفحص لاحقًا.");
+      }
+      return false;
+    }
+  })();
+
+  officialEducationScanLocks.set(userId, task);
+  try {
+    return await task;
+  } finally {
+    if (officialEducationScanLocks.get(userId) === task) officialEducationScanLocks.delete(userId);
+  }
+}
+
+
 export async function ingestYoutubeWebSubFeed(teacherId: string, xml: string) {
   const teacher = getSIETeacher(teacherId);
   if (!teacher) return { received: 0, updatedProfiles: 0 };
@@ -787,6 +911,30 @@ async function buildDailyPlanOperationalContext(userId: number) {
       update.affectedDate ? "التاريخ المتأثر: " + update.affectedDate : "",
       update.url,
     ].filter(Boolean).join(" — "));
+  const rawOfficialUpdates = Array.isArray(selection.officialEducationUpdates)
+    ? selection.officialEducationUpdates as OfficialEducationUpdate[]
+    : [];
+  const officialEducationUpdates = rawOfficialUpdates
+    .filter(update => update && typeof update.title === "string" && typeof update.url === "string")
+    .filter(update => {
+      const publishedAt = Date.parse(String(update.publishedAt ?? update.observedAt ?? ""));
+      return Number.isFinite(publishedAt) && publishedAt >= now.getTime() - 120 * 24 * 60 * 60 * 1_000;
+    })
+    .sort((a, b) => Date.parse(String(b.publishedAt ?? b.observedAt)) - Date.parse(String(a.publishedAt ?? a.observedAt)))
+    .slice(0, 10);
+  const officialPlanningSignals = officialEducationUpdates.filter(isHighConfidenceOfficialPlanningSignal);
+  const officialEducationContext = officialEducationUpdates.map(update => [
+    "المصدر: " + String(update.sourceLabel ?? update.sourceId),
+    "العنوان: " + String(update.title),
+    "التأثير المصنف: " + String(update.impactType),
+    "الثقة: " + String(update.confidence),
+    update.publishedAt ? "تاريخ النشر: " + String(update.publishedAt) : "تاريخ النشر غير مثبت",
+    "الرابط: " + String(update.url),
+    update.confidence === "high"
+      ? "إشارة رسمية صريحة حديثة؛ راجع النص الكامل قبل تفسير نطاق أو موعد."
+      : "إشارة غير كافية لتغيير المواعيد أو نطاق الامتحان تلقائيًا.",
+  ].join(" — "));
+
   const videoTimeLabel = (seconds: number) => {
     const safe = Math.max(0, Math.floor(Number(seconds) || 0));
     const hours = Math.floor(safe / 3_600);
@@ -878,6 +1026,8 @@ async function buildDailyPlanOperationalContext(userId: number) {
     completedRecentTasks.length ? completedRecentTasks.join("\n") : "لا توجد مهام منتهية مسجلة.",
     "إعلانات عامة موثوقة بتغيير أو إلغاء محاضرات (مصدرها صفحة المدرس المختار؛ التحديثات الغامضة لا تُستخدم لتغيير الجدول):",
     teacherScheduleUpdates.length ? teacherScheduleUpdates.join("\\n") : "لا توجد إعلانات عالية الثقة عن إلغاء أو تغيير حصص ضمن آخر تحديثات المدرسين.",
+    "التحديثات من المصادر التعليمية الرسمية:",
+    officialEducationContext.length ? officialEducationContext.join("\\n") : "لم يتم رصد تحديثات رسمية حديثة تخص البكالوريا. لا تخمّن موعدًا أو نطاق امتحان."
     "تحليلات فيديوهات المدرسين المختارين (هذه الموضوعات استخرجها نموذج فيديو من محتوى الفيديو الفعلي؛ استخدم فقط المقاطع التي تطابق عقد المنهج الرسمي ولا تحول مدة الفيديو إلى مدد مذاكرة):",
     analyzedTeacherVideos.length ? analyzedTeacherVideos.join("\\n\\n") : "لا توجد تحليلات فيديو مكتملة حتى الآن. لا تستنتج موضوعات الفيديو من العنوان أو مدة الفيديو وحدهما.",
     "الأحداث والمواعيد خلال 14 يومًا:",
@@ -912,6 +1062,13 @@ async function buildDailyPlanOperationalContext(userId: number) {
     openTasksCount: openTasks.length,
     recentSetbacks: nonCompletionReports.length,
     obstacle: String(profile?.obstacle ?? ""),
+    officialEducationUpdates: officialPlanningSignals.map(update => ({
+      title: String(update.title),
+      sourceLabel: String(update.sourceLabel),
+      publishedAt: String(update.publishedAt),
+      impactType: update.impactType,
+      url: String(update.url),
+    })),
   };
   const nearestExam = decisionSignals.exams?.[0];
   const adaptiveDirectives = [
@@ -923,6 +1080,9 @@ async function buildDailyPlanOperationalContext(userId: number) {
         : nearestExam && nearestExam.daysUntil <= 14
           ? "هناك امتحان خلال أسبوعين في " + nearestExam.subjectName + ". وزّع المراجعة تدريجيًا ولا تنتظر آخر يوم، مع الحفاظ على الخطة السنوية."
           : "",
+    decisionSignals.officialEducationUpdates?.length
+      ? "رُصدت إشارات رسمية حديثة عالية الثقة من الوزارة/المصادر الحكومية: " + decisionSignals.officialEducationUpdates.map(update => update.title).slice(0, 3).join("؛ ") + ". استخدمها كسبب لمراجعة الأولويات، لكن لا تستخرج تاريخ امتحان أو نطاق دروس من العنوان وحده؛ احتفظ بالرابط وتحقق من النص الكامل."
+      : "",
     decisionSignals.energyLevel === "low"
       ? "الطاقة البدنية منخفضة: قلّل الحمل اليومي إلى أقل مجموعة مهام ذات أثر واضح، واجعل أول خطوة قصيرة ومحددة. لا تعاقب التعثر بتكديس ساعات تعويضية."
       : "",
@@ -969,7 +1129,8 @@ async function ensureDailyPlanForStudent(userId: number, dailyMinutes: number, f
   const task = (async (): Promise<DailyPlanResult> => {
     try {
       await scanTeacherSourcesForStudent(userId, activityId);
-      updateAIActivity(userId, activityId, "تجميع سياق الدراسة", "يجمع ملفك والمهام الحالية والتقدم المسجل.");
+      await scanOfficialEducationForStudent(userId, activityId);
+      updateAIActivity(userId, activityId, "تجميع سياق الدراسة", "يجمع ملفك وموضع المدرس والتحديثات الرسمية والمهام الحالية قبل اتخاذ قرار التخطيط.");
       const profile = await getStudentProfile(userId);
     if (!profile || !Array.isArray(profile.subjectIds) || profile.subjectIds.length === 0) {
       throw new TRPCError({
