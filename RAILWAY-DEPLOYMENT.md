@@ -1,4 +1,4 @@
-# Railway deployment and verified runtime behavior
+# StudyFlow deployment and verified runtime behavior
 
 The StudyFlow application is built from `Dockerfile`, which extracts the source archive and overlays the maintained files under `overrides/` before creating `dist/index.js`.
 
@@ -7,7 +7,7 @@ The StudyFlow application is built from `Dockerfile`, which extracts the source 
 - Railway public domain target port: `8080`.
 - Service environment: `PORT=8080`.
 - Start command: `node dist/index.js`.
-- The current Preview service is attached to `redesign/studyflow-v4-graphite`; this does not authorize changes to the separate `StudyFlow app` production service.
+- The maintained source branch is `main`. The primary StudyFlow app builds from `main`; preview branches are not production deployment targets.
 - Do not run `pnpm db:push` as a startup or automatic pre-deploy command.
 
 ## Database migrations
@@ -22,6 +22,8 @@ That additive, idempotent script:
 The event table existed in the Drizzle journal, but the Preview pre-deploy command did not run the Drizzle migration runner. The additive check closes that gap without running every historical migration or using `db:push`. Future schema migrations still require review.
 
 ## Local StudyFlow accounts
+
+Student sign-in uses local accounts and signed HttpOnly session cookies. It does not require the external OAuth portal or `OAUTH_SERVER_URL`. The legacy OAuth adapter is initialized lazily only when an OAuth flow is explicitly used; normal StudyFlow startup must not emit an OAuth configuration error.
 
 StudyFlow uses separate username/password accounts and signed HttpOnly session cookies. Passwords are stored as salted scrypt hashes and are never returned to the browser.
 
