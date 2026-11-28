@@ -167,20 +167,9 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          if (!id.includes("node_modules")) return undefined;
-          if (id.includes("/three/") || id.includes("/gsap/")) return "vendor-3d";
-          if (id.includes("/recharts/") || /\/d3-[^/]+\//.test(id)) return "vendor-charts";
-          if (id.includes("/framer-motion/") || id.includes("/motion-dom/")) return "vendor-motion";
-          if (id.includes("/react-dom/") || id.includes("/react/") || id.includes("/scheduler/") || id.includes("/@tanstack/react-query/")) return "vendor-react";
-          if (id.includes("/lucide-react/")) return "vendor-icons";
-          if (id.includes("/@radix-ui/") || id.includes("/@floating-ui/")) return "vendor-ui";
-          return undefined;
-        },
-      },
-    },
+    // Let Vite/Rollup group shared dependencies safely. The previous forced
+    // vendor buckets caused a React forwardRef runtime crash in Chromium.
+
   },
   server: {
     host: true,
