@@ -1849,6 +1849,12 @@ function PlanAssistantChat({ plan, subjectIds, editable, onChange, onApprove, ap
         planner: {
           title: plan.title,
           summary: plan.summary,
+          strategy: plan.strategy ? {
+            baselineTitle: plan.strategy.baseline.title,
+            baselineSummary: plan.strategy.baseline.summary,
+            revisionHeadline: plan.strategy.revision.headline,
+            revisionRationale: plan.strategy.revision.rationale,
+          } : undefined,
           steps: plan.steps.map((step, index) => ({
             title: displayPlanStepTitle(step, subjectIds),
             detail: displayPlanStepDetail(step, subjectIds),
@@ -1886,7 +1892,7 @@ function PlanAssistantChat({ plan, subjectIds, editable, onChange, onApprove, ap
             <div className="flex min-h-20 items-center gap-3 text-sm text-muted-foreground">
               <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><BrainCircuit className="size-4" /></span>
               <p>{editable
-                ? "أنا شايف تفاصيل الخطة. اطلب تعديل ترتيب الخطوات أو أولوية مهمة أو تفاصيلها، وسأطبّق التغيير على المسودة قبل اعتمادها."
+                ? "أنا شايف تفاصيل الخطة. اطلب تفسير الفرق بين خطة البداية والتوزيع الحالي أو تعديل ترتيب المهام وأولوياتها دون حذف التراكم."
                 : "أنا شايف تفاصيل الخطة المعتمدة. اسأل عن سبب الترتيب أو اطلب اقتراحًا؛ التعديل الفعلي يتطلب إنشاء مسودة جديدة."}</p>
             </div>
           )}
@@ -1922,7 +1928,7 @@ function PlanAssistantChat({ plan, subjectIds, editable, onChange, onApprove, ap
           </Button>
         </div>
         <p className="px-1 text-[10px] text-muted-foreground">{editable
-          ? "المساعد يقدر يعدّل الخطوات الموجودة ويزامن التغييرات فورًا. المهام المكتملة والواجبات الأصلية المحفوظة محمية من التعديل أو الحذف."
+          ? "المساعد يستخدم نفس قرارات محرك التخطيط، ويعدّل ترتيب المهام وأولوياتها دون حذف الخطة الأساسية أو الواجبات الأصلية."
           : "المساعد يشرح الخطة ويقترح البدائل؛ لا يغيّر المهام الفعلية من وضع القراءة."}</p>
       </div>
     </section>

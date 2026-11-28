@@ -944,6 +944,7 @@ async function buildDailyPlanOperationalContext(userId: number) {
     ].filter(Boolean).join("\n\n"),
     memorySnapshot,
     decisionSignals,
+    decisionDirectives: adaptiveDirectives,
   };
 }
 
@@ -1653,6 +1654,12 @@ const attachmentInput = z.object({
 const plannerAssistantContextSchema = z.object({
   title: z.string().trim().min(1).max(160),
   summary: z.string().trim().max(1_500),
+  strategy: z.object({
+    baselineTitle: z.string().trim().max(120),
+    baselineSummary: z.string().trim().max(500),
+    revisionHeadline: z.string().trim().max(180),
+    revisionRationale: z.string().trim().max(700),
+  }).optional(),
   steps: z.array(z.object({
     title: z.string().trim().min(1).max(180),
     detail: z.string().trim().max(1_200),
@@ -1746,6 +1753,7 @@ function parsePlannerAssistantReply(
     updates.push({ index, changes });
   }
   const removeIndexes = [...new Set(patch.removeIndexes ?? [])];
+  if (removeIndexes.length > 0) return reject();
   if (removeIndexes.some(index => index >= planner.steps.length)) return reject();
   if (removeIndexes.some(index => planner.steps[index].completed || planner.steps[index].linkedTask)) return reject();
 
@@ -1784,7 +1792,7 @@ export async function runAssistantChat(
           detail: "يجمع ملفك ومواضع التقدم والمهام والمواعيد المسجلة.",
         });
         try {
-        const [profile, taskRows, goalRows, bookRows, routineRows, calendarRows, recentActivity] = await Promise.all([
+        const [profile, taskRows, goalRows, bookRows, routineRows, calendarRows, recentActivity, sharedPlanningContext] = await Promise.all([
           getStudentProfile(userId),
           listTasks(userId),
           listGoals(userId),
@@ -1792,6 +1800,7 @@ export async function runAssistantChat(
           listRoutines(userId, "Africa/Cairo"),
           listCalendarEvents(userId, "Africa/Cairo"),
           listRecentStudentActivityEvents(userId, 30),
+          buildDailyPlanOperationalContext(userId),
         ]);
         updateAIActivity(userId, activityId, "ربط التقدم بالمنهج", "يراجع موضعك وموضع المدرس والفجوات المسجلة في كل فرع.");
         const selection = (profile?.selection ?? {}) as Record<string, unknown>;
@@ -1994,6 +2003,8 @@ export async function runAssistantChat(
           `فهرس المنهج وتقدم دروس SQ3R:\n${curriculumContext || "لا توجد فهارس متاحة للمواد المختارة."}`,
           `بيانات المنهج المشتقة من فهارس كتب الجزء الأول (أسماء الدروس ونطاق الصفحات المطبوعة وتقدير حجم/صعوبة أولي؛ ليست نصوصًا منقولة من صفحات الكتب):\n${textbookEvidenceContext || "بيانات المنهج التفصيلية غير متاحة الآن."}`,
           `التقدم المبلغ عنه ونتائج التقييمات:\n${learningEvidenceContext || "لا توجد تحديثات تقدم محفوظة حتى الآن."}`,
+          `إشارات القرار الموحدة لمحرك التخطيط (المصدر نفسه الذي يستخدمه مولّد الخطة):\n${JSON.stringify(sharedPlanningContext.decisionSignals)}`,
+          `تعليمات التكيّف التنفيذية الموحدة:\n${sharedPlanningContext.decisionDirectives.join("\n")}`,
         ].join("\n\n");
         const activityContext = recentActivity.map(event =>
           "- " + event.summary + " [" + event.eventType + ", " + new Date(event.createdAt).toLocaleString("ar-EG", { timeZone: "Africa/Cairo" }) + "]"
@@ -2007,12 +2018,12 @@ export async function runAssistantChat(
         let response;
         try {
           const plannerAssistantInstruction = input.planner
-            ? "أنت في وضع تحرير مسودة الخطة. أجب بكائن JSON فقط: {reply, patch?}. يمكن تعديل العنوان والملخص، وتعديل الخطوات الموجودة أو إعادة ترتيبها أو استبعادها. لا تضف خطوات جديدة ولا تخترع معرفات منهج. index يبدأ من صفر. لا تعدل أو تحذف خطوة مكتملة أو مرتبطة بمهمة موجودة. order يجب أن يحتوي جميع فهارس الخطوات الباقية مرة واحدة. عند السؤال أو الشرح أرسل reply فقط. أي تغيير يظل مسودة ولا تعتمدها أو تنفذ المزامنة من طرفك."
+            ? "أنت في وضع تحرير مسودة الخطة. أجب بكائن JSON فقط: {reply, patch?}. يمكن تعديل العنوان والملخص، وتحديث تفاصيل الخطوات الموجودة وإعادة ترتيبها فقط. لا تحذف أي خطوة ولا تمسح تراكمًا محفوظًا. لا تضف خطوات جديدة ولا تخترع معرفات منهج. index يبدأ من صفر. لا تعدل أو تحذف خطوة مكتملة أو مرتبطة بمهمة موجودة. order يجب أن يحتوي جميع فهارس الخطوات الباقية مرة واحدة. عند السؤال أو الشرح أرسل reply فقط. أي تغيير يظل مسودة ولا تعتمدها أو تنفذ المزامنة من طرفك."
             : "لا تنشئ أو تعدّل مهامًا أو خططًا أو عادات ولا تدّعِ أنك نفذت إجراءً؛ وجّه الطالب إلى صفحة الأداة المناسبة.";
           const webSearchInstruction = "البحث المباشر في الإنترنت غير متصل حاليًا بهذا المساعد. لا تدّعِ أنك بحثت أو تحققت من مصدر حديث. يمكنك تحليل البيانات والمصادر المفهرسة داخل StudyFlow فقط.";
           const llmParams: InvokeParams = {
             messages: [
-              { role: "system", content: `أنت المساعد التنظيمي والمعرفي داخل StudyFlow. ${webSearchInstruction} دورك مساعدة الطالب في تحديد موضع الدرس، وفهم المصطلحات والتعليمات، والرجوع إلى شرح المدرس والصفحات المرتبطة به. لا تحل محل المدرس في تدريس مهارات المنهج أو التدريب عليها أو تقييمها. لا تنشئ واجبات أو أسئلة أو تدريبات من تلقاء نفسك، ولا تختبر الطالب. إذا طلب الطالب توضيح مفهوم، قدّم شرحًا مساعدًا محدودًا يخدم فهم شرح المدرس ولا يتحول إلى درس بديل أو نشاط تقييم. استخدم الكتاب المدرسي بوصفه المصدر الأساسي لتحديد أهداف المنهج ومفاهيمه ومصطلحاته وأمثلته وتسلسله وحدود ما يُنسب رسميًا إلى الكتاب. عند توفير بيانات منهج مشتقة من فهرس كتاب رسمي، استخدم اسم الدرس ونطاق الصفحات المطبوعة الموثق، وميّزها عن رقم صفحة PDF. هذه البيانات لا تحتوي نص الصفحة ولا تسمح باختلاق اقتباس أو شرح تفصيلي ونسبته للكتاب. إذا لم يكن نص الصفحة متاحًا في السياق أو عبر استرجاع موثوق فلا تدّع أنك اطلعت عليه؛ اطلب من الطالب إرفاق الصفحة المطلوبة. عند وجود مقتطف نصي مرخص ومسترجع مستقبلًا، اذكر مصدره ورقم صفحة PDF الفعلي.
+              { role: "system", content: `أنت المساعد التنظيمي والمعرفي داخل StudyFlow. اعمل باعتبارك واجهة المحادثة لنفس محرك التخطيط المركزي، لا نظامًا منفصلًا. استخدم إشارات القرار وتعليمات التكيّف الموحدة الظاهرة في السياق عند تفسير الخطة أو مناقشة التعديل، ولا تناقضها. الخطة الأساسية للتراكم محفوظة؛ لا تقترح حذف مهامها لمجرد اقتراب امتحان شهري أو انخفاض الطاقة، بل اقترح إعادة ترتيبها وتأجيل غير الحرج مع توضيح السبب. ${webSearchInstruction} دورك مساعدة الطالب في تحديد موضع الدرس، وفهم المصطلحات والتعليمات، والرجوع إلى شرح المدرس والصفحات المرتبطة به. لا تحل محل المدرس في تدريس مهارات المنهج أو التدريب عليها أو تقييمها. لا تنشئ واجبات أو أسئلة أو تدريبات من تلقاء نفسك، ولا تختبر الطالب. إذا طلب الطالب توضيح مفهوم، قدّم شرحًا مساعدًا محدودًا يخدم فهم شرح المدرس ولا يتحول إلى درس بديل أو نشاط تقييم. استخدم الكتاب المدرسي بوصفه المصدر الأساسي لتحديد أهداف المنهج ومفاهيمه ومصطلحاته وأمثلته وتسلسله وحدود ما يُنسب رسميًا إلى الكتاب. عند توفير بيانات منهج مشتقة من فهرس كتاب رسمي، استخدم اسم الدرس ونطاق الصفحات المطبوعة الموثق، وميّزها عن رقم صفحة PDF. هذه البيانات لا تحتوي نص الصفحة ولا تسمح باختلاق اقتباس أو شرح تفصيلي ونسبته للكتاب. إذا لم يكن نص الصفحة متاحًا في السياق أو عبر استرجاع موثوق فلا تدّع أنك اطلعت عليه؛ اطلب من الطالب إرفاق الصفحة المطلوبة. عند وجود مقتطف نصي مرخص ومسترجع مستقبلًا، اذكر مصدره ورقم صفحة PDF الفعلي.
 
 عند سؤال الطالب عن طريقة دراسة مدرس معين (سنتر أم أونلاين) أو الواجب والامتحان قبل المحاضرة التالية، اعتمد فقط على سجل بيانات المدرس المركزي الظاهر في السياق ومصادره. لا تستنتج أن وجود فيديوهات على YouTube يعني وجود كورس أونلاين أو أن المدرس يشترط حل الواجب/الامتحان. إذا كانت الحالة unknown أو الأدلة جزئية، قل بوضوح إن المعلومة غير مؤكدة ولا تعرضها كحقيقة.
 
