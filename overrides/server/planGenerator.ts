@@ -15,7 +15,7 @@ import { getCalendarDaysBetween } from "@shared/date-time";
 import { getStudentProfile, listTasks, saveAiPlan } from "./db";
 import { formatTextbookEvidence, getCurriculumBranchPriorityGuidance, orderPlanStepsByCurriculumDependencies, retrieveTextbookEvidence } from "./textbook-retrieval";
 import { buildExamBlueprintContext, SECOND_YEAR_BAC_EXAM_WINDOW_2026_2027 } from "./exam-blueprints";
-import { acceptedAlternativeReviewVideoIds, getAcceptedAlternativeReviewContext, isHighConfidenceScheduleAnnouncement, isSecondYearBaccalaureateProfile, isSecondYearBaccalaureateUpdate, selectedTeacherIds } from "./teacher-content-monitor";
+import { acceptedAlternativeReviewVideoIds, getAcceptedAlternativeReviewContext, getSelectedTeacherRevisionUpdates, isHighConfidenceScheduleAnnouncement, isSecondYearBaccalaureateProfile, isSecondYearBaccalaureateUpdate, selectedSubjectIdsForTeacher, selectedTeacherIds } from "./teacher-content-monitor";
 import { buildLessonStudyMethod, isFirstLearningTask, type TeacherRequirementState } from "./study-method";
 import { getTeacherCourseFactsWithRefresh } from "./teacher-course-research";
 import { getEffectiveStudentLessonState, isStudentLessonStudyComplete, isStudentLessonState, type StudentLessonState } from "@shared/sie-lesson-state";
@@ -1557,7 +1557,6 @@ export function applyDailyPlanDepth(
   const rawTeacherVideos = Array.isArray(selection.teacherPublicUpdates)
     ? selection.teacherPublicUpdates as Array<Record<string, any>>
     : [];
-  const allowedTeacherIds = new Set(selectedTeacherIds(profile));
   const acceptedAlternativeVideoIds = acceptedAlternativeReviewVideoIds(profile);
   const formatTopicTime = (seconds: number) => {
     const value = Math.max(0, Math.floor(seconds));
@@ -1575,16 +1574,7 @@ export function applyDailyPlanDepth(
       .filter(item => item.choice.learningState === "needs_review" || item.choice.learningState === "watched_only")
       .map(item => item.choice.nodeId),
   );
-  const analyzedVideos = rawTeacherVideos
-    .filter(update => typeof update.teacherId === "string"
-      && (allowedTeacherIds.has(update.teacherId) || acceptedAlternativeVideoIds.has(String(update.externalId ?? "")))
-      && update.sourceType === "youtube"
-      && (update.contentAnalysis?.contentType === "revision"
-        || update.announcementType === "revision"
-        || /مراجعة|مراجعات|review|revision/i.test(String(update.title ?? "") + " " + String(update.description ?? "")))
-      && update.contentAnalysis?.status === "complete"
-      && Array.isArray(update.contentAnalysis.topics))
-    .sort((left, right) => Date.parse(String(right.publishedAt)) - Date.parse(String(left.publishedAt)));
+  const analyzedVideos = getSelectedTeacherRevisionUpdates(profile, rawTeacherVideos as any[]);
   for (const video of analyzedVideos) {
     const teacher = getSIETeacher(String(video.teacherId));
     if (!teacher) continue;
@@ -1603,6 +1593,7 @@ export function applyDailyPlanDepth(
     if (parsedVideoUrl.protocol !== "https:" || !isYoutubeHost
       || !youtubeVideoId || !/^[A-Za-z0-9_-]{6,}$/.test(youtubeVideoId)) continue;
     const analysis = video.contentAnalysis as Record<string, any>;
+    const selectedSubjectIdsForVideo = selectedSubjectIdsForTeacher(profile, String(video.teacherId));
     const topics = Array.isArray(analysis.topics) ? analysis.topics as Array<Record<string, any>> : [];
     const subtasks: NonNullable<GeneratedPlan["steps"][number]["subtasks"]> = [];
     const videoTitle = String(video.title || "مراجعة المدرس").trim().slice(0, 150);
@@ -1620,15 +1611,19 @@ export function applyDailyPlanDepth(
       const matchingText = [
         topic.titleAr,
         topic.descriptionAr,
+        ...(Array.isArray(topic.subjectHints) ? topic.subjectHints : []),
         ...(Array.isArray(topic.curriculumKeywords) ? topic.curriculumKeywords : []),
         ...(Array.isArray(topic.branchHints) ? topic.branchHints : []),
       ].filter(value => typeof value === "string").join(" ");
-      const match = matchSIECheckpointTask(profile.subjectIds, matchingText);
       const acceptedContext = acceptedAlternativeVideoIds.has(String(video.externalId ?? ""))
         ? getAcceptedAlternativeReviewContext(profile, String(video.externalId))
         : undefined;
+      const matchingSubjectIds = acceptedContext ? [acceptedContext.subjectId] : selectedSubjectIdsForVideo;
+      if (!matchingSubjectIds.length) continue;
+      const match = matchSIECheckpointTask(matchingSubjectIds, matchingText);
       if (!match
         || (acceptedContext && (match.subjectId !== acceptedContext.subjectId || match.branchId !== acceptedContext.branchId))
+        || (!acceptedContext && !selectedSubjectIdsForVideo.includes(match.subjectId))
         || !teacher.subjectIds.includes(match.subjectId)
         || !snapshot.eligibleNodeIds.has(match.nodeId)
         || !reviewEligibleNodeIds.has(match.nodeId)

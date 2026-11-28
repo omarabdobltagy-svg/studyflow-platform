@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { acceptedAlternativeReviewVideoIds, classifyTeacherAnnouncement, getAcceptedAlternativeReviewContext, isHighConfidenceScheduleAnnouncement, isSecondYearBaccalaureateProfile, isSecondYearBaccalaureateUpdate, isTeacherVideoUpdateAllowed, parseYoutubeAtomFeed, parseYoutubeDurationMinutes, selectedTeacherIds, shouldScanTeacherSource } from "./teacher-content-monitor";
+import { acceptedAlternativeReviewVideoIds, classifyTeacherAnnouncement, getAcceptedAlternativeReviewContext, getSelectedTeacherRevisionUpdates, isHighConfidenceScheduleAnnouncement, isSecondYearBaccalaureateProfile, isSecondYearBaccalaureateUpdate, isTeacherVideoUpdateAllowed, parseYoutubeAtomFeed, parseYoutubeDurationMinutes, selectedSubjectIdsForTeacher, selectedTeacherIds, shouldScanTeacherSource } from "./teacher-content-monitor";
 
 describe("teacher public channel monitor", () => {
   it("parses public YouTube upload entries and decodes Arabic metadata", () => {
@@ -57,6 +57,56 @@ describe("teacher public channel monitor", () => {
     expect(isSecondYearBaccalaureateProfile(profile)).toBe(true);
     expect(selectedTeacherIds(profile)).toEqual(expect.arrayContaining(["T_AR_MOHAMED_SALAH", "T_EN_MAHMOUD_RADWAN"]));
     expect(selectedTeacherIds(profile)).not.toContain("T_AR_REDA_FAROUK");
+  });
+
+  it("maps each selected teacher only to the subjects assigned to that teacher", () => {
+    const profile = {
+      educationSystem: "baccalaureate",
+      gradeYear: "الصف الثاني الثانوي – دفعة 2027",
+      subjectIds: ["ARB_G2_BAC", "ENG1_G2_BAC", "HIS_G2_BAC"],
+      teacherSelections: {
+        ARB_G2_BAC: "T_AR_MOHAMED_SALAH",
+        ENG1_G2_BAC: "T_EN_MAHMOUD_RADWAN",
+        HIS_G2_BAC: "T_AR_MOHAMED_SALAH",
+      },
+    };
+    expect(selectedSubjectIdsForTeacher(profile, "T_AR_MOHAMED_SALAH")).toEqual(["ARB_G2_BAC", "HIS_G2_BAC"]);
+    expect(selectedSubjectIdsForTeacher(profile, "T_EN_MAHMOUD_RADWAN")).toEqual(["ENG1_G2_BAC"]);
+    expect(selectedSubjectIdsForTeacher(profile, "T_AR_REDA_FAROUK")).toEqual([]);
+  });
+
+  it("requires semantic revision classification and the student's selected teacher", () => {
+    const profile = {
+      educationSystem: "baccalaureate",
+      gradeYear: "الصف الثاني الثانوي – دفعة 2027",
+      subjectIds: ["ARB_G2_BAC", "ENG1_G2_BAC"],
+      teacherSelections: {
+        ARB_G2_BAC: "T_AR_MOHAMED_SALAH",
+        ENG1_G2_BAC: "T_EN_MAHMOUD_RADWAN",
+      },
+    };
+    const makeUpdate = (externalId: string, teacherId: string, title: string, contentType: "revision" | "lesson" | "unknown") => ({
+      externalId, teacherId, teacherName: "مدرس مختار", sourceType: "youtube" as const,
+      title, description: "وصف عام", url: "https://www.youtube.com/watch?v=abc123",
+      publishedAt: "2026-11-28T10:00:00.000Z", observedAt: "2026-11-28T10:01:00.000Z",
+      contentAnalysis: {
+        status: "complete" as const, contentType,
+        summaryAr: "تحليل مكتمل للفيديو يصف الموضوعات التي تمت مراجعتها.",
+        topics: [{
+          titleAr: "موضوع دراسي", descriptionAr: "تفصيل موضوعي", startSeconds: 0, endSeconds: 60,
+          subjectHints: [], branchHints: [], curriculumKeywords: [], confidence: "high" as const,
+        }],
+        teacherInstructions: [], topicsNotCovered: [],
+      },
+    });
+    const updates = [
+      makeUpdate("youtube:titleOnlyRevision", "T_AR_MOHAMED_SALAH", "مراجعة النحو كاملة", "lesson"),
+      makeUpdate("youtube:englishRevision", "T_EN_MAHMOUD_RADWAN", "لقاء جديد", "revision"),
+      makeUpdate("youtube:wrongTeacherRevision", "T_AR_REDA_FAROUK", "مراجعة مؤكدة", "revision"),
+      makeUpdate("youtube:unknownReview", "T_AR_MOHAMED_SALAH", "مراجعة شاملة", "unknown"),
+    ];
+    expect(getSelectedTeacherRevisionUpdates(profile, updates as any).map(update => update.externalId))
+      .toEqual(["youtube:englishRevision"]);
   });
 
   it("allows only explicitly accepted alternative review videos, not all videos from that teacher", () => {

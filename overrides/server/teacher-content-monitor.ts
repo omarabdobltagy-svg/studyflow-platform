@@ -300,23 +300,34 @@ export function isSecondYearBaccalaureateUpdate(update: { title?: unknown; descr
   const hasOtherYearMarker = /(?:الصف|دفعة|سنة)\s*(?:الأول|الأولى|الاول|اولى|الثالث|الثالثة|تالتة)|(?:الأول|الأولى|اولى|الثالث|الثالثة|تالتة)\s*بكالوريا|(?:first|third)\s*(?:year|secondary|bac)|(?:1st|3rd)\s*(?:year|secondary)|grade\s*(?:10|12)|\bg(?:10|12)\b/iu.test(text);
   return hasBaccalaureateMarker && hasSecondYearMarker && !hasOtherYearMarker;
 }
-export function selectedTeacherIds(profile: TeacherMonitoringProfile): string[] {
-  if (!isSecondYearBaccalaureateProfile(profile)) return [];
+export function selectedSubjectIdsForTeacher(profile: TeacherMonitoringProfile, teacherId: string): string[] {
+  if (!isSecondYearBaccalaureateProfile(profile) || !teacherId) return [];
   const selection = profile.selection ?? {};
   const choices = {
     ...(profile.teacherSelections ?? {}),
     ...((selection.teacherChoices && typeof selection.teacherChoices === "object") ? selection.teacherChoices : {}),
   } as Record<string, string>;
   const subjectIds = new Set(profile.subjectIds ?? []);
-  const validTeacherIds = Object.entries(choices).flatMap(([subjectId, teacherId]) => {
-    if (!subjectIds.has(subjectId) || !/_G2_BAC$/.test(subjectId)) return [];
-    if (typeof teacherId !== "string" || !teacherId || teacherId === "__SKIP__" || teacherId === "__DEFERRED__") return [];
-    const teacher = getSIETeacher(teacherId);
-    const courseStatus = teacher?.systemCourseVerification?.EG_BACCALAUREATE;
-    if (!teacher || !teacher.subjectIds.includes(subjectId) || !courseStatus || courseStatus === "not_verified_for_2026_2027") return [];
-    return [teacherId];
+  const teacher = getSIETeacher(teacherId);
+  const courseStatus = teacher?.systemCourseVerification?.EG_BACCALAUREATE;
+  if (!teacher || !courseStatus || courseStatus === "not_verified_for_2026_2027") return [];
+  return Object.entries(choices).flatMap(([subjectId, selectedTeacherId]) => {
+    if (selectedTeacherId !== teacherId || !subjectIds.has(subjectId) || !/_G2_BAC$/.test(subjectId)) return [];
+    return teacher.subjectIds.includes(subjectId) ? [subjectId] : [];
   });
-  return [...new Set(validTeacherIds)];
+}
+
+export function selectedTeacherIds(profile: TeacherMonitoringProfile): string[] {
+  if (!isSecondYearBaccalaureateProfile(profile)) return [];
+  const choices = {
+    ...(profile.teacherSelections ?? {}),
+    ...(((profile.selection ?? {}).teacherChoices && typeof (profile.selection ?? {}).teacherChoices === "object")
+      ? (profile.selection ?? {}).teacherChoices
+      : {}),
+  } as Record<string, string>;
+  return [...new Set(Object.values(choices).filter((id): id is string =>
+    typeof id === "string" && selectedSubjectIdsForTeacher(profile, id).length > 0
+  ))];
 }
 
 export function acceptedAlternativeReviewVideoIds(profile: TeacherMonitoringProfile): Set<string> {
@@ -327,6 +338,26 @@ export function acceptedAlternativeReviewVideoIds(profile: TeacherMonitoringProf
   return new Set(raw.filter((value): value is string =>
     typeof value === "string" && /^youtube:[A-Za-z0-9_-]{6,20}$/.test(value)
   ));
+}
+
+export function getSelectedTeacherRevisionUpdates(
+  profile: TeacherMonitoringProfile,
+  updates: TeacherPublicUpdate[],
+): TeacherPublicUpdate[] {
+  const selected = new Set(selectedTeacherIds(profile));
+  const acceptedAlternatives = acceptedAlternativeReviewVideoIds(profile);
+  if (!selected.size && !acceptedAlternatives.size) return [];
+  return updates
+    .filter(update => typeof update.teacherId === "string"
+      && (selected.has(update.teacherId) || acceptedAlternatives.has(update.externalId))
+      && update.sourceType === "youtube"
+      && update.contentAnalysis?.status === "complete"
+      && update.contentAnalysis.contentType === "revision"
+      && Array.isArray(update.contentAnalysis.topics)
+      && update.contentAnalysis.topics.length > 0
+      && typeof update.url === "string"
+      && /^https:\/\//i.test(update.url))
+    .sort((left, right) => Date.parse(String(right.publishedAt)) - Date.parse(String(left.publishedAt)));
 }
 
 export function isTeacherVideoUpdateAllowed(
