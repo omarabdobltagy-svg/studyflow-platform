@@ -33,7 +33,7 @@ describe("assistant conversation persistence boundaries", () => {
       content: "رسالة " + index,
     }));
     messages.push({ role: "system", content: "hidden control text" } as any);
-    messages.push({ role: "user", content: "x".repeat(6_001) });
+    messages.push({ role: "user", content: "x".repeat(12_001) });
 
     const result = normalizeAssistantConversationDraft({
       clientId: "thread-1",
