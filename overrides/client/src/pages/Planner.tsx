@@ -1368,6 +1368,14 @@ function PlanCard({ plan, subjectIds, teacherSessions, teacherChoices, title, st
     return firstOpen >= 0 ? firstOpen : plan.steps.length > 0 ? 0 : null;
   });
   const teacherSessionGroups = useMemo(() => groupPlannerTeacherSessions(teacherSessions), [teacherSessions]);
+  const teacherSessionConflictKeys = useMemo(() => {
+    const starts = new Map<string, number>();
+    for (const session of teacherSessions) {
+      const key = session.sortDate + "::" + session.time;
+      starts.set(key, (starts.get(key) ?? 0) + 1);
+    }
+    return new Set([...starts.entries()].filter(([, count]) => count > 1).map(([key]) => key));
+  }, [teacherSessions]);
   const [teacherScheduleExpanded, setTeacherScheduleExpanded] = useState(true);
   const executionBoardRef = useRef<HTMLElement | null>(null);
   const completedCount = plan.steps.filter(step => step.plannerTaskStatus === "done" || step.existingTask?.status === "done").length;
@@ -1469,12 +1477,12 @@ function PlanCard({ plan, subjectIds, teacherSessions, teacherChoices, title, st
       </header>
 
       <div className="sf-sp-board-metrics">
-        <article><span>إجمالي الخطوات</span><strong>{plan.steps.length.toLocaleString("ar-EG")}</strong></article>
-        <article><span>المهام المنفذة</span><strong>{completedCount.toLocaleString("ar-EG")}</strong></article>
+        <article><span>إجمالي الخطوات</span><strong data-count-up={plan.steps.length}>{plan.steps.length.toLocaleString("ar-EG")}</strong></article>
+        <article><span>المهام المنفذة</span><strong data-count-up={completedCount}>{completedCount.toLocaleString("ar-EG")}</strong></article>
         <article><span>المتراكم المؤكد المدرج / الإجمالي</span><strong>{backlogCoverageLabel}</strong></article>
-        <article><span>نقاط المنهج المرتبطة</span><strong>{coveredCurriculumCount.toLocaleString("ar-EG")}</strong></article>
-        <article><span>مراجعات موجهة</span><strong>{plannedReviewCount.toLocaleString("ar-EG")}</strong></article>
-        <article><span>التزامات مسجلة</span><strong>{confirmedTaskCount.toLocaleString("ar-EG")}</strong></article>
+        <article><span>نقاط المنهج المرتبطة</span><strong data-count-up={coveredCurriculumCount}>{coveredCurriculumCount.toLocaleString("ar-EG")}</strong></article>
+        <article><span>مراجعات موجهة</span><strong data-count-up={plannedReviewCount}>{plannedReviewCount.toLocaleString("ar-EG")}</strong></article>
+        <article><span>التزامات مسجلة</span><strong data-count-up={confirmedTaskCount}>{confirmedTaskCount.toLocaleString("ar-EG")}</strong></article>
       </div>
 
       <section className="sf-sp-plan-phases" aria-label="مراحل الخطة">
@@ -1506,7 +1514,10 @@ function PlanCard({ plan, subjectIds, teacherSessions, teacherChoices, title, st
           <header>
             <div><span>الجدول الأسبوعي</span><h3>كل مواعيد كل مدرس</h3></div>
             <div className="sf-sp-schedule-header-actions">
-              <small>{teacherSessions.length.toLocaleString("ar-EG")} مواعيد · {teacherSessionGroups.length.toLocaleString("ar-EG")} مدرسين</small>
+              <small>
+                {teacherSessions.length.toLocaleString("ar-EG")} موعد · {teacherSessionGroups.length.toLocaleString("ar-EG")} مدرسين
+                {teacherSessionConflictKeys.size > 0 ? " · " + teacherSessionConflictKeys.size.toLocaleString("ar-EG") + " تعارضات في وقت البداية" : ""}
+              </small>
               <button type="button" className="sf-sp-schedule-toggle" aria-expanded={teacherScheduleExpanded}
                 aria-controls="sf-sp-teacher-session-list" onClick={() => setTeacherScheduleExpanded(value => !value)}>
                 {teacherScheduleExpanded ? <ArrowUp className="size-3.5" /> : <ArrowDown className="size-3.5" />}
@@ -1527,13 +1538,17 @@ function PlanCard({ plan, subjectIds, teacherSessions, teacherChoices, title, st
                     </div>
                   </div>
                   <div className="sf-sp-teacher-session-slots" aria-label={"كل مواعيد " + group.teacherName}>
-                    {group.sessions.map(session => (
-                      <div key={session.key} className="sf-sp-teacher-session-slot" data-testid={"planner-teacher-slot-" + group.subjectId + "-" + session.dayOfWeek}>
-                        <span>{new Intl.DateTimeFormat("ar-EG", { timeZone: "Africa/Cairo", weekday: "long" }).format(new Date(session.sortDate + "T12:00:00.000Z"))}</span>
-                        <strong>{displayTime12Hour(session.time)}</strong>
-                        <small>وقت المحاضرة</small>
-                      </div>
-                    ))}
+                    {group.sessions.map(session => {
+                      const isConflict = teacherSessionConflictKeys.has(session.sortDate + "::" + session.time);
+                      return (
+                        <div key={session.key} className={"sf-sp-teacher-session-slot" + (isConflict ? " is-conflict" : "")} data-testid={"planner-teacher-slot-" + group.subjectId + "-" + session.dayOfWeek} aria-label={isConflict ? "موعد يتزامن مع حصة أخرى في نفس وقت البداية" : undefined}>
+                          <span>{new Intl.DateTimeFormat("ar-EG", { timeZone: "Africa/Cairo", weekday: "long" }).format(new Date(session.sortDate + "T12:00:00.000Z"))}</span>
+                          <strong>{displayTime12Hour(session.time)}</strong>
+                          <small>وقت بداية الحصة</small>
+                          {isConflict && <em>يتزامن مع حصة أخرى</em>}
+                        </div>
+                      );
+                    })}
                   </div>
                   <div className="sf-sp-session-preparation">
                     <span className="sf-sp-session-preparation-label">التحضير قبل أقرب موعد</span>
