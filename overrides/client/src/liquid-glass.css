@@ -8,7 +8,7 @@
   --sf-glass-shine: rgba(255,255,255,.88);
   --sf-glass-shadow: 0 22px 60px rgba(48,38,28,.10), 0 3px 10px rgba(48,38,28,.045);
   --sf-glass-inset: inset 0 1px 0 rgba(255,255,255,.86);
-  --sf-glass-blur: 24px;
+  --sf-glass-blur: 30px;
   --sf-glass-accent: rgba(168,127,68,.14);
 }
 html.dark {
@@ -30,11 +30,11 @@ html.dark {
   --border: rgba(239,225,197,.16);
   --input: rgba(239,225,197,.22);
   --ring: #d9bd7c;
-  --sf-glass-panel: rgba(10,12,15,.72);
-  --sf-glass-panel-strong: rgba(13,15,18,.88);
-  --sf-glass-panel-soft: rgba(15,17,20,.62);
-  --sf-glass-edge: rgba(239,225,197,.15);
-  --sf-glass-shine: rgba(255,255,255,.13);
+  --sf-glass-panel: rgba(9,11,14,.34);
+  --sf-glass-panel-strong: rgba(10,12,15,.54);
+  --sf-glass-panel-soft: rgba(11,13,16,.24);
+  --sf-glass-edge: rgba(239,225,197,.23);
+  --sf-glass-shine: rgba(255,255,255,.21);
   --sf-glass-shadow: 0 26px 76px rgba(0,0,0,.54), 0 4px 18px rgba(0,0,0,.32);
   --sf-glass-inset: inset 0 1px 0 rgba(255,255,255,.12);
   --sf-glass-accent: rgba(207,173,111,.13);
@@ -50,7 +50,15 @@ html.dark body {
   background-image: radial-gradient(66rem 44rem at 2% -18%,rgba(107,101,92,.20),transparent 58%),radial-gradient(54rem 46rem at 100% 88%,rgba(122,111,95,.13),transparent 62%),linear-gradient(180deg,#020304 0%,#050608 52%,#020304 100%);
 }
 html body .sf-app-shell.sf-shell-v3 { position:relative; isolation:isolate; overflow:clip; background:#f5f1ec !important; }
-html.dark body .sf-app-shell.sf-shell-v3 { background:#020304 !important; }
+html.dark body .sf-app-shell.sf-shell-v3 {
+  background-color:#020304 !important;
+  background-image:
+    radial-gradient(ellipse 56rem 34rem at 7% 3%,rgba(105,91,70,.13),transparent 66%),
+    radial-gradient(ellipse 48rem 38rem at 92% 86%,rgba(78,82,86,.12),transparent 68%),
+    repeating-linear-gradient(60deg,transparent 0 82px,rgba(207,173,111,.022) 83px,transparent 84px 164px),
+    repeating-linear-gradient(150deg,transparent 0 112px,rgba(207,173,111,.016) 113px,transparent 114px 226px),
+    linear-gradient(180deg,#020304,#050607 52%,#020304) !important;
+}
 .sf-app-shell.sf-shell-v3::before,.sf-app-shell.sf-shell-v3::after {
   content:""; position:absolute; inset:-16%; z-index:0; pointer-events:none; opacity:.34; filter:blur(44px); transform:translate3d(0,0,0);
 }
@@ -241,4 +249,139 @@ html.dark .sf-study-hero { background:radial-gradient(ellipse at 100% 0%,rgba(19
 @media (prefers-reduced-motion:reduce) {
   .sf-app-shell.sf-shell-v3::after { animation:none !important; }
   .sf-study-unit-card,.sf-study-subject-option,.sf-study-view-tab,.sf-mobile-dock { transition:none !important; }
+}
+
+
+/* Liquid Glass v3 — translucent charcoal glass, restrained gold geometry and slow light drift. */
+@keyframes sf-glass-sheen {
+  0%, 100% { background-position: 0% 50%, 0 0; }
+  50% { background-position: 100% 50%, 0 0; }
+}
+@keyframes sf-gold-dust-drift {
+  0% { transform: translate3d(-.7%,.2%,0) scale(1); opacity:.38; }
+  50% { transform: translate3d(.8%,-.5%,0) scale(1.035); opacity:.58; }
+  100% { transform: translate3d(-.2%,.8%,0) scale(1.015); opacity:.42; }
+}
+html.dark body .sf-app-shell.sf-shell-v3::before {
+  background:
+    radial-gradient(ellipse 42% 28% at 14% 25%,rgba(115,108,97,.20),transparent 78%),
+    radial-gradient(ellipse 35% 32% at 76% 64%,rgba(91,99,104,.17),transparent 82%),
+    repeating-linear-gradient(58deg,transparent 0 74px,rgba(208,177,116,.035) 75px,transparent 76px 148px);
+  animation: sf-gold-dust-drift 34s ease-in-out infinite alternate;
+}
+html.dark body .sf-app-shell.sf-shell-v3::after {
+  background:
+    radial-gradient(ellipse 44% 26% at 85% 14%,rgba(128,120,105,.19),transparent 80%),
+    radial-gradient(ellipse 37% 30% at 21% 90%,rgba(82,91,97,.18),transparent 82%),
+    repeating-linear-gradient(145deg,transparent 0 106px,rgba(208,177,116,.022) 107px,transparent 108px 212px);
+  animation: sf-black-smoke-drift 29s ease-in-out infinite alternate;
+}
+html.dark body .sf-shell-v3 .sf-main :is(
+  .app-card,.sf-next-action-card,.sf-progress-card,.sf-active-study-session,
+  .sf-daily-plan-card,.sf-home-study-map,.sf-home-exam-calendar,.sf-home-exam-item,
+  .sf-sp-hero,.sf-sp-metric,.sf-sp-focus-card,.sf-sp-builder-card,.sf-sp-section-card,
+  .sf-sp-plan-board,.sf-sp-branch-card,.sf-sp-teacher-session-card,.sf-sp-tabs,
+  .sf-sp-overview-panel,.sf-sp-snapshot,.sf-sp-curriculum-group,.sf-sp-task-row,
+  .sf-plan-decision,.sf-plan-generation-inline,.sf-sp-generation-in-distribution,
+  .sf-execution-board,.sf-execution-focus-scene,.sf-execution-subject,.sf-execution-step,
+  .sf-sp-composite-subtasks,.sf-exam-mission-scene,.sf-home-study-step
+) {
+  color:var(--card-foreground);
+  background:
+    linear-gradient(118deg,rgba(255,255,255,.105),rgba(255,255,255,.012) 34%,rgba(210,177,112,.045) 66%,rgba(255,255,255,.055)),
+    var(--sf-glass-panel) !important;
+  background-size:220% 100%,auto;
+  border:1px solid var(--sf-glass-edge) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.16),
+    inset 0 0 0 1px rgba(255,255,255,.018),
+    0 24px 70px rgba(0,0,0,.38),
+    0 3px 18px rgba(0,0,0,.22) !important;
+  -webkit-backdrop-filter:blur(30px) saturate(175%);
+  backdrop-filter:blur(30px) saturate(175%);
+  animation:sf-glass-sheen 18s ease-in-out infinite;
+}
+html.dark body .sf-shell-v3 .sf-main :is(
+  .sf-sp-metric,.sf-home-study-step,.sf-home-exam-item,.sf-execution-subject,.sf-execution-step,
+  .sf-sp-branch-card,.sf-sp-task-row,.sf-sp-teacher-session-card
+) {
+  background-color:rgba(9,11,14,.28) !important;
+}
+html.dark body .sf-shell-v3 .sf-main :is(
+  .sf-next-action-card,.sf-progress-card,.sf-daily-plan-card,.sf-home-study-map,
+  .sf-home-exam-calendar,.sf-sp-overview-panel,.sf-sp-snapshot,.sf-execution-board
+) {
+  border-radius:26px;
+}
+html.dark body .sf-shell-v3 .sf-main :is(
+  .sf-sp-tabs,.sf-execution-filters,.sf-sp-focus-actions
+) {
+  border-color:rgba(222,190,126,.24);
+}
+html.dark body .sf-shell-v3 .sf-main :is(
+  .sf-sp-tabs,.sf-execution-filters
+) {
+  -webkit-backdrop-filter:blur(34px) saturate(185%);
+  backdrop-filter:blur(34px) saturate(185%);
+}
+html.dark body .sf-shell-v3 .sf-main :is(
+  .sf-next-action-card,.sf-progress-card,.sf-daily-plan-card,.sf-home-study-map,
+  .sf-home-exam-calendar,.sf-sp-hero,.sf-sp-metric,.sf-sp-focus-card,.sf-sp-builder-card,
+  .sf-sp-section-card,.sf-sp-plan-board,.sf-sp-branch-card,.sf-execution-board,
+  .sf-execution-focus-scene,.sf-execution-subject,.sf-execution-step,.sf-plan-decision
+):hover {
+  border-color:rgba(224,194,132,.34) !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 30px 82px rgba(0,0,0,.46),0 0 26px rgba(201,166,102,.055) !important;
+}
+
+/* The planner dock stays in view without turning into a horizontally scrolling strip. */
+html body .sf-page-planner .sf-sp-tabs {
+  position:sticky !important;
+  top:108px;
+  z-index:48;
+  display:grid !important;
+  grid-template-columns:repeat(5,minmax(0,1fr));
+  width:100%;
+  max-width:100%;
+  overflow:visible !important;
+  overscroll-behavior:contain;
+  margin-block:18px 22px;
+  padding:7px;
+  border:1px solid var(--sf-glass-edge);
+  border-radius:20px;
+  background:rgba(9,11,14,.76) !important;
+  box-shadow:0 18px 48px rgba(0,0,0,.28),inset 0 1px rgba(255,255,255,.1);
+  -webkit-backdrop-filter:blur(30px) saturate(175%);
+  backdrop-filter:blur(30px) saturate(175%);
+}
+html body .sf-page-planner .sf-sp-tab {
+  min-width:0;
+  min-height:46px;
+  justify-content:center;
+  white-space:nowrap;
+}
+html.dark body .sf-page-planner .sf-sp-tab[aria-selected="true"] {
+  color:#f5e8c8 !important;
+  border:1px solid rgba(221,187,119,.3);
+  background:linear-gradient(130deg,rgba(216,183,118,.19),rgba(255,255,255,.035)) !important;
+  box-shadow:inset 0 1px rgba(255,255,255,.12),0 5px 18px rgba(0,0,0,.24);
+}
+html.dark body .sf-page-planner .sf-sp-tabs + .sf-sp-panel { min-width:0; }
+html.dark body .sf-page-planner .sf-sp-panel { min-width:0; }
+@media (max-width: 760px) {
+  html body .sf-page-planner .sf-sp-tabs { top:80px; grid-template-columns:repeat(5,minmax(0,1fr)); gap:3px; padding:5px; }
+  html body .sf-page-planner .sf-sp-tab { min-height:42px; gap:4px; padding-inline:3px; font-size:10px; }
+  html body .sf-page-planner .sf-sp-tab svg { width:14px; height:14px; }
+}
+@media (max-width: 390px) {
+  html body .sf-page-planner .sf-sp-tabs { gap:1px; }
+  html body .sf-page-planner .sf-sp-tab { font-size:9px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html.dark body .sf-app-shell.sf-shell-v3::before,
+  html.dark body .sf-app-shell.sf-shell-v3::after,
+  html.dark body .sf-shell-v3 .sf-main :is(.app-card,.sf-next-action-card,.sf-progress-card,.sf-active-study-session,.sf-daily-plan-card,.sf-home-study-map,.sf-home-exam-calendar,.sf-home-exam-item,.sf-sp-hero,.sf-sp-metric,.sf-sp-focus-card,.sf-sp-builder-card,.sf-sp-section-card,.sf-sp-plan-board,.sf-sp-branch-card,.sf-sp-teacher-session-card,.sf-sp-tabs,.sf-sp-overview-panel,.sf-sp-snapshot,.sf-sp-curriculum-group,.sf-sp-task-row,.sf-plan-decision,.sf-plan-generation-inline,.sf-sp-generation-in-distribution,.sf-execution-board,.sf-execution-focus-scene,.sf-execution-subject,.sf-execution-step,.sf-sp-composite-subtasks,.sf-exam-mission-scene,.sf-home-study-step) {
+    animation:none !important;
+    transition:none !important;
+  }
 }
