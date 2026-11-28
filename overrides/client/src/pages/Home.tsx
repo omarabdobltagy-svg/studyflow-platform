@@ -10,7 +10,7 @@ import { trpc } from "@/lib/trpc";
 import { getNextOpenPlanStep } from "@/lib/plan-actions";
 import { getPlannerStepCurriculum } from "@/lib/planner-curriculum";
 import { displayCurriculumTitle } from "@/lib/curriculum-display";
-import { CAIRO_BAC_EXAM_CALENDAR_NOTICE, getCairoSecondYearBaccalaureateExams } from "@shared/cairo-baccalaureate-exam-calendar";
+import { CAIRO_BAC_EXAM_CALENDAR_NOTICE, getUpcomingCairoSecondYearBaccalaureateExams } from "@shared/cairo-baccalaureate-exam-calendar";
 import { getSIEStudentVisibleBranches, getSIECheckpointProgressBranches, getSIESubject, matchSIECheckpointTask, normalizeSIECheckpointFrontier } from "@shared/sie-catalog";
 import { formatTime12Hour, getCalendarDaysBetween, getDateKeyInTimeZone } from "@shared/date-time";
 import { buildMonthlyExamCoveredScope } from "@shared/monthly-exam-scope";
@@ -359,10 +359,8 @@ export default function Home() {
   const homeNextStep = getNextOpenPlanStep(homeStudySteps as any[] | undefined);
   const cairoExamDate = serverNow ? getDateKeyInTimeZone(serverNow, "Africa/Cairo") : null;
   const upcomingExams = useMemo(
-    () => cairoExamDate
-      ? getCairoSecondYearBaccalaureateExams(profile.data).filter(exam => exam.date >= cairoExamDate)
-      : [],
-    [profile.data?.educationSystem, profile.data?.gradeYear, profile.data?.subjectIds, cairoExamDate],
+    () => serverNow ? getUpcomingCairoSecondYearBaccalaureateExams(profile.data, serverNow) : [],
+    [profile.data?.educationSystem, profile.data?.gradeYear, profile.data?.subjectIds, cairoExamDate, serverNow],
   );
   const monthlyExamCoveredScope = useMemo(() => {
     const selection = (profile.data?.selection ?? {}) as Record<string, any>;
@@ -818,7 +816,7 @@ export default function Home() {
             <header className="sf-home-exam-calendar-header">
               <div>
                 <span className="sf-sp-eyebrow">المتابعة الامتحانية · القاهرة</span>
-                <h3 id="sf-home-exam-calendar-title">الامتحانات القادمة</h3>
+                <h3 id="sf-home-exam-calendar-title">اختبارات الشهر القادمة</h3>
                 <p>مواعيد مقترحة على مستوى مديرية القاهرة، وليست جدول مدرستك المؤكد.</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -873,8 +871,7 @@ export default function Home() {
               })}
             </div>
             <footer className="sf-home-exam-calendar-footer">
-              <p>استبعدنا الثقافة المالية والتربية الرياضية من مسار الاستعداد للمجموع. هذه مواعيد مديرية القاهرة المقترحة وليست تأكيدًا لجدول المدرسة.</p>
-              <small>{CAIRO_BAC_EXAM_CALENDAR_NOTICE.schoolName}: لم نعثر على إعلان مدرسي موثّق يؤكد المواعيد نفسها حتى الآن.</small>
+              <p>جدول مديرية القاهرة المقترح، وليس تأكيدًا من مدرستك. نطاق المراجعة المعروض تقديري ويعتمد على موضع الشرح المسجل.</p>
             </footer>
           </section>
         )}

@@ -1,3 +1,4 @@
+import { getDateKeyInTimeZone } from "./date-time";
 import { SIE_CATALOG_META } from "./sie-catalog";
 
 export type CairoSecondYearBaccalaureateExamProfile = {
@@ -18,7 +19,7 @@ export type CairoSecondYearBaccalaureateExam = {
 
 const CORE_EXAMS: Array<Omit<CairoSecondYearBaccalaureateExam, "scope" | "schoolConfirmed">> = [
   { date: "2026-11-29", dayName: "الأحد", subjectId: "ARB_G2_BAC", subjectName: "اللغة العربية", category: "core" },
-  { date: "2026-11-30", dayName: "الاثنين", subjectId: "ENG1_G2_BAC", subjectName: "اللغة الأجنبية الأولى", category: "core" },
+  { date: "2026-11-30", dayName: "الاثنين", subjectId: "ENG1_G2_BAC", subjectName: "اللغة الإنجليزية", category: "core" },
   { date: "2026-12-01", dayName: "الثلاثاء", subjectId: "HIS_G2_BAC", subjectName: "التاريخ المصري", category: "core" },
 ];
 
@@ -63,6 +64,15 @@ export function getCairoSecondYearBaccalaureateExams(
   return [...exams, ...specialization]
     .map(exam => ({ ...exam, scope: "cairo_directorate_proposed" as const, schoolConfirmed: false as const }))
     .sort((left, right) => left.date.localeCompare(right.date) || left.subjectName.localeCompare(right.subjectName, "ar"));
+}
+
+export function getUpcomingCairoSecondYearBaccalaureateExams(
+  profile: CairoSecondYearBaccalaureateExamProfile | null | undefined,
+  now: Date,
+): CairoSecondYearBaccalaureateExam[] {
+  if (!(now instanceof Date) || !Number.isFinite(now.getTime())) return [];
+  const cairoToday = getDateKeyInTimeZone(now, "Africa/Cairo");
+  return getCairoSecondYearBaccalaureateExams(profile).filter(exam => exam.date >= cairoToday);
 }
 
 export const CAIRO_BAC_EXAM_CALENDAR_NOTICE = {
