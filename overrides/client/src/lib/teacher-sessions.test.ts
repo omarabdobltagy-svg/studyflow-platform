@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getPlannerTeacherSessions, groupPlannerTeacherSessions, mergeSuggestedTeacherScheduleSlots } from "./teacher-sessions";
+import { getPlannerTeacherSessions, getTeacherSessionConflictKeys, groupPlannerTeacherSessions, mergeSuggestedTeacherScheduleSlots } from "./teacher-sessions";
 
 describe("getPlannerTeacherSessions", () => {
   it("keeps both default weekly sessions for one teacher", () => {
@@ -216,5 +216,24 @@ describe("complete weekly teacher schedule rendering", () => {
     expect(sessions).toHaveLength(1);
     expect(sessions[0]).toMatchObject({ dayOfWeek: 4, time: "10:30" });
     expect(Object.hasOwn(sessions[0], "endTime")).toBe(false);
+  });
+});
+
+
+describe("teacher schedule collision detection", () => {
+  it("flags only appointments with the same date and exact start time", () => {
+    expect(getTeacherSessionConflictKeys([
+      { sortDate: "2026-11-29", time: "09:00" },
+      { sortDate: "2026-11-29", time: "09:00" },
+      { sortDate: "2026-11-29", time: "10:00" },
+      { sortDate: "2026-12-02", time: "09:00" },
+    ])).toEqual(new Set(["2026-11-29::09:00"]));
+  });
+
+  it("does not infer interval overlap when only start times are known", () => {
+    expect(getTeacherSessionConflictKeys([
+      { sortDate: "2026-11-29", time: "09:00" },
+      { sortDate: "2026-11-29", time: "09:30" },
+    ])).toEqual(new Set());
   });
 });
