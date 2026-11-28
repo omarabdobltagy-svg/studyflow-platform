@@ -589,11 +589,6 @@ export default function Planner() {
     }
     if (!generationDetailsHiddenForRun) setShowGenerationDetails(true);
   }, [isPlanGenerationRunning, generationDetailsHiddenForRun]);
-  const aiCapabilities = trpc.ai.capabilities.useQuery(undefined, {
-    enabled: Boolean(profile.data?.subjectIds?.length),
-    staleTime: 30_000,
-    refetchOnWindowFocus: false,
-  });
   const visibleAIActivities = (aiActivity.data?.active ?? [])
     .filter(item => item.kind === "daily_plan");
 
@@ -1320,8 +1315,6 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
     return new Intl.DateTimeFormat("ar-EG", { timeZone: "Africa/Cairo", day: "numeric", month: "short" }).format(date);
   };
   const priorityLabel: Record<string,string> = {critical:"عاجلة",high:"أولوية عالية",medium:"متوسطة",low:"مرنة"};
-  const difficultyLabel: Record<string,string> = {easy:"خفيف",medium:"متوسط",hard:"يحتاج تركيزًا",unknown:"غير محدد"};
-  const phaseLabel: Record<string,string> = {backlog:"التزام مفتوح",teacher_sync:"شرح غير مشاهد",steady:"درس جديد",review_later:"مراجعة مؤجلة"};
   const summary = displayArabicText(plan.summary.split("\n\n")[0], "خطة مرتبة حسب التزاماتك والمواد المتاحة في ملفك الدراسي.");
   return (
     <section className="sf-sp-plan-board">
@@ -1652,7 +1645,7 @@ function PlanAssistantChat({ plan, subjectIds, editable, onChange, onProposalApp
             aria-label="اكتب رسالة لمساعد الخطة"
             className="min-h-12 max-h-32 min-w-0 flex-1 resize-y rounded-xl border border-border bg-background px-3 py-2.5 text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground focus:border-primary/60"
           />
-          <Button type="button" onClick={sendMessage} disabled={!draft.trim() || chat.isPending || approving} className="h-12 shrink-0 rounded-xl px-4">
+          <Button type="button" onClick={sendMessage} disabled={!draft.trim() || chat.isPending || Boolean(pendingPatch)} className="h-12 shrink-0 rounded-xl px-4">
             <Send className="size-4" /><span className="hidden sm:inline">إرسال</span>
           </Button>
         </div>

@@ -67,11 +67,12 @@ describe("teacher public channel monitor", () => {
       teacherSelections: {
         ARB_G2_BAC: "T_AR_MOHAMED_SALAH",
         ENG1_G2_BAC: "T_EN_MAHMOUD_RADWAN",
-        HIS_G2_BAC: "T_AR_MOHAMED_SALAH",
+        HIS_G2_BAC: "T_HIS_AHMED_ADEL",
       },
     };
-    expect(selectedSubjectIdsForTeacher(profile, "T_AR_MOHAMED_SALAH")).toEqual(["ARB_G2_BAC", "HIS_G2_BAC"]);
+    expect(selectedSubjectIdsForTeacher(profile, "T_AR_MOHAMED_SALAH")).toEqual(["ARB_G2_BAC"]);
     expect(selectedSubjectIdsForTeacher(profile, "T_EN_MAHMOUD_RADWAN")).toEqual(["ENG1_G2_BAC"]);
+    expect(selectedSubjectIdsForTeacher(profile, "T_HIS_AHMED_ADEL")).toEqual(["HIS_G2_BAC"]);
     expect(selectedSubjectIdsForTeacher(profile, "T_AR_REDA_FAROUK")).toEqual([]);
   });
 

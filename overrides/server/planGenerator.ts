@@ -1558,15 +1558,7 @@ export function applyDailyPlanDepth(
     ? selection.teacherPublicUpdates as Array<Record<string, any>>
     : [];
   const acceptedAlternativeVideoIds = acceptedAlternativeReviewVideoIds(profile);
-  const formatTopicTime = (seconds: number) => {
-    const value = Math.max(0, Math.floor(seconds));
-    const hours = Math.floor(value / 3_600);
-    const minutes = Math.floor((value % 3_600) / 60);
-    const rest = value % 60;
-    return hours > 0
-      ? hours + ":" + String(minutes).padStart(2, "0") + ":" + String(rest).padStart(2, "0")
-      : minutes + ":" + String(rest).padStart(2, "0");
-  };
+
   // A review video may help either a lesson the student marked for review
   // or a lesson whose explanation was watched but not yet studied.
   const reviewEligibleNodeIds = new Set(
@@ -1631,8 +1623,6 @@ export function applyDailyPlanDepth(
 
       const subjectName = getSIESubject(match.subjectId)?.nameAr ?? match.subjectId;
       const topicTitle = String(topic.titleAr || match.title).trim().slice(0, 150);
-      const startLabel = formatTopicTime(startSeconds);
-      const endLabel = formatTopicTime(endSeconds);
       const topicDetail = [
         String(topic.descriptionAr || "جزء موضوعي من مراجعة المدرس.").slice(0, 500),
         "راجع النقاط المرتبطة بهذا الموضوع، وركّز على ما يحتاج إلى تثبيت.",
