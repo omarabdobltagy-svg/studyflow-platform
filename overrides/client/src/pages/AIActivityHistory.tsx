@@ -9,6 +9,10 @@ const eventLabels: Record<string, string> = {
   "ai.background.progress": "تقدم التنفيذ",
   "ai.background.completed": "اكتملت العملية",
   "ai.background.failed": "تعذّر إكمال العملية",
+  "ai.activity.started": "بدأت عملية ذكاء اصطناعي",
+  "ai.activity.progress": "تقدم التنفيذ",
+  "ai.activity.completed": "اكتملت العملية",
+  "ai.activity.failed": "تعذّر إكمال العملية",
   "teacher.public_update_detected": "محتوى جديد من قنوات المدرسين",
   "teacher.video_analysis_completed": "اكتمل تحليل فيديو تعليمي",
   "teacher.video_analysis_failed": "تعذّر تحليل فيديو تعليمي",
@@ -52,7 +56,7 @@ export default function AIActivityHistory() {
     const operations = new Map<string, { latest: Event; startedAt: Date | string }>();
 
     for (const event of events) {
-      const isBackgroundLifecycle = event.entityType === "ai_background" && event.entityId !== null;
+      const isBackgroundLifecycle = (event.entityType === "ai_background" || event.entityType === "ai_activity") && event.entityId !== null;
       if (!isBackgroundLifecycle) {
         standalone.push({ ...event, historyKey: String(event.id), historyDate: event.createdAt });
         continue;
@@ -68,7 +72,7 @@ export default function AIActivityHistory() {
       }
       const eventTime = new Date(event.createdAt as unknown as string).getTime();
       const latestTime = new Date(existing.latest.createdAt as unknown as string).getTime();
-      if (event.eventType === "ai.background.started") existing.startedAt = event.createdAt;
+      if (event.eventType === "ai.background.started" || event.eventType === "ai.activity.started") existing.startedAt = event.createdAt;
       if (Number.isFinite(eventTime) && (!Number.isFinite(latestTime) || eventTime > latestTime)) {
         existing.latest = { ...event, historyKey: key, historyDate: existing.startedAt };
       } else {
