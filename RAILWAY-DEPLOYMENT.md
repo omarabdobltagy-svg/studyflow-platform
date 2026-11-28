@@ -11,9 +11,17 @@ The StudyFlow application is built from `Dockerfile`, which extracts the source 
 
 ## Database migrations
 
-Database migrations are schema changes, not a server-startup task. Apply them separately and only after reviewing the generated SQL against the current production schema. The production MySQL database already has `studentProfiles.selectionJson`; a repeated `ALTER TABLE ... ADD selectionJson` fails with MySQL `ER_DUP_FIELDNAME`.
+The production MySQL database already has `studentProfiles.selectionJson`; never add that column again. Do not run `pnpm db:push` during startup or as a pre-deploy command.
 
-Keep the MySQL service and its persistent volume intact when deploying the application.
+For the additive schema used by the current StudyFlow application, configure the **StudyFlow app** Railway service with this pre-deploy command:
+
+```sh
+node scripts/migrate-local-auth.mjs
+```
+
+This script checks the existing schema before applying its additive, idempotent changes. It preserves existing user IDs and linked student records. If account ownership is ambiguous or the configured legacy username conflicts with another account, it stops rather than guessing. It does not run the full Drizzle migration history and must not be replaced with `db:push`.
+
+Keep the MySQL service and its persistent volume intact. Preview and production app services must each run this hook against their own configured `DATABASE_URL`; never point Preview at the production database.
 
 
 ## Local StudyFlow sign-in
