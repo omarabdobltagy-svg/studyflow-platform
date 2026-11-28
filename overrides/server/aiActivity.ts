@@ -101,7 +101,12 @@ function persistActivityTransition(
   if (!persistenceEnabled || activity.kind === "assistant") return;
   const key = String(userId) + ":" + activity.id;
   const previous = persistenceQueues.get(key) ?? Promise.resolve();
-  const currentEvent = activity.events[activity.events.length - 1];
+  const currentEvent: AIActivityEvent = {
+    stage: activity.stage,
+    detail: activity.detail,
+    status: transition === "completed" ? "complete" : transition === "failed" ? "failed" : "active",
+    updatedAt: activity.updatedAt,
+  };
   const eventType = PERSISTED_EVENT_TYPES[transition];
   const metadata = {
     activityId: activity.id,
