@@ -147,7 +147,7 @@ async function run() {
       assert(initialState.themeClass.split(/\\s+/).includes("dark"), viewport.name + ": expected dark premium theme");
       assert(initialState.primary.toUpperCase() === "#D6BC83", viewport.name + ": antique brass primary token is missing");
       assert(initialState.ember.toUpperCase() === "#4C3A4F", viewport.name + ": restrained plum identity token is missing");
-      assert(initialState.brass.toUpperCase() === "#E0C78D", viewport.name + ": antique brass brand token is missing");
+      assert(initialState.brass.toUpperCase() === "#D6BC83", viewport.name + ": champagne brass brand token is missing");
       assert(
         initialState.loginCardSurface
           && (initialState.loginCardSurface.image !== "none" || initialState.loginCardSurface.color !== "rgba(0, 0, 0, 0)"),

@@ -1,7 +1,7 @@
 /*
  * StudyFlow Design Quality Layer
  * Single source of truth for product surfaces, brand color, controls and states.
- * Loaded last so legacy page styles cannot split the interface into unrelated themes.
+ * Token values are reconciled with the final identity layer so legacy pages cannot split the theme.
  */
 
 :root {
