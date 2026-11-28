@@ -658,7 +658,7 @@ function shouldFailOverFromGemini(error: unknown): boolean {
   return /GEMINI_API_KEY is not configured/i.test(message)
     || /Gemini invoke failed:\s*(?:400|401|402|403|404|408|409|425|429|5\d\d)\b/i.test(message)
     || /fetch failed|network error|timed out|socket|ECONNRESET|ENOTFOUND/i.test(message)
-    || /unsupported|not supported|response_format|json_schema|invalid argument/i.test(message);
+    || /unsupported|not supported|response_format|json_schema|invalid argument|empty or truncated|without any text content/i.test(message);
 }
 
 /** Explicit OpenRouter route for the free-model fallback and schema-validation retry. */

@@ -177,6 +177,20 @@ html.dark .sf-study-hero { background:radial-gradient(ellipse at 100% 0%,rgba(19
 .sf-english-lesson-sequence { color:var(--primary); font-size:10px; font-weight:900; }
 .sf-english-lesson-name { color:var(--foreground); font-size:11px; line-height:1.55; }
 .sf-english-lesson-type { border:1px solid var(--sf-glass-edge); }
+
+.sf-english-section-tag {
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  padding:4px 8px;
+  border:1px solid var(--sf-glass-edge);
+  border-radius:999px;
+  color:var(--primary);
+  background:var(--sf-glass-accent);
+  font-size:9px;
+  font-weight:850;
+}
+
 .sf-study-progress-card { min-width:0; }
 .sf-progress-position-pickers>div { border-color:var(--sf-glass-edge) !important; background:var(--sf-glass-panel-soft) !important; box-shadow:inset 0 1px 0 var(--sf-glass-shine); }
 .sf-progress-coach-float { display:grid; gap:10px; margin-top:14px; padding:15px; border:1px solid color-mix(in srgb,var(--primary) 32%,var(--sf-glass-edge)); border-radius:18px; color:var(--foreground); background:linear-gradient(140deg,var(--sf-glass-accent),var(--sf-glass-panel-strong)); box-shadow:var(--sf-glass-inset),0 14px 34px rgba(0,0,0,.08); }
