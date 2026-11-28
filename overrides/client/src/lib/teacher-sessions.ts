@@ -123,6 +123,22 @@ export type PlannerTeacherSessionGroup = {
   sessions: PlannerTeacherSession[];
 };
 
+/**
+ * Return date/time pairs that have more than one lesson beginning at exactly
+ * the same Cairo wall-clock time. This intentionally does not infer duration
+ * or overlap because the current profile schema does not persist reliable ends.
+ */
+export function getTeacherSessionConflictKeys(
+  sessions: readonly Pick<PlannerTeacherSession, "sortDate" | "time">[],
+): Set<string> {
+  const counts = new Map<string, number>();
+  for (const session of sessions) {
+    const key = session.sortDate + "::" + session.time;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return new Set([...counts.entries()].filter(([, count]) => count > 1).map(([key]) => key));
+}
+
 export function groupPlannerTeacherSessions(sessions: PlannerTeacherSession[]): PlannerTeacherSessionGroup[] {
   const groups = new Map<string, PlannerTeacherSessionGroup>();
   for (const session of sessions) {
