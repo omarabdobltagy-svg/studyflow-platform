@@ -13,6 +13,8 @@ const STORAGE_KEY = "studyflow.assistant.conversations.v2";
 const suggestions = [
   "اشرح لي درسًا من منهج المادة التي أدرسها خطوة بخطوة.",
   "وضّح لي فكرة في آخر درس وصلت إليه، واربطها بشرح المدرس.",
+  "فسّر لي سبب ترتيب الخطوة التالية في خطتي.",
+  "هل يوجد التزام أو موعد يحتاج أن أراعيه قبل المحاضرة القادمة؟",
   "ما الفرق بين المفاهيم الأساسية في هذا الموضوع؟",
 ];
 
@@ -92,7 +94,7 @@ export default function Assistant() {
     enabled: Boolean(profile.data),
     staleTime: 20_000,
   });
-  const assistantContextReady = Boolean(profile.data && !dailyPlan.isLoading && !dashboardSummary.isLoading);
+  const assistantContextReady = Boolean(profile.data && !profile.isError && !dailyPlan.isLoading && !dailyPlan.isError && !dashboardSummary.isLoading && !dashboardSummary.isError);
   const abortControllerRef = useRef<AbortController | null>(null);
   const streamingThreadRef = useRef<string | null>(null);
 

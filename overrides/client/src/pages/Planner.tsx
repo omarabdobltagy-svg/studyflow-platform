@@ -1626,7 +1626,16 @@ function PlanAssistantChat({ plan, subjectIds, editable, onChange, onProposalApp
           {chat.isPending && <div className="flex justify-end"><span className="rounded-xl border border-border bg-card px-3 py-2 text-xs text-muted-foreground">المساعد بيحلل الخطة...</span></div>}
         </div>
         {pendingPatch&&<section className="sf-plan-proposal" data-testid="planner-assistant-proposal">
-          <div><span>اقتراح جاهز للمراجعة</span><strong>{pendingPatch.updates.length.toLocaleString("ar-EG")} تعديل على الخطوات{pendingPatch.title?" وتحديث عنوان الخطة":""}{pendingPatch.summary?" وملخصها":""}{pendingPatch.order?" مع إعادة ترتيبها":""}</strong><p>لم تتغير خطة التنفيذ بعد. طبّق الاقتراح على المسودة ثم راجعها قبل الاعتماد.</p></div>
+          <div className="sf-plan-proposal-copy">
+            <span>اقتراح جاهز للمراجعة</span>
+            <strong>{pendingPatch.updates.length.toLocaleString("ar-EG")} تعديل على الخطوات{pendingPatch.title?" وتحديث عنوان الخطة":""}{pendingPatch.summary?" وملخصها":""}{pendingPatch.order?" مع إعادة ترتيبها":""}</strong>
+            <p>لم تتغير خطة التنفيذ بعد. راجع الفرق ثم طبّق الاقتراح على المسودة.</p>
+            {pendingPatch.updates.slice(0,3).map((update,index)=>{
+              const before=plan.steps[update.index];
+              if(!before)return null;
+              return <article key={update.index}><small>الخطوة { (update.index+1).toLocaleString("ar-EG") }</small><div><span>قبل</span><b>{displayPlanStepTitle(before,subjectIds)}</b></div><div><span>بعد</span><b>{update.changes.title?displayArabicText(update.changes.title,displayPlanStepTitle(before,subjectIds)):displayPlanStepTitle(before,subjectIds)}</b></div>{update.changes.detail&&<p>{displayArabicText(update.changes.detail,"تفاصيل معدلة للخطوة.")}</p>}</article>;
+            })}
+          </div>
           <div><Button type="button" variant="outline" onClick={rejectProposal}>رفض الاقتراح</Button><Button type="button" onClick={acceptProposal} disabled={!editable}>تطبيق الاقتراح</Button></div>
         </section>}
         <div className="flex items-end gap-2">
