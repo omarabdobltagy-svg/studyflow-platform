@@ -439,6 +439,9 @@ export default function Planner() {
   const progressivePath = useMemo(() => {
     type PathLesson = {
       key: string;
+      subjectId: string;
+      branchId: string;
+      branchTitle: string;
       subject: string;
       lesson: string;
       state: StudentLessonState;
@@ -450,6 +453,7 @@ export default function Planner() {
     const gaps = (learning.data as any)?.gapByBranch ?? {};
     const unseen: PathLesson[] = [];
     const deferred: PathLesson[] = [];
+    const allLessons: PathLesson[] = [];
     let unknownLessons = 0;
 
     for (const subjectId of profile.data?.subjectIds ?? []) {
@@ -504,19 +508,21 @@ export default function Planner() {
           const completedBySq3r = Array.isArray(lessonRecord?.completedSteps)
             && new Set(lessonRecord.completedSteps).size === 5;
           if (completedBySq3r) state = "studied";
-          if (state === "studied") continue;
-          if (state === "not_recorded") {
-            if (referencePosition !== null && index < referencePosition) {
-              unknownLessons += 1;
-            }
-            continue;
-          }
           const item: PathLesson = {
             key: subjectId + "::" + branch.branchId + "::" + choice.nodeId,
+            subjectId,
+            branchId: branch.branchId,
+            branchTitle: displayBranchTitle(branch.branchTitle),
             subject: subjectLabel,
             lesson: displayCurriculumTitle(choice.title),
             state,
           };
+          allLessons.push(item);
+          if (state === "studied") continue;
+          if (state === "not_recorded") {
+            if (referencePosition !== null && index < referencePosition) unknownLessons += 1;
+            continue;
+          }
           if (state === "not_watched") unseen.push(item);
           else if (state === "watched_only" || state === "needs_review") deferred.push(item);
         }
@@ -524,8 +530,47 @@ export default function Planner() {
       }
     }
 
-    return { unseen, deferred, unknownLessons };
+    return { unseen, deferred, unknownLessons, allLessons };
   }, [profile.data?.selection, profile.data?.subjectIds, learning.data]);
+
+  const curriculumPath = useMemo(() => {
+    const lessonByKey = new Map(progressivePath.allLessons.map(lesson => [lesson.key, lesson]));
+    return (profile.data?.subjectIds ?? []).map(subjectId => {
+      const subject = getSIESubject(subjectId);
+      const branches = getSIEStudentVisibleBranches(subjectId).map(branch => {
+        const lessons = branch.choices
+          .map(choice => lessonByKey.get(subjectId + "::" + branch.branchId + "::" + choice.nodeId))
+          .filter((lesson): lesson is NonNullable<typeof lesson> => Boolean(lesson));
+        const completedCount = lessons.filter(lesson => lesson.state === "studied").length;
+        const unknownCount = lessons.filter(lesson => lesson.state === "not_recorded").length;
+        const unseenCount = lessons.filter(lesson => lesson.state === "not_watched").length;
+        const deferredCount = lessons.filter(lesson => lesson.state === "watched_only" || lesson.state === "needs_review").length;
+        const nextLesson = lessons.find(lesson =>
+          lesson.state === "not_watched" || lesson.state === "watched_only" || lesson.state === "needs_review"
+        ) ?? null;
+        return {
+          id: branch.branchId,
+          title: displayBranchTitle(branch.branchTitle),
+          lessons,
+          totalCount: branch.choices.length,
+          completedCount,
+          unknownCount,
+          unseenCount,
+          deferredCount,
+          nextLesson,
+          completionPercent: branch.choices.length ? Math.round(completedCount / branch.choices.length * 100) : 0,
+        };
+      }).filter(branch => branch.lessons.length > 0);
+      return {
+        subjectId,
+        subjectName: subject?.nameAr ?? subjectId,
+        branches,
+        lessonCount: branches.reduce((sum, branch) => sum + branch.totalCount, 0),
+        completedCount: branches.reduce((sum, branch) => sum + branch.completedCount, 0),
+      };
+    }).filter(subject => subject.branches.length > 0);
+  }, [profile.data?.subjectIds, progressivePath.allLessons]);
+
   const isPreflightReady = !profile.isLoading && !learning.isLoading && !tasksQuery.isLoading
     && !profile.isError && !learning.isError && !tasksQuery.isError;
 
@@ -1115,73 +1160,77 @@ export default function Planner() {
               <p className="sf-sp-muted-intro">القائمة تعرض كل درس حالته معروفة، لا عينة من أول الخطة فقط. الجدول اليومي يختار منها ما يناسب وقتك.</p>
 
               <div className="sf-sp-board-metrics">
-                <article><span>شرح لم يُشاهد</span><strong>{progressivePath.unseen.length.toLocaleString("ar-EG")}</strong></article>
-                <article><span>مذاكرة أو مراجعة مؤجلة</span><strong>{progressivePath.deferred.length.toLocaleString("ar-EG")}</strong></article>
-                <article><span>دروس داخل النطاق حالتها غير مسجلة</span><strong>{progressivePath.unknownLessons.toLocaleString("ar-EG")}</strong></article>
+                <article><span>شرح لم يُشاهد</span><strong data-count-up={progressivePath.unseen.length}>{progressivePath.unseen.length.toLocaleString("ar-EG")}</strong></article>
+                <article><span>مذاكرة أو مراجعة مؤجلة</span><strong data-count-up={progressivePath.deferred.length}>{progressivePath.deferred.length.toLocaleString("ar-EG")}</strong></article>
+                <article><span>حالة تحتاج إلى تسجيل</span><strong data-count-up={progressivePath.unknownLessons}>{progressivePath.unknownLessons.toLocaleString("ar-EG")}</strong></article>
               </div>
 
-              {progressivePath.unknownLessons > 0 && (
-                <div className="sf-sp-empty-inline" role="status">
-                  هناك {progressivePath.unknownLessons.toLocaleString("ar-EG")} درس داخل نطاق شرح المدرس لم تُسجّل حالته. حدّد موضعك حتى نميّز الدروس المتراكمة من الدروس التي لم يشرحها المدرس بعد.
-                </div>
-              )}
+              <div className="sf-sp-path-explainer">
+                <span>هيكل المسار</span>
+                <strong>الخطة ← المادة ← الفرع / الوحدة ← الدرس</strong>
+                <p>كل مستوى مرتبط بالمنهج المسجل. حالة الدرس تُعرض كما هي، ولا نعتبر الدروس التي لم يُسجل شرحها متراكماً عليك.</p>
+              </div>
 
               {profile.isLoading || learning.isLoading ? (
                 <div className="sf-sp-skeletons"><span /><span /><span /></div>
+              ) : curriculumPath.length ? (
+                <div className="sf-sp-path-subjects">
+                  {curriculumPath.map(subject => (
+                    <section key={subject.subjectId} className="sf-sp-path-subject">
+                      <header>
+                        <div>
+                          <span className="sf-sp-eyebrow">المادة</span>
+                          <h3>{subject.subjectName}</h3>
+                        </div>
+                        <span className="sf-sp-path-subject-count">
+                          {subject.completedCount.toLocaleString("ar-EG")} / {subject.lessonCount.toLocaleString("ar-EG")} مكتمل
+                        </span>
+                      </header>
+                      <div className="sf-sp-path-branches">
+                        {subject.branches.map(branch => (
+                          <details key={branch.id} className="sf-sp-path-branch">
+                            <summary>
+                              <span className="sf-sp-path-branch-title">
+                                <strong>{branch.title}</strong>
+                                <small>{branch.nextLesson ? "التالي: " + branch.nextLesson.lesson : "لا توجد خطوة مفتوحة مؤكدة"}</small>
+                              </span>
+                              <span className="sf-sp-path-branch-progress">
+                                <b>{branch.completedCount.toLocaleString("ar-EG")} / {branch.totalCount.toLocaleString("ar-EG")}</b>
+                                <i><b style={{ width: branch.completionPercent + "%" }} /></i>
+                              </span>
+                              <span className="sf-sp-path-branch-chevron"><ArrowDown className="size-4" /></span>
+                            </summary>
+                            <div className="sf-sp-path-branch-body">
+                              <div className="sf-sp-path-branch-stats">
+                                <span>{branch.unseenCount.toLocaleString("ar-EG")} شرح غير مشاهد</span>
+                                <span>{branch.deferredCount.toLocaleString("ar-EG")} للمذاكرة / المراجعة</span>
+                                <span>{branch.unknownCount.toLocaleString("ar-EG")} غير مسجل</span>
+                              </div>
+                              <ol>
+                                {branch.lessons.map((lesson, index) => {
+                                  const label = lesson.state === "studied" ? "مكتمل"
+                                    : lesson.state === "not_watched" ? "شرح غير مشاهد"
+                                      : lesson.state === "watched_only" ? "شاهدت الشرح — لم تسجل المذاكرة"
+                                        : lesson.state === "needs_review" ? "يحتاج مراجعة"
+                                          : "الحالة غير مسجلة";
+                                  return (
+                                    <li key={lesson.key} className={"sf-sp-path-lesson state-" + lesson.state}>
+                                      <span>{(index + 1).toLocaleString("ar-EG")}</span>
+                                      <strong>{lesson.lesson}</strong>
+                                      <small>{label}</small>
+                                    </li>
+                                  );
+                                })}
+                              </ol>
+                            </div>
+                          </details>
+                        ))}
+                      </div>
+                    </section>
+                  ))}
+                </div>
               ) : (
-                <>
-                  <section className="sf-sp-curriculum-group">
-                    <div className="sf-sp-section-heading">
-                      <div><span className="sf-sp-eyebrow">الأولوية الأولى</span><h3>دروس لم تشاهد شرحها</h3></div>
-                      <span className="sf-sp-count">{progressivePath.unseen.length.toLocaleString("ar-EG")}</span>
-                    </div>
-                    {progressivePath.unseen.length ? (
-                      <div className="sf-sp-task-list">
-                        {progressivePath.unseen.map(item => (
-                          <article key={item.key} className="sf-sp-task-row">
-                            <span className="sf-sp-task-check" aria-hidden="true" />
-                            <div className="min-w-0 flex-1">
-                              <strong>{item.subject} · {item.lesson}</strong>
-                              <small className="block mt-1">شرح غير مشاهد</small>
-                            </div>
-                            <span className="sf-sp-task-meta">ابدأ الآن</span>
-                          </article>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="sf-sp-empty-inline">لا توجد دروس مؤكدة ضمن هذه المرحلة.</div>
-                    )}
-                  </section>
-
-                  <section className="sf-sp-curriculum-group">
-                    <div className="sf-sp-section-heading">
-                      <div><span className="sf-sp-eyebrow">الأولوية التالية</span><h3>بعد إنهاء الدروس الجديدة</h3></div>
-                      <span className="sf-sp-count">{progressivePath.deferred.length.toLocaleString("ar-EG")}</span>
-                    </div>
-                    {progressivePath.deferred.length ? (
-                      <div className="sf-sp-task-list">
-                        {progressivePath.deferred.map(item => (
-                          <article key={item.key} className="sf-sp-task-row">
-                            <span className="sf-sp-task-check" aria-hidden="true" />
-                            <div className="min-w-0 flex-1">
-                              <strong>{item.subject} · {item.lesson}</strong>
-                              <small className="block mt-1">{item.state === "watched_only" ? "شاهدت الشرح ولم تسجل المذاكرة" : "درس يحتاج مراجعة"}</small>
-                            </div>
-                            <span className="sf-sp-task-meta">مؤجل</span>
-                          </article>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="sf-sp-empty-inline">لا توجد مذاكرة بعد الشرح أو مراجعة مؤجلة مسجلة.</div>
-                    )}
-                  </section>
-
-                  {progressivePath.unseen.length === 0
-                    && progressivePath.deferred.length === 0
-                    && progressivePath.unknownLessons === 0 && (
-                      <div className="sf-sp-empty-inline">لا يوجد تراكم مؤكد حاليًا. يتحدث المسار تلقائيًا عند تسجيل تقدمك في الدروس.</div>
-                    )}
-                </>
+                <div className="sf-sp-empty-inline">لا توجد بيانات فروع ودروس مؤكدة للمواد المحددة حتى الآن. حدّث موضعك الدراسي من خريطة المنهج.</div>
               )}
             </section>
           </div>
@@ -1427,6 +1476,30 @@ function PlanCard({ plan, subjectIds, teacherSessions, teacherChoices, title, st
         <article><span>مراجعات موجهة</span><strong>{plannedReviewCount.toLocaleString("ar-EG")}</strong></article>
         <article><span>التزامات مسجلة</span><strong>{confirmedTaskCount.toLocaleString("ar-EG")}</strong></article>
       </div>
+
+      <section className="sf-sp-plan-phases" aria-label="مراحل الخطة">
+        <header>
+          <span>بنية الخطة</span>
+          <h3>خطة واحدة، بمراحل مترابطة</h3>
+          <p>المراحل ترتب الأولويات؛ وداخل كل مرحلة تظهر المادة ثم الوحدة أو الفرع ثم الدروس والمهام.</p>
+        </header>
+        <div className="sf-sp-plan-phase-list">
+          {(["exam_focus", "backlog", "teacher_sync", "steady", "review_later"] as const).flatMap((phaseId, index) => {
+            const steps = plan.steps.filter(step => step.phaseId === phaseId);
+            if (!steps.length) return [];
+            const done = steps.filter(step => step.plannerTaskStatus === "done" || step.existingTask?.status === "done").length;
+            const percent = Math.round(done / steps.length * 100);
+            return [(
+              <article key={phaseId}>
+                <small>المرحلة {(index + 1).toLocaleString("ar-EG")}</small>
+                <strong>{phaseLabels[phaseId]}</strong>
+                <span>{done.toLocaleString("ar-EG")} / {steps.length.toLocaleString("ar-EG")} خطوة</span>
+                <i><b style={{ width: percent + "%" }} /></i>
+              </article>
+            )];
+          })}
+        </div>
+      </section>
 
       {teacherSessionGroups.length > 0 && (
         <section className="sf-sp-teacher-schedule" aria-label="مواعيد المدرسين الأسبوعية">
