@@ -630,7 +630,10 @@ export async function ingestYoutubeWebSubFeed(teacherId: string, xml: string) {
           externalIds: newUpdates.map(item => item.externalId),
         },
       });
-      if (!dailyPlanLocks.has(profileTarget.userId)) queueDailyPlanReconciliation(profileTarget.userId);
+      const scheduleChanges = newUpdates.filter(isHighConfidenceScheduleAnnouncement);
+      if (scheduleChanges.length && !dailyPlanLocks.has(profileTarget.userId)) {
+        queueDailyPlanReconciliation(profileTarget.userId, "teacher.schedule_changed", "teacher");
+      }
     } else {
       await updateStudentProfileSelection(profileTarget.userId, {
         ...latestSelection,
