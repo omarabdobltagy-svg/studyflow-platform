@@ -1527,7 +1527,7 @@ function PlanCard({ plan, subjectIds, teacherSessions, title, studentName, edita
             <span><i className="is-done" /> مهمة منتهية</span>
           </div>
           {mapLanes.length ? (
-            <div className="sf-sp-flow-lanes">
+            <div className="sf-sp-flow-lanes" data-testid="planner-subject-lanes" aria-label="مسارات الخطة حسب المادة والوحدة الدراسية">
               {mapLanes.map(lane => {
                 const laneDoneCount = lane.items.filter(({ step }) =>
                   step.plannerTaskStatus === "done" || step.existingTask?.status === "done"
