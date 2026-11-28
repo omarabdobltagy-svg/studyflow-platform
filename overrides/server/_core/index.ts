@@ -17,6 +17,7 @@ import { serveStatic, setupVite } from "./vite";
 import { sdk } from "./sdk";
 import { processScheduledReminder } from "../reminders";
 import { getSecurityHeaders, isAllowedSameOrigin } from "./security";
+import { getNetworkTimeSnapshot, startNetworkTimeSync } from "../network-time";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -38,6 +39,7 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
+  startNetworkTimeSync();
   const app = express();
   const server = createServer(app);
   app.disable("x-powered-by");
@@ -75,12 +77,11 @@ async function startServer() {
 
   // Authoritative server time. Date-sensitive UI must not read the device wall clock.
   app.get("/api/system/time", (_req, res) => {
-    const serverTimeMs = Date.now();
+    const snapshot = getNetworkTimeSnapshot();
     return res.status(200).json({
-      serverTimeMs,
-      serverTime: new Date(serverTimeMs).toISOString(),
+      ...snapshot,
+      serverTime: new Date(snapshot.serverTimeMs).toISOString(),
       timeZone: "Africa/Cairo",
-      source: "application-server",
     });
   });
 

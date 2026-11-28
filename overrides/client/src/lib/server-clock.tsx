@@ -8,10 +8,12 @@ export type ServerClockAnchor = {
   roundTripMs: number;
 };
 export type ServerClockStatus = "syncing" | "synced" | "stale" | "unavailable";
+export type ServerClockSource = "internet" | "application-server";
 export type ServerClockValue = {
   now: Date | null;
   status: ServerClockStatus;
   lastSynchronizedAt: Date | null;
+  source: ServerClockSource | null;
   refresh: () => Promise<void>;
 };
 
@@ -43,6 +45,7 @@ const ServerClockContext = createContext<ServerClockValue | null>(null);
 export function ServerClockProvider({ children }: { children: ReactNode }) {
   const [anchor, setAnchor] = useState<ServerClockAnchor | null>(null);
   const [syncStatus, setSyncStatus] = useState<ServerClockStatus>("syncing");
+  const [clockSource, setClockSource] = useState<ServerClockSource | null>(null);
   const [tick, setTick] = useState(0);
 
   const refresh = useCallback(async () => {
@@ -56,11 +59,12 @@ export function ServerClockProvider({ children }: { children: ReactNode }) {
         headers: { Accept: "application/json" },
       });
       if (!response.ok) throw new Error("Server clock request failed with HTTP " + response.status + ".");
-      const payload = await response.json() as { serverTimeMs?: unknown };
+      const payload = await response.json() as { serverTimeMs?: unknown; source?: unknown };
       const responseReceivedAtMs = performance.now();
       const serverTimeMs = Number(payload.serverTimeMs);
       if (!Number.isFinite(serverTimeMs) || serverTimeMs <= 0) throw new Error("Invalid server time.");
       setAnchor(createServerClockAnchor(serverTimeMs, requestStartedAtMs, responseReceivedAtMs));
+      setClockSource(payload.source === "internet" ? "internet" : "application-server");
       setSyncStatus("synced");
     } catch {
       setSyncStatus(current => current === "syncing" || current === "unavailable" ? "unavailable" : "stale");
@@ -104,8 +108,9 @@ export function ServerClockProvider({ children }: { children: ReactNode }) {
     now,
     status,
     lastSynchronizedAt: anchor ? new Date(anchor.serverTimeAtReceiptMs) : null,
+    source: clockSource,
     refresh,
-  }), [now, status, anchor, refresh]);
+  }), [now, status, anchor, clockSource, refresh]);
 
   return <ServerClockContext.Provider value={value}>{children}</ServerClockContext.Provider>;
 }
