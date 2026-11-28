@@ -29,7 +29,7 @@ export function normalizeAssistantConversationDraft(input: unknown): AssistantCo
     if (typeof message.content !== "string") return [];
     const content = message.content.trim();
     if (!content || content.length > MAX_MESSAGE_LENGTH) return [];
-    return [{ role: message.role, content }];
+    return [{ role: message.role as AssistantConversationRole, content }];
   }).slice(-MAX_MESSAGES_PER_CONVERSATION);
 
   return { clientId, title, messages };
